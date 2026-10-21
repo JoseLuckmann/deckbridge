@@ -405,6 +405,14 @@ Estas três deixam de ser `OWNER_DECISION`. Os defaults antigos não valem mais.
 | OD-08 | PWA remota deve permitir comandos do mixer? | não, read-only/config no P3 | P3 |
 | OD-09 | Quais métricas importam mais no DJ Trainer? | alinhamento temporal/frases e sobreposição de grave | P4 |
 | OD-10 | Precisa gravar o set no MVP? | não; recurso P3, sem bloquear P1 | P3 |
+| OD-11 | O Android substitui o Raspberry ou vira um segundo alvo? Opções: substituir / os dois / só estudo. | aberta. Sugestão da proposta, se ninguém responder: os dois (o Pi continua; o Android seria trilha nova) | aberta |
+| OD-12 | Aceita escrever um motor próprio em vez do Mixxx no Android (mexeria no ADR-0001)? Opções: sim / esperar o Mixxx Android. | aberta. Sugestão da proposta: sim, só na trilha Android | aberta |
+| OD-13 | Aceita somente leitura no app (o Android monta o pendrive) e a opção de copiar para o tablet (mexeria no ADR-0002)? Opções: sim / só tocar de cópia local. | aberta. Sugestão da proposta: sim, com alerta | aberta |
+| OD-14 | Se o tablet não fizer 4 canais: driver USB próprio, cue por cabo divisor (master mono) ou trocar de tablet? | aberta. Sugestão da proposta: trocar de tablet antes de tudo | aberta |
+| OD-15 | O set fica só na bateria ou aceita um hub USB-C com Power Delivery para carregar? Opções: só bateria / hub PD. | aberta. Sugestão da proposta: só bateria | aberta |
+| OD-16 | Distribuição: APK direto, F-Droid ou Play Store? | aberta. Sugestão da proposta: APK direto (uso pessoal) | aberta |
+
+OD-11 a OD-16 vieram de `docs/adr/0004-android-viabilidade.md`. Essa ADR está em status **proposta** e não foi aceita. ADR-0001, ADR-0002 e o plano não mudam por causa dela.
 
 ### 14.3 Protocolo de dúvidas bloqueantes
 
