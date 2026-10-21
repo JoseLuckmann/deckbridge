@@ -16,6 +16,10 @@ Todo dispositivo externo de música será montado `ro` e validado antes de a UI 
 - Contras: mudanças feitas no Pi não aparecem automaticamente ao voltar ao rekordbox.
 - Extensão: projeto separado de writeback com backup, controle transacional, validação em USB descartável e opt-in explícito.
 
+## Emenda Android — 21/10/2026
+
+Na trilha Raspberry, a decisão acima continua: montar `ro,nodev,nosuid,noexec` e não oferecer a fonte se isso não for confirmado. OD-13, **provisório, confirmar com o dono**, vale só para o Android, onde o sistema é quem monta o pendrive. Lá o app pede só leitura, avisa essa limitação e não grava no pendrive. Isso não libera escrita na trilha Raspberry e não é writeback.
+
 ## Fontes
 
 https://manual.mixxx.org/2.5/en_gb/chapters/library ; https://github.com/xsco/libdjinterop/blob/main/GUIDE.md

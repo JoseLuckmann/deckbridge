@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1200" viewBox="0 0 2000 1200">
+<rect width="100%" height="100%" fill="#121418"/>
+<rect x="8" y="8" width="1984" height="100" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="16" y="38" fill="#e8eef6" font-family="sans-serif" font-size="26">Fonte sintética  ·  áudio por confirmar  ·  DDJ por confirmar</text>
+<rect x="8" y="112" width="988" height="991" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<rect x="1004" y="112" width="988" height="991" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<rect x="16" y="120" width="972" height="22" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="24" y="138" fill="#e8eef6" font-family="sans-serif" font-size="26">Deck A  ·  Faixa sintética</text>
+<rect x="16" y="142" width="486" height="22" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="24" y="160" fill="#e8eef6" font-family="sans-serif" font-size="26">BPM 120.00</text>
+<rect x="502" y="142" width="486" height="22" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="510" y="160" fill="#e8eef6" font-family="sans-serif" font-size="26">00:01 / 00:01</text>
+<rect x="16" y="164" width="972" height="22" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="24" y="182" fill="#e8eef6" font-family="sans-serif" font-size="26">PLAY</text>
+<rect x="16" y="186" width="972" height="885" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="24" y="216" fill="#e8eef6" font-family="sans-serif" font-size="26">waveform</text>
+<rect x="16" y="1075" width="972" height="20" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="24" y="1091" fill="#e8eef6" font-family="sans-serif" font-size="26">cue  ·  loop</text>
+<rect x="1012" y="120" width="972" height="22" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="1020" y="138" fill="#e8eef6" font-family="sans-serif" font-size="26">Deck B  ·  Faixa sintética</text>
+<rect x="1012" y="142" width="486" height="22" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="1020" y="160" fill="#e8eef6" font-family="sans-serif" font-size="26">BPM 120.00</text>
+<rect x="1498" y="142" width="486" height="22" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="1506" y="160" fill="#e8eef6" font-family="sans-serif" font-size="26">00:00 / 00:01</text>
+<rect x="1012" y="164" width="972" height="22" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="1020" y="182" fill="#e8eef6" font-family="sans-serif" font-size="26">PAUSE</text>
+<rect x="1012" y="186" width="972" height="885" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="1020" y="216" fill="#e8eef6" font-family="sans-serif" font-size="26">waveform</text>
+<rect x="1012" y="1075" width="972" height="20" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="1020" y="1091" fill="#e8eef6" font-family="sans-serif" font-size="26">cue  ·  loop</text>
+<rect x="8" y="1107" width="1984" height="85" fill="#1c2430" stroke="#8aa0b8" stroke-width="1"/>
+<text x="16" y="1137" fill="#e8eef6" font-family="sans-serif" font-size="26">BROWSE gira a lista  ·  LOAD A/B carrega  ·  gravação desligada</text>
+</svg>

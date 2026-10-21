@@ -33,6 +33,10 @@ Não é uma decisão nova. É o identificador que esta decisão passou a carrega
 - StandaloneMixxx, TriMixxx, NauticMixxx e mixxx-pi-gen são referência. Código só entra com licença verificada e port deliberado.
 - O caminho `docs/adr/001-upstream-base.md` citado pela T002 aponta para esta ADR.
 
+## Emenda Android — 21/10/2026
+
+OD-11 faz o Android o alvo 1 e o Raspberry o alvo 2. OD-12, **provisório, confirmar com o dono**, autoriza um motor próprio só na trilha Android. Esta ADR não é revogada na trilha Raspberry: a base de produção do alvo 2 continua o Mixxx 2.5.6 pinado acima. O app Android não copia o motor do Mixxx e não troca o pin.
+
 ## Fontes
 
 https://mixxx.org/download/ ; https://manual.mixxx.org/2.7/en/hardware/controllers/pioneer_ddj_400 ; https://github.com/mixxxdj/mixxx ; https://github.com/mixxxdj/mixxx/releases/tag/2.5.6

@@ -22,6 +22,7 @@ HIL_TASKS = frozenset(
         "T035",
         "T038",
         "T039",
+        "A014",
     }
 )
 GATES = frozenset({"G0", "G1"})

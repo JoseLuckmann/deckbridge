@@ -71,6 +71,8 @@ O comando revalida IDs T001–T074, FR/NFR e gera `ESPECIFICACAO_COMPLETA.md`, `
 
 Simulação não é prova no hardware. O roteiro único para a DDJ-400 e o Raspberry, no fim do projeto, está em `docs/hil/roteiro-validacao-final.md`.
 
+O alvo 1, desde 21/10/2026, é o app Android em `android/`. O Raspberry é o alvo 2. Como instalar a prova A0 no tablet está em `docs/android/prova-a0.md`. A leitura do pendrive rekordbox e os dois decks estão em `docs/android/biblioteca-rekordbox.md`. Ouvir master e fone nesse app ainda não foi feito aqui. Prints do emulador não substituem o tablet.
+
 ## Ferramentas da fase 0
 
 ```bash

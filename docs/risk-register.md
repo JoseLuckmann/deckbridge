@@ -19,3 +19,5 @@
 | Eventos/IA degradarem thread de áudio | média | alta | evitar RT, bridge async, quotas, soak | G3/G4 |
 | Armazenar músicas/cache inadvertidamente | média | média/alta | metadados e waveform local só quando previsto, quotas/consentimento | G2/P3 |
 | Matriz teste sem hardware real gerar falso positivo | média | alta | reportar BLOCKED_HARDWARE e evidências rastreáveis | todos |
+| Android em geral não separar master e fone (canais 3–4) | alta | alta | Prova A0. Se falhar, outro tablet antes de driver próprio (OD-14, provisório, confirmar com o dono) | A0 |
+| 4 canais no Galaxy Tab S6 Lite do dono | baixa neste aparelho, só pelo relato | alta | Relato do dono em 21/10/2026: com o djay, master e fone saíram separados. Não é medição nossa. Modelo exato não confirmado (SM-P610/P615 ou 2022/2024). A prova A0 segue BLOCKED_HARDWARE | A0 |

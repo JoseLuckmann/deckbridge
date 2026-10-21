@@ -1,0 +1,1415 @@
+{
+  "tag": "2.5.6",
+  "commit": "3ebac449e7e5fe2a0186596657696e87ce8b0e56",
+  "hardware_capture": "BLOCKED_HARDWARE",
+  "control_count": 201,
+  "controls": [
+    {
+      "status": 182,
+      "midino": 64,
+      "group": "[Library]",
+      "key": "MoveVertical",
+      "description": "BROWSE - rotate - Scroll tracklist/tree view"
+    },
+    {
+      "status": 150,
+      "midino": 65,
+      "group": "[Library]",
+      "key": "MoveFocusForward",
+      "description": "BROWSE - press - Move cursor between track list and tree view"
+    },
+    {
+      "status": 150,
+      "midino": 66,
+      "group": "[Library]",
+      "key": "MoveFocusBackward",
+      "description": "BROWSE +SHIFT - press - Move cursor between track list and tree view"
+    },
+    {
+      "status": 150,
+      "midino": 70,
+      "group": "[Channel1]",
+      "key": "LoadSelectedTrack",
+      "description": "LOAD (DECK1) - press - Load a Track into Deck 1"
+    },
+    {
+      "status": 150,
+      "midino": 71,
+      "group": "[Channel2]",
+      "key": "LoadSelectedTrack",
+      "description": "LOAD (DECK2) - press - Load a Track into Deck 2"
+    },
+    {
+      "status": 144,
+      "midino": 63,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.shiftPressed",
+      "description": "Shift (DECK1)"
+    },
+    {
+      "status": 145,
+      "midino": 63,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.shiftPressed",
+      "description": "Shift (DECK2)"
+    },
+    {
+      "status": 144,
+      "midino": 11,
+      "group": "[Channel1]",
+      "key": "play",
+      "description": "PLAY/PAUSE (DECK1) - press - Play/Pause"
+    },
+    {
+      "status": 144,
+      "midino": 71,
+      "group": "[Channel1]",
+      "key": "reverseroll",
+      "description": "PLAY/PAUSE +SHIFT (DECK1) - press - Reverse playback in Slip Mode while held (Censor)"
+    },
+    {
+      "status": 145,
+      "midino": 11,
+      "group": "[Channel2]",
+      "key": "play",
+      "description": "PLAY/PAUSE (DECK2) - press - Play/Pause"
+    },
+    {
+      "status": 145,
+      "midino": 71,
+      "group": "[Channel2]",
+      "key": "reverseroll",
+      "description": "PLAY/PAUSE +SHIFT (DECK2) - press - Reverse playback in Slip Mode while held (Censor)"
+    },
+    {
+      "status": 144,
+      "midino": 12,
+      "group": "[Channel1]",
+      "key": "cue_default",
+      "description": "CUE (DECK1) - press - Set/Call Cue, Back Cue"
+    },
+    {
+      "status": 144,
+      "midino": 72,
+      "group": "[Channel1]",
+      "key": "start_play",
+      "description": "CUE +SHIFT (DECK1) - press - Jump to track start"
+    },
+    {
+      "status": 145,
+      "midino": 12,
+      "group": "[Channel2]",
+      "key": "cue_default",
+      "description": "CUE (DECK2) - press - Set/Call Cue, Back Cue"
+    },
+    {
+      "status": 145,
+      "midino": 72,
+      "group": "[Channel2]",
+      "key": "start_play",
+      "description": "CUE +SHIFT (DECK2) - press - Jump to track start"
+    },
+    {
+      "status": 176,
+      "midino": 34,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogTurn",
+      "description": "JOG DIAL PLATTER Vinyl mode On (DECK1) - rotate - Scratch"
+    },
+    {
+      "status": 176,
+      "midino": 35,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogTurn",
+      "description": "JOG DIAL PLATTER Vinyl mode Off (DECK1) - rotate - Pitch bend"
+    },
+    {
+      "status": 176,
+      "midino": 41,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogSearch",
+      "description": "JOG DIAL PLATTER +SHIFT (DECK1) - rotate - Search (Fast Pitch bend)"
+    },
+    {
+      "status": 144,
+      "midino": 54,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogTouch",
+      "description": "JOG DIAL PLATTER (DECK1) - touch - enable (on touch) / disable (on release) Scratching/Pitch\n                    bend"
+    },
+    {
+      "status": 144,
+      "midino": 103,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogTouch",
+      "description": "JOG DIAL PLATTER +SHIFT (DECK1) - touch - enable (on touch) / disable (on release) highspeed\n                    Pitch bend"
+    },
+    {
+      "status": 176,
+      "midino": 33,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogTurn",
+      "description": "JOG DIAL SIDE (DECK1) - rotate - Pitch bend"
+    },
+    {
+      "status": 177,
+      "midino": 34,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogTurn",
+      "description": "JOG DIAL PLATTER Vinyl mode On (DECK2) - rotate - Scratch"
+    },
+    {
+      "status": 177,
+      "midino": 35,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogTurn",
+      "description": "JOG DIAL PLATTER Vinyl mode Off (DECK2) - rotate - Pitch bend"
+    },
+    {
+      "status": 177,
+      "midino": 41,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogSearch",
+      "description": "JOG DIAL PLATTER +SHIFT (DECK2) - rotate - Search (Fast Pitch bend)"
+    },
+    {
+      "status": 145,
+      "midino": 54,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogTouch",
+      "description": "JOG DIAL PLATTER (DECK2) - touch - enable (on touch) / disable (on release) Scratching/Pitch\n                    bend"
+    },
+    {
+      "status": 145,
+      "midino": 103,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogTouch",
+      "description": "JOG DIAL PLATTER +SHIFT (DECK2) - touch - enable (on touch) / disable (on release) highspeed\n                    Pitch bend"
+    },
+    {
+      "status": 177,
+      "midino": 33,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogTurn",
+      "description": "JOG DIAL SIDE (DECK2) - rotate - Pitch bend"
+    },
+    {
+      "status": 176,
+      "midino": 32,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.tempoSliderLSB",
+      "description": "TEMPO (DECK1) - fader - Tempo control LSB"
+    },
+    {
+      "status": 176,
+      "midino": 0,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.tempoSliderMSB",
+      "description": "TEMPO (DECK1) - fader - Tempo control MSB"
+    },
+    {
+      "status": 177,
+      "midino": 32,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.tempoSliderLSB",
+      "description": "TEMPO (DECK2) - fader - Tempo control LSB"
+    },
+    {
+      "status": 177,
+      "midino": 0,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.tempoSliderMSB",
+      "description": "TEMPO (DECK2) - fader - Tempo control MSB"
+    },
+    {
+      "status": 144,
+      "midino": 88,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.syncPressed",
+      "description": "BEAT SYNC (DECK1) - press - Beat Sync to Master deck"
+    },
+    {
+      "status": 144,
+      "midino": 92,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.syncLongPressed",
+      "description": "BEAT SYNC LONG PRESS (DECK1) - press - Set as Master deck"
+    },
+    {
+      "status": 144,
+      "midino": 96,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.cycleTempoRange",
+      "description": "BEAT SYNC +SHIFT (DECK1) - press - change Tempo range"
+    },
+    {
+      "status": 145,
+      "midino": 88,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.syncPressed",
+      "description": "BEAT SYNC (DECK2) - press - Beat Sync to Master deck"
+    },
+    {
+      "status": 145,
+      "midino": 92,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.syncLongPressed",
+      "description": "BEAT SYNC LONG PRESS (DECK2) - press - Set as Master deck"
+    },
+    {
+      "status": 145,
+      "midino": 96,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.cycleTempoRange",
+      "description": "BEAT SYNC +SHIFT (DECK2) - press - change Tempo range"
+    },
+    {
+      "status": 144,
+      "midino": 16,
+      "group": "[Channel1]",
+      "key": "loop_in",
+      "description": "LOOP IN/4 BEAT (DECK1) - press - Set loop in"
+    },
+    {
+      "status": 145,
+      "midino": 16,
+      "group": "[Channel2]",
+      "key": "loop_in",
+      "description": "LOOP IN/4 BEAT (DECK2) - press - Set loop in"
+    },
+    {
+      "status": 144,
+      "midino": 17,
+      "group": "[Channel1]",
+      "key": "loop_out",
+      "description": "LOOP OUT (DECK1) - press - Set loop out"
+    },
+    {
+      "status": 145,
+      "midino": 17,
+      "group": "[Channel2]",
+      "key": "loop_out",
+      "description": "LOOP OUT (DECK2) - press - Set loop out"
+    },
+    {
+      "status": 144,
+      "midino": 77,
+      "group": "[Channel1]",
+      "key": "reloop_toggle",
+      "description": "RELOOP/EXIT (DECK1) - press - (loop off) Reloop, (loop on) Loop exit"
+    },
+    {
+      "status": 145,
+      "midino": 77,
+      "group": "[Channel2]",
+      "key": "reloop_toggle",
+      "description": "RELOOP/EXIT (DECK2) - press - (loop off) Reloop, (loop on) Loop exit"
+    },
+    {
+      "status": 144,
+      "midino": 80,
+      "group": "[Channel1]",
+      "key": "reloop_andstop",
+      "description": "RELOOP/EXIT +SHIFT (DECK1) - press - Reloop and stop"
+    },
+    {
+      "status": 145,
+      "midino": 80,
+      "group": "[Channel2]",
+      "key": "reloop_andstop",
+      "description": "RELOOP/EXIT +SHIFT (DECK2) - press - Reloop and stop"
+    },
+    {
+      "status": 144,
+      "midino": 76,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.toggleLoopAdjustIn",
+      "description": "SHIFT + LOOP IN (DECK1) - Loop in adjust (using jog wheel)"
+    },
+    {
+      "status": 145,
+      "midino": 76,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.toggleLoopAdjustIn",
+      "description": "SHIFT + LOOP IN (DECK2) - Loop in adjust (using jog wheel)"
+    },
+    {
+      "status": 144,
+      "midino": 78,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.toggleLoopAdjustOut",
+      "description": "SHIFT + LOOP OUT (DECK1) - Loop out adjust (using jog wheel)"
+    },
+    {
+      "status": 145,
+      "midino": 78,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.toggleLoopAdjustOut",
+      "description": "SHIFT + LOOP OUT (DECK2) - Loop out adjust (using jog wheel)"
+    },
+    {
+      "status": 144,
+      "midino": 81,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.cueLoopCallLeft",
+      "description": "CUE/LOOP CALL LEFT (DECK1) - press - half active loop"
+    },
+    {
+      "status": 144,
+      "midino": 62,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.quickJumpBack",
+      "description": "CUE/LOOP CALL LEFT + SHIFT (DECK1) - press - quick jump back"
+    },
+    {
+      "status": 145,
+      "midino": 81,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.cueLoopCallLeft",
+      "description": "CUE/LOOP CALL LEFT (DECK2) - press - half active loop"
+    },
+    {
+      "status": 145,
+      "midino": 62,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.quickJumpBack",
+      "description": "CUE/LOOP CALL LEFT + SHIFT (DECK2) - press - quick jump back"
+    },
+    {
+      "status": 144,
+      "midino": 83,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.cueLoopCallRight",
+      "description": "CUE/LOOP CALL LEFT (DECK1) - press - double active loop"
+    },
+    {
+      "status": 144,
+      "midino": 61,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.quickJumpForward",
+      "description": "CUE/LOOP CALL RIGHT + SHIFT (DECK1) - press - quick jump forwards"
+    },
+    {
+      "status": 145,
+      "midino": 83,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.cueLoopCallRight",
+      "description": "CUE/LOOP CALL LEFT (DECK2) - press - double active loop"
+    },
+    {
+      "status": 145,
+      "midino": 61,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.quickJumpForward",
+      "description": "CUE/LOOP CALL RIGHT + SHIFT (DECK2) - press - quick jump forwards"
+    },
+    {
+      "status": 182,
+      "midino": 31,
+      "group": "[Master]",
+      "key": "crossfader",
+      "description": "CROSSFADER - slider"
+    },
+    {
+      "status": 182,
+      "midino": 63,
+      "group": "[Master]",
+      "key": "crossfader",
+      "description": "CROSSFADER - slider"
+    },
+    {
+      "status": 176,
+      "midino": 51,
+      "group": "[Channel1]",
+      "key": "volume",
+      "description": "CHANNELFADER - slider"
+    },
+    {
+      "status": 176,
+      "midino": 19,
+      "group": "[Channel1]",
+      "key": "volume",
+      "description": "CHANNELFADER - slider"
+    },
+    {
+      "status": 177,
+      "midino": 51,
+      "group": "[Channel2]",
+      "key": "volume",
+      "description": "CHANNELFADER - slider"
+    },
+    {
+      "status": 177,
+      "midino": 19,
+      "group": "[Channel2]",
+      "key": "volume",
+      "description": "CHANNELFADER - slider"
+    },
+    {
+      "status": 144,
+      "midino": 104,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.toggleQuantize",
+      "description": "Shift + Left CUE - Toggle quantize on/off (Deck1)"
+    },
+    {
+      "status": 145,
+      "midino": 104,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.toggleQuantize",
+      "description": "Shift + Right CUE - Toggle quantize on/off (Deck2)"
+    },
+    {
+      "status": 176,
+      "midino": 36,
+      "group": "[Channel1]",
+      "key": "pregain",
+      "description": "TRIM - rotate"
+    },
+    {
+      "status": 176,
+      "midino": 4,
+      "group": "[Channel1]",
+      "key": "pregain",
+      "description": "TRIM - rotate"
+    },
+    {
+      "status": 177,
+      "midino": 36,
+      "group": "[Channel2]",
+      "key": "pregain",
+      "description": "TRIM - rotate"
+    },
+    {
+      "status": 177,
+      "midino": 4,
+      "group": "[Channel2]",
+      "key": "pregain",
+      "description": "TRIM - rotate"
+    },
+    {
+      "status": 176,
+      "midino": 39,
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter3",
+      "description": "EQ HI - rotate"
+    },
+    {
+      "status": 176,
+      "midino": 43,
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter2",
+      "description": "EQ MID - rotate"
+    },
+    {
+      "status": 176,
+      "midino": 47,
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter1",
+      "description": "EQ LOW - rotate"
+    },
+    {
+      "status": 176,
+      "midino": 7,
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter3",
+      "description": "EQ HI - rotate"
+    },
+    {
+      "status": 176,
+      "midino": 11,
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter2",
+      "description": "EQ MID - rotate"
+    },
+    {
+      "status": 176,
+      "midino": 15,
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter1",
+      "description": "EQ LOW - rotate"
+    },
+    {
+      "status": 177,
+      "midino": 39,
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter3",
+      "description": "EQ HI - rotate"
+    },
+    {
+      "status": 177,
+      "midino": 43,
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter2",
+      "description": "EQ MID - rotate"
+    },
+    {
+      "status": 177,
+      "midino": 47,
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter1",
+      "description": "EQ LOW - rotate"
+    },
+    {
+      "status": 177,
+      "midino": 7,
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter3",
+      "description": "EQ HI - rotate"
+    },
+    {
+      "status": 177,
+      "midino": 11,
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter2",
+      "description": "EQ MID - rotate"
+    },
+    {
+      "status": 177,
+      "midino": 15,
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter1",
+      "description": "EQ LOW - rotate"
+    },
+    {
+      "status": 144,
+      "midino": 84,
+      "group": "[Channel1]",
+      "key": "pfl",
+      "description": "CUE Channel - press - toggle Headphone Cue"
+    },
+    {
+      "status": 145,
+      "midino": 84,
+      "group": "[Channel2]",
+      "key": "pfl",
+      "description": "CUE Channel - press - toggle Headphone Cue"
+    },
+    {
+      "status": 182,
+      "midino": 44,
+      "group": "[Master]",
+      "key": "headMix",
+      "description": "HEADPHONES MIXING - rotate - Monitor Balance"
+    },
+    {
+      "status": 182,
+      "midino": 12,
+      "group": "[Master]",
+      "key": "headMix",
+      "description": "HEADPHONES MIXING - rotate - Monitor Balance"
+    },
+    {
+      "status": 182,
+      "midino": 45,
+      "group": "[Master]",
+      "key": "headGain",
+      "description": "HEADPHONES LEVEL - rotate - Headphone gain"
+    },
+    {
+      "status": 182,
+      "midino": 13,
+      "group": "[Master]",
+      "key": "headGain",
+      "description": "HEADPHONES LEVEL - rotate - Headphone gain"
+    },
+    {
+      "status": 182,
+      "midino": 23,
+      "group": "[QuickEffectRack1_[Channel1]]",
+      "key": "super1",
+      "description": "FILTER CH1 - rotate - Filter Effect Knob"
+    },
+    {
+      "status": 182,
+      "midino": 55,
+      "group": "[QuickEffectRack1_[Channel1]]",
+      "key": "super1",
+      "description": "FILTER CH1 - rotate - Filter Effect Knob"
+    },
+    {
+      "status": 182,
+      "midino": 24,
+      "group": "[QuickEffectRack1_[Channel2]]",
+      "key": "super1",
+      "description": "FILTER CH2 - rotate - Filter Effect Knob"
+    },
+    {
+      "status": 182,
+      "midino": 56,
+      "group": "[QuickEffectRack1_[Channel2]]",
+      "key": "super1",
+      "description": "FILTER CH2 - rotate - Filter Effect Knob"
+    },
+    {
+      "status": 148,
+      "midino": 74,
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxLeftPressed",
+      "description": "BEAT LEFT - press - toggle focused Effect leftward"
+    },
+    {
+      "status": 148,
+      "midino": 75,
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxRightPressed",
+      "description": "BEAT RIGHT - press - toggle focused Effect rightward"
+    },
+    {
+      "status": 148,
+      "midino": 99,
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxSelectPressed",
+      "description": "BEAT FX SELECT - press - load next effect entry for focused Effect"
+    },
+    {
+      "status": 148,
+      "midino": 100,
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxSelectShiftPressed",
+      "description": "BEAT FX SELECT +SHIFT - press - load previous effect entry for focused Effect"
+    },
+    {
+      "status": 148,
+      "midino": 16,
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxChannel",
+      "description": "BEAT FX CH SELECT CH1 - slide - Select FX on DECK 1"
+    },
+    {
+      "status": 148,
+      "midino": 17,
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxChannel",
+      "description": "BEAT FX CH SELECT CH2 - slide - Select FX on DECK 2"
+    },
+    {
+      "status": 148,
+      "midino": 20,
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxChannel",
+      "description": "BEAT FX CH SELECT MASTER - slide - Select FX on Master"
+    },
+    {
+      "status": 180,
+      "midino": 2,
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxLevelDepthRotate",
+      "description": "BEAT FX LEVEL/DEPTH - rotate (MSB) - Adjust FX Level (mix) and BEAT FX Depth (meta) in the\n                    selected slot"
+    },
+    {
+      "status": 148,
+      "midino": 71,
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxOnOffPressed",
+      "description": "BEAT FX ON/OFF - press - Toggle FX in the selected Slot"
+    },
+    {
+      "status": 148,
+      "midino": 67,
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxOnOffShiftPressed",
+      "description": "BEAT FX ON/OFF +SHIFT - press - Disable all enabled Beat FX Slots"
+    },
+    {
+      "status": 151,
+      "midino": 0,
+      "group": "[Channel1]",
+      "key": "hotcue_1_activate",
+      "description": "PAD 1 (DECK1) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 152,
+      "midino": 0,
+      "group": "[Channel1]",
+      "key": "hotcue_1_clear",
+      "description": "PAD 1 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 153,
+      "midino": 0,
+      "group": "[Channel2]",
+      "key": "hotcue_1_activate",
+      "description": "PAD 1 (DECK2) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 154,
+      "midino": 0,
+      "group": "[Channel2]",
+      "key": "hotcue_1_clear",
+      "description": "PAD 1 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 151,
+      "midino": 1,
+      "group": "[Channel1]",
+      "key": "hotcue_2_activate",
+      "description": "PAD 2 (DECK1) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 152,
+      "midino": 1,
+      "group": "[Channel1]",
+      "key": "hotcue_2_clear",
+      "description": "PAD 2 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 153,
+      "midino": 1,
+      "group": "[Channel2]",
+      "key": "hotcue_2_activate",
+      "description": "PAD 2 (DECK2) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 154,
+      "midino": 1,
+      "group": "[Channel2]",
+      "key": "hotcue_2_clear",
+      "description": "PAD 2 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 151,
+      "midino": 2,
+      "group": "[Channel1]",
+      "key": "hotcue_3_activate",
+      "description": "PAD 3 (DECK1) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 152,
+      "midino": 2,
+      "group": "[Channel1]",
+      "key": "hotcue_3_clear",
+      "description": "PAD 3 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 153,
+      "midino": 2,
+      "group": "[Channel2]",
+      "key": "hotcue_3_activate",
+      "description": "PAD 3 (DECK2) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 154,
+      "midino": 2,
+      "group": "[Channel2]",
+      "key": "hotcue_3_clear",
+      "description": "PAD 3 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 151,
+      "midino": 3,
+      "group": "[Channel1]",
+      "key": "hotcue_4_activate",
+      "description": "PAD 4 (DECK1) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 152,
+      "midino": 3,
+      "group": "[Channel1]",
+      "key": "hotcue_4_clear",
+      "description": "PAD 4 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 153,
+      "midino": 3,
+      "group": "[Channel2]",
+      "key": "hotcue_4_activate",
+      "description": "PAD 4 (DECK2) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 154,
+      "midino": 3,
+      "group": "[Channel2]",
+      "key": "hotcue_4_clear",
+      "description": "PAD 4 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 151,
+      "midino": 4,
+      "group": "[Channel1]",
+      "key": "hotcue_5_activate",
+      "description": "PAD 5(DECK1) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 152,
+      "midino": 4,
+      "group": "[Channel1]",
+      "key": "hotcue_5_clear",
+      "description": "PAD 5 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 153,
+      "midino": 4,
+      "group": "[Channel2]",
+      "key": "hotcue_5_activate",
+      "description": "PAD 5 (DECK2) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 154,
+      "midino": 4,
+      "group": "[Channel2]",
+      "key": "hotcue_5_clear",
+      "description": "PAD 5 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 151,
+      "midino": 5,
+      "group": "[Channel1]",
+      "key": "hotcue_6_activate",
+      "description": "PAD 6 (DECK1) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 152,
+      "midino": 5,
+      "group": "[Channel1]",
+      "key": "hotcue_6_clear",
+      "description": "PAD 6 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 153,
+      "midino": 5,
+      "group": "[Channel2]",
+      "key": "hotcue_6_activate",
+      "description": "PAD 6 (DECK2) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 154,
+      "midino": 5,
+      "group": "[Channel2]",
+      "key": "hotcue_6_clear",
+      "description": "PAD 6 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 151,
+      "midino": 6,
+      "group": "[Channel1]",
+      "key": "hotcue_7_activate",
+      "description": "PAD 7 (DECK1) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 152,
+      "midino": 6,
+      "group": "[Channel1]",
+      "key": "hotcue_7_clear",
+      "description": "PAD 7 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 153,
+      "midino": 6,
+      "group": "[Channel2]",
+      "key": "hotcue_7_activate",
+      "description": "PAD 7 (DECK2) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 154,
+      "midino": 6,
+      "group": "[Channel2]",
+      "key": "hotcue_7_clear",
+      "description": "PAD 7 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 151,
+      "midino": 7,
+      "group": "[Channel1]",
+      "key": "hotcue_8_activate",
+      "description": "PAD 8 (DECK1) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 152,
+      "midino": 7,
+      "group": "[Channel1]",
+      "key": "hotcue_8_clear",
+      "description": "PAD 8 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 153,
+      "midino": 7,
+      "group": "[Channel2]",
+      "key": "hotcue_8_activate",
+      "description": "PAD 8 (DECK2) HOT CUE MODE - press - set hotcue"
+    },
+    {
+      "status": 154,
+      "midino": 7,
+      "group": "[Channel2]",
+      "key": "hotcue_8_clear",
+      "description": "PAD 8 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue"
+    },
+    {
+      "status": 151,
+      "midino": 96,
+      "group": "[Channel1]",
+      "key": "beatloop_0.25_toggle",
+      "description": "PAD 1 (DECK1) BEAT LOOP MODE - press - 1/4 Beatloop"
+    },
+    {
+      "status": 153,
+      "midino": 96,
+      "group": "[Channel2]",
+      "key": "beatloop_0.25_toggle",
+      "description": "PAD 1 (DECK2) BEAT LOOP MODE - press - 1/4 Beatloop"
+    },
+    {
+      "status": 151,
+      "midino": 97,
+      "group": "[Channel1]",
+      "key": "beatloop_0.5_toggle",
+      "description": "PAD 2 (DECK1) BEAT LOOP MODE - press - 1/2 Beatloop"
+    },
+    {
+      "status": 153,
+      "midino": 97,
+      "group": "[Channel2]",
+      "key": "beatloop_0.5_toggle",
+      "description": "PAD 2 (DECK2) BEAT LOOP MODE - press - 1/2 Beatloop"
+    },
+    {
+      "status": 151,
+      "midino": 98,
+      "group": "[Channel1]",
+      "key": "beatloop_1_toggle",
+      "description": "PAD 3 (DECK1) BEAT LOOP MODE - press - 1/1 Beatloop"
+    },
+    {
+      "status": 153,
+      "midino": 98,
+      "group": "[Channel2]",
+      "key": "beatloop_1_toggle",
+      "description": "PAD 3 (DECK2) BEAT LOOP MODE - press - 1/1 Beatloop"
+    },
+    {
+      "status": 151,
+      "midino": 99,
+      "group": "[Channel1]",
+      "key": "beatloop_2_toggle",
+      "description": "PAD 4 (DECK1) BEAT LOOP MODE - press - 2 Beatloop"
+    },
+    {
+      "status": 153,
+      "midino": 99,
+      "group": "[Channel2]",
+      "key": "beatloop_2_toggle",
+      "description": "PAD 4 (DECK2) BEAT LOOP MODE - press - 2 Beatloop"
+    },
+    {
+      "status": 151,
+      "midino": 100,
+      "group": "[Channel1]",
+      "key": "beatloop_4_toggle",
+      "description": "PAD 5 (DECK1) BEAT LOOP MODE - press - 4 Beatloop"
+    },
+    {
+      "status": 153,
+      "midino": 100,
+      "group": "[Channel2]",
+      "key": "beatloop_4_toggle",
+      "description": "PAD 5 (DECK2) BEAT LOOP MODE - press - 4 Beatloop"
+    },
+    {
+      "status": 151,
+      "midino": 101,
+      "group": "[Channel1]",
+      "key": "beatloop_8_toggle",
+      "description": "PAD 6 (DECK1) BEAT LOOP MODE - press - 8 Beatloop"
+    },
+    {
+      "status": 153,
+      "midino": 101,
+      "group": "[Channel2]",
+      "key": "beatloop_8_toggle",
+      "description": "PAD 6 (DECK2) BEAT LOOP MODE - press - 8 Beatloop"
+    },
+    {
+      "status": 151,
+      "midino": 102,
+      "group": "[Channel1]",
+      "key": "beatloop_16_toggle",
+      "description": "PAD 7 (DECK1) BEAT LOOP MODE - press - 16 Beatloop"
+    },
+    {
+      "status": 153,
+      "midino": 102,
+      "group": "[Channel2]",
+      "key": "beatloop_16_toggle",
+      "description": "PAD 7 (DECK2) BEAT LOOP MODE - press - 16 Beatloop"
+    },
+    {
+      "status": 151,
+      "midino": 103,
+      "group": "[Channel1]",
+      "key": "beatloop_32_toggle",
+      "description": "PAD 8 (DECK1) BEAT LOOP MODE - press - 32 Beatloop"
+    },
+    {
+      "status": 153,
+      "midino": 103,
+      "group": "[Channel2]",
+      "key": "beatloop_32_toggle",
+      "description": "PAD 8 (DECK2) BEAT LOOP MODE - press - 32 Beatloop"
+    },
+    {
+      "status": 151,
+      "midino": 32,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 1 (DECK1) BEAT JUMP MODE - press - Jump 1 Beat backwards"
+    },
+    {
+      "status": 153,
+      "midino": 32,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 1 (DECK2) BEAT JUMP MODE - press - Jump 1 Beat backwards"
+    },
+    {
+      "status": 151,
+      "midino": 33,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 2 (DECK1) BEAT JUMP MODE - press - Jump 1 Beat forwards"
+    },
+    {
+      "status": 153,
+      "midino": 33,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 2 (DECK2) BEAT JUMP MODE - press - Jump 1 Beat forwards"
+    },
+    {
+      "status": 151,
+      "midino": 34,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 3 (DECK1) BEAT JUMP MODE - press - Jump 2 Beats backwards"
+    },
+    {
+      "status": 153,
+      "midino": 34,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 3 (DECK2) BEAT JUMP MODE - press - Jump 2 Beats backwards"
+    },
+    {
+      "status": 151,
+      "midino": 35,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 4 (DECK1) BEAT JUMP MODE - press - Jump 2 Beats forwards"
+    },
+    {
+      "status": 153,
+      "midino": 35,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 4 (DECK2) BEAT JUMP MODE - press - Jump 2 Beats forwards"
+    },
+    {
+      "status": 151,
+      "midino": 36,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 5 (DECK1) BEAT JUMP MODE - press - Jump 4 Beats backwards"
+    },
+    {
+      "status": 153,
+      "midino": 36,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 5 (DECK2) BEAT JUMP MODE - press - Jump 4 Beats backwards"
+    },
+    {
+      "status": 151,
+      "midino": 37,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 6 (DECK1) BEAT JUMP MODE - press - Jump 4 Beats forwards"
+    },
+    {
+      "status": 153,
+      "midino": 37,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 6 (DECK2) BEAT JUMP MODE - press - Jump 4 Beats forwards"
+    },
+    {
+      "status": 151,
+      "midino": 38,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 7 (DECK1) BEAT JUMP MODE - press - Jump 8 Beats backwards"
+    },
+    {
+      "status": 153,
+      "midino": 38,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 7 (DECK2) BEAT JUMP MODE - press - Jump 8 Beats backwards"
+    },
+    {
+      "status": 151,
+      "midino": 39,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 8 (DECK1) BEAT JUMP MODE - press - Jump 8 Beats forwards"
+    },
+    {
+      "status": 153,
+      "midino": 39,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "description": "PAD 8 (DECK2) BEAT JUMP MODE - press - Jump 8 Beats forwards"
+    },
+    {
+      "status": 152,
+      "midino": 38,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.decreaseBeatjumpSizes",
+      "description": "PAD 7 (DECK1) +SHift BEAT JUMP MODE - press - decrease Beatjump by a factor of 16"
+    },
+    {
+      "status": 154,
+      "midino": 38,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.decreaseBeatjumpSizes",
+      "description": "PAD 7 (DECK2) +Shift BEAT JUMP MODE - press - decrease Beatjump by a factor of 16"
+    },
+    {
+      "status": 152,
+      "midino": 39,
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.increaseBeatjumpSizes",
+      "description": "PAD 8 (DECK1) +SHift BEAT JUMP MODE - press - increase Beatjump by a factor of 16"
+    },
+    {
+      "status": 154,
+      "midino": 39,
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.increaseBeatjumpSizes",
+      "description": "PAD 8 (DECK2) +Shift BEAT JUMP MODE - press - increase Beatjump by a factor of 16"
+    },
+    {
+      "status": 151,
+      "midino": 48,
+      "group": "[Sampler1]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 1 (LEFT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 152,
+      "midino": 48,
+      "group": "[Sampler1]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 1 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 151,
+      "midino": 49,
+      "group": "[Sampler2]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 2 (LEFT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 152,
+      "midino": 49,
+      "group": "[Sampler2]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 2 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 151,
+      "midino": 50,
+      "group": "[Sampler3]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 3 (LEFT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 152,
+      "midino": 50,
+      "group": "[Sampler3]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 3 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 151,
+      "midino": 51,
+      "group": "[Sampler4]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 4 (LEFT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 152,
+      "midino": 51,
+      "group": "[Sampler4]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 4 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 151,
+      "midino": 52,
+      "group": "[Sampler5]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 5 (LEFT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 152,
+      "midino": 52,
+      "group": "[Sampler5]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 5 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 151,
+      "midino": 53,
+      "group": "[Sampler6]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 6 (LEFT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 152,
+      "midino": 53,
+      "group": "[Sampler6]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 6 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 151,
+      "midino": 54,
+      "group": "[Sampler7]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 7 (LEFT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 152,
+      "midino": 54,
+      "group": "[Sampler7]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 7 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 151,
+      "midino": 55,
+      "group": "[Sampler8]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 8 (LEFT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 152,
+      "midino": 55,
+      "group": "[Sampler8]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 8 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 153,
+      "midino": 48,
+      "group": "[Sampler9]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 1 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 154,
+      "midino": 48,
+      "group": "[Sampler9]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 1 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 153,
+      "midino": 49,
+      "group": "[Sampler10]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 2 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 154,
+      "midino": 49,
+      "group": "[Sampler10]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 2 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 153,
+      "midino": 50,
+      "group": "[Sampler11]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 3 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 154,
+      "midino": 50,
+      "group": "[Sampler11]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 3 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 153,
+      "midino": 51,
+      "group": "[Sampler12]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 4 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 154,
+      "midino": 51,
+      "group": "[Sampler12]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 4 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 153,
+      "midino": 52,
+      "group": "[Sampler13]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 5 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 154,
+      "midino": 52,
+      "group": "[Sampler13]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 5 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 153,
+      "midino": 53,
+      "group": "[Sampler14]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 6 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 154,
+      "midino": 53,
+      "group": "[Sampler14]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 6 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 153,
+      "midino": 54,
+      "group": "[Sampler15]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 7 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 154,
+      "midino": 54,
+      "group": "[Sampler15]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 7 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    },
+    {
+      "status": 153,
+      "midino": 55,
+      "group": "[Sampler16]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "description": "PAD 8 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track"
+    },
+    {
+      "status": 154,
+      "midino": 55,
+      "group": "[Sampler16]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "description": "PAD 8 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track"
+    }
+  ]
+}

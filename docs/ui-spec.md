@@ -1,6 +1,6 @@
 # UI/UX Detailed Specification — DeckBridge OS (P1–P4)
 
-**Data:** 2026-10-21 | **Decisão OD-02 em 21/10/2026:** layout adaptável a qualquer resolução. Referência de tela de 7 polegadas: 800x480 e 1024x600, paisagem.  
+**Data:** 2026-10-21 | **Decisão OD-02 em 21/10/2026:** layout adaptável a qualquer resolução. Referência de tela de 7 polegadas: 800x480 e 1024x600, paisagem. O tablet alvo (Galaxy Tab S6 Lite, 10,4") também precisa caber em 2000x1200; o padrão de 7" não muda.  
 **Padrão:** controla-se primariamente pela DDJ-400; interface serve de estado, browsing e informações de DJ.  
 **Nota:** layouts abaixo são wireframes funcionais, não reproduções de interface comercial. Brand/assets produzidos pelo projeto, não copiados de Pioneer/AlphaTheta.
 

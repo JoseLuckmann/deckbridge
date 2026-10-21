@@ -115,6 +115,33 @@ O proprietário só terá DDJ-400 e Raspberry no fim do projeto (21/10/2026). Si
 - [ ] **T078** Roteiro numerado de validação final no hardware real, feito de uma vez no fim. **Entrega:** `docs/hil/roteiro-validacao-final.md`. **Estado:** documento escrito; execução `BLOCKED_HARDWARE`.
 - [x] **T079** Regra de evidência: resultado `SIMULATED` não fecha tarefa HIL nem gate G0/G1. **Estado:** `PASS` da regra em `src/deckbridge/evidence.py` e no plano de testes, em 21/10/2026. Os ambientes T075–T077 ainda não existem.
 
+## Trilha A — Android, alvo 1 (IDs novos; T001–T079 não mudam)
+
+OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Raspberry é o alvo 2. OD-12 a OD-16 estão provisórias. O acesso ao tablet ainda vai demorar: o que exige o aparelho fica `BLOCKED_HARDWARE`.
+
+- [x] **A001** Registrar OD-11 e as provisórias OD-12..OD-16. Aceitar a ADR de Android e emendar ADR-0001 e ADR-0002 sem apagar a trilha Raspberry. **Estado:** `PASS` de documento em 21/10/2026.
+- [x] **A002** Projeto `android/`: Kotlin, Compose, Oboe 1.11.0 pelo NDK, minSdk 26, targetSdk 34. Cobre Android 10 a 14 do Tab S6 Lite e também Android 8 da OD-01. **Estado:** `PASS` se o APK de debug for gerado nesta rodada.
+- [x] **A003** Mapa oficial da DDJ-400 dentro do app, com teste JVM. Bytes só do XML pinado. **Estado:** `PASS` de software.
+- [x] **A004** Relatório de diagnóstico: modelo, hardware, SoC só se o sistema informar, Android, bateria, latência e x-runs. Ausente vira UNKNOWN. O relato do djay entra como referência, não como medição. **Estado:** `PASS` do texto em teste.
+- [ ] **A005** Motor Oboe: tons diferentes nos canais 1–2 e 3–4, sem jogar o fone para o master se só houver 2 canais. **Estado:** código no APK. Escuta `BLOCKED_HARDWARE`.
+- [ ] **A006** Listar dispositivos de áudio USB e canais. **Estado:** código no APK. Lista real `BLOCKED_HARDWARE`.
+- [ ] **A007** Ler MIDI com `android.media.midi` e mostrar o nome do mapa. **Estado:** código no APK. Eventos reais `BLOCKED_HARDWARE`.
+- [ ] **A008** Medir latência, x-runs e bateria e compartilhar o texto. **Estado:** código no APK. Números do tablet `BLOCKED_HARDWARE`.
+- [x] **A009** A prova A0 é a primeira tela. **Estado:** `PASS` da tela no código. Uso no tablet `BLOCKED_HARDWARE`.
+- [x] **A010** Layout de referência em 800x480, 1024x600 e 2000x1200. **Estado:** `PASS` dos testes de encaixe. Não é a tela física.
+- [x] **A011** Perfil de capacidade: 4 GB e 8 núcleos continuam dentro da política, sem usar o nome do modelo. Android 10 a 14 coberto. **Estado:** `PASS` dos testes.
+- [x] **A012** Dois decks com MP3/WAV local, lado a lado na paisagem, inclusive 2000x1200. Não mede canais. **Estado:** o player de arquivos locais passou a usar o motor de mixagem em A020. Tocar no tablet `BLOCKED_HARDWARE`.
+- [x] **A013** APK debug instalável. **Estado:** `PASS` da geração em 21/10/2026. A escuta continua `BLOCKED_HARDWARE`. O APK seguinte, com biblioteca, substitui o artefato.
+- [ ] **A014** `[HIL]` No Tab S6 Lite, com a DDJ-400: ouvir master e fone separados, conferir o modelo lido na hora, mandar o relatório. **Estado:** `BLOCKED_HARDWARE`. O djay não substitui este passo.
+- [x] **A015** Leitor DeviceSQL de `export.pdb` em Kotlin, sem copiar Crate Digger, rekordcrate nem pyrekordbox. Faixas, artistas, álbuns, gêneros, tom, BPM, duração e árvore de playlists. **Estado:** `PASS` dos testes JVM em 21/10/2026. Pendrive real `BLOCKED_HARDWARE`.
+- [x] **A016** ANLZ `.DAT` e `.EXT`: grade, hot cues, memory cues e forma de onda curta (`PWAV`). **Estado:** `PASS` dos testes na fixture sintética. Não foi conferido num export real.
+- [x] **A017** Fixture sintética de `export.pdb`, ANLZ e WAV, gerada no app. **Estado:** `PASS` do teste de ida e volta. Sem música comercial.
+- [x] **A018** `exportLibrary.db` detectado e não aberto. **Estado:** `PASS` do teste. OneLibrary continua não lida.
+- [ ] **A019** Permissão persistente de leitura (Storage Access Framework) e aviso quando um USB chega ou sai. **Estado:** código no APK. Pendrive real `BLOCKED_HARDWARE`.
+- [ ] **A020** Dois decks no motor Oboe: play, cue, pitch, volume, crossfader, pré-escuta nos canais 3–4, sync por BPM, hot cues. **Estado:** código no APK. Escuta no tablet `BLOCKED_HARDWARE`. Prints do emulador são simulação.
+- [x] **A021** Botão de MIDI simulado com bytes do mapa oficial. **Estado:** `PASS` de software. Não é a DDJ-400 e não fecha T009 nem A014.
+- [ ] **A022** Prints do emulador em 2000x1200 e 1024x600. **Estado:** o emulador Android 14 x86_64 chegou a abrir, mas o KVM desta máquina falhou (`kvm_spurious_fault`) e a CPU emulada em software deixou a interface do sistema em "Application Not Responding". O framebuffer não mostrou o app. Os PNG dessa tentativa não foram guardados como telas do DeckBridge. A022 continua aberta.
+
 ## Traçabilidade requisito -> tarefas -> testes/gates
 
 | Requisito | Tarefas-chave | Gate |
@@ -140,7 +167,7 @@ O proprietário só terá DDJ-400 e Raspberry no fim do projeto (21/10/2026). Si
 
 ## Gerenciamento de blockers
 
-- O proprietário só terá a DDJ-400 e o Raspberry no fim do projeto. Até lá, T005/T009/T010/T011/T012/T014/T016/T018/T031/T033/T034/T035/T038/T039 e a execução da T078 ficam `BLOCKED_HARDWARE`. OD-04 (versão do rekordbox e tipo de exportação) continua aberta para o pendrive real.
+- O acesso ao tablet e à DDJ-400 ainda vai demorar. A014, a escuta da prova A0, a leitura de um pendrive rekordbox real (A019) e a escuta dos decks (A020) ficam `BLOCKED_HARDWARE`. O Raspberry é o alvo 2: T005/T009/T010/T011/T012/T014/T016/T018/T031/T033/T034/T035/T038/T039 e a execução da T078 continuam `BLOCKED_HARDWARE`. OD-04 segue aberta. OD-12 a OD-16 estão provisórias.
 - Na ausência de hardware, agentes seguem em software e na trilha T075–T079, **sem fechar G0 ou G1**.
 - Simulação, teste de desktop e emulação não substituem o roteiro `docs/hil/roteiro-validacao-final.md`.
 - Qualquer issue de upstream incompatível exige issue com repro, commit e contorno verificável.

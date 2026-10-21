@@ -288,10 +288,22 @@ Se uma implementação exigir reescrita de engine de áudio para suportar uma fu
 
 ## 15. Trilha de simulação (T075–T079)
 
-O proprietário só terá a DDJ-400 e o Raspberry no fim do projeto (informação de 21/10/2026). As tarefas T001–T074 não mudam de número. A simulação é uma trilha extra para adiantar verificação. **Simulação não é prova no hardware.** Resultado `SIMULATED` não marca tarefa HIL como `PASS` e não fecha G0 nem G1.
+Atualização no mesmo dia: o alvo 1 passou a ser Android e o acesso ao tablet e à DDJ-400 ainda vai demorar. O Raspberry é o alvo 2. As tarefas T001–T074 não mudam de número. A simulação é uma trilha extra para adiantar verificação. **Simulação não é prova no hardware.** Resultado `SIMULATED` não marca tarefa HIL como `PASS` e não fecha G0 nem G1.
 
 - **T075.** Controladora DDJ-400 virtual. Envia e recebe MIDI conforme o mapa pinado em `third_party/mixxx/2.5.6`, por ALSA virtual (`snd-virmidi`) ou equivalente. Não inventa byte ausente do mapa. Estado nesta rodada: TODO.
 - **T076.** Dispositivo de áudio virtual de 4 canais. Master nos canais 1–2 e fone nos 3–4, para checar o roteamento do perfil. Estado nesta rodada: TODO.
 - **T077.** Execução em emulação ARM, `arm64` e `armhf` (QEMU ou container), para os perfis de capacidade da OD-01. Isso prova a arquitetura em que o código rodou, não que uma placa toca.
 - **T078.** Roteiro curto e numerado para a validação real, feito de uma vez no fim: `docs/hil/roteiro-validacao-final.md`. O texto existe. A execução está `BLOCKED_HARDWARE`.
 - **T079.** A regra acima fica testada em `src/deckbridge/evidence.py`. Desktop, emulação e MIDI virtual continuam sendo simulação.
+
+## 16. Trilha Android (A001 em diante; nada de T001–T079 muda de número)
+
+OD-11 (21/10/2026): o alvo 1 é um tablet ligado direto na DDJ-400, sem equipamento extra. O Raspberry fica como alvo 2 e o plano das seções anteriores continua valendo para ele. OD-12 a OD-16 estão **provisório, confirmar com o dono**.
+
+O tablet de referência é um Galaxy Tab S6 Lite, modelo e ano não confirmados, 4 GB de RAM, Android 10 a 14. A tela de 10,4" é 2000x1200. O padrão de 7" (800x480 e 1024x600) continua. O app usa minSdk 26 para também caber em aparelhos Android 8 da OD-01, e targetSdk 34 para cobrir até o Android 14.
+
+A lógica compartilhada: mapa da DDJ-400 pinado, biblioteca só leitura, MP3 e WAV primeiro, perfil de capacidade pelos mesmos limiares de RAM e núcleos (o nome do modelo não escolhe o tier), UI que cabe nas três referências.
+
+A prova A0 é a primeira tela do app: listar áudio USB e canais, tocar tons diferentes em 1–2 e em 3–4, ler MIDI e mostrar o nome do mapa, registrar modelo, string de hardware, SoC quando o sistema informar, versão do Android, latência, x-runs e bateria, e exportar um texto. O que não for lido fica UNKNOWN. Ouvir a separação no aparelho está `BLOCKED_HARDWARE`.
+
+O relato do djay (master e fone separados nesse tablet) é referência do dono. Está no registro de riscos e reduz a chance de falha de 4 canais nesse aparelho. Não é medição nossa.

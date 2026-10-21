@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SCREENS = ("PERFORMANCE", "BROWSE", "STATUS", "ERROR")
-RESOLUTIONS = ((800, 480), (1024, 600), (1366, 768))
+RESOLUTIONS = ((800, 480), (1024, 600), (1366, 768), (2000, 1200))
 
 
 @dataclass(frozen=True)
@@ -96,6 +96,7 @@ def _overlaps(left: Rect, right: Rect) -> bool:
 
 def render_svg(screen: str, width: int, height: int, waveforms: str = "full") -> str:
     rects = layout(screen, width, height, waveforms)
+    font = 13 if width < 1000 else 18 if width < 1600 else 26
     labels = {
         "banner": "Fonte sintética  ·  áudio por confirmar  ·  DDJ por confirmar",
         "footer": "BROWSE gira a lista  ·  LOAD A/B carrega  ·  gravação desligada",
@@ -129,9 +130,10 @@ def render_svg(screen: str, width: int, height: int, waveforms: str = "full") ->
         )
         text = labels.get(rect.name, "")
         if text:
+            baseline = min(rect.y + font + 4, rect.y + rect.h - 4)
             parts.append(
-                f'<text x="{rect.x + 6}" y="{rect.y + 16}" fill="#e8eef6" '
-                f'font-family="sans-serif" font-size="13">{_xml(text)}</text>'
+                f'<text x="{rect.x + 8}" y="{baseline}" fill="#e8eef6" '
+                f'font-family="sans-serif" font-size="{font}">{_xml(text)}</text>'
             )
     parts.append("</svg>")
     svg = "\n".join(parts)

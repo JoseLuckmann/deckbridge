@@ -24,6 +24,14 @@ def test_strong_generic_linux_is_high_tier_without_a_pi_name() -> None:
     assert profile.heavy_effects == "on"
 
 
+def test_four_gigabyte_class_stays_inside_the_policy_without_a_model_name() -> None:
+    named = classify(HostFacts(arch="aarch64", cpu_cores=8, ram_mb=4096, model="SM-P610"))
+    unnamed = classify(HostFacts(arch="aarch64", cpu_cores=8, ram_mb=4096, model="UNKNOWN"))
+    assert named == unnamed
+    assert named.tier == "high"
+    assert "não medido" in named.reason or "não foi medido" in named.reason or "ainda não medido" in named.reason
+
+
 def test_mid_tier_keeps_simple_waveform_and_drops_heavy_effects() -> None:
     profile = classify(HostFacts(arch="aarch64", cpu_cores=4, ram_mb=1024, model="UNKNOWN"))
     assert profile.tier == "mid"

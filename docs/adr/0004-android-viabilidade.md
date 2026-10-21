@@ -1,6 +1,6 @@
-# ADR-0004 (proposta) — Viabilidade de Android
+# ADR-0004 — Viabilidade de Android
 
-**Status:** proposta (não aceita) | **Data:** 2026-10-21 | **Idioma:** pt-BR
+**Status:** aceito | **Data:** 2026-10-21 | **Aceite:** 2026-10-21 | **Idioma:** pt-BR
 **Arquivo sugerido:** `docs/adr/0004-android-viabilidade.md`
 **Relaciona-se com:** ADR-0001 (Mixxx), ADR-0002 (pendrive somente leitura), ADR-0003 (offline), decisões D-01, D-06 e OD-01/02/03 do `spec.md`
 
@@ -238,6 +238,18 @@ Já está previsto na fase 3 (`contracts/openapi.yaml`). **Não atende ao novo o
 | **OD-16** | Distribuição: APK direto, F-Droid ou Play Store? | APK / F-Droid / Play | APK direto (uso pessoal) |
 
 ---
+
+## 13. Aceite do proprietário em 21/10/2026
+
+A proposta passa a **aceita**. OD-11 está decidida: o Android é o alvo 1 (tablet ligado direto na DDJ-400 por USB, sem equipamento extra) e o Raspberry é o alvo 2. OD-12 a OD-16 entram como **provisório, confirmar com o dono**, nos padrões desta proposta: motor próprio no Android; somente leitura no app, com aviso; se faltar 4 canais, tentar outro tablet primeiro; só bateria; APK direto.
+
+A trilha Raspberry não foi apagada. O Mixxx 2.5.6 continua valendo nela (emenda na ADR-0001). A montagem `ro` do Linux continua valendo nela (emenda na ADR-0002).
+
+### Tablet e relato do djay
+
+O tablet alvo é um Samsung Galaxy Tab S6 Lite. O modelo exato e o ano **não** foram confirmados. Pode ser SM-P610 ou SM-P615 (Exynos 9611) ou as versões 2022/2024 (Snapdragon 720G ou Exynos 1280), com 4 GB de RAM. O sistema Android desse aparelho fica entre 10 e 14.
+
+O dono relatou que, com o app djay, a DDJ-400 tocou master e fone **separados** nesse tablet. Isso é relato do dono, não medição deste projeto. Reduz o risco de 4 canais **nesse aparelho**, no registro de riscos. Não prova o nosso app, não confirma o SoC e não fecha a prova A0. O acesso ao tablet e à controladora ainda vai demorar. Até o relatório do diagnóstico voltar, a escuta continua `BLOCKED_HARDWARE`.
 
 ## Fontes (consultadas em 2026-10-21)
 

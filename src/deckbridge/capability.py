@@ -1,7 +1,9 @@
 """Perfil de execução a partir de RAM e núcleos.
 
 Os limiares são política (OD-01, 21/10/2026), não medida de desempenho.
-O nome do modelo não entra na conta.
+O nome do modelo não entra na conta. Um tablet de 4 GB e 8 núcleos,
+como a classe do Galaxy Tab S6 Lite, cai no tier alto por esses números.
+Isso não mede o aparelho e não confirma o modelo.
 """
 
 from __future__ import annotations

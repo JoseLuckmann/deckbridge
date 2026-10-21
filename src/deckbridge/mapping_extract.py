@@ -199,6 +199,34 @@ def build_document() -> tuple[dict[str, object], str]:
     return data, "\n".join(lines)
 
 
+def android_map_document() -> dict[str, object]:
+    """Tabela de entrada para o app Android. Só bytes que o XML pinado traz."""
+    pin = json.loads(PIN_PATH.read_text(encoding="utf-8"))
+    parsed = parse_xml(XML_PATH)
+    controls = []
+    for item in parsed["controls"]:
+        status = item["status"].strip()
+        midino = item["midino"].strip()
+        if not status or not midino:
+            continue
+        controls.append(
+            {
+                "status": int(status, 16),
+                "midino": int(midino, 16),
+                "group": item["group"],
+                "key": item["key"],
+                "description": item["description"],
+            }
+        )
+    return {
+        "tag": pin["tag"],
+        "commit": pin["commit_sha"],
+        "hardware_capture": "BLOCKED_HARDWARE",
+        "control_count": len(controls),
+        "controls": controls,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Gera a matriz DDJ-400 a partir do mapping pinado")
     parser.add_argument("--json-out", type=Path)

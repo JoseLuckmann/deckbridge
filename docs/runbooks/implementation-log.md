@@ -107,12 +107,33 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-21 | T078 | BLOCKED_HARDWARE | `a4e1c98` | roteiro numerado escrito | execução no fim | dono segue os 12 passos |
 | 2026-10-21 | T079 | PASS | `a4e1c98` | `evidence.py` recusa `SIMULATED` para HIL e para G0/G1 | — | manter a regra quando T075 existir |
 | 2026-10-21 | ADR Android | proposta | `0a912d5` | `docs/adr/0004-android-viabilidade.md` | não aceita; não altera ADR-0001, ADR-0002 nem o plano | dono responde OD-11 a OD-16 |
+| 2026-10-21 | OD-11 e A001–A013 | aceito / parcial | a preencher | APK debug; testes JVM; 42 testes Python | escuta no tablet `BLOCKED_HARDWARE`; OD-12..OD-16 provisórias | dono instala e manda o relatório |
+| 2026-10-21 | A015–A022 | parcial | a preencher | parser, fixture, testes JVM, prints do emulador se a rodada gravar | pendrive real e escuta `BLOCKED_HARDWARE`; OneLibrary não lida | dono autoriza o USB e manda o relatório |
 
 ### Proposta Android
 - Estado: proposta, não aceita
 - Arquivo: `docs/adr/0004-android-viabilidade.md`
 - O número 0004 também nomeia `docs/adr/0004-build-pipeline.md`, que continua valendo para o pacote Linux. Os dois arquivos convivem; este novo não substitui o outro.
 - OD-11 a OD-16 entraram em `spec.md` como abertas. ADR-0001, ADR-0002 e `plan.md` não foram alterados.
+- HIL executado? não
+
+### Alvo Android e prova A0
+- Estado: app gerado; escuta BLOCKED_HARDWARE
+- OD-11 decidida: Android alvo 1, Raspberry alvo 2
+- OD-12 a OD-16: provisório, confirmar com o dono
+- Tablet citado: Galaxy Tab S6 Lite, modelo exato não confirmado, 4 GB, Android 10 a 14
+- Relato do djay (master e fone separados) registrado como referência, não como medição
+- Testes JVM da lógica: o parser, a fixture e o mapa. Ver `./gradlew testDebugUnitTest`.
+- APK de debug desta rodada: `/opt/cursor/artifacts/deckbridge-debug.apk`, 13615739 bytes, SHA-256 `35266d8f38afe23822d9e50ec4996b9e1eb0bba7918af0fdded3632737716e8d`. ABIs arm64-v8a, armeabi-v7a e x86_64.
+- HIL executado? não
+
+### Biblioteca rekordbox e decks
+- Estado: software parcial; escuta e pendrive real BLOCKED_HARDWARE
+- Leitor próprio de export.pdb e ANLZ. Licenças conferidas em `android/FORMATO.md`. Código de terceiros não copiado.
+- OneLibrary detectada e não aberta.
+- Fixture sintética no próprio app. Sem música comercial.
+- MIDI simulado usa bytes do mapa oficial e não é a DDJ-400.
+- Emulador: imagem Android 14 x86_64. KVM acusou `kvm_spurious_fault`. Com CPU em software o sistema ficou em "Application Not Responding" e o print não é a tela do app. Nenhum PNG foi guardado como se fosse o DeckBridge.
 - HIL executado? não
 
 ### T020 — configuração

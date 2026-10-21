@@ -371,7 +371,7 @@ Inventariar: CPU/RAM/núcleos, distro/versão, kernel, display (tipo e resoluç�
 
 ### 14.1 Decisões tomadas nesta especificação (podem ser revisadas por ADR)
 
-- D-01: produto standalone **Raspberry+DDJ-400**, não driver Android.
+- D-01: produto standalone **Raspberry+DDJ-400**, não driver Android. Emenda OD-11 (21/10/2026): o alvo 1 é o app Android próprio no tablet, ligado direto na DDJ-400; o Raspberry permanece como alvo 2. O app rekordbox para Android continua fora de escopo.
 - D-02: usar **Mixxx 2.5.6 estável** como baseline; melhoria de forks externa só com port + testes.
 - D-03: read-only rekordbox em P1; OneLibrary completa adiada a P5.
 - D-04: priorizar controles físicos e **display landscape**; sem tela é possível desenvolver P0.
@@ -390,9 +390,29 @@ Estas três deixam de ser `OWNER_DECISION`. Os defaults antigos não valem mais.
 
 | ID | Decisão do proprietário | O que muda |
 |---|---|---|
-| OD-01 | Funcionar no máximo possível de aparelhos: Raspberry Pi de modelos diversos, inclusive antigos, e de preferência também Linux x86/ARM genérico. Não depender de um modelo. Detectar capacidades em execução e degradar com elegância (exemplo: desligar waveforms e efeitos pesados em hardware fraco). | Complementa D-06 sem apagá-la: Raspberry Pi OS 64-bit segue como base do aparelho; o programa também mira Linux genérico. D-01 (Raspberry + DDJ-400, não driver Android) permanece. |
+| OD-01 | Funcionar no máximo possível de aparelhos: Raspberry Pi de modelos diversos, inclusive antigos, e de preferência também Linux x86/ARM genérico. Não depender de um modelo. Detectar capacidades em execução e degradar com elegância (exemplo: desligar waveforms e efeitos pesados em hardware fraco). | Complementa D-06 sem apagá-la: Raspberry Pi OS 64-bit segue como base do aparelho na trilha Raspberry; o programa também mira Linux genérico. OD-11, no mesmo dia, passou o app Android próprio para alvo 1. |
 | OD-02 | Interface adaptável a qualquer resolução. Padrão e referência de tela: 7 polegadas, 800x480 e 1024x600. | Substitui o default anterior de 7" 1280x720. D-04 (controles físicos e paisagem; P0 pode seguir sem tela) permanece. |
 | OD-03 | Formatos principais: MP3 e WAV. Outros formatos podem ser suportados; MP3 e WAV são a prioridade de testes e de desempenho. | FLAC e AIFF saem da prioridade de desempenho e continuam no escopo se o decoder existir. |
+
+#### Decidida em 21/10/2026 — alvo
+
+| ID | Decisão do proprietário | O que muda |
+|---|---|---|
+| OD-11 | O Android é o alvo 1: tablet ligado direto na DDJ-400 por USB, sem equipamento extra. O Raspberry passa a ser o alvo 2. | O app é nosso, não o rekordbox. A trilha Raspberry e o Mixxx 2.5.6 continuam para o alvo 2. |
+
+Relato do dono no mesmo dia, guardado como referência e não como medição nossa: a DDJ-400 já funciona no tablet dele com o app djay. O tablet é um Samsung Galaxy Tab S6 Lite, com modelo e ano ainda não confirmados (pode ser SM-P610/P615 com Exynos 9611, ou as versões 2022/2024 com Snapdragon 720G ou Exynos 1280, 4 GB de RAM). Com o djay, master e fone saíram separados nesse tablet. Isso não prova os 4 canais deste app. O acesso ao equipamento ainda vai demorar.
+
+#### Provisórias em 21/10/2026 — confirmar com o dono
+
+Adotam o padrão proposto na ADR de Android. Não estão fechadas.
+
+| ID | Decisão provisória | Marca |
+|---|---|---|
+| OD-12 | Motor próprio no Android, em vez do Mixxx, só nessa trilha. | provisório, confirmar com o dono |
+| OD-13 | Somente leitura no nível do app, com aviso de que o Android é quem monta o pendrive. | provisório, confirmar com o dono |
+| OD-14 | Se o tablet não fizer 4 canais, tentar outro tablet antes de um driver USB próprio ou de um cabo divisor. | provisório, confirmar com o dono |
+| OD-15 | Set só na bateria, sem hub. | provisório, confirmar com o dono |
+| OD-16 | Distribuição por APK direto. | provisório, confirmar com o dono |
 
 #### Ainda abertas — `OWNER_DECISION` (não impedem P0/P1)
 
@@ -405,14 +425,6 @@ Estas três deixam de ser `OWNER_DECISION`. Os defaults antigos não valem mais.
 | OD-08 | PWA remota deve permitir comandos do mixer? | não, read-only/config no P3 | P3 |
 | OD-09 | Quais métricas importam mais no DJ Trainer? | alinhamento temporal/frases e sobreposição de grave | P4 |
 | OD-10 | Precisa gravar o set no MVP? | não; recurso P3, sem bloquear P1 | P3 |
-| OD-11 | O Android substitui o Raspberry ou vira um segundo alvo? Opções: substituir / os dois / só estudo. | aberta. Sugestão da proposta, se ninguém responder: os dois (o Pi continua; o Android seria trilha nova) | aberta |
-| OD-12 | Aceita escrever um motor próprio em vez do Mixxx no Android (mexeria no ADR-0001)? Opções: sim / esperar o Mixxx Android. | aberta. Sugestão da proposta: sim, só na trilha Android | aberta |
-| OD-13 | Aceita somente leitura no app (o Android monta o pendrive) e a opção de copiar para o tablet (mexeria no ADR-0002)? Opções: sim / só tocar de cópia local. | aberta. Sugestão da proposta: sim, com alerta | aberta |
-| OD-14 | Se o tablet não fizer 4 canais: driver USB próprio, cue por cabo divisor (master mono) ou trocar de tablet? | aberta. Sugestão da proposta: trocar de tablet antes de tudo | aberta |
-| OD-15 | O set fica só na bateria ou aceita um hub USB-C com Power Delivery para carregar? Opções: só bateria / hub PD. | aberta. Sugestão da proposta: só bateria | aberta |
-| OD-16 | Distribuição: APK direto, F-Droid ou Play Store? | aberta. Sugestão da proposta: APK direto (uso pessoal) | aberta |
-
-OD-11 a OD-16 vieram de `docs/adr/0004-android-viabilidade.md`. Essa ADR está em status **proposta** e não foi aceita. ADR-0001, ADR-0002 e o plano não mudam por causa dela.
 
 ### 14.3 Protocolo de dúvidas bloqueantes
 
