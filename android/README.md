@@ -6,7 +6,7 @@ Alvo 1, a partir de 21/10/2026: tablet ligado direto na DDJ-400. O Raspberry con
 - Motor de tons em C++ com Oboe 1.11.0, pelo NDK.
 - minSdk 26 (Android 8). Isso inclui o Galaxy Tab S6 Lite, que está entre Android 10 e 14. targetSdk 34.
 - Mapa de MIDI copiado do XML pinado do Mixxx 2.5.6. Não é captura da controladora.
-- Leitor próprio de `export.pdb` e de ANLZ. Ver `FORMATO.md`. OneLibrary não é aberta.
+- Leitor próprio de `export.pdb`, `exportExt.pdb` e ANLZ. Ver `FORMATO.md`. OneLibrary abre uma cópia local com a chave pública documentada; se não abrir, a tela avisa.
 - O APK de debug inclui `x86_64` para o emulador, além de `arm64-v8a` e `armeabi-v7a` para o tablet.
 
 ```bash

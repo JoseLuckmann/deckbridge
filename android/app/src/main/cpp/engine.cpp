@@ -44,7 +44,8 @@ const char *performanceName(oboe::PerformanceMode mode) {
 }
 
 struct Deck {
-    std::vector<float> samples;
+    std::vector<float> left;
+    std::vector<float> right;
     int sampleRate = 48000;
     double position = 0.0;
     double pitch = 1.0;
@@ -54,25 +55,40 @@ struct Deck {
     double cue = 0.0;
     double hot[kMaxHot]{};
     float bpm = 0.f;
+    double loopStart = -1.0;
+    double loopEnd = -1.0;
 
     Deck() {
         for (double &item : hot) item = -1.0;
     }
 
-    float read(int outputRate) {
-        if (!playing || samples.empty() || sampleRate <= 0 || outputRate <= 0) return 0.f;
+    void wrapLoop() {
+        if (!(loopEnd > loopStart) || position < loopEnd) return;
+        const double length = loopEnd - loopStart;
+        double over = std::fmod(position - loopEnd, length);
+        if (over < 0.0) over += length;
+        position = loopStart + over;
+    }
+
+    void read(int outputRate, float &leftOut, float &rightOut) {
+        leftOut = 0.f;
+        rightOut = 0.f;
+        if (!playing || left.empty() || sampleRate <= 0 || outputRate <= 0) return;
         if (position < 0.0) position = 0.0;
-        auto index = static_cast<int>(position);
-        if (index >= static_cast<int>(samples.size())) {
+        wrapLoop();
+        const int frames = static_cast<int>(left.size());
+        const int index = static_cast<int>(position);
+        if (index >= frames) {
             playing = false;
             position = 0.0;
-            return 0.f;
+            return;
         }
-        int next = std::min(index + 1, static_cast<int>(samples.size()) - 1);
-        float frac = static_cast<float>(position - index);
-        float sample = samples[index] * (1.f - frac) + samples[next] * frac;
+        const int next = std::min(index + 1, frames - 1);
+        const float frac = static_cast<float>(position - index);
+        leftOut = left[index] * (1.f - frac) + left[next] * frac;
+        rightOut = right[index] * (1.f - frac) + right[next] * frac;
         position += (pitch * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
-        return sample;
+        wrapLoop();
     }
 };
 
@@ -155,27 +171,49 @@ public:
         return statsLocked();
     }
 
-    void loadDeck(int deck, const float *data, int count, int rate, float bpm, float cueSeconds, const float *hot, int hotCount) {
-        if (deck < 0 || deck > 1) return;
+    void loadDeck(int deck, const float *data, int count, int channels, int rate, float bpm, float cueSeconds,
+                  const float *hot, int hotCount, float loopStartSec, float loopEndSec) {
+        if (deck < 0 || deck > 1 || data == nullptr) return;
         std::lock_guard<std::mutex> lock(mixMutex_);
         Deck &target = decks_[deck];
-        target.samples.assign(data, data + std::max(count, 0));
+        const int ch = channels == 2 ? 2 : 1;
+        const int frames = std::max(0, ch == 2 ? count / 2 : count);
+        target.left.assign(frames, 0.f);
+        target.right.assign(frames, 0.f);
+        for (int index = 0; index < frames; ++index) {
+            if (ch == 2) {
+                target.left[index] = data[index * 2];
+                target.right[index] = data[index * 2 + 1];
+            } else {
+                target.left[index] = data[index];
+                target.right[index] = data[index];
+            }
+        }
         target.sampleRate = rate > 0 ? rate : 48000;
         target.bpm = bpm;
         target.position = 0.0;
         target.playing = false;
         target.cue = std::max(0.0, static_cast<double>(cueSeconds) * target.sampleRate);
+        const double start = static_cast<double>(loopStartSec) * target.sampleRate;
+        const double end = static_cast<double>(loopEndSec) * target.sampleRate;
+        if (end > start && start >= 0.0) {
+            target.loopStart = start;
+            target.loopEnd = end;
+        } else {
+            target.loopStart = -1.0;
+            target.loopEnd = -1.0;
+        }
         for (double &item : target.hot) item = -1.0;
         int limit = std::min(hotCount, kMaxHot);
         for (int index = 0; index < limit; ++index) {
-            if (hot[index] >= 0.f) target.hot[index] = static_cast<double>(hot[index]) * target.sampleRate;
+            if (hot != nullptr && hot[index] >= 0.f) target.hot[index] = static_cast<double>(hot[index]) * target.sampleRate;
         }
     }
 
     void transport(int deck, bool playing) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
-        decks_[deck].playing = playing && !decks_[deck].samples.empty();
+        decks_[deck].playing = playing && !decks_[deck].left.empty();
     }
 
     void cue(int deck) {
@@ -220,19 +258,33 @@ public:
             const bool phonesOpen = channels >= 4;
             phonesAudible_.store(phonesOpen && (decks_[0].pfl || decks_[1].pfl));
             for (int frame = 0; frame < numFrames; ++frame) {
-                float a = decks_[0].read(rate);
-                float b = decks_[1].read(rate);
-                float master = a * (1.f - cross_) * decks_[0].volume + b * cross_ * decks_[1].volume;
-                float phone = 0.f;
+                float al = 0.f, ar = 0.f, bl = 0.f, br = 0.f;
+                decks_[0].read(rate, al, ar);
+                decks_[1].read(rate, bl, br);
+                const float masterL = al * (1.f - cross_) * decks_[0].volume + bl * cross_ * decks_[1].volume;
+                const float masterR = ar * (1.f - cross_) * decks_[0].volume + br * cross_ * decks_[1].volume;
+                float phoneL = 0.f;
+                float phoneR = 0.f;
                 if (phonesOpen) {
-                    if (decks_[0].pfl) phone += a * decks_[0].volume;
-                    if (decks_[1].pfl) phone += b * decks_[1].volume;
-                    if (decks_[0].pfl && decks_[1].pfl) phone *= 0.5f;
+                    if (decks_[0].pfl) {
+                        phoneL += al * decks_[0].volume;
+                        phoneR += ar * decks_[0].volume;
+                    }
+                    if (decks_[1].pfl) {
+                        phoneL += bl * decks_[1].volume;
+                        phoneR += br * decks_[1].volume;
+                    }
+                    if (decks_[0].pfl && decks_[1].pfl) {
+                        phoneL *= 0.5f;
+                        phoneR *= 0.5f;
+                    }
                 }
                 for (int channel = 0; channel < channels; ++channel) {
                     float sample = 0.f;
-                    if (channel < 2) sample = master;
-                    else if (channel < 4) sample = phone;
+                    if (channel == 0) sample = masterL;
+                    else if (channel == 1) sample = masterR;
+                    else if (channel == 2) sample = phoneL;
+                    else if (channel == 3) sample = phoneR;
                     out[frame * channels + channel] = sample;
                 }
             }
@@ -361,7 +413,8 @@ Java_os_deckbridge_android_NativeEngine_nativeStop(JNIEnv *, jobject) {
 
 extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeLoadDeck(
-        JNIEnv *env, jobject, jint deck, jfloatArray samples, jint rate, jfloat bpm, jfloat cueSeconds, jfloatArray hot) {
+        JNIEnv *env, jobject, jint deck, jfloatArray samples, jint channels, jint rate, jfloat bpm, jfloat cueSeconds,
+        jfloatArray hot, jfloat loopStart, jfloat loopEnd) {
     if (samples == nullptr) return;
     jsize count = env->GetArrayLength(samples);
     jfloat *data = env->GetFloatArrayElements(samples, nullptr);
@@ -371,7 +424,7 @@ Java_os_deckbridge_android_NativeEngine_nativeLoadDeck(
         hotCount = env->GetArrayLength(hot);
         hotData = env->GetFloatArrayElements(hot, nullptr);
     }
-    engine().loadDeck(deck, data, count, rate, bpm, cueSeconds, hotData, hotCount);
+    engine().loadDeck(deck, data, count, channels, rate, bpm, cueSeconds, hotData, hotCount, loopStart, loopEnd);
     env->ReleaseFloatArrayElements(samples, data, JNI_ABORT);
     if (hotData != nullptr) env->ReleaseFloatArrayElements(hot, hotData, JNI_ABORT);
 }

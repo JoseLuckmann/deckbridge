@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,6 +47,7 @@ fun LibraryPage(
     onReloadPersisted: () -> Unit,
     onLoadDeck: (RbTrack, Int) -> Unit,
     widthPx: Int,
+    jvmBanner: String? = null,
 ) {
     val context = LocalContext.current
     val size = textSp(widthPx).sp
@@ -54,6 +56,7 @@ fun LibraryPage(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        if (jvmBanner != null) Text(jvmBanner, fontSize = size, color = Color(0xFFFFC857))
         Text("Biblioteca rekordbox — somente leitura", fontSize = size)
         Text("Volume USB: $usbLabel", fontSize = size)
         Text(notice, fontSize = size)
@@ -96,7 +99,7 @@ fun LibraryPage(
                 if (ids.isEmpty() && selected?.folder == false) Text("Playlist vazia.", fontSize = size)
                 ids.forEach { id ->
                     val track = catalog.tracks.firstOrNull { it.id == id }
-                    if (track != null) TrackRow(track, size, onLoadDeck)
+                    if (track != null) TrackRow(track, catalog.trackTags[track.id].orEmpty(), size, onLoadDeck)
                 }
             }
         }
@@ -112,9 +115,17 @@ private fun PlaylistButton(playlist: RbPlaylist, selected: Boolean, size: androi
 }
 
 @Composable
-private fun TrackRow(track: RbTrack, size: androidx.compose.ui.unit.TextUnit, onLoadDeck: (RbTrack, Int) -> Unit) {
+private fun TrackRow(
+    track: RbTrack,
+    tags: List<os.deckbridge.logic.RbTag>,
+    size: androidx.compose.ui.unit.TextUnit,
+    onLoadDeck: (RbTrack, Int) -> Unit,
+) {
     Text("${track.title} — ${track.artist}", fontSize = size)
-    Text("${track.bpm} BPM · ${track.keyName} · ${track.durationSeconds}s · ${track.genre}", fontSize = size)
+    Text("${track.bpm} BPM · tom ${track.keyName} · ${track.durationSeconds}s · ${track.genre}", fontSize = size)
+    if (tags.isNotEmpty()) {
+        Text("Tags " + tags.joinToString { if (it.category.isBlank()) it.name else "${it.category}/${it.name}" }, fontSize = size)
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onClick = { onLoadDeck(track, 0) }) { Text("Deck A") }
         Button(onClick = { onLoadDeck(track, 1) }) { Text("Deck B") }

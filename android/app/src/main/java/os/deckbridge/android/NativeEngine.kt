@@ -26,9 +26,23 @@ object NativeEngine {
         }
     }
 
-    fun loadDeck(deck: Int, mono: FloatArray, sampleRate: Int, bpm: Float, cueSeconds: Float, hotCueSeconds: FloatArray) {
+    fun loadDeck(
+        deck: Int,
+        pcm: os.deckbridge.logic.DecodedPcm,
+        bpm: Float,
+        cueSeconds: Float,
+        hotCueSeconds: FloatArray,
+        loopStartSeconds: Float,
+        loopEndSeconds: Float,
+    ) {
         if (!ensureQuiet()) return
-        nativeLoadDeck(deck, mono, sampleRate, bpm, cueSeconds, hotCueSeconds)
+        val frames = minOf(pcm.left.size, pcm.right.size)
+        val interleaved = FloatArray(frames * 2)
+        for (index in 0 until frames) {
+            interleaved[index * 2] = pcm.left[index]
+            interleaved[index * 2 + 1] = pcm.right[index]
+        }
+        nativeLoadDeck(deck, interleaved, 2, pcm.sampleRate, bpm, cueSeconds, hotCueSeconds, loopStartSeconds, loopEndSeconds)
     }
 
     fun transport(deck: Int, playing: Boolean) {
@@ -86,10 +100,13 @@ object NativeEngine {
     private external fun nativeLoadDeck(
         deck: Int,
         samples: FloatArray,
+        channels: Int,
         rate: Int,
         bpm: Float,
         cueSeconds: Float,
         hot: FloatArray,
+        loopStart: Float,
+        loopEnd: Float,
     )
     private external fun nativeTransport(deck: Int, playing: Boolean)
     private external fun nativeCue(deck: Int)

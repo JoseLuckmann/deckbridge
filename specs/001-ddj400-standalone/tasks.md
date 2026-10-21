@@ -136,11 +136,18 @@ OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Ras
 - [x] **A015** Leitor DeviceSQL de `export.pdb` em Kotlin, sem copiar Crate Digger, rekordcrate nem pyrekordbox. Faixas, artistas, álbuns, gêneros, tom, BPM, duração e árvore de playlists. **Estado:** `PASS` dos testes JVM em 21/10/2026. Pendrive real `BLOCKED_HARDWARE`.
 - [x] **A016** ANLZ `.DAT` e `.EXT`: grade, hot cues, memory cues e forma de onda curta (`PWAV`). **Estado:** `PASS` dos testes na fixture sintética. Não foi conferido num export real.
 - [x] **A017** Fixture sintética de `export.pdb`, ANLZ e WAV, gerada no app. **Estado:** `PASS` do teste de ida e volta. Sem música comercial.
-- [x] **A018** `exportLibrary.db` detectado e não aberto. **Estado:** `PASS` do teste. OneLibrary continua não lida.
+- [x] **A018** `exportLibrary.db` detectado. **Estado:** a abertura tenta a chave pública documentada numa cópia local, somente leitura. O arquivo sintético não é SQLCipher e o teste confirma que não abre. Um export real continua `BLOCKED_HARDWARE`.
 - [ ] **A019** Permissão persistente de leitura (Storage Access Framework) e aviso quando um USB chega ou sai. **Estado:** código no APK. Pendrive real `BLOCKED_HARDWARE`.
-- [ ] **A020** Dois decks no motor Oboe: play, cue, pitch, volume, crossfader, pré-escuta nos canais 3–4, sync por BPM, hot cues. **Estado:** código no APK. Escuta no tablet `BLOCKED_HARDWARE`. Prints do emulador são simulação.
+- [ ] **A020** Dois decks no motor Oboe: play, cue, pitch, volume, crossfader, pré-escuta nos canais 3–4, sync por BPM, hot cues, loop em ciclo e estéreo. **Estado:** código no APK. Escuta no tablet `BLOCKED_HARDWARE`.
 - [x] **A021** Botão de MIDI simulado com bytes do mapa oficial. **Estado:** `PASS` de software. Não é a DDJ-400 e não fecha T009 nem A014.
-- [ ] **A022** Prints do emulador em 2000x1200 e 1024x600. **Estado:** o emulador Android 14 x86_64 chegou a abrir, mas o KVM desta máquina falhou (`kvm_spurious_fault`) e a CPU emulada em software deixou a interface do sistema em "Application Not Responding". O framebuffer não mostrou o app. Os PNG dessa tentativa não foram guardados como telas do DeckBridge. A022 continua aberta.
+- [ ] **A022** Prints do emulador em 2000x1200 e 1024x600. **Estado:** o KVM desta máquina falhou (`kvm_spurious_fault`) e a CPU em software deixou a interface do sistema em "Application Not Responding". A022 continua aberta. Os prints da A023 não fecham este item.
+- [x] **A023** Prints das telas reais na JVM, com Roborazzi e Robolectric em modo de gráficos nativos, usando o pendrive simulado. **Estado:** `PASS` de renderização. Não é o tablet. Arquivos em `/opt/cursor/artifacts/prints/`.
+- [x] **A024** Loop do rekordbox toca em ciclo no motor. **Estado:** `PASS` da fórmula no teste JVM e código no motor. Escuta `BLOCKED_HARDWARE`.
+- [x] **A025** Estéreo de verdade no WAV, no MP3 e no motor (master L/R e fone L/R). **Estado:** `PASS` do WAV sintético. Escuta `BLOCKED_HARDWARE`.
+- [x] **A026** Pitch de 14 bits (MSB+LSB) como o script oficial: centro `0x2000`, faixas 6/10/16/25%. **Estado:** `PASS` do teste. A curva ouvida na controladora continua `BLOCKED_HARDWARE`.
+- [x] **A027** Leitura de `exportExt.pdb` (My Tags). **Estado:** `PASS` da fixture sintética. Export real `BLOCKED_HARDWARE`.
+- [x] **A028** OneLibrary com a chave pública documentada, só numa cópia local. **Estado:** `PASS` do caminho que não abre arquivo inválido e do caminho que lê um SQLite local de teste. A cifra de um `exportLibrary.db` real não foi exercida aqui.
+- [x] **A029** Sequências MIDI virtuais de jog, volume, crossfader, hot cue e pitch, com bytes do mapa oficial. **Estado:** `PASS` dos testes JVM. O jog não move o áudio. Não é a DDJ-400.
 
 ## Traçabilidade requisito -> tarefas -> testes/gates
 

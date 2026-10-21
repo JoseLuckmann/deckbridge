@@ -36,6 +36,8 @@ data class RbAnalysis(
     val waveform: ByteArray,
 )
 
+data class RbTag(val name: String, val category: String)
+
 data class RbCatalog(
     val tracks: List<RbTrack>,
     val playlists: List<RbPlaylist>,
@@ -45,6 +47,8 @@ data class RbCatalog(
     val oneLibraryPresent: Boolean,
     val oneLibraryReadable: Boolean,
     val oneLibraryNote: String,
+    val oneLibraryContentRows: Int,
+    val trackTags: Map<Int, List<RbTag>>,
     val warnings: List<String>,
     val error: String?,
 )
@@ -78,7 +82,7 @@ fun normalizeRekordboxPath(raw: String): String {
     return path
 }
 
-fun loadRekordbox(volume: ReadableVolume): RbCatalog {
+fun loadRekordbox(volume: ReadableVolume, oneLibrary: OneLibraryOpener? = null): RbCatalog {
     val warnings = mutableListOf<String>()
     val pdbPath = listOf(
         "PIONEER/rekordbox/export.pdb",
@@ -93,14 +97,33 @@ fun loadRekordbox(volume: ReadableVolume): RbCatalog {
     if (db == null) {
         return emptyCatalog(volume, parsed.error ?: "E_RB_UNSUPPORTED_VARIANT", warnings)
     }
-    if (volume.exists(sibling(pdbPath, "exportExt.pdb"))) {
+    val extBytes = volume.read(sibling(pdbPath, "exportExt.pdb"))
+    val ext = extBytes?.let(::parseExportExt)
+    val trackTags = tagsByTrack(ext)
+    if (extBytes != null && ext == null) {
         warnings += "exportExt.pdb visto e não interpretado nesta versão"
     }
-    val oneLibrary = volume.exists(sibling(pdbPath, "exportLibrary.db"))
-    val oneNote = if (oneLibrary) {
-        "exportLibrary.db encontrado. Não foi aberto: pode ser SQLCipher e abrir o arquivo criaria WAL. Somente leitura não inclui essa base nesta versão."
+    val onePath = sibling(pdbPath, "exportLibrary.db")
+    val oneBytes = volume.read(onePath)
+    val onePresent = oneBytes != null
+    val opened = if (oneBytes != null && oneLibrary != null) {
+        runCatching { oneLibrary.open(oneBytes) }.getOrNull()
     } else {
-        "exportLibrary.db ausente"
+        null
+    }
+    val oneNote = when {
+        !onePresent -> "exportLibrary.db ausente"
+        opened != null -> {
+            "exportLibrary.db aberto numa cópia local, somente leitura. ${opened.tables.size} tabelas. " +
+                "Linhas em djmdContent: ${opened.contentRows}. Chave pública documentada, a mesma em toda exportação."
+        }
+        oneLibraryLooksLikePlainSqlite(oneBytes!!) -> {
+            "exportLibrary.db é SQLite sem cifra, mas esta leitura não devolveu tabelas."
+        }
+        else -> {
+            "exportLibrary.db encontrado. A documentação pública (pyrekordbox, MIT) descreve uma chave SQLCipher " +
+                "compartilhada, sem depender de licença. Esta cópia não abriu. Nada foi gravado no pendrive."
+        }
     }
     val artists = db.artists.associate { it.id to it.name }
     val albums = db.albums.associate { it.id to it.name }
@@ -136,12 +159,32 @@ fun loadRekordbox(volume: ReadableVolume): RbCatalog {
         analyses = analyses,
         label = volume.label,
         simulated = volume.simulated,
-        oneLibraryPresent = oneLibrary,
-        oneLibraryReadable = false,
+        oneLibraryPresent = onePresent,
+        oneLibraryReadable = opened != null,
         oneLibraryNote = oneNote,
+        oneLibraryContentRows = opened?.contentRows ?: -1,
+        trackTags = trackTags,
         warnings = warnings,
         error = null,
     )
+}
+
+fun activeLoop(analysis: RbAnalysis?): Pair<Int, Int>? {
+    val cue = analysis?.memoryCues?.firstOrNull { it.loopEndMs != null && it.loopEndMs > it.timeMs } ?: return null
+    return cue.timeMs to cue.loopEndMs!!
+}
+
+private fun tagsByTrack(ext: PdbExt?): Map<Int, List<RbTag>> {
+    if (ext == null) return emptyMap()
+    val categories = ext.tags.filter { it.category }.associate { it.id to it.name }
+    val names = ext.tags.filter { !it.category }.associate { it.id to it }
+    val grouped = mutableMapOf<Int, MutableList<RbTag>>()
+    ext.tagTracks.forEach { link ->
+        val tag = names[link.tagId] ?: return@forEach
+        val bucket = grouped.getOrPut(link.trackId) { mutableListOf() }
+        bucket += RbTag(tag.name, categories[tag.categoryId].orEmpty())
+    }
+    return grouped
 }
 
 private fun analysisFor(volume: ReadableVolume, path: String): RbAnalysis {
@@ -179,14 +222,19 @@ private fun emptyCatalog(volume: ReadableVolume, error: String, warnings: List<S
         oneLibraryPresent = false,
         oneLibraryReadable = false,
         oneLibraryNote = "",
+        oneLibraryContentRows = -1,
+        trackTags = emptyMap(),
         warnings = warnings,
         error = error,
     )
 }
 
-data class DecodedPcm(val mono: FloatArray, val sampleRate: Int)
+data class DecodedPcm(val left: FloatArray, val right: FloatArray, val sampleRate: Int) {
+    val frameCount: Int get() = minOf(left.size, right.size)
+    val stereo: Boolean get() = !left.contentEquals(right)
+}
 
-fun decodeWavMono(bytes: ByteArray): DecodedPcm? {
+fun decodeWav(bytes: ByteArray): DecodedPcm? {
     if (bytes.size < 44) return null
     if (bytes.copyOfRange(0, 4).toString(Charsets.US_ASCII) != "RIFF") return null
     if (bytes.copyOfRange(8, 12).toString(Charsets.US_ASCII) != "WAVE") return null
@@ -216,16 +264,20 @@ fun decodeWavMono(bytes: ByteArray): DecodedPcm? {
     if (channels !in 1..2 || rate <= 0 || bits != 16 || dataAt < 0) return null
     val frames = dataLen / (channels * 2)
     if (frames <= 0 || frames > 48000 * 60 * 10) return null
-    val mono = FloatArray(frames)
+    val left = FloatArray(frames)
+    val right = FloatArray(frames)
     var sample = dataAt
     for (frame in 0 until frames) {
-        var sum = 0
-        for (channel in 0 until channels) {
-            val raw = bytes.u16le(sample).toShort().toInt()
-            sum += raw
+        val first = bytes.u16le(sample).toShort().toInt() / 32768f
+        sample += 2
+        if (channels == 1) {
+            left[frame] = first
+            right[frame] = first
+        } else {
+            left[frame] = first
+            right[frame] = bytes.u16le(sample).toShort().toInt() / 32768f
             sample += 2
         }
-        mono[frame] = (sum / channels) / 32768f
     }
-    return DecodedPcm(mono, rate)
+    return DecodedPcm(left, right, rate)
 }

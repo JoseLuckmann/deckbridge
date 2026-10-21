@@ -14,7 +14,7 @@ object SyntheticRekordbox {
         val files = linkedMapOf(
             "PIONEER/rekordbox/export.pdb" to pdb(wav120.size, wav100.size),
             "PIONEER/rekordbox/exportLibrary.db" to "NOTASQLITE".toByteArray(Charsets.US_ASCII),
-            "PIONEER/rekordbox/exportExt.pdb" to "nao-lido".toByteArray(Charsets.US_ASCII),
+            "PIONEER/rekordbox/exportExt.pdb" to extPdb(),
             "PIONEER/USBANLZ/ANLZ0001.DAT" to anlzDat(bpm = 120, beats = 16, hot = listOf(0 to 1, 2000 to 2), memoryMs = 500),
             "PIONEER/USBANLZ/ANLZ0001.EXT" to anlzExt(
                 hot = listOf(CueSpec(1, 0, "Intro", 255, 40, 40), CueSpec(2, 2000, "Meio", 40, 180, 255)),
@@ -106,6 +106,98 @@ object SyntheticRekordbox {
         }
         return file
     }
+}
+
+private fun extPdb(): ByteArray {
+    val pages = mutableListOf(ByteArray(PAGE_LEN))
+    data class Chain(val first: Int, val last: Int)
+    fun addChain(type: Int, rows: List<ByteArray>): Chain {
+        val emptyIndex = pages.size
+        pages += ByteArray(PAGE_LEN)
+        val dataIndex = pages.size
+        val data = ByteArray(PAGE_LEN)
+        pages += data
+        writePageHeader(pages[emptyIndex], emptyIndex, type, dataIndex, 0, 0)
+        var cursor = PAGE_HEADER_END
+        val offsets = IntArray(rows.size)
+        rows.forEachIndexed { index, row ->
+            row.copyInto(data, cursor)
+            offsets[index] = cursor - PAGE_HEADER_END
+            cursor += row.size
+            if (cursor % 2 != 0) cursor += 1
+        }
+        val present = List(rows.size) { true }
+        writeIndex(data, present, offsets)
+        writePageHeader(data, dataIndex, type, 0x00FFFFFF, present.size, present.size)
+        return Chain(emptyIndex, dataIndex)
+    }
+    val tags = addChain(
+        3,
+        listOf(
+            tagRowNear(id = 1, name = "Mood", categoryId = 0, position = 0, category = true, indexShift = 0x20),
+            tagRowNear(id = 100, name = "Abertura", categoryId = 1, position = 0, category = false, indexShift = 0x40),
+            tagRowFar(id = 200, name = "Longe", categoryId = 1, position = 1, indexShift = 0x60),
+        ),
+    )
+    val links = addChain(
+        4,
+        listOf(
+            tagTrackRow(1, 100),
+            tagTrackRow(2, 200),
+        ),
+    )
+    val tables = listOf(intArrayOf(3, tags.first, tags.last), intArrayOf(4, links.first, links.last))
+    val file = ByteArray(pages.size * PAGE_LEN)
+    pages.forEachIndexed { index, page -> page.copyInto(file, index * PAGE_LEN) }
+    file.putU32le(4, PAGE_LEN)
+    file.putU32le(8, tables.size)
+    file.putU32le(12, pages.size)
+    file.putU32le(20, 1)
+    tables.forEachIndexed { index, spec ->
+        val at = 28 + index * 16
+        file.putU32le(at, spec[0])
+        file.putU32le(at + 4, 0)
+        file.putU32le(at + 8, spec[1])
+        file.putU32le(at + 12, spec[2])
+    }
+    return file
+}
+
+private fun tagRowNear(id: Int, name: String, categoryId: Int, position: Int, category: Boolean, indexShift: Int): ByteArray {
+    val text = deviceString(name)
+    val row = ByteArray(0x20 + text.size)
+    row.putU16le(0, 0x0680)
+    row.putU16le(2, indexShift)
+    row.putU32le(0x0C, categoryId)
+    row.putU32le(0x10, position)
+    row.putU32le(0x14, id)
+    row.putU32le(0x18, if (category) 1 else 0)
+    row.putU8(0x1C, 0x03)
+    row.putU8(0x1D, 0x20)
+    text.copyInto(row, 0x20)
+    return row
+}
+
+private fun tagRowFar(id: Int, name: String, categoryId: Int, position: Int, indexShift: Int): ByteArray {
+    val text = deviceString(name)
+    val nameAt = 0x120
+    val row = ByteArray(nameAt + text.size)
+    row.putU16le(0, 0x0684)
+    row.putU16le(2, indexShift)
+    row.putU32le(0x0C, categoryId)
+    row.putU32le(0x10, position)
+    row.putU32le(0x14, id)
+    row.putU16le(0x1E, nameAt)
+    text.copyInto(row, nameAt)
+    return row
+}
+
+private fun tagTrackRow(trackId: Int, tagId: Int): ByteArray {
+    val row = ByteArray(16)
+    row.putU32le(4, trackId)
+    row.putU32le(8, tagId)
+    row.putU32le(12, 3)
+    return row
 }
 
 private fun writePageHeader(page: ByteArray, index: Int, type: Int, next: Int, numOffsets: Int, numRows: Int) {

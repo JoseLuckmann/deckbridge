@@ -5,14 +5,14 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import os.deckbridge.logic.DecodedPcm
-import os.deckbridge.logic.decodeWavMono
+import os.deckbridge.logic.decodeWav
 import java.io.File
 import java.nio.ByteOrder
 
 fun decodeTrackAudio(context: Context, name: String, bytes: ByteArray): DecodedPcm? {
     val lower = name.lowercase()
     if (lower.endsWith(".wav") || (bytes.size > 12 && bytes.copyOfRange(0, 4).decodeToString() == "RIFF")) {
-        return decodeWavMono(bytes)
+        return decodeWav(bytes)
     }
     if (!lower.endsWith(".mp3")) return null
     return decodeMp3(context, bytes)
@@ -43,11 +43,12 @@ private fun decodeMp3(context: Context, bytes: ByteArray): DecodedPcm? {
         decoder.start()
         val rate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
         val channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-        val mono = ArrayList<Float>()
+        val left = ArrayList<Float>()
+        val right = ArrayList<Float>()
         val info = MediaCodec.BufferInfo()
         var inputDone = false
         var outputDone = false
-        while (!outputDone && mono.size < rate * 60 * 10) {
+        while (!outputDone && left.size < rate * 60 * 10) {
             if (!inputDone) {
                 val inIndex = decoder.dequeueInputBuffer(5_000)
                 if (inIndex >= 0) {
@@ -71,9 +72,16 @@ private fun decodeMp3(context: Context, bytes: ByteArray): DecodedPcm? {
                     buffer.limit(info.offset + info.size)
                     val frames = info.size / (2 * channels)
                     repeat(frames) {
-                        var sum = 0
-                        repeat(channels) { sum += buffer.short.toInt() }
-                        mono += (sum / channels) / 32768f
+                        val first = buffer.short.toInt() / 32768f
+                        if (channels == 1) {
+                            left += first
+                            right += first
+                        } else {
+                            val second = buffer.short.toInt() / 32768f
+                            left += first
+                            right += second
+                            repeat((channels - 2).coerceAtLeast(0)) { buffer.short }
+                        }
                     }
                 }
                 decoder.releaseOutputBuffer(outIndex, false)
@@ -85,7 +93,7 @@ private fun decodeMp3(context: Context, bytes: ByteArray): DecodedPcm? {
         decoder.stop()
         decoder.release()
         extractor.release()
-        if (mono.isEmpty()) null else DecodedPcm(mono.toFloatArray(), rate)
+        if (left.isEmpty()) null else DecodedPcm(left.toFloatArray(), right.toFloatArray(), rate)
     } catch (_: Exception) {
         null
     } finally {

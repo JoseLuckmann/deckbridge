@@ -50,6 +50,18 @@ data class PdbDatabase(
 
 data class PdbParse(val database: PdbDatabase?, val error: String?)
 
+data class PdbTag(
+    val id: Int,
+    val name: String,
+    val categoryId: Int,
+    val position: Int,
+    val category: Boolean,
+)
+
+data class PdbTagTrack(val trackId: Int, val tagId: Int)
+
+data class PdbExt(val tags: List<PdbTag>, val tagTracks: List<PdbTagTrack>)
+
 fun parseExportPdb(bytes: ByteArray): PdbParse {
     if (bytes.size < 28 || bytes.size > MAX_PDB_BYTES) {
         return PdbParse(null, "E_RB_UNSUPPORTED_VARIANT")
@@ -232,6 +244,50 @@ private fun readPlaylist(bytes: ByteArray, at: Int, pageEnd: Int): PdbPlaylist? 
         folder = bytes.u32le(at + 16) != 0L,
         sortOrder = bytes.u32le(at + 8).toInt(),
     )
+}
+
+fun parseExportExt(bytes: ByteArray): PdbExt? {
+    if (bytes.size < 28 || bytes.size > MAX_PDB_BYTES) return null
+    val pageLen = bytes.u32le(4).toInt()
+    val numTables = bytes.u32le(8).toInt()
+    if (pageLen < 128 || pageLen > 65536 || numTables < 1 || numTables > 64) return null
+    if (28L + numTables * 16L > bytes.size) return null
+    val tags = mutableListOf<PdbTag>()
+    val tagTracks = mutableListOf<PdbTagTrack>()
+    for (table in 0 until numTables) {
+        val base = 28 + table * 16
+        val type = bytes.u32le(base).toInt()
+        val first = bytes.u32le(base + 8).toInt()
+        val last = bytes.u32le(base + 12).toInt()
+        readTable(bytes, pageLen, type, first, last) { rowAt, pageEnd ->
+            when (type) {
+                3 -> readTag(bytes, rowAt, pageEnd)?.let(tags::add)
+                4 -> readTagTrack(bytes, rowAt)?.let(tagTracks::add)
+            }
+        }
+    }
+    return PdbExt(tags, tagTracks)
+}
+
+private fun readTag(bytes: ByteArray, at: Int, pageEnd: Int): PdbTag? {
+    if (at + 0x20 > bytes.size) return null
+    val subtype = bytes.u16le(at)
+    val nameAt = if (subtype and 0x04 != 0) bytes.u16le(at + 0x1E) else bytes.u8(at + 0x1D)
+    if (nameAt < 0) return null
+    val name = deviceString(bytes, at + nameAt, pageEnd)
+    if (name.isBlank()) return null
+    return PdbTag(
+        id = bytes.u32le(at + 0x14).toInt(),
+        name = name,
+        categoryId = bytes.u32le(at + 0x0C).toInt(),
+        position = bytes.u32le(at + 0x10).toInt(),
+        category = bytes.u32le(at + 0x18) != 0L,
+    )
+}
+
+private fun readTagTrack(bytes: ByteArray, at: Int): PdbTagTrack? {
+    if (at + 12 > bytes.size) return null
+    return PdbTagTrack(trackId = bytes.u32le(at + 4).toInt(), tagId = bytes.u32le(at + 8).toInt())
 }
 
 private fun readEntry(bytes: ByteArray, at: Int): PdbPlaylistEntry? {

@@ -56,7 +56,8 @@ import os.deckbridge.logic.ReadableVolume
 import os.deckbridge.logic.SyntheticRekordbox
 import os.deckbridge.logic.buildDiagnosticReport
 import os.deckbridge.logic.loadRekordbox
-import os.deckbridge.logic.performanceAction
+import os.deckbridge.logic.TempoAssembler
+import os.deckbridge.logic.interpretPerformance
 import os.deckbridge.logic.textSp
 
 class MainActivity : ComponentActivity() {
@@ -97,7 +98,9 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
     var midiLines by remember { mutableStateOf(listOf<String>()) }
     val map = remember { MidiMap.loadResource() }
     val assembler = remember { MidiAssembler() }
+    val tempo = remember { TempoAssembler() }
     val handler = remember { Handler(Looper.getMainLooper()) }
+    val oneLibrary = remember { AndroidOneLibrary(context) }
 
     fun describe(bytes: ByteArray, simulated: Boolean) {
         val parsed = assembler.push(bytes)
@@ -105,7 +108,7 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
         val prefix = if (simulated) "SIMULADO " else ""
         val lines = parsed.map { message ->
             val hit = map.lookup(message.status, message.data1)
-            performanceAction(hit, message.data2)?.let { PerformanceHub.onAction?.invoke(it) }
+            interpretPerformance(hit, message.data2, tempo)?.let { PerformanceHub.onAction?.invoke(it) }
             "$prefix status=0x%02X nota=0x%02X valor=%d | %s | %s".format(
                 message.status,
                 message.data1,
@@ -121,7 +124,7 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
         loading = true
         notice = "Lendo ${next.label}…"
         Thread {
-            val loaded = loadRekordbox(next)
+            val loaded = loadRekordbox(next, oneLibrary)
             handler.post {
                 volume = next
                 catalog = loaded
@@ -197,7 +200,7 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
         if (screen == "biblioteca" || screen == "decks" || play) {
             val loadedPair = withContext(Dispatchers.Default) {
                 val simulated = SyntheticRekordbox.volume()
-                simulated to loadRekordbox(simulated)
+                simulated to loadRekordbox(simulated, oneLibrary)
             }
             volume = loadedPair.first
             catalog = loadedPair.second
@@ -217,7 +220,7 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (page) {
-                0 -> DiagnosticPage(midiLines) { describe(byteArrayOf(0x90.toByte(), 0x0B, 0x7F), true) }
+                0 -> DiagnosticPage(midiLines, null) { describe(byteArrayOf(0x90.toByte(), 0x0B, 0x7F), true) }
                 1 -> BoxWithConstraints(Modifier.fillMaxSize()) {
                     val widthPx = with(LocalDensity.current) { maxWidth.toPx() }.toInt()
                     LibraryPage(
@@ -267,7 +270,7 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
 }
 
 @Composable
-private fun DiagnosticPage(events: List<String>, onSimulate: () -> Unit) {
+internal fun DiagnosticPage(events: List<String>, jvmBanner: String?, onSimulate: () -> Unit) {
     val context = LocalContext.current
     var identity by remember { mutableStateOf(readIdentity(context)) }
     var battery by remember { mutableStateOf(readBattery(context)) }
@@ -300,36 +303,74 @@ private fun DiagnosticPage(events: List<String>, onSimulate: () -> Unit) {
         selectedDeviceId = deviceId.takeIf { it > 0 },
     )
 
+    DiagnosticScreen(
+        headline = "Prova A0. O som desta tela ainda não é prova até você mandar o relatório.",
+        identityLine = "${identity.manufacturer} ${identity.model} · Android ${identity.androidRelease} · SoC ${identity.soc}",
+        ramLine = "RAM ${identity.ramMb ?: "UNKNOWN"} MB · núcleos ${identity.cores ?: "UNKNOWN"}",
+        engineLine = engineLine(engine),
+        events = events,
+        heard = heard,
+        report = report,
+        jvmBanner = jvmBanner,
+        onRefresh = { refresh() },
+        onMaster = { engine = NativeEngine.start(deviceId, 1) },
+        onPhones = { engine = NativeEngine.start(deviceId, 2) },
+        onStop = { NativeEngine.stop(); engine = engine?.copy(route = 0, phonesSent = false) },
+        onSimulate = onSimulate,
+        onHeard = { heard = it },
+        onShare = {
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, "DeckBridge diagnóstico")
+                putExtra(Intent.EXTRA_TEXT, report)
+            }
+            context.startActivity(Intent.createChooser(send, "Enviar relatório"))
+        },
+    )
+}
+
+@Composable
+fun DiagnosticScreen(
+    headline: String,
+    identityLine: String,
+    ramLine: String,
+    engineLine: String,
+    events: List<String>,
+    heard: Heard,
+    report: String,
+    jvmBanner: String?,
+    onRefresh: () -> Unit,
+    onMaster: () -> Unit,
+    onPhones: () -> Unit,
+    onStop: () -> Unit,
+    onSimulate: () -> Unit,
+    onHeard: (Heard) -> Unit,
+    onShare: () -> Unit,
+) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val widthPx = with(LocalDensity.current) { maxWidth.toPx() }.toInt()
         val size = textSp(widthPx).sp
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Prova A0. O som desta tela ainda não é prova até você mandar o relatório.", fontSize = size)
-            Text("${identity.manufacturer} ${identity.model} · Android ${identity.androidRelease} · SoC ${identity.soc}", fontSize = size)
-            Text("RAM ${identity.ramMb ?: "UNKNOWN"} MB · núcleos ${identity.cores ?: "UNKNOWN"}", fontSize = size)
-            Button(onClick = { refresh() }) { Text("Atualizar dispositivos") }
-            Button(onClick = { engine = NativeEngine.start(deviceId, 1) }) { Text("Tom no master (1–2)") }
-            Button(onClick = { engine = NativeEngine.start(deviceId, 2) }) { Text("Tom no fone (3–4)") }
-            Button(onClick = { NativeEngine.stop(); engine = engine?.copy(route = 0, phonesSent = false) }) { Text("Parar tom") }
+            if (jvmBanner != null) Text(jvmBanner, fontSize = size, color = androidx.compose.ui.graphics.Color(0xFFFFC857))
+            Text(headline, fontSize = size)
+            Text(identityLine, fontSize = size)
+            Text(ramLine, fontSize = size)
+            Button(onClick = onRefresh) { Text("Atualizar dispositivos") }
+            Button(onClick = onMaster) { Text("Tom no master (1–2)") }
+            Button(onClick = onPhones) { Text("Tom no fone (3–4)") }
+            Button(onClick = onStop) { Text("Parar tom") }
             Button(onClick = onSimulate) { Text("MIDI simulado") }
             Text("O MIDI simulado não é a DDJ-400. Serve para ver o nome do mapa.", fontSize = size)
-            Text(engineLine(engine), fontSize = size)
+            Text(engineLine, fontSize = size)
             Text("O que você ouviu?", fontSize = size)
             Heard.entries.forEach { option ->
                 Row {
-                    RadioButton(selected = heard == option, onClick = { heard = option })
+                    RadioButton(selected = heard == option, onClick = { onHeard(option) })
                     Text(heardLabel(option), modifier = Modifier.padding(top = 12.dp), fontSize = size)
                 }
             }
             events.forEach { Text(it, fontSize = size) }
-            Button(onClick = {
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_SUBJECT, "DeckBridge diagnóstico")
-                    putExtra(Intent.EXTRA_TEXT, report)
-                }
-                context.startActivity(Intent.createChooser(send, "Enviar relatório"))
-            }) { Text("Compartilhar relatório") }
+            Button(onClick = onShare) { Text("Compartilhar relatório") }
             Text(report, fontSize = size)
         }
     }
