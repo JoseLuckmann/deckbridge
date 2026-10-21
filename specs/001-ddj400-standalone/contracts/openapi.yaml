@@ -1,0 +1,508 @@
+openapi: 3.1.0
+info:
+  title: DeckBridge Companion API
+  version: 0.1.0-alpha
+  description: >-
+    API local opcional (P3), desligada por padrão. Nunca participa do caminho de áudio.
+    Não oferece comandos remotos de reprodução/mixagem. Respostas sem caminhos de
+    arquivos de host e sem acesso ao conteúdo das músicas.
+servers:
+  - url: http://127.0.0.1:8765/api/v1
+    description: Exclusivamente loopback por padrão; acesso LAN somente após pairing/opt-in
+security:
+  - PairToken: []
+tags:
+  - name: Health
+  - name: Devices
+  - name: Sources
+  - name: Library
+  - name: Sessions
+  - name: Recommendations
+  - name: Pairing
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Saúde do appliance
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Saúde sanitizada (não contém IDs privados ou paths locais)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /devices:
+    get:
+      tags: [Devices]
+      summary: Estado da DDJ, display e saída de áudio
+      operationId: listDevices
+      responses:
+        '200':
+          description: Estado de dispositivos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [controller, audio]
+                properties:
+                  controller:
+                    $ref: '#/components/schemas/ControllerStatus'
+                  audio:
+                    $ref: '#/components/schemas/AudioStatus'
+  /sources:
+    get:
+      tags: [Sources]
+      summary: Volumes USB conhecidos
+      operationId: listSources
+      responses:
+        '200':
+          description: Fontes removíveis, sem filesystem paths
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Source'
+  /sources/{sourceId}:
+    get:
+      tags: [Sources]
+      summary: Diagnóstico de uma fonte
+      operationId: getSource
+      parameters:
+        - $ref: '#/components/parameters/SourceId'
+      responses:
+        '200':
+          description: Fonte encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /library/playlists:
+    get:
+      tags: [Library]
+      summary: Playlists indexadas de uma fonte
+      operationId: listPlaylists
+      parameters:
+        - in: query
+          name: source_id
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 128}
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistPage'
+        '422':
+          $ref: '#/components/responses/BadRequest'
+  /library/tracks:
+    get:
+      tags: [Library]
+      summary: Faixas indexadas, sem conteúdo de áudio
+      operationId: listTracks
+      parameters:
+        - in: query
+          name: source_id
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 128}
+        - in: query
+          name: playlist_uid
+          schema: {type: string, maxLength: 128}
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackPage'
+        '422':
+          $ref: '#/components/responses/BadRequest'
+  /sessions:
+    get:
+      tags: [Sessions]
+      summary: Histórico local de sessões de performance
+      operationId: listSessions
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Sessões
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Session'
+                  next_cursor:
+                    type: [string, 'null']
+    post:
+      tags: [Sessions]
+      summary: Iniciar registro de metadados de sessão (não inicia reprodução)
+      operationId: startSession
+      description: Exige ativação explícita do recurso na configuração e token pareado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                notes: {type: string, maxLength: 2000}
+      responses:
+        '201':
+          description: Sessão iniciada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /sessions/{sessionId}:
+    get:
+      tags: [Sessions]
+      operationId: getSession
+      summary: Detalhes de sessão
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Sessão
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Sessions]
+      operationId: deleteSession
+      summary: Excluir somente os metadados de uma sessão
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '204': {description: Excluída}
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /sessions/{sessionId}/events:
+    get:
+      tags: [Sessions]
+      operationId: listSessionEvents
+      summary: Eventos normalizados e paginados de sessão
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Eventos paginados
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PerformanceEvent'
+                  next_cursor:
+                    type: [string, 'null']
+  /sessions/{sessionId}/tracklist:
+    get:
+      tags: [Sessions]
+      operationId: getTracklist
+      summary: Tracklist revisável da sessão
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Tracklist
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TrackPlay'
+  /recommendations:
+    get:
+      tags: [Recommendations]
+      operationId: getRecommendations
+      summary: Próximas faixas candidatas offline
+      parameters:
+        - in: query
+          name: current_track_uid
+          required: true
+          schema: {type: string, maxLength: 128}
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Ranking com razões
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, algorithm_version]
+                properties:
+                  algorithm_version: {type: string}
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Recommendation'
+        '503':
+          description: Serviço de recomendação não ativado
+  /pairing/challenge:
+    post:
+      tags: [Pairing]
+      operationId: requestPairing
+      security: []
+      summary: Solicitar pareamento (apenas LAN explicitamente habilitada)
+      description: >-
+        Cria desafio de uso único de curta duração. Exige confirmação no dispositivo
+        físico antes de emitir credencial. Endpoint com rate limit severo.
+      responses:
+        '202':
+          description: Aguardando aprovação física
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challenge_id, expires_in_seconds]
+                properties:
+                  challenge_id: {type: string}
+                  expires_in_seconds: {type: integer, minimum: 1, maximum: 120}
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /pairing/exchange:
+    post:
+      tags: [Pairing]
+      operationId: exchangePairing
+      security: []
+      summary: Trocar desafio aprovado por token pareado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challenge_id, proof]
+              additionalProperties: false
+              properties:
+                challenge_id: {type: string}
+                proof: {type: string, minLength: 12, maxLength: 256}
+      responses:
+        '200':
+          description: Token de sessão emitido ao dispositivo aprovado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, expires_in_seconds]
+                properties:
+                  token: {type: string}
+                  expires_in_seconds: {type: integer, minimum: 1}
+        '403':
+          $ref: '#/components/responses/Forbidden'
+components:
+  securitySchemes:
+    PairToken:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Token aleatório curto ou sessão revogável, armazenado como hash em repouso
+  parameters:
+    SourceId:
+      name: sourceId
+      in: path
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 128}
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 128}
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+    Cursor:
+      name: cursor
+      in: query
+      schema: {type: string, maxLength: 512}
+  responses:
+    NotFound:
+      description: Recurso não localizado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Operação desabilitada ou não autorizada
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    BadRequest:
+      description: Parâmetros inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        details: {type: object}
+    Health:
+      type: object
+      required: [status, uptime_seconds, version]
+      properties:
+        status: {type: string, enum: [READY, DEGRADED, STARTING, ERROR]}
+        uptime_seconds: {type: integer, minimum: 0}
+        version: {type: string}
+        controller_connected: {type: boolean}
+        audio_ready: {type: boolean}
+        xruns_total:
+          type: [integer, 'null']
+          minimum: 0
+        throttled: {type: [boolean, 'null']}
+    ControllerStatus:
+      type: object
+      required: [name, connected]
+      properties:
+        name: {type: string, example: DDJ-400}
+        connected: {type: boolean}
+        firmware: {type: [string, 'null']}
+    AudioStatus:
+      type: object
+      required: [status, master_available, headphones_available]
+      properties:
+        status: {type: string, enum: [READY, DEGRADED, ERROR]}
+        backend: {type: [string, 'null']}
+        master_available: {type: boolean}
+        headphones_available: {type: boolean}
+        sample_rate: {type: [integer, 'null']}
+        buffer_frames: {type: [integer, 'null']}
+    Source:
+      type: object
+      required: [source_id, name, available, format_kind, read_only]
+      properties:
+        source_id: {type: string}
+        name: {type: string}
+        available: {type: boolean}
+        format_kind:
+          type: string
+          enum: [REKORDBOX_LEGACY, ONELIBRARY, AUDIO_FILES, UNSUPPORTED, UNKNOWN]
+        read_only: {type: boolean}
+        scan_status: {type: string, enum: [IDLE, SCANNING, READY, FAILED]}
+        last_error: {type: [string, 'null']}
+    Playlist:
+      type: object
+      required: [playlist_uid, source_id, name, position]
+      properties:
+        playlist_uid: {type: string}
+        source_id: {type: string}
+        name: {type: string}
+        position: {type: integer, minimum: 0}
+        parent_playlist_uid: {type: [string, 'null']}
+    PlaylistPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Playlist'}
+        next_cursor: {type: [string, 'null']}
+    Track:
+      type: object
+      required: [track_uid, source_id, available]
+      properties:
+        track_uid: {type: string}
+        source_id: {type: string}
+        available: {type: boolean}
+        title: {type: [string, 'null']}
+        artist: {type: [string, 'null']}
+        duration_ms: {type: [integer, 'null']}
+        bpm: {type: [number, 'null']}
+        musical_key: {type: [string, 'null']}
+        # raw file paths, audio bytes and proprietary DB keys are never returned
+    TrackPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Track'}
+        next_cursor: {type: [string, 'null']}
+    Session:
+      type: object
+      required: [session_id, started_at_utc, status]
+      properties:
+        session_id: {type: string}
+        started_at_utc: {type: string, format: date-time}
+        ended_at_utc: {type: [string, 'null'], format: date-time}
+        status: {type: string, enum: [RECORDING, STOPPED, RECOVERED, INCOMPLETE]}
+        notes: {type: [string, 'null']}
+    PerformanceEvent:
+      type: object
+      required: [event_id, session_id, sequence, timestamp_utc, type, source]
+      properties:
+        event_id: {type: string}
+        session_id: {type: string}
+        sequence: {type: integer, minimum: 0}
+        timestamp_utc: {type: string, format: date-time}
+        source: {type: string, enum: [MIDI, MIXXX_CONTROL, SYSTEM, MANUAL]}
+        deck: {type: [string, 'null'], enum: [A, B, MASTER, SYSTEM, null]}
+        type: {type: string}
+        payload: {type: object}
+    TrackPlay:
+      type: object
+      required: [play_id, track_uid, deck, inferred]
+      properties:
+        play_id: {type: string}
+        track_uid: {type: string}
+        deck: {type: string, enum: [A, B]}
+        started_at_utc: {type: [string, 'null'], format: date-time}
+        ended_at_utc: {type: [string, 'null'], format: date-time}
+        inferred: {type: boolean}
+        confidence: {type: [number, 'null'], minimum: 0, maximum: 1}
+    Recommendation:
+      type: object
+      required: [track_uid, rank, score, reasons]
+      properties:
+        track_uid: {type: string}
+        rank: {type: integer, minimum: 1}
+        score: {type: number, minimum: 0, maximum: 1}
+        reasons:
+          type: array
+          items:
+            type: object
+            required: [code, text]
+            properties:
+              code: {type: string}
+              text: {type: string}
