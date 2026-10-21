@@ -1,0 +1,35 @@
+# Sistema operacional
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editores e IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Dependências
+node_modules/
+vendor/
+.venv/
+venv/
+
+# Builds e caches
+dist/
+build/
+out/
+.next/
+.cache/
+*.log
+coverage/
+__pycache__/
+*.pyc
+.pytest_cache/
+target/
