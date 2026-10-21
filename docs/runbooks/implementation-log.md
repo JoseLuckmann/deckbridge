@@ -6,19 +6,19 @@
 |---|---|---|---|---|---|---|
 | 2026-10-21 | SPEC | DOCUMENTED | n/a | conjunto de arquivos entregue | Pi/USB reais desconhecidos | iniciar T001 |
 | 2026-10-21 | OD-01 OD-02 OD-03 | DECIDE | `717e488` | spec, plan, tasks, ui, testes, riscos | nenhuma | Fase 0 sem hardware |
-| 2026-10-21 | T001 | PASS | fase 0 neste branch | árvore, CI, licença provisória, 18 testes | runner remoto de CI não observado | — |
-| 2026-10-21 | T002 | PASS | fase 0 | pin em ADR-0001 e `PIN.json` | assinatura PGP não verificada | importar chave se for exigido |
-| 2026-10-21 | T003 | PASS | fase 0 | `NOTICE.md`, `sbom.json`, `LICENSE` | licença do StandaloneMixxx é UNKNOWN; codecs não auditados arquivo a arquivo | não copiar esses códigos |
-| 2026-10-21 | T004 | PASS | fase 0 | testes de UNKNOWN; `docs/benchmarks/T004-live-host.json` | coleta no aparelho é T005 | dono roda o script |
+| 2026-10-21 | T001 | PASS | `c984331` | árvore, CI, licença provisória, 18 testes | runner remoto de CI não observado | — |
+| 2026-10-21 | T002 | PASS | `c984331` | pin em ADR-0001 e `PIN.json` | assinatura PGP não verificada | importar chave se for exigido |
+| 2026-10-21 | T003 | PASS | `c984331` | `NOTICE.md`, `sbom.json`, `LICENSE` | licença do StandaloneMixxx é UNKNOWN; codecs não auditados arquivo a arquivo | não copiar esses códigos |
+| 2026-10-21 | T004 | PASS | `c984331` | testes de UNKNOWN; `docs/benchmarks/T004-live-host.json` | coleta no aparelho é T005 | dono roda o script |
 | 2026-10-21 | T005 | BLOCKED_HARDWARE | — | checklist `docs/hil/checklist-fase0.md` | sem Raspberry e sem DDJ | dono liga o aparelho |
-| 2026-10-21 | T006 | BLOCKED | fase 0 | guia `docs/setup/desktop-x86_64.md`; smoke JSON | binário Mixxx ausente; áudio não tocado | instalar a tag 2.5.6 e repetir o smoke |
-| 2026-10-21 | T007 | parcial | fase 0 | ADR-0004; `docs/releases/deckbridge-tools-manifest.json` | binário arm64 do Mixxx não gerado | build no aparelho ou runner arm64 |
-| 2026-10-21 | T008 | PASS | fase 0 | matriz 201 controles, 112 saídas, 12 LEDs de script, 45 funções | captura física é T009 | — |
+| 2026-10-21 | T006 | BLOCKED | `c984331` | guia `docs/setup/desktop-x86_64.md`; smoke JSON | binário Mixxx ausente; áudio não tocado | instalar a tag 2.5.6 e repetir o smoke |
+| 2026-10-21 | T007 | parcial | `c984331` | ADR-0004; `docs/releases/deckbridge-tools-manifest.json` | binário arm64 do Mixxx não gerado | build no aparelho ou runner arm64 |
+| 2026-10-21 | T008 | PASS | `c984331` | matriz 201 controles, 112 saídas, 12 LEDs de script, 45 funções | captura física é T009 | — |
 | 2026-10-21 | T009 T010 T011 T012 | BLOCKED_HARDWARE | — | checklist | sem controladora e sem placa | ver checklist |
-| 2026-10-21 | T013 | PASS | fase 0 | `fixtures/audio/MANIFEST.json`; MP3 e WAV prioritários | não é export rekordbox | T014 com o dono |
+| 2026-10-21 | T013 | PASS | `c984331` | `fixtures/audio/MANIFEST.json`; MP3 e WAV prioritários | não é export rekordbox | T014 com o dono |
 | 2026-10-21 | T014 T016 T018 | BLOCKED_HARDWARE | — | — | pendrive rekordbox e aparelho | OD-04 ainda aberta para a versão do rekordbox |
-| 2026-10-21 | T015 | PASS | fase 0 | `docs/compatibility/rekordbox-format-matrix.md` | leitura de fonte, não de pendrive | T016 |
-| 2026-10-21 | T017 | parcial | fase 0 | 900 s, 180 amostras, CPU média 0,14%, RAM livre mínima 4985 MB, temperatura UNKNOWN, x-runs UNKNOWN | sem Mixxx e sem Raspberry; nada extrapolado | repetir 15 min no aparelho com áudio |
+| 2026-10-21 | T015 | PASS | `c984331` | `docs/compatibility/rekordbox-format-matrix.md` | leitura de fonte, não de pendrive | T016 |
+| 2026-10-21 | T017 | parcial | `c984331` | 900 s, 180 amostras, CPU média 0,14%, RAM livre mínima 4985 MB, temperatura UNKNOWN, x-runs UNKNOWN | sem Mixxx e sem Raspberry; nada extrapolado | repetir 15 min no aparelho com áudio |
 
 ### T001 — esqueleto
 - Estado: PASS
