@@ -1,0 +1,2628 @@
+{
+  "commit_sha": "3ebac449e7e5fe2a0186596657696e87ce8b0e56",
+  "tag": "2.5.6",
+  "xml_sha256": "f3de2ecb02869f2aaf89101c138efa3c1f1b7357655ca20f705d2636ec4306ee",
+  "js_sha256": "87e1c696fe445d3c9816f04da9f3d0d5e774d0fc1c88bad699864bf13545a86d",
+  "control_count": 201,
+  "output_count": 112,
+  "light_count": 12,
+  "hook_count": 45,
+  "controls": [
+    {
+      "description": "BROWSE - rotate - Scroll tracklist/tree view",
+      "group": "[Library]",
+      "key": "MoveVertical",
+      "status": "0xB6",
+      "midino": "0x40",
+      "options": "SelectKnob"
+    },
+    {
+      "description": "BROWSE - press - Move cursor between track list and tree view",
+      "group": "[Library]",
+      "key": "MoveFocusForward",
+      "status": "0x96",
+      "midino": "0x41",
+      "options": "Normal"
+    },
+    {
+      "description": "BROWSE +SHIFT - press - Move cursor between track list and tree view",
+      "group": "[Library]",
+      "key": "MoveFocusBackward",
+      "status": "0x96",
+      "midino": "0x42",
+      "options": "Normal"
+    },
+    {
+      "description": "LOAD (DECK1) - press - Load a Track into Deck 1",
+      "group": "[Channel1]",
+      "key": "LoadSelectedTrack",
+      "status": "0x96",
+      "midino": "0x46",
+      "options": "Normal"
+    },
+    {
+      "description": "LOAD (DECK2) - press - Load a Track into Deck 2",
+      "group": "[Channel2]",
+      "key": "LoadSelectedTrack",
+      "status": "0x96",
+      "midino": "0x47",
+      "options": "Normal"
+    },
+    {
+      "description": "Shift (DECK1)",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.shiftPressed",
+      "status": "0x90",
+      "midino": "0x3F",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "Shift (DECK2)",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.shiftPressed",
+      "status": "0x91",
+      "midino": "0x3F",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PLAY/PAUSE (DECK1) - press - Play/Pause",
+      "group": "[Channel1]",
+      "key": "play",
+      "status": "0x90",
+      "midino": "0x0B",
+      "options": "Normal"
+    },
+    {
+      "description": "PLAY/PAUSE +SHIFT (DECK1) - press - Reverse playback in Slip Mode while held (Censor)",
+      "group": "[Channel1]",
+      "key": "reverseroll",
+      "status": "0x90",
+      "midino": "0x47",
+      "options": "Normal"
+    },
+    {
+      "description": "PLAY/PAUSE (DECK2) - press - Play/Pause",
+      "group": "[Channel2]",
+      "key": "play",
+      "status": "0x91",
+      "midino": "0x0B",
+      "options": "Normal"
+    },
+    {
+      "description": "PLAY/PAUSE +SHIFT (DECK2) - press - Reverse playback in Slip Mode while held (Censor)",
+      "group": "[Channel2]",
+      "key": "reverseroll",
+      "status": "0x91",
+      "midino": "0x47",
+      "options": "Normal"
+    },
+    {
+      "description": "CUE (DECK1) - press - Set/Call Cue, Back Cue",
+      "group": "[Channel1]",
+      "key": "cue_default",
+      "status": "0x90",
+      "midino": "0x0C",
+      "options": "Normal"
+    },
+    {
+      "description": "CUE +SHIFT (DECK1) - press - Jump to track start",
+      "group": "[Channel1]",
+      "key": "start_play",
+      "status": "0x90",
+      "midino": "0x48",
+      "options": "Normal"
+    },
+    {
+      "description": "CUE (DECK2) - press - Set/Call Cue, Back Cue",
+      "group": "[Channel2]",
+      "key": "cue_default",
+      "status": "0x91",
+      "midino": "0x0C",
+      "options": "Normal"
+    },
+    {
+      "description": "CUE +SHIFT (DECK2) - press - Jump to track start",
+      "group": "[Channel2]",
+      "key": "start_play",
+      "status": "0x91",
+      "midino": "0x48",
+      "options": "Normal"
+    },
+    {
+      "description": "JOG DIAL PLATTER Vinyl mode On (DECK1) - rotate - Scratch",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogTurn",
+      "status": "0xB0",
+      "midino": "0x22",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "JOG DIAL PLATTER Vinyl mode Off (DECK1) - rotate - Pitch bend",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogTurn",
+      "status": "0xB0",
+      "midino": "0x23",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "JOG DIAL PLATTER +SHIFT (DECK1) - rotate - Search (Fast Pitch bend)",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogSearch",
+      "status": "0xB0",
+      "midino": "0x29",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "JOG DIAL PLATTER (DECK1) - touch - enable (on touch) / disable (on release) Scratching/Pitch\n                    bend",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogTouch",
+      "status": "0x90",
+      "midino": "0x36",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "JOG DIAL PLATTER +SHIFT (DECK1) - touch - enable (on touch) / disable (on release) highspeed\n                    Pitch bend",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogTouch",
+      "status": "0x90",
+      "midino": "0x67",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "JOG DIAL SIDE (DECK1) - rotate - Pitch bend",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.jogTurn",
+      "status": "0xB0",
+      "midino": "0x21",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "JOG DIAL PLATTER Vinyl mode On (DECK2) - rotate - Scratch",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogTurn",
+      "status": "0xB1",
+      "midino": "0x22",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "JOG DIAL PLATTER Vinyl mode Off (DECK2) - rotate - Pitch bend",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogTurn",
+      "status": "0xB1",
+      "midino": "0x23",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "JOG DIAL PLATTER +SHIFT (DECK2) - rotate - Search (Fast Pitch bend)",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogSearch",
+      "status": "0xB1",
+      "midino": "0x29",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "JOG DIAL PLATTER (DECK2) - touch - enable (on touch) / disable (on release) Scratching/Pitch\n                    bend",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogTouch",
+      "status": "0x91",
+      "midino": "0x36",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "JOG DIAL PLATTER +SHIFT (DECK2) - touch - enable (on touch) / disable (on release) highspeed\n                    Pitch bend",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogTouch",
+      "status": "0x91",
+      "midino": "0x67",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "JOG DIAL SIDE (DECK2) - rotate - Pitch bend",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.jogTurn",
+      "status": "0xB1",
+      "midino": "0x21",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "TEMPO (DECK1) - fader - Tempo control LSB",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.tempoSliderLSB",
+      "status": "0xB0",
+      "midino": "0x20",
+      "options": "script-binding"
+    },
+    {
+      "description": "TEMPO (DECK1) - fader - Tempo control MSB",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.tempoSliderMSB",
+      "status": "0xB0",
+      "midino": "0x00",
+      "options": "script-binding"
+    },
+    {
+      "description": "TEMPO (DECK2) - fader - Tempo control LSB",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.tempoSliderLSB",
+      "status": "0xB1",
+      "midino": "0x20",
+      "options": "script-binding"
+    },
+    {
+      "description": "TEMPO (DECK2) - fader - Tempo control MSB",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.tempoSliderMSB",
+      "status": "0xB1",
+      "midino": "0x00",
+      "options": "script-binding"
+    },
+    {
+      "description": "BEAT SYNC (DECK1) - press - Beat Sync to Master deck",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.syncPressed",
+      "status": "0x90",
+      "midino": "0x58",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT SYNC LONG PRESS (DECK1) - press - Set as Master deck",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.syncLongPressed",
+      "status": "0x90",
+      "midino": "0x5C",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT SYNC +SHIFT (DECK1) - press - change Tempo range",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.cycleTempoRange",
+      "status": "0x90",
+      "midino": "0x60",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT SYNC (DECK2) - press - Beat Sync to Master deck",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.syncPressed",
+      "status": "0x91",
+      "midino": "0x58",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT SYNC LONG PRESS (DECK2) - press - Set as Master deck",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.syncLongPressed",
+      "status": "0x91",
+      "midino": "0x5C",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT SYNC +SHIFT (DECK2) - press - change Tempo range",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.cycleTempoRange",
+      "status": "0x91",
+      "midino": "0x60",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "LOOP IN/4 BEAT (DECK1) - press - Set loop in",
+      "group": "[Channel1]",
+      "key": "loop_in",
+      "status": "0x90",
+      "midino": "0x10",
+      "options": "Normal"
+    },
+    {
+      "description": "LOOP IN/4 BEAT (DECK2) - press - Set loop in",
+      "group": "[Channel2]",
+      "key": "loop_in",
+      "status": "0x91",
+      "midino": "0x10",
+      "options": "Normal"
+    },
+    {
+      "description": "LOOP OUT (DECK1) - press - Set loop out",
+      "group": "[Channel1]",
+      "key": "loop_out",
+      "status": "0x90",
+      "midino": "0x11",
+      "options": "Normal"
+    },
+    {
+      "description": "LOOP OUT (DECK2) - press - Set loop out",
+      "group": "[Channel2]",
+      "key": "loop_out",
+      "status": "0x91",
+      "midino": "0x11",
+      "options": "Normal"
+    },
+    {
+      "description": "RELOOP/EXIT (DECK1) - press - (loop off) Reloop, (loop on) Loop exit",
+      "group": "[Channel1]",
+      "key": "reloop_toggle",
+      "status": "0x90",
+      "midino": "0x4D",
+      "options": "Normal"
+    },
+    {
+      "description": "RELOOP/EXIT (DECK2) - press - (loop off) Reloop, (loop on) Loop exit",
+      "group": "[Channel2]",
+      "key": "reloop_toggle",
+      "status": "0x91",
+      "midino": "0x4D",
+      "options": "Normal"
+    },
+    {
+      "description": "RELOOP/EXIT +SHIFT (DECK1) - press - Reloop and stop",
+      "group": "[Channel1]",
+      "key": "reloop_andstop",
+      "status": "0x90",
+      "midino": "0x50",
+      "options": "Normal"
+    },
+    {
+      "description": "RELOOP/EXIT +SHIFT (DECK2) - press - Reloop and stop",
+      "group": "[Channel2]",
+      "key": "reloop_andstop",
+      "status": "0x91",
+      "midino": "0x50",
+      "options": "Normal"
+    },
+    {
+      "description": "SHIFT + LOOP IN (DECK1) - Loop in adjust (using jog wheel)",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.toggleLoopAdjustIn",
+      "status": "0x90",
+      "midino": "0x4C",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "SHIFT + LOOP IN (DECK2) - Loop in adjust (using jog wheel)",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.toggleLoopAdjustIn",
+      "status": "0x91",
+      "midino": "0x4C",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "SHIFT + LOOP OUT (DECK1) - Loop out adjust (using jog wheel)",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.toggleLoopAdjustOut",
+      "status": "0x90",
+      "midino": "0x4E",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "SHIFT + LOOP OUT (DECK2) - Loop out adjust (using jog wheel)",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.toggleLoopAdjustOut",
+      "status": "0x91",
+      "midino": "0x4E",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "CUE/LOOP CALL LEFT (DECK1) - press - half active loop",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.cueLoopCallLeft",
+      "status": "0x90",
+      "midino": "0x51",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "CUE/LOOP CALL LEFT + SHIFT (DECK1) - press - quick jump back",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.quickJumpBack",
+      "status": "0x90",
+      "midino": "0x3E",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "CUE/LOOP CALL LEFT (DECK2) - press - half active loop",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.cueLoopCallLeft",
+      "status": "0x91",
+      "midino": "0x51",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "CUE/LOOP CALL LEFT + SHIFT (DECK2) - press - quick jump back",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.quickJumpBack",
+      "status": "0x91",
+      "midino": "0x3E",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "CUE/LOOP CALL LEFT (DECK1) - press - double active loop",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.cueLoopCallRight",
+      "status": "0x90",
+      "midino": "0x53",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "CUE/LOOP CALL RIGHT + SHIFT (DECK1) - press - quick jump forwards",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.quickJumpForward",
+      "status": "0x90",
+      "midino": "0x3D",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "CUE/LOOP CALL LEFT (DECK2) - press - double active loop",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.cueLoopCallRight",
+      "status": "0x91",
+      "midino": "0x53",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "CUE/LOOP CALL RIGHT + SHIFT (DECK2) - press - quick jump forwards",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.quickJumpForward",
+      "status": "0x91",
+      "midino": "0x3D",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "CROSSFADER - slider",
+      "group": "[Master]",
+      "key": "crossfader",
+      "status": "0xB6",
+      "midino": "0x1F",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "CROSSFADER - slider",
+      "group": "[Master]",
+      "key": "crossfader",
+      "status": "0xB6",
+      "midino": "0x3F",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "CHANNELFADER - slider",
+      "group": "[Channel1]",
+      "key": "volume",
+      "status": "0xB0",
+      "midino": "0x33",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "CHANNELFADER - slider",
+      "group": "[Channel1]",
+      "key": "volume",
+      "status": "0xB0",
+      "midino": "0x13",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "CHANNELFADER - slider",
+      "group": "[Channel2]",
+      "key": "volume",
+      "status": "0xB1",
+      "midino": "0x33",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "CHANNELFADER - slider",
+      "group": "[Channel2]",
+      "key": "volume",
+      "status": "0xB1",
+      "midino": "0x13",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "Shift + Left CUE - Toggle quantize on/off (Deck1)",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.toggleQuantize",
+      "status": "0x90",
+      "midino": "0x68",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "Shift + Right CUE - Toggle quantize on/off (Deck2)",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.toggleQuantize",
+      "status": "0x91",
+      "midino": "0x68",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "TRIM - rotate",
+      "group": "[Channel1]",
+      "key": "pregain",
+      "status": "0xB0",
+      "midino": "0x24",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "TRIM - rotate",
+      "group": "[Channel1]",
+      "key": "pregain",
+      "status": "0xB0",
+      "midino": "0x04",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "TRIM - rotate",
+      "group": "[Channel2]",
+      "key": "pregain",
+      "status": "0xB1",
+      "midino": "0x24",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "TRIM - rotate",
+      "group": "[Channel2]",
+      "key": "pregain",
+      "status": "0xB1",
+      "midino": "0x04",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "EQ HI - rotate",
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter3",
+      "status": "0xB0",
+      "midino": "0x27",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "EQ MID - rotate",
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter2",
+      "status": "0xB0",
+      "midino": "0x2B",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "EQ LOW - rotate",
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter1",
+      "status": "0xB0",
+      "midino": "0x2F",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "EQ HI - rotate",
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter3",
+      "status": "0xB0",
+      "midino": "0x07",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "EQ MID - rotate",
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter2",
+      "status": "0xB0",
+      "midino": "0x0B",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "EQ LOW - rotate",
+      "group": "[EqualizerRack1_[Channel1]_Effect1]",
+      "key": "parameter1",
+      "status": "0xB0",
+      "midino": "0x0F",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "EQ HI - rotate",
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter3",
+      "status": "0xB1",
+      "midino": "0x27",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "EQ MID - rotate",
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter2",
+      "status": "0xB1",
+      "midino": "0x2B",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "EQ LOW - rotate",
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter1",
+      "status": "0xB1",
+      "midino": "0x2F",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "EQ HI - rotate",
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter3",
+      "status": "0xB1",
+      "midino": "0x07",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "EQ MID - rotate",
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter2",
+      "status": "0xB1",
+      "midino": "0x0B",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "EQ LOW - rotate",
+      "group": "[EqualizerRack1_[Channel2]_Effect1]",
+      "key": "parameter1",
+      "status": "0xB1",
+      "midino": "0x0F",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "CUE Channel - press - toggle Headphone Cue",
+      "group": "[Channel1]",
+      "key": "pfl",
+      "status": "0x90",
+      "midino": "0x54",
+      "options": "normal"
+    },
+    {
+      "description": "CUE Channel - press - toggle Headphone Cue",
+      "group": "[Channel2]",
+      "key": "pfl",
+      "status": "0x91",
+      "midino": "0x54",
+      "options": "normal"
+    },
+    {
+      "description": "HEADPHONES MIXING - rotate - Monitor Balance",
+      "group": "[Master]",
+      "key": "headMix",
+      "status": "0xB6",
+      "midino": "0x2C",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "HEADPHONES MIXING - rotate - Monitor Balance",
+      "group": "[Master]",
+      "key": "headMix",
+      "status": "0xB6",
+      "midino": "0x0C",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "HEADPHONES LEVEL - rotate - Headphone gain",
+      "group": "[Master]",
+      "key": "headGain",
+      "status": "0xB6",
+      "midino": "0x2D",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "HEADPHONES LEVEL - rotate - Headphone gain",
+      "group": "[Master]",
+      "key": "headGain",
+      "status": "0xB6",
+      "midino": "0x0D",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "FILTER CH1 - rotate - Filter Effect Knob",
+      "group": "[QuickEffectRack1_[Channel1]]",
+      "key": "super1",
+      "status": "0xB6",
+      "midino": "0x17",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "FILTER CH1 - rotate - Filter Effect Knob",
+      "group": "[QuickEffectRack1_[Channel1]]",
+      "key": "super1",
+      "status": "0xB6",
+      "midino": "0x37",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "FILTER CH2 - rotate - Filter Effect Knob",
+      "group": "[QuickEffectRack1_[Channel2]]",
+      "key": "super1",
+      "status": "0xB6",
+      "midino": "0x18",
+      "options": "fourteen-bit-msb"
+    },
+    {
+      "description": "FILTER CH2 - rotate - Filter Effect Knob",
+      "group": "[QuickEffectRack1_[Channel2]]",
+      "key": "super1",
+      "status": "0xB6",
+      "midino": "0x38",
+      "options": "fourteen-bit-lsb"
+    },
+    {
+      "description": "BEAT LEFT - press - toggle focused Effect leftward",
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxLeftPressed",
+      "status": "0x94",
+      "midino": "0x4A",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT RIGHT - press - toggle focused Effect rightward",
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxRightPressed",
+      "status": "0x94",
+      "midino": "0x4B",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT FX SELECT - press - load next effect entry for focused Effect",
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxSelectPressed",
+      "status": "0x94",
+      "midino": "0x63",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT FX SELECT +SHIFT - press - load previous effect entry for focused Effect",
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxSelectShiftPressed",
+      "status": "0x94",
+      "midino": "0x64",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT FX CH SELECT CH1 - slide - Select FX on DECK 1",
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxChannel",
+      "status": "0x94",
+      "midino": "0x10",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT FX CH SELECT CH2 - slide - Select FX on DECK 2",
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxChannel",
+      "status": "0x94",
+      "midino": "0x11",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT FX CH SELECT MASTER - slide - Select FX on Master",
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxChannel",
+      "status": "0x94",
+      "midino": "0x14",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT FX LEVEL/DEPTH - rotate (MSB) - Adjust FX Level (mix) and BEAT FX Depth (meta) in the\n                    selected slot",
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxLevelDepthRotate",
+      "status": "0xB4",
+      "midino": "0x02",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT FX ON/OFF - press - Toggle FX in the selected Slot",
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxOnOffPressed",
+      "status": "0x94",
+      "midino": "0x47",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "BEAT FX ON/OFF +SHIFT - press - Disable all enabled Beat FX Slots",
+      "group": "[EffectRack1_EffectUnit1]",
+      "key": "PioneerDDJ400.beatFxOnOffShiftPressed",
+      "status": "0x94",
+      "midino": "0x43",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 1 (DECK1) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_1_activate",
+      "status": "0x97",
+      "midino": "0x00",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 1 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_1_clear",
+      "status": "0x98",
+      "midino": "0x00",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 1 (DECK2) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_1_activate",
+      "status": "0x99",
+      "midino": "0x00",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 1 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_1_clear",
+      "status": "0x9A",
+      "midino": "0x00",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 2 (DECK1) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_2_activate",
+      "status": "0x97",
+      "midino": "0x01",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 2 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_2_clear",
+      "status": "0x98",
+      "midino": "0x01",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 2 (DECK2) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_2_activate",
+      "status": "0x99",
+      "midino": "0x01",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 2 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_2_clear",
+      "status": "0x9A",
+      "midino": "0x01",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 3 (DECK1) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_3_activate",
+      "status": "0x97",
+      "midino": "0x02",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 3 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_3_clear",
+      "status": "0x98",
+      "midino": "0x02",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 3 (DECK2) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_3_activate",
+      "status": "0x99",
+      "midino": "0x02",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 3 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_3_clear",
+      "status": "0x9A",
+      "midino": "0x02",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 4 (DECK1) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_4_activate",
+      "status": "0x97",
+      "midino": "0x03",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 4 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_4_clear",
+      "status": "0x98",
+      "midino": "0x03",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 4 (DECK2) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_4_activate",
+      "status": "0x99",
+      "midino": "0x03",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 4 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_4_clear",
+      "status": "0x9A",
+      "midino": "0x03",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 5(DECK1) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_5_activate",
+      "status": "0x97",
+      "midino": "0x04",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 5 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_5_clear",
+      "status": "0x98",
+      "midino": "0x04",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 5 (DECK2) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_5_activate",
+      "status": "0x99",
+      "midino": "0x04",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 5 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_5_clear",
+      "status": "0x9A",
+      "midino": "0x04",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 6 (DECK1) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_6_activate",
+      "status": "0x97",
+      "midino": "0x05",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 6 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_6_clear",
+      "status": "0x98",
+      "midino": "0x05",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 6 (DECK2) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_6_activate",
+      "status": "0x99",
+      "midino": "0x05",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 6 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_6_clear",
+      "status": "0x9A",
+      "midino": "0x05",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 7 (DECK1) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_7_activate",
+      "status": "0x97",
+      "midino": "0x06",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 7 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_7_clear",
+      "status": "0x98",
+      "midino": "0x06",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 7 (DECK2) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_7_activate",
+      "status": "0x99",
+      "midino": "0x06",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 7 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_7_clear",
+      "status": "0x9A",
+      "midino": "0x06",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 8 (DECK1) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_8_activate",
+      "status": "0x97",
+      "midino": "0x07",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 8 +SHIFT (DECK1) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel1]",
+      "key": "hotcue_8_clear",
+      "status": "0x98",
+      "midino": "0x07",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 8 (DECK2) HOT CUE MODE - press - set hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_8_activate",
+      "status": "0x99",
+      "midino": "0x07",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 8 +SHIFT (DECK2) HOT CUE MODE - press - delete hotcue",
+      "group": "[Channel2]",
+      "key": "hotcue_8_clear",
+      "status": "0x9A",
+      "midino": "0x07",
+      "options": "normal"
+    },
+    {
+      "description": "PAD 1 (DECK1) BEAT LOOP MODE - press - 1/4 Beatloop",
+      "group": "[Channel1]",
+      "key": "beatloop_0.25_toggle",
+      "status": "0x97",
+      "midino": "0x60",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 1 (DECK2) BEAT LOOP MODE - press - 1/4 Beatloop",
+      "group": "[Channel2]",
+      "key": "beatloop_0.25_toggle",
+      "status": "0x99",
+      "midino": "0x60",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 2 (DECK1) BEAT LOOP MODE - press - 1/2 Beatloop",
+      "group": "[Channel1]",
+      "key": "beatloop_0.5_toggle",
+      "status": "0x97",
+      "midino": "0x61",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 2 (DECK2) BEAT LOOP MODE - press - 1/2 Beatloop",
+      "group": "[Channel2]",
+      "key": "beatloop_0.5_toggle",
+      "status": "0x99",
+      "midino": "0x61",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 3 (DECK1) BEAT LOOP MODE - press - 1/1 Beatloop",
+      "group": "[Channel1]",
+      "key": "beatloop_1_toggle",
+      "status": "0x97",
+      "midino": "0x62",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 3 (DECK2) BEAT LOOP MODE - press - 1/1 Beatloop",
+      "group": "[Channel2]",
+      "key": "beatloop_1_toggle",
+      "status": "0x99",
+      "midino": "0x62",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 4 (DECK1) BEAT LOOP MODE - press - 2 Beatloop",
+      "group": "[Channel1]",
+      "key": "beatloop_2_toggle",
+      "status": "0x97",
+      "midino": "0x63",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 4 (DECK2) BEAT LOOP MODE - press - 2 Beatloop",
+      "group": "[Channel2]",
+      "key": "beatloop_2_toggle",
+      "status": "0x99",
+      "midino": "0x63",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 5 (DECK1) BEAT LOOP MODE - press - 4 Beatloop",
+      "group": "[Channel1]",
+      "key": "beatloop_4_toggle",
+      "status": "0x97",
+      "midino": "0x64",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 5 (DECK2) BEAT LOOP MODE - press - 4 Beatloop",
+      "group": "[Channel2]",
+      "key": "beatloop_4_toggle",
+      "status": "0x99",
+      "midino": "0x64",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 6 (DECK1) BEAT LOOP MODE - press - 8 Beatloop",
+      "group": "[Channel1]",
+      "key": "beatloop_8_toggle",
+      "status": "0x97",
+      "midino": "0x65",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 6 (DECK2) BEAT LOOP MODE - press - 8 Beatloop",
+      "group": "[Channel2]",
+      "key": "beatloop_8_toggle",
+      "status": "0x99",
+      "midino": "0x65",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 7 (DECK1) BEAT LOOP MODE - press - 16 Beatloop",
+      "group": "[Channel1]",
+      "key": "beatloop_16_toggle",
+      "status": "0x97",
+      "midino": "0x66",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 7 (DECK2) BEAT LOOP MODE - press - 16 Beatloop",
+      "group": "[Channel2]",
+      "key": "beatloop_16_toggle",
+      "status": "0x99",
+      "midino": "0x66",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 8 (DECK1) BEAT LOOP MODE - press - 32 Beatloop",
+      "group": "[Channel1]",
+      "key": "beatloop_32_toggle",
+      "status": "0x97",
+      "midino": "0x67",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 8 (DECK2) BEAT LOOP MODE - press - 32 Beatloop",
+      "group": "[Channel2]",
+      "key": "beatloop_32_toggle",
+      "status": "0x99",
+      "midino": "0x67",
+      "options": "Normal"
+    },
+    {
+      "description": "PAD 1 (DECK1) BEAT JUMP MODE - press - Jump 1 Beat backwards",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x97",
+      "midino": "0x20",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 1 (DECK2) BEAT JUMP MODE - press - Jump 1 Beat backwards",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x99",
+      "midino": "0x20",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 2 (DECK1) BEAT JUMP MODE - press - Jump 1 Beat forwards",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x97",
+      "midino": "0x21",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 2 (DECK2) BEAT JUMP MODE - press - Jump 1 Beat forwards",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x99",
+      "midino": "0x21",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 3 (DECK1) BEAT JUMP MODE - press - Jump 2 Beats backwards",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x97",
+      "midino": "0x22",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 3 (DECK2) BEAT JUMP MODE - press - Jump 2 Beats backwards",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x99",
+      "midino": "0x22",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 4 (DECK1) BEAT JUMP MODE - press - Jump 2 Beats forwards",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x97",
+      "midino": "0x23",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 4 (DECK2) BEAT JUMP MODE - press - Jump 2 Beats forwards",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x99",
+      "midino": "0x23",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 5 (DECK1) BEAT JUMP MODE - press - Jump 4 Beats backwards",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x97",
+      "midino": "0x24",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 5 (DECK2) BEAT JUMP MODE - press - Jump 4 Beats backwards",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x99",
+      "midino": "0x24",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 6 (DECK1) BEAT JUMP MODE - press - Jump 4 Beats forwards",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x97",
+      "midino": "0x25",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 6 (DECK2) BEAT JUMP MODE - press - Jump 4 Beats forwards",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x99",
+      "midino": "0x25",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 7 (DECK1) BEAT JUMP MODE - press - Jump 8 Beats backwards",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x97",
+      "midino": "0x26",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 7 (DECK2) BEAT JUMP MODE - press - Jump 8 Beats backwards",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x99",
+      "midino": "0x26",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 8 (DECK1) BEAT JUMP MODE - press - Jump 8 Beats forwards",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x97",
+      "midino": "0x27",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 8 (DECK2) BEAT JUMP MODE - press - Jump 8 Beats forwards",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.beatjumpPadPressed",
+      "status": "0x99",
+      "midino": "0x27",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 7 (DECK1) +SHift BEAT JUMP MODE - press - decrease Beatjump by a factor of 16",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.decreaseBeatjumpSizes",
+      "status": "0x98",
+      "midino": "0x26",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 7 (DECK2) +Shift BEAT JUMP MODE - press - decrease Beatjump by a factor of 16",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.decreaseBeatjumpSizes",
+      "status": "0x9A",
+      "midino": "0x26",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 8 (DECK1) +SHift BEAT JUMP MODE - press - increase Beatjump by a factor of 16",
+      "group": "[Channel1]",
+      "key": "PioneerDDJ400.increaseBeatjumpSizes",
+      "status": "0x98",
+      "midino": "0x27",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 8 (DECK2) +Shift BEAT JUMP MODE - press - increase Beatjump by a factor of 16",
+      "group": "[Channel2]",
+      "key": "PioneerDDJ400.increaseBeatjumpSizes",
+      "status": "0x9A",
+      "midino": "0x27",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 1 (LEFT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler1]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x97",
+      "midino": "0x30",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 1 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler1]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x98",
+      "midino": "0x30",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 2 (LEFT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler2]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x97",
+      "midino": "0x31",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 2 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler2]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x98",
+      "midino": "0x31",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 3 (LEFT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler3]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x97",
+      "midino": "0x32",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 3 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler3]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x98",
+      "midino": "0x32",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 4 (LEFT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler4]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x97",
+      "midino": "0x33",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 4 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler4]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x98",
+      "midino": "0x33",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 5 (LEFT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler5]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x97",
+      "midino": "0x34",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 5 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler5]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x98",
+      "midino": "0x34",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 6 (LEFT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler6]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x97",
+      "midino": "0x35",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 6 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler6]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x98",
+      "midino": "0x35",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 7 (LEFT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler7]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x97",
+      "midino": "0x36",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 7 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler7]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x98",
+      "midino": "0x36",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 8 (LEFT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler8]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x97",
+      "midino": "0x37",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 8 (LEFT)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler8]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x98",
+      "midino": "0x37",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 1 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler9]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x99",
+      "midino": "0x30",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 1 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler9]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x9A",
+      "midino": "0x30",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 2 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler10]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x99",
+      "midino": "0x31",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 2 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler10]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x9A",
+      "midino": "0x31",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 3 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler11]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x99",
+      "midino": "0x32",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 3 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler11]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x9A",
+      "midino": "0x32",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 4 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler12]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x99",
+      "midino": "0x33",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 4 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler12]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x9A",
+      "midino": "0x33",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 5 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler13]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x99",
+      "midino": "0x34",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 5 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler13]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x9A",
+      "midino": "0x34",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 6 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler14]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x99",
+      "midino": "0x35",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 6 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler14]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x9A",
+      "midino": "0x35",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 7 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler15]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x99",
+      "midino": "0x36",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 7 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler15]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x9A",
+      "midino": "0x36",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 8 (RIGHT) SAMPLE MODE - press - Play Sample or Load Track",
+      "group": "[Sampler16]",
+      "key": "PioneerDDJ400.samplerPadPressed",
+      "status": "0x99",
+      "midino": "0x37",
+      "options": "Script-Binding"
+    },
+    {
+      "description": "PAD 8 (Right)+SHIFT SAMPLE MODE - press - Stop Playback or Eject Track",
+      "group": "[Sampler16]",
+      "key": "PioneerDDJ400.samplerPadShiftPressed",
+      "status": "0x9A",
+      "midino": "0x37",
+      "options": "Script-Binding"
+    }
+  ],
+  "outputs": [
+    {
+      "group": "[Channel1]",
+      "key": "play_indicator",
+      "status": "0x90",
+      "midino": "0x0B",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "play_indicator",
+      "status": "0x91",
+      "midino": "0x0B",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "play_indicator",
+      "status": "0x90",
+      "midino": "0x47",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "play_indicator",
+      "status": "0x91",
+      "midino": "0x47",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "cue_indicator",
+      "status": "0x90",
+      "midino": "0x0C",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "cue_indicator",
+      "status": "0x91",
+      "midino": "0x0C",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "cue_indicator",
+      "status": "0x90",
+      "midino": "0x47",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "cue_indicator",
+      "status": "0x91",
+      "midino": "0x47",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "sync_enabled",
+      "status": "0x90",
+      "midino": "0x58",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "sync_enabled",
+      "status": "0x91",
+      "midino": "0x58",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "pfl",
+      "status": "0x90",
+      "midino": "0x54",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "pfl",
+      "status": "0x91",
+      "midino": "0x54",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_1_enabled",
+      "status": "0x97",
+      "midino": "0x00",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_1_enabled",
+      "status": "0x99",
+      "midino": "0x00",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_2_enabled",
+      "status": "0x97",
+      "midino": "0x01",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_2_enabled",
+      "status": "0x99",
+      "midino": "0x01",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_3_enabled",
+      "status": "0x97",
+      "midino": "0x02",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_3_enabled",
+      "status": "0x99",
+      "midino": "0x02",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_4_enabled",
+      "status": "0x97",
+      "midino": "0x03",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_4_enabled",
+      "status": "0x99",
+      "midino": "0x03",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_5_enabled",
+      "status": "0x97",
+      "midino": "0x04",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_5_enabled",
+      "status": "0x99",
+      "midino": "0x04",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_6_enabled",
+      "status": "0x97",
+      "midino": "0x05",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_6_enabled",
+      "status": "0x99",
+      "midino": "0x05",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_7_enabled",
+      "status": "0x97",
+      "midino": "0x06",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_7_enabled",
+      "status": "0x99",
+      "midino": "0x06",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_8_enabled",
+      "status": "0x97",
+      "midino": "0x07",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_8_enabled",
+      "status": "0x99",
+      "midino": "0x07",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_1_enabled",
+      "status": "0x98",
+      "midino": "0x00",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_1_enabled",
+      "status": "0x9A",
+      "midino": "0x00",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_2_enabled",
+      "status": "0x98",
+      "midino": "0x01",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_2_enabled",
+      "status": "0x9A",
+      "midino": "0x01",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_3_enabled",
+      "status": "0x98",
+      "midino": "0x02",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_3_enabled",
+      "status": "0x9A",
+      "midino": "0x02",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_4_enabled",
+      "status": "0x98",
+      "midino": "0x03",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_4_enabled",
+      "status": "0x9A",
+      "midino": "0x03",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_5_enabled",
+      "status": "0x98",
+      "midino": "0x04",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_5_enabled",
+      "status": "0x9A",
+      "midino": "0x04",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_6_enabled",
+      "status": "0x98",
+      "midino": "0x05",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_6_enabled",
+      "status": "0x9A",
+      "midino": "0x05",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_7_enabled",
+      "status": "0x98",
+      "midino": "0x06",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_7_enabled",
+      "status": "0x9A",
+      "midino": "0x06",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "hotcue_8_enabled",
+      "status": "0x98",
+      "midino": "0x07",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "hotcue_8_enabled",
+      "status": "0x9A",
+      "midino": "0x07",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_0.25_enabled",
+      "status": "0x97",
+      "midino": "0x60",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_0.25_enabled",
+      "status": "0x99",
+      "midino": "0x60",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_0.5_enabled",
+      "status": "0x97",
+      "midino": "0x61",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_0.5_enabled",
+      "status": "0x99",
+      "midino": "0x61",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_1_enabled",
+      "status": "0x97",
+      "midino": "0x62",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_1_enabled",
+      "status": "0x99",
+      "midino": "0x62",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_2_enabled",
+      "status": "0x97",
+      "midino": "0x63",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_2_enabled",
+      "status": "0x99",
+      "midino": "0x63",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_4_enabled",
+      "status": "0x97",
+      "midino": "0x64",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_4_enabled",
+      "status": "0x99",
+      "midino": "0x64",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_8_enabled",
+      "status": "0x97",
+      "midino": "0x65",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_8_enabled",
+      "status": "0x99",
+      "midino": "0x65",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_16_enabled",
+      "status": "0x97",
+      "midino": "0x66",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_16_enabled",
+      "status": "0x99",
+      "midino": "0x66",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_32_enabled",
+      "status": "0x97",
+      "midino": "0x67",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_32_enabled",
+      "status": "0x99",
+      "midino": "0x67",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_0.25_enabled",
+      "status": "0x98",
+      "midino": "0x60",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_0.25_enabled",
+      "status": "0x9A",
+      "midino": "0x60",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_0.5_enabled",
+      "status": "0x98",
+      "midino": "0x61",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_0.5_enabled",
+      "status": "0x9A",
+      "midino": "0x61",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_1_enabled",
+      "status": "0x98",
+      "midino": "0x62",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_1_enabled",
+      "status": "0x9A",
+      "midino": "0x62",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_2_enabled",
+      "status": "0x98",
+      "midino": "0x63",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_2_enabled",
+      "status": "0x9A",
+      "midino": "0x63",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_4_enabled",
+      "status": "0x98",
+      "midino": "0x64",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_4_enabled",
+      "status": "0x9A",
+      "midino": "0x64",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_8_enabled",
+      "status": "0x98",
+      "midino": "0x65",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_8_enabled",
+      "status": "0x9A",
+      "midino": "0x65",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_16_enabled",
+      "status": "0x98",
+      "midino": "0x66",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_16_enabled",
+      "status": "0x9A",
+      "midino": "0x66",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "beatloop_32_enabled",
+      "status": "0x98",
+      "midino": "0x67",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "beatloop_32_enabled",
+      "status": "0x9A",
+      "midino": "0x67",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "track_loaded",
+      "status": "0x98",
+      "midino": "0x26",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel1]",
+      "key": "track_loaded",
+      "status": "0x98",
+      "midino": "0x27",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "track_loaded",
+      "status": "0x9A",
+      "midino": "0x26",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Channel2]",
+      "key": "track_loaded",
+      "status": "0x9A",
+      "midino": "0x27",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler1]",
+      "key": "track_loaded",
+      "status": "0x97",
+      "midino": "0x30",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler2]",
+      "key": "track_loaded",
+      "status": "0x97",
+      "midino": "0x31",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler3]",
+      "key": "track_loaded",
+      "status": "0x97",
+      "midino": "0x32",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler4]",
+      "key": "track_loaded",
+      "status": "0x97",
+      "midino": "0x33",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler5]",
+      "key": "track_loaded",
+      "status": "0x97",
+      "midino": "0x34",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler6]",
+      "key": "track_loaded",
+      "status": "0x97",
+      "midino": "0x35",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler7]",
+      "key": "track_loaded",
+      "status": "0x97",
+      "midino": "0x36",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler8]",
+      "key": "track_loaded",
+      "status": "0x97",
+      "midino": "0x37",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler9]",
+      "key": "track_loaded",
+      "status": "0x99",
+      "midino": "0x30",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler10]",
+      "key": "track_loaded",
+      "status": "0x99",
+      "midino": "0x31",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler11]",
+      "key": "track_loaded",
+      "status": "0x99",
+      "midino": "0x32",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler12]",
+      "key": "track_loaded",
+      "status": "0x99",
+      "midino": "0x33",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler13]",
+      "key": "track_loaded",
+      "status": "0x99",
+      "midino": "0x34",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler14]",
+      "key": "track_loaded",
+      "status": "0x99",
+      "midino": "0x35",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler15]",
+      "key": "track_loaded",
+      "status": "0x99",
+      "midino": "0x36",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler16]",
+      "key": "track_loaded",
+      "status": "0x99",
+      "midino": "0x37",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler1]",
+      "key": "track_loaded",
+      "status": "0x98",
+      "midino": "0x30",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler2]",
+      "key": "track_loaded",
+      "status": "0x98",
+      "midino": "0x31",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler3]",
+      "key": "track_loaded",
+      "status": "0x98",
+      "midino": "0x32",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler4]",
+      "key": "track_loaded",
+      "status": "0x98",
+      "midino": "0x33",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler5]",
+      "key": "track_loaded",
+      "status": "0x98",
+      "midino": "0x34",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler6]",
+      "key": "track_loaded",
+      "status": "0x98",
+      "midino": "0x35",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler7]",
+      "key": "track_loaded",
+      "status": "0x98",
+      "midino": "0x36",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler8]",
+      "key": "track_loaded",
+      "status": "0x98",
+      "midino": "0x37",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler9]",
+      "key": "track_loaded",
+      "status": "0x9A",
+      "midino": "0x30",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler10]",
+      "key": "track_loaded",
+      "status": "0x9A",
+      "midino": "0x31",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler11]",
+      "key": "track_loaded",
+      "status": "0x9A",
+      "midino": "0x32",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler12]",
+      "key": "track_loaded",
+      "status": "0x9A",
+      "midino": "0x33",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler13]",
+      "key": "track_loaded",
+      "status": "0x9A",
+      "midino": "0x34",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler14]",
+      "key": "track_loaded",
+      "status": "0x9A",
+      "midino": "0x35",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler15]",
+      "key": "track_loaded",
+      "status": "0x9A",
+      "midino": "0x36",
+      "on": "0x7F",
+      "minimum": "0.5"
+    },
+    {
+      "group": "[Sampler16]",
+      "key": "track_loaded",
+      "status": "0x9A",
+      "midino": "0x37",
+      "on": "0x7F",
+      "minimum": "0.5"
+    }
+  ],
+  "lights": [
+    {
+      "name": "lights.beatFx",
+      "status": "0x94",
+      "data1": "0x47"
+    },
+    {
+      "name": "lights.shiftBeatFx",
+      "status": "0x94",
+      "data1": "0x43"
+    },
+    {
+      "name": "lights.deck1.vuMeter",
+      "status": "0xB0",
+      "data1": "0x02"
+    },
+    {
+      "name": "lights.deck1.playPause",
+      "status": "0x90",
+      "data1": "0x0B"
+    },
+    {
+      "name": "lights.deck1.shiftPlayPause",
+      "status": "0x90",
+      "data1": "0x47"
+    },
+    {
+      "name": "lights.deck1.cue",
+      "status": "0x90",
+      "data1": "0x0C"
+    },
+    {
+      "name": "lights.deck1.shiftCue",
+      "status": "0x90",
+      "data1": "0x48"
+    },
+    {
+      "name": "lights.deck2.vuMeter",
+      "status": "0xB0",
+      "data1": "0x02"
+    },
+    {
+      "name": "lights.deck2.playPause",
+      "status": "0x91",
+      "data1": "0x0B"
+    },
+    {
+      "name": "lights.deck2.shiftPlayPause",
+      "status": "0x91",
+      "data1": "0x47"
+    },
+    {
+      "name": "lights.deck2.cue",
+      "status": "0x91",
+      "data1": "0x0C"
+    },
+    {
+      "name": "lights.deck2.shiftCue",
+      "status": "0x91",
+      "data1": "0x48"
+    }
+  ],
+  "hooks": [
+    "beatFxChannel",
+    "beatFxLeftPressed",
+    "beatFxLevelDepthRotate",
+    "beatFxOnOffPressed",
+    "beatFxOnOffShiftPressed",
+    "beatFxRightPressed",
+    "beatFxSelectPressed",
+    "beatFxSelectShiftPressed",
+    "beatjumpPadPressed",
+    "changeFocusedEffectBy",
+    "cueLoopCallLeft",
+    "cueLoopCallRight",
+    "cycleTempoRange",
+    "decreaseBeatjumpSizes",
+    "focusedFxGroup",
+    "increaseBeatjumpSizes",
+    "init",
+    "jogSearch",
+    "jogTouch",
+    "jogTurn",
+    "loopToggle",
+    "quickJumpBack",
+    "quickJumpForward",
+    "samplerPadPressed",
+    "samplerPadShiftPressed",
+    "samplerPlayOutputCallbackFunction",
+    "setLoopButtonLights",
+    "setReloopLight",
+    "shiftPressed",
+    "shutdown",
+    "startLoopLightsBlink",
+    "startSamplerBlink",
+    "stopLoopLightsBlink",
+    "stopSamplerBlink",
+    "syncLongPressed",
+    "syncPressed",
+    "tempoSliderLSB",
+    "tempoSliderMSB",
+    "toggleFxLight",
+    "toggleLight",
+    "toggleLoopAdjustIn",
+    "toggleLoopAdjustOut",
+    "toggleQuantize",
+    "trackLoadedLED",
+    "vuMeterUpdate"
+  ],
+  "hardware_capture": "BLOCKED_HARDWARE"
+}

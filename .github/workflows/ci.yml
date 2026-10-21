@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: dependências de teste
+        run: python3 -m pip install pytest ruff
+      - name: lint
+        run: python3 -m ruff check src tests tools
+      - name: testes
+        run: python3 -m pytest
+      - name: árvore
+        run: python3 -m deckbridge.tree_audit

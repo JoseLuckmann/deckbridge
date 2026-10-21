@@ -1,0 +1,3 @@
+Tons de teste do DeckBridge OS. Seno de 440 Hz, 1 segundo, gerado aqui.
+Licença: CC0-1.0. Sem música comercial.
+Prioridade: MP3 e WAV. FLAC e AIFF existem, e não são o foco de desempenho.

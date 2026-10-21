@@ -1,0 +1,20 @@
+{
+  "priority": [
+    "mp3",
+    "wav"
+  ],
+  "secondary": [
+    "flac",
+    "aiff"
+  ],
+  "license": "CC0-1.0",
+  "content": "tom senoidal sintetizado, 440 Hz, 1 s, amplitude 0.2, mono",
+  "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+  "files": {
+    "tone-440hz-1s-44100.wav": "90cf8b2193e0cc766f6f8a0a68e173e1981d43b5e0838feacd0f12523b612094",
+    "tone-440hz-1s-48000.wav": "e4df7c1075940a8d01285505c96e080a5adae2c819ae7f16a0e9338e6a228110",
+    "tone-440hz-1s-44100.aiff": "7014b774fd835909d51a732df1d72c702ba142228fb3d2596854fa532a757b9f",
+    "tone-440hz-1s-44100.mp3": "1c66e3703c65f3b2eef4291716fb8c801eceb602f3fdee581fc9693f2eb54e0a",
+    "tone-440hz-1s-44100.flac": "bfdda1a6bf4f780646258d4f9ad98ebb942a2fdabd867d0926b092321c839ad8"
+  }
+}

@@ -1,0 +1,7 @@
+Tons de teste do DeckBridge OS.
+
+Conteúdo: seno de 440 Hz, 1 segundo, gerado por código, sem música de terceiros.
+Licença: CC0-1.0. Pode copiar, modificar e usar.
+Prioridade de teste (OD-03, 21/10/2026): o MP3 e o WAV desta pasta.
+Este diretório não é uma exportação do rekordbox. Não há export.pdb.
+Não grave por cima de um pendrive que já tenha a sua biblioteca.

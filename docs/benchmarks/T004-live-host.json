@@ -1,0 +1,32 @@
+{
+  "schema": "deckbridge.hil/1",
+  "collected_at_utc": "2026-10-21T17:59:12Z",
+  "hil_executed": false,
+  "values_invented": false,
+  "host_role": "coleta ao vivo; não é prova de áudio nem de DDJ-400",
+  "uname": {
+    "sysname": "Linux",
+    "release": "6.12.94+",
+    "machine": "x86_64"
+  },
+  "model": "UNKNOWN",
+  "arch": "x86_64",
+  "cpu_cores": 4,
+  "ram_mb": 16003,
+  "kernel": "6.12.94+",
+  "python": "3.12.3",
+  "power": {
+    "source": "UNKNOWN",
+    "throttled_raw": "UNKNOWN",
+    "under_voltage_now": "UNKNOWN"
+  },
+  "mixxx_version": "UNKNOWN",
+  "ddj_firmware": "UNKNOWN",
+  "runtime_profile": {
+    "tier": "high",
+    "waveforms": "full",
+    "heavy_effects": "on",
+    "reason": "RAM e núcleos acima dos limiares de política; desempenho ainda não medido"
+  },
+  "runtime_profile_note": "Limiares de política, não benchmark. O modelo não escolhe o perfil."
+}

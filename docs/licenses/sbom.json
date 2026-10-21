@@ -1,0 +1,74 @@
+{
+  "bomFormat": "DeckBridge-sbom-inicial",
+  "specVersion": "0",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-10-21T00:00:00Z",
+    "note": "Lista inicial da T003. Não é um CycloneDX completo e não afirma auditoria de cada arquivo upstream."
+  },
+  "components": [
+    {
+      "name": "deckbridge",
+      "version": "0.1.0",
+      "scope": "projeto",
+      "license": "GPL-2.0-or-later provisória; OD-06 ainda aberta",
+      "vendored": true
+    },
+    {
+      "name": "mixxx",
+      "version": "2.5.6",
+      "commit": "3ebac449e7e5fe2a0186596657696e87ce8b0e56",
+      "scope": "baseline não compilada",
+      "license": "GPL-2.0-or-later",
+      "vendored": "apenas res/controllers/Pioneer-DDJ-400.midi.xml e Pioneer-DDJ-400-script.js"
+    },
+    {
+      "name": "StandaloneMixxx",
+      "scope": "referência",
+      "license": "UNKNOWN — LICENSE não detectada em 2026-10-21",
+      "vendored": false
+    },
+    {
+      "name": "TriMixxx",
+      "scope": "referência",
+      "license": "GPL-3.0 no branch padrão",
+      "vendored": false
+    },
+    {
+      "name": "NauticMixxx",
+      "scope": "referência",
+      "license": "GPL-3.0 no branch padrão",
+      "vendored": false
+    },
+    {
+      "name": "pyrekordbox",
+      "scope": "referência",
+      "license": "MIT no branch padrão",
+      "vendored": false
+    },
+    {
+      "name": "libdjinterop",
+      "scope": "referência",
+      "license": "LGPL-3.0 no arquivo LICENSE do branch main; or-later não revalidado",
+      "vendored": false
+    },
+    {
+      "name": "mixxx-pi-gen",
+      "scope": "referência",
+      "license": "BSD-3-Clause no branch padrão",
+      "vendored": false
+    },
+    {
+      "name": "mixxx-skins",
+      "scope": "referência",
+      "license": "por skin, no skin.xml; não auditado arquivo a arquivo",
+      "vendored": false
+    },
+    {
+      "name": "codecs",
+      "scope": "build futura do Mixxx",
+      "license": "UNKNOWN por codec",
+      "vendored": false
+    }
+  ]
+}

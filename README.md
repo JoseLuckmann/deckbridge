@@ -67,4 +67,15 @@ Mixxx é GPL-2.0-or-later; o pacote composto deve manter os respectivos avisos d
 python3 tools/build_spec_bundle.py
 ```
 
-O comando revalida IDs T001–T074, FR/NFR e gera `ESPECIFICACAO_COMPLETA.md`, `manifest.json` e o ZIP de entrega. Ele não executa código de aplicação.
+O comando revalida IDs T001–T074, FR/NFR e gera `ESPECIFICACAO_COMPLETA.md`, `manifest.json` e o ZIP de entrega. Ele não executa código de aplicação. O script ainda não está neste repositório.
+
+## Ferramentas da fase 0
+
+```bash
+python3 -m pytest
+python3 -m deckbridge.hil_collect
+python3 -m deckbridge.mixxx_smoke
+python3 -m deckbridge.release_bundle --out dist
+```
+
+O que exige a DDJ-400 ou o Raspberry está em `docs/hil/checklist-fase0.md`. Nada disso foi marcado como comprovado.

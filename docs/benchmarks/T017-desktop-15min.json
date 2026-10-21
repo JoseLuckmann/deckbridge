@@ -1,0 +1,18 @@
+{
+  "schema": "deckbridge.benchmark/1",
+  "duration_requested_s": 900.0,
+  "duration_actual_s": 900.0,
+  "sample_count": 180,
+  "extrapolated": false,
+  "mixxx_running": false,
+  "audio_exercised": false,
+  "hil_executed": false,
+  "cpu_busy_percent_mean": 0.14,
+  "ram_available_mb_min": 4985.1,
+  "temperature_c_max": "UNKNOWN",
+  "xruns_total": "UNKNOWN",
+  "note": "Números valem só para esta amostra. Não projetar para outra duração, outro aparelho ou para o Mixxx tocando.",
+  "host_sample": true,
+  "pi_15min_status": "BLOCKED_HARDWARE",
+  "mixxx_15min_status": "BLOCKED_HARDWARE"
+}

@@ -1,0 +1,21 @@
+DeckBridge OS
+Copyright (C) 2026 DeckBridge contributors
+
+Licença provisória do código escrito neste repositório (src/, tests/, tools/):
+GNU General Public License, versão 2 ou posterior (GPL-2.0-or-later).
+
+Esta escolha existe para o código poder acompanhar o Mixxx, que é GPL-2.0-or-later.
+A decisão comercial do produto (OD-06) continua aberta. Esta licença provisória
+não fecha essa pergunta.
+
+Documentos em specs/ e docs/ acompanham o repositório para serem lidos e
+modificados junto com o código, sob a mesma licença provisória, salvo nota
+diferente no próprio arquivo.
+
+Arquivos em third_party/mixxx/ permanecem sob a licença upstream.
+Ver docs/licenses/NOTICE.md.
+
+O texto integral da GPL versão 2 está publicado em
+https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
+e também no arquivo LICENSE da tag Mixxx 2.5.6:
+https://github.com/mixxxdj/mixxx/blob/3ebac449e7e5fe2a0186596657696e87ce8b0e56/LICENSE

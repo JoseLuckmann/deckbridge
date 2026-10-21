@@ -1,0 +1,10 @@
+{
+  "status": "BLOCKED",
+  "reason": "binário mixxx ausente neste ambiente",
+  "binary": "UNKNOWN",
+  "version_text": "UNKNOWN",
+  "matches_pin": false,
+  "pinned_tag": "2.5.6",
+  "playback_tested": false,
+  "hil_executed": false
+}

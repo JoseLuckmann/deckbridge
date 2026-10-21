@@ -1,0 +1,31 @@
+{
+  "upstream": "https://github.com/mixxxdj/mixxx",
+  "tag": "2.5.6",
+  "prerelease": false,
+  "draft": false,
+  "release_published_at": "2026-03-27T17:45:39Z",
+  "tag_object_sha": "94ccc34f91d37dec62d0d70c16fac38dc8af677f",
+  "commit_sha": "3ebac449e7e5fe2a0186596657696e87ce8b0e56",
+  "commit_subject": "Release 2.5.6",
+  "commit_date": "2026-03-25T07:10:46Z",
+  "tagger": "Daniel Schürmann",
+  "tag_message": "Mixxx 2.5.6",
+  "tag_pgp_signature_present": true,
+  "tag_pgp_signature_verified": false,
+  "tag_pgp_note": "A tag anotada contém uma assinatura PGP. A chave não foi importada neste ambiente, então git tag -v não foi executado.",
+  "github_archive_url": "https://github.com/mixxxdj/mixxx/archive/refs/tags/2.5.6.tar.gz",
+  "github_archive_sha256_observed": "9cfc9025d50d2511767ee52a07b8854f75c581f0585197d043bc219fcf9f9050",
+  "github_archive_bytes": 40343561,
+  "github_archive_note": "O release no GitHub não publicou assets. O SHA-256 abaixo é do arquivo gerado pelo GitHub, baixado em 2026-10-21. Não é um checksum publicado pelo projeto Mixxx. O identificador estável é o commit_sha.",
+  "observed_at": "2026-10-21",
+  "controllers": {
+    "Pioneer-DDJ-400.midi.xml": {
+      "git_blob_sha": "f7f68d11616d809cf3bc714038308510e472c51f",
+      "sha256": "f3de2ecb02869f2aaf89101c138efa3c1f1b7357655ca20f705d2636ec4306ee"
+    },
+    "Pioneer-DDJ-400-script.js": {
+      "git_blob_sha": "8050f7c2db03b994ede4ec97d1e74e927badb996",
+      "sha256": "87e1c696fe445d3c9816f04da9f3d0d5e774d0fc1c88bad699864bf13545a86d"
+    }
+  }
+}

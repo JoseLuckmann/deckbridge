@@ -1,0 +1,29 @@
+{
+  "name": "deckbridge-tools",
+  "version": "0.1.0",
+  "built_at_utc": "2026-10-21T17:59:12Z",
+  "built_on_arch": "x86_64",
+  "contains_machine_code": false,
+  "debian_architecture": "all",
+  "installable_on": [
+    "amd64",
+    "arm64",
+    "armhf",
+    "any python3"
+  ],
+  "mixxx_binary_included": false,
+  "mixxx_arm64_status": "BLOCKED_HARDWARE",
+  "pi_gen_status": "adiado para a imagem do aparelho (T041)",
+  "files": [
+    {
+      "path": "deckbridge-tools_0.1.0_all.deb",
+      "sha256": "7e16e31f09fc0c103802516d9e8f35185052a73ac74453c4ffd8b5dbbe4799a5",
+      "bytes": 40174
+    },
+    {
+      "path": "deckbridge-tools_0.1.0_linux-any.tar.gz",
+      "sha256": "b8ab7b1a272b804d9cc82cdfd69e647e2376d3f5a58a9423af7a41652415ca54",
+      "bytes": 46219
+    }
+  ]
+}

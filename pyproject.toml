@@ -1,0 +1,17 @@
+[project]
+name = "deckbridge"
+version = "0.1.0"
+description = "Ferramentas de diagnóstico do DeckBridge OS. O motor de áudio é o Mixxx pinado."
+requires-python = ">=3.11"
+license = { text = "GPL-2.0-or-later" }
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 160
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
