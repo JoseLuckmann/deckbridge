@@ -67,7 +67,9 @@ Mixxx é GPL-2.0-or-later; o pacote composto deve manter os respectivos avisos d
 python3 tools/build_spec_bundle.py
 ```
 
-O comando revalida IDs T001–T074, FR/NFR e gera `ESPECIFICACAO_COMPLETA.md`, `manifest.json` e o ZIP de entrega. Ele não executa código de aplicação. O script ainda não está neste repositório.
+O comando revalida IDs T001–T074, FR/NFR e gera `ESPECIFICACAO_COMPLETA.md`, `manifest.json` e o ZIP de entrega. Ele não executa código de aplicação. O script ainda não está neste repositório. Os IDs T075–T079 (simulação) foram acrescentados depois e ficam fora desse gerador ausente.
+
+Simulação não é prova no hardware. O roteiro único para a DDJ-400 e o Raspberry, no fim do projeto, está em `docs/hil/roteiro-validacao-final.md`.
 
 ## Ferramentas da fase 0
 

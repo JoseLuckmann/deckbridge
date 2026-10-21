@@ -84,6 +84,51 @@
 - HIL executado? não
 - Próximo passo: o dono segue `docs/hil/checklist-fase0.md`
 
+## Fase 1 e trilha de simulação — 2026-10-21
+
+O equipamento físico fica para o fim. Simulação não foi montada (T075–T077 seguem TODO). O roteiro único de hardware está escrito. O hash deste bloco entra na linha de baixo depois do commit.
+
+| Data UTC | Task | Estado | Commit/PR | Testes/Evidências | Bloqueios | Próxima ação |
+|---|---|---|---|---|---|---|
+| 2026-10-21 | T020 | PASS | a preencher | `config/defaults.toml`, testes de recusa de escrita | sample rate e buffer são placeholder | medir no aparelho, sem tratar o número atual como fato |
+| 2026-10-21 | T021 | PASS | a preencher | fila simulada de add/remove | daemon udev não instalado no aparelho | T033 |
+| 2026-10-21 | T022 | parcial | a preencher | runner falso; imagem FAT não montou | kernel sem tipo `vfat` | repetir montagem onde o sistema de arquivos existir |
+| 2026-10-21 | T023 | PASS | a preencher | semente 20261021, auto-play sempre falso | sem controladora | — |
+| 2026-10-21 | T024 | PASS | a preencher | PDB sintético, OneLibrary não aberto, timeout | não é export rekordbox; cues não carregados | T016 e OD-04 |
+| 2026-10-21 | T025 | parcial | a preencher | ADR-0005; áudio devolvido igual | Mixxx não executado; sem patch C++ | gancho interno quando houver binário |
+| 2026-10-21 | T026 T027 | PASS | a preencher | 13 SVG em `docs/ui/screenshots/` | Mixxx não carregou pele; waveform é bloco | T035 na UI real |
+| 2026-10-21 | T028 | PASS | a preencher | 100 faixas sintéticas, espera de 200 ms | sem encoder | T029 no hardware |
+| 2026-10-21 | T029 | parcial | a preencher | bytes do XML pinado; troca de tela sem botão | confirmação física pendente | roteiro final, passo 6 |
+| 2026-10-21 | T030 | PASS | a preencher | 12 códigos em pt-BR e en-US | sem tela ligada | — |
+| 2026-10-21 | T031 T033 T034 T035 T038 T039 | BLOCKED_HARDWARE | — | `docs/benchmarks/G1-evidence.md` não fecha o gate | sem DDJ-400 e sem Raspberry até o fim | `docs/hil/roteiro-validacao-final.md` |
+| 2026-10-21 | T032 | PASS | a preencher | temperatura, subtensão e x-runs `UNKNOWN` se vazios | sem medida no aparelho | hil-collect no fim |
+| 2026-10-21 | T036 T037 | PASS | a preencher | processo separado não cria arquivo; suíte local | runner remoto de CI não observado | — |
+| 2026-10-21 | T075 T076 T077 | TODO | — | plano em `plan.md` §15 e `docs/simulation/README.md` | ambiente não construído | implementar só como simulação, sem fechar gate |
+| 2026-10-21 | T078 | BLOCKED_HARDWARE | a preencher | roteiro numerado escrito | execução no fim | dono segue os 12 passos |
+| 2026-10-21 | T079 | PASS | a preencher | `evidence.py` recusa `SIMULATED` para HIL e para G0/G1 | — | manter a regra quando T075 existir |
+
+### T020 — configuração
+- Estado: PASS
+- Perfil `runtime`, tela de referência 1024x600, `allow_write` recusado
+- HIL executado? não
+
+### T022 — montagem
+- Estado: parcial
+- Tentativa: `mkfs.vfat` criou imagem; `mount` respondeu `unknown filesystem type 'vfat'`
+- Não houve ponto montado e nenhum teste afirma o contrário
+- HIL executado? não
+
+### T025 — rescan
+- Estado: parcial
+- Fonte lido: commit `3ebac449e7e5fe2a0186596657696e87ce8b0e56`
+- Sem controle `[Library],Rescan`; `LibraryScanner::scan()` é slot interno
+- HIL executado? não
+
+### T078 — roteiro final
+- Estado: documento PASS; execução BLOCKED_HARDWARE
+- Arquivo: `docs/hil/roteiro-validacao-final.md`
+- Simulação não conta como estes 12 passos
+
 ## Template de registro
 
 ```md

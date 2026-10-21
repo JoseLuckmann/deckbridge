@@ -1,0 +1,44 @@
+# Defaults DeckBridge. OD-01: profile é "runtime", não um modelo de placa.
+# OD-02: referência visual 1024x600 (a outra referência é 800x480).
+# sample_rate e buffer_frames são placeholders. Não são medida de hardware.
+schema_version = "1.0.0"
+profile = "runtime"
+locale = "pt-BR"
+boot_into_mixxx = true
+allow_internet = false
+
+[audio]
+device_name_hint = "DDJ-400"
+preferred_backend = "ALSA"
+master_channels = [1, 2]
+headphone_channels = [3, 4]
+sample_rate = 48000
+buffer_frames = 512
+
+[controller]
+profile = "pioneer-ddj400"
+auto_reconnect = true
+
+[usb]
+mount_root = "/media/deckbridge"
+read_only = true
+allow_write = false
+probe_timeout_seconds = 10
+max_file_scan_bytes = 33554432
+
+[ui]
+mode = "PERFORMANCE"
+orientation = "landscape"
+preferred_width = 1024
+preferred_height = 600
+skin = "DeckBridgeCompact"
+
+[health]
+enabled = true
+sample_interval_seconds = 5
+
+[companion]
+enabled = false
+bind_host = "127.0.0.1"
+port = 8765
+pairing_required = true

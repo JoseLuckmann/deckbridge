@@ -285,3 +285,13 @@ Event bridge versionada, store de sessões, PWA read-only, recommender offline, 
 - `EventBridge`: coletor não-crítico; não usar como command bus central para controls físicos.
 
 Se uma implementação exigir reescrita de engine de áudio para suportar uma função não-MVP, registrar o risco e não prosseguir sem ADR e benchmark isolado. Uma release opera bem com metade das features; **não opera com metade da estabilidade**.
+
+## 15. Trilha de simulação (T075–T079)
+
+O proprietário só terá a DDJ-400 e o Raspberry no fim do projeto (informação de 21/10/2026). As tarefas T001–T074 não mudam de número. A simulação é uma trilha extra para adiantar verificação. **Simulação não é prova no hardware.** Resultado `SIMULATED` não marca tarefa HIL como `PASS` e não fecha G0 nem G1.
+
+- **T075.** Controladora DDJ-400 virtual. Envia e recebe MIDI conforme o mapa pinado em `third_party/mixxx/2.5.6`, por ALSA virtual (`snd-virmidi`) ou equivalente. Não inventa byte ausente do mapa. Estado nesta rodada: TODO.
+- **T076.** Dispositivo de áudio virtual de 4 canais. Master nos canais 1–2 e fone nos 3–4, para checar o roteamento do perfil. Estado nesta rodada: TODO.
+- **T077.** Execução em emulação ARM, `arm64` e `armhf` (QEMU ou container), para os perfis de capacidade da OD-01. Isso prova a arquitetura em que o código rodou, não que uma placa toca.
+- **T078.** Roteiro curto e numerado para a validação real, feito de uma vez no fim: `docs/hil/roteiro-validacao-final.md`. O texto existe. A execução está `BLOCKED_HARDWARE`.
+- **T079.** A regra acima fica testada em `src/deckbridge/evidence.py`. Desktop, emulação e MIDI virtual continuam sendo simulação.

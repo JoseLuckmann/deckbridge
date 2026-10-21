@@ -85,3 +85,17 @@ Não preencher tabela acima com compatibilidade de outra versão se não foi tes
 ## 7. Go/No-Go para uso real
 
 NO-GO se qualquer um: saída cue não separa corretamente, drop audível em teste G2, USB montado RW, processo auto-play após recovery, firmware com falsos pitch sem mitigação, throttling/undervoltage persistente, release sem imagem/rollback testados. Demo doméstica experimental pode ocorrer antes de G2, mas não deve ser vendida como pronta para apresentações.
+
+## 8. Simulação e validação final
+
+O equipamento físico entra só no fim. A trilha T075–T079 não renumera T001–T074.
+
+| Trilha | O que o teste pode afirmar | O que não afirma |
+|---|---|---|
+| T075 MIDI virtual | os bytes enviados batem com o mapa pinado | que a DDJ-400 física mandou esse byte |
+| T076 áudio virtual 4 canais | o roteamento lógico manda master para 1–2 e fone para 3–4 | que a saída da controladora separa master e fone |
+| T077 emulação arm64 e armhf | o perfil de capacidade da OD-01 rodou naquela arquitetura | que um Raspberry toca sem falha |
+| T078 roteiro final | a lista numerada em `docs/hil/roteiro-validacao-final.md` é a prova única no hardware | nada, até alguém executar e anexar log |
+| T079 regra | `SIMULATED` não vira `PASS` de tarefa HIL e não fecha G0/G1 | — |
+
+Enquanto T075–T077 estiverem TODO, não há resultado simulado para registrar. A ausência do ambiente não libera o gate.

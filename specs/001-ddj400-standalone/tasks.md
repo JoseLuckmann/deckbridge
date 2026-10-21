@@ -37,26 +37,26 @@
 
 ## Fase 1 — produto mínimo DDJ-400 standalone
 
-- [ ] **T020** `[P]` Criar `DeviceProfile` + `Config TOML` versionados e parser/validation. **Deps:** T001,T004. **Teste:** defaults, schema inválido, `usb.allow_write=true` recusado.
-- [ ] **T021** `[P]` Criar adapter de detecção udev/udevmon em daemon não-root (processamento fora do udev worker). **Deps:** T020. **Teste:** simulação coldplug/hotplug e desconexão.
-- [ ] **T022** Implementar Mount Guard `ro,nodev,nosuid,noexec`, mount root saneado, timeout e verificação de `findmnt`. **Deps:** T021. **Teste:** loopback FAT/exFAT, fake paths, USB read-only.
-- [ ] **T023** `[P]` Implementar state machine de device/controller/audio/source, códigos de erro do plano. **Deps:** T020. **Teste:** transições e idempotência, property tests se possível.
-- [ ] **T024** `[P]` Implementar Format Probe de legacy/OneLibrary/audio-only/unknown sem alterar USB, com recursos limitados. **Deps:** T022. **Teste:** PDB válido, arquivos truncados, huge paths, timeout.
-- [ ] **T025** Integrar mount/source com descoberta/rescan USB Mixxx; resolver SP-003 antes de patch C++. **Deps:** T015,T022,T024. **Teste:** conectar USB em set ativo e visualizar fonte sem resetar áudio.
-- [ ] **T026** `[P]` Definir skin compacta baseada em mecanismos Mixxx, wireframes de referência 800x480 e 1024x600, layout adaptável a outras resoluções (OD-02, 21/10/2026). **Deps:** T002. **Teste:** screenshots das 4 telas nessas duas referências e numa resolução diferente.
-- [ ] **T027** Implementar `PERFORMANCE` skin com 2 decks, waveform, BPM, tempo, estado, cues e loops. **Deps:** T026. **Teste:** screenshots/visibilidade; sem uso de webview pesada.
-- [ ] **T028** Implementar `BROWSE` e fluxo source/playlist/track/load para encoder e DDJ-400. **Deps:** T008,T025,T026. **Teste:** 100 faixas e navegação sem mouse.
-- [ ] **T029** Mapear combinações de botões para alternar BROWSE/PERFORMANCE/STATUS, sem quebrar controles de performance. **Deps:** T008,T028. **Teste:** mapeamento explícito por estados + HIL.
-- [ ] **T030** Implementar `STATUS` e mensagens E_DDJ/E_AUDIO/E_RB/E_USB legíveis, com i18n pt-BR/en-US. **Deps:** T023,T026. **Teste:** states sintéticos.
-- [ ] **T031** Configurar autostart supervisionado (systemd + desktop/Sway) com usuário não-root, grace shutdown e fallback recovery. **Deps:** T020,T027. **Teste:** 5 cold boots HIL.
-- [ ] **T032** Implementar diagnóstico mínimo do sistema (logs com privacy, temperatur/undervoltage, DDJ status e 4ch). **Deps:** T023,T031. **Teste:** eventos sintetizados, sem root shell injection.
-- [ ] **T033** `[HIL]` Provar hotplug USB, DDJ reconnection e ausência de keyboard na apresentação. **Deps:** T025,T028,T029,T031. **Teste:** roteiro manual com vídeo/log.
-- [ ] **T034** `[HIL]` Provar imutabilidade USB com hashes e variações de ações (load/cue/loop). **Deps:** T022,T025,T027. **Teste:** 100% hashes iguais, mount `ro`.
-- [ ] **T035** `[HIL]` Provar master/cue/LEDs e todas as ações da matriz M0 por 15min na UI final. **Deps:** T027,T029,T033. **Teste:** report de DDJ-400 por firmware.
-- [ ] **T036** `[P]` Testar parsers com fuzz limitado e inputs maliciosos/Unicode/path traversal; confinamento para processo parser auxiliar. **Deps:** T024. **Teste:** não criar arquivo fora mount/DB local.
-- [ ] **T037** `[P]` Suite de regression unit/integration de estados, configuração, montagens, formats e rendering metadata. **Deps:** T023,T024,T026,T028. **Teste:** executa em CI.
-- [ ] **T038** `[HIL]` Testes de remocão USB durante playback e falha áudio, com mensagens honestas sem promessa gapless. **Deps:** T030,T033. **Teste:** nenhum crash e nenhum write USB.
-- [ ] **T039** Consolidar **Gate G1** (`G1-evidence.md`), publicar matriz PDB/cues/controls e instruções de uso offline. **Deps:** T025–T038. **Condição:** G0 evidenciado e sem fail crítico.
+- [x] **T020** `[P]` Criar `DeviceProfile` + `Config TOML` versionados e parser/validation. **Deps:** T001,T004. **Teste:** defaults, schema inválido, `usb.allow_write=true` recusado. **Estado:** `PASS` de software em 21/10/2026. Perfil `runtime`, referência 1024x600, escrita recusada. Sample rate e buffer continuam placeholder.
+- [x] **T021** `[P]` Criar adapter de detecção udev/udevmon em daemon não-root (processamento fora do udev worker). **Deps:** T020. **Teste:** simulação coldplug/hotplug e desconexão. **Estado:** `PASS` do adaptador com eventos simulados. O daemon no aparelho não foi instalado.
+- [ ] **T022** Implementar Mount Guard `ro,nodev,nosuid,noexec`, mount root saneado, timeout e verificação de `findmnt`. **Deps:** T021. **Teste:** loopback FAT/exFAT, fake paths, USB read-only. **Estado:** parcial em 21/10/2026. A lógica e o runner falso passam. `mkfs.vfat` criou uma imagem neste ambiente e o `mount` falhou com `unknown filesystem type 'vfat'`. Não houve montagem real.
+- [x] **T023** `[P]` Implementar state machine de device/controller/audio/source, códigos de erro do plano. **Deps:** T020. **Teste:** transições e idempotência, property tests se possível. **Estado:** `PASS` de software em 21/10/2026, com semente fixa. Sem aparelho.
+- [x] **T024** `[P]` Implementar Format Probe de legacy/OneLibrary/audio-only/unknown sem alterar USB, com recursos limitados. **Deps:** T022. **Teste:** PDB válido, arquivos truncados, huge paths, timeout. **Estado:** `PASS` da sonda estrutural em árvore sintética. Não abre SQLite, não carrega cue, versão rekordbox `UNKNOWN`. Pendrive real continua T016.
+- [ ] **T025** Integrar mount/source com descoberta/rescan USB Mixxx; resolver SP-003 antes de patch C++. **Deps:** T015,T022,T024. **Teste:** conectar USB em set ativo e visualizar fonte sem resetar áudio. **Estado:** parcial. ADR-0005: não há controle `[Library],Rescan` no fonte 2.5.6; o pedido não reinicia o áudio e não aplica patch. O Mixxx não foi executado, então a fonte não apareceu num set.
+- [x] **T026** `[P]` Definir skin compacta baseada em mecanismos Mixxx, wireframes de referência 800x480 e 1024x600, layout adaptável a outras resoluções (OD-02, 21/10/2026). **Deps:** T002. **Teste:** screenshots das 4 telas nessas duas referências e numa resolução diferente. **Estado:** `PASS` do layout SVG em 21/10/2026, também em 1366x768. O Mixxx não carregou pele.
+- [x] **T027** Implementar `PERFORMANCE` skin com 2 decks, waveform, BPM, tempo, estado, cues e loops. **Deps:** T026. **Teste:** screenshots/visibilidade; sem uso de webview pesada. **Estado:** `PASS` do desenho. A waveform é um bloco do layout; some no perfil `off`. Não é forma de onda calculada pelo motor.
+- [x] **T028** Implementar `BROWSE` e fluxo source/playlist/track/load para encoder e DDJ-400. **Deps:** T008,T025,T026. **Teste:** 100 faixas e navegação sem mouse. **Estado:** `PASS` da lista sintética de 100 faixas, MP3/WAV alternados, com espera de 200 ms na carga. Sem encoder físico.
+- [ ] **T029** Mapear combinações de botões para alternar BROWSE/PERFORMANCE/STATUS, sem quebrar controles de performance. **Deps:** T008,T028. **Teste:** mapeamento explícito por estados + HIL. **Estado:** parcial. Mapa de computador lido do XML pinado. Troca de tela `OPEN_BROWSE`, `OPEN_STATUS`, `BACK` e `SAFE_SHUTDOWN` segue sem botão. Confirmação na controladora `BLOCKED_HARDWARE`.
+- [x] **T030** Implementar `STATUS` e mensagens E_DDJ/E_AUDIO/E_RB/E_USB legíveis, com i18n pt-BR/en-US. **Deps:** T023,T026. **Teste:** states sintéticos. **Estado:** `PASS` dos textos e da tela STATUS em SVG. Sem display ligado.
+- [ ] **T031** Configurar autostart supervisionado (systemd + desktop/Sway) com usuário não-root, grace shutdown e fallback recovery. **Deps:** T020,T027. **Teste:** 5 cold boots HIL. **Estado:** `BLOCKED_HARDWARE`.
+- [x] **T032** Implementar diagnóstico mínimo do sistema (logs com privacy, temperatur/undervoltage, DDJ status e 4ch). **Deps:** T023,T031. **Teste:** eventos sintetizados, sem root shell injection. **Estado:** `PASS` do módulo em 21/10/2026. Temperatura, subtensão e x-runs ficam `UNKNOWN` se ninguém medir. Coleta no aparelho continua bloqueada.
+- [ ] **T033** `[HIL]` Provar hotplug USB, DDJ reconnection e ausência de keyboard na apresentação. **Deps:** T025,T028,T029,T031. **Teste:** roteiro manual com vídeo/log. **Estado:** `BLOCKED_HARDWARE`.
+- [ ] **T034** `[HIL]` Provar imutabilidade USB com hashes e variações de ações (load/cue/loop). **Deps:** T022,T025,T027. **Teste:** 100% hashes iguais, mount `ro`. **Estado:** `BLOCKED_HARDWARE`.
+- [ ] **T035** `[HIL]` Provar master/cue/LEDs e todas as ações da matriz M0 por 15min na UI final. **Deps:** T027,T029,T033. **Teste:** report de DDJ-400 por firmware. **Estado:** `BLOCKED_HARDWARE`.
+- [x] **T036** `[P]` Testar parsers com fuzz limitado e inputs maliciosos/Unicode/path traversal; confinamento para processo parser auxiliar. **Deps:** T024. **Teste:** não criar arquivo fora mount/DB local. **Estado:** `PASS` em árvore sintética e processo separado, em 21/10/2026. Não é um pendrive hostil no aparelho.
+- [x] **T037** `[P]` Suite de regression unit/integration de estados, configuração, montagens, formats e rendering metadata. **Deps:** T023,T024,T026,T028. **Teste:** executa em CI. **Estado:** `PASS` local. O runner remoto do CI não foi observado.
+- [ ] **T038** `[HIL]` Testes de remocão USB durante playback e falha áudio, com mensagens honestas sem promessa gapless. **Deps:** T030,T033. **Teste:** nenhum crash e nenhum write USB. **Estado:** `BLOCKED_HARDWARE`.
+- [ ] **T039** Consolidar **Gate G1** (`G1-evidence.md`), publicar matriz PDB/cues/controls e instruções de uso offline. **Deps:** T025–T038. **Condição:** G0 evidenciado e sem fail crítico. **Estado:** `BLOCKED_HARDWARE`. O arquivo `docs/benchmarks/G1-evidence.md` existe e não fecha o gate.
 
 ## Fase 2 — appliance confiável
 
@@ -105,6 +105,16 @@
 - [ ] **T073** `[P]` Avaliar ControllerProfile extensível para FLX4/Hercules sem quebrar DDJ-400. **Deps:** T054. **Teste:** M0 regressão DDJ-400.
 - [ ] **T074** Definir projeto separado para writeback bidirecional com backup, transaction & autorizações — apenas se proprietário aprovar. **Deps:** T070, decisão OD-06 e decisão explícita de writeback. **Status:** `DEFERRED` por default.
 
+## Trilha S — simulação sem hardware (IDs novos; T001–T074 não mudam)
+
+O proprietário só terá DDJ-400 e Raspberry no fim do projeto (21/10/2026). Simulação não é prova no hardware. `SIMULATED` não marca tarefa HIL como `PASS` e não fecha G0 nem G1 (T079).
+
+- [ ] **T075** Controladora DDJ-400 virtual: enviar e receber MIDI conforme o mapa pinado, por ALSA `snd-virmidi` ou equivalente. **Estado:** `TODO`. Não inventar byte. Não substitui T009 nem T035.
+- [ ] **T076** Dispositivo de áudio virtual de 4 canais, master 1–2 e fone 3–4, para checar roteamento. **Estado:** `TODO`. Não substitui T010 nem T035.
+- [ ] **T077** Executar os perfis de capacidade da OD-01 em emulação ARM `arm64` e `armhf` (QEMU ou container). **Estado:** `TODO`. Prova a arquitetura, não que uma placa toca.
+- [ ] **T078** Roteiro numerado de validação final no hardware real, feito de uma vez no fim. **Entrega:** `docs/hil/roteiro-validacao-final.md`. **Estado:** documento escrito; execução `BLOCKED_HARDWARE`.
+- [x] **T079** Regra de evidência: resultado `SIMULATED` não fecha tarefa HIL nem gate G0/G1. **Estado:** `PASS` da regra em `src/deckbridge/evidence.py` e no plano de testes, em 21/10/2026. Os ambientes T075–T077 ainda não existem.
+
 ## Traçabilidade requisito -> tarefas -> testes/gates
 
 | Requisito | Tarefas-chave | Gate |
@@ -130,7 +140,7 @@
 
 ## Gerenciamento de blockers
 
-- `T005/T009/T010/T012/T014/T016/T018/T033/T034/T035/T038/T049/T050/T051/T052` exigem hardware físico ou export USB do proprietário.
-- Na ausência de hardware, agentes podem executar T001–T004/T006–T008/T013/T015/T017/T020–T024/T026/T027/T030/T036/T037 e simulações, **sem fechar gates reais**.
-- HIL não pode ser substituído por testes no desktop nem documentação de terceiros.
+- O proprietário só terá a DDJ-400 e o Raspberry no fim do projeto. Até lá, T005/T009/T010/T011/T012/T014/T016/T018/T031/T033/T034/T035/T038/T039 e a execução da T078 ficam `BLOCKED_HARDWARE`. OD-04 (versão do rekordbox e tipo de exportação) continua aberta para o pendrive real.
+- Na ausência de hardware, agentes seguem em software e na trilha T075–T079, **sem fechar G0 ou G1**.
+- Simulação, teste de desktop e emulação não substituem o roteiro `docs/hil/roteiro-validacao-final.md`.
 - Qualquer issue de upstream incompatível exige issue com repro, commit e contorno verificável.
