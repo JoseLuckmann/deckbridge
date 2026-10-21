@@ -9,10 +9,10 @@
 | Core DJ | Mixxx 2.5.6 stable, tag imutável + patchset local | Mixxx 2.6 beta e 2.7 dev fora do release principal até nova decisão |
 | Core/runtime | C++ / Qt / scripts MIDI JavaScript/XML do Mixxx | Preservar API de controles upstream; minimizar patches C++ |
 | Pi OS | Raspberry Pi OS 64-bit, inicialmente Desktop Debian 13 Trixie onde suportado | alinhar distro/kernel ao hardware real e imagem mixxx-pi-gen |
-| Hardware | DDJ-400 USB class-compliant, Pi 4B 4GB target e Pi 5 preferencial | Pi antigo não identificado, gate obrigatório |
+| Hardware | DDJ-400 USB class-compliant; Raspberry de vários modelos e Linux x86/ARM genérico (OD-01, 21/10/2026) | nenhum modelo é requisito; capacidade lida em execução; HIL continua obrigatório por aparelho |
 | Áudio | dispositivo USB da DDJ-400; master ch1–2, cue ch3–4 | ALSA preferido se estável; PipeWire/JACK apenas se benchmark justificar |
 | MIDI | mapping nativo DDJ-400 Mixxx, scripts JS estendidos de forma conservadora | CC/notes, IDs e feedback inferidos do mapping fixado e captura HIL |
-| Tela | skin nativa do Mixxx e touchscreen 800x480+ em paisagem | usar LateNightMini como referência/derivação sujeita a licença; UI própria se necessário |
+| Tela | skin nativa do Mixxx, paisagem, adaptável a qualquer resolução; referência 7" 800x480 e 1024x600 (OD-02, 21/10/2026) | usar LateNightMini como referência/derivação sujeita a licença; UI própria se necessário |
 | USB | udev + udisks2/systemd mount com `ro,nodev,nosuid,noexec` onde suportados | fs-dependent; mount manual em laboratório inicialmente |
 | Biblioteca USB | suporte nativo Mixxx à exportação PDB tradicional | rastrear limitacões do mixxx 2.5.6 e diferenças de cues |
 | Persistência local | SQLite (dados do produto), Mixxx library DB separada | não editar banco Mixxx externamente com Mixxx rodando |
@@ -149,7 +149,7 @@ Antes de importar código de um projeto de referência: registrar repositório/c
 ### 4.2 Design system
 
 - Tema dark de alto contraste, cores de decks consistentes, sem depender de cores apenas para status.
-- Layout adaptativo para 800x480 e 1280x720 landscape; teste de legibilidade à distância.
+- Layout adaptativo a qualquer resolução landscape. Referências obrigatórias: 800x480 e 1024x600 (OD-02, 21/10/2026). Uma resolução diferente entra no teste para mostrar que o layout não está preso a esses dois tamanhos.
 - UI no P1 é skin Qt Mixxx com XML e assets vetoriais/licenciados. Customizar tags de skin e conexão de controls do próprio Mixxx; evitar overlay Electron/Chromium que consuma recursos em Pi antigo.
 - Touch é recurso secundário; todos os gestos essenciais da performance/navegação mapeados para DDJ.
 - “Onde tocar?”: shortcut/encoder navega playlist; botão LOAD define deck; SHIFT + seleção troca foco source/playlist quando mapeamento suportar; documentação de botões conforme mapping real.
@@ -157,7 +157,7 @@ Antes de importar código de um projeto de referência: registrar repositório/c
 
 ### 4.3 Critérios UX mensuráveis
 
-- Em 800x480, BPMs dos decks legíveis com distância 50–80 cm, títulos truncados sem apagar identificação, tempo/buffer mostrados claramente.
+- Em 800x480 e em 1024x600, BPMs dos decks legíveis com distância 50–80 cm, títulos truncados sem apagar identificação, tempo/buffer mostrados claramente. Em perfil fraco, a waveform é o primeiro elemento a sair.
 - Navegação por uma playlist de 100 faixas só com encoder e load, sem touch, em menos de 60s na prova humana (meta).
 - Feedback para entrada em PLAY, CUE, LOOP, SYNC e ocorrência de desconexão em menos de 200ms perceptíveis; medido por vídeo ou logs quando aplicável.
 
@@ -271,9 +271,9 @@ Event bridge versionada, store de sessões, PWA read-only, recommender offline, 
 
 ## 13. Planejamento de recursos (referência, não pedido de compra)
 
-- **POC:** Raspberry Pi antigo + monitor HDMI + teclado/Mouse para setup + DDJ-400 + cabo USB-B + fonte correta + USB com biblioteca de teste.
-- **MVP:** Pi 4B/5 com fonte certificada para seu perfil USB, cooler, SD boa qualidade, touch em paisagem e estrutura com ventilação. DDJ-400 já é interface áudio, não adicionar DAC externo.
-- **Risco de energia:** Pi 5 com fonte 3A limita periféricos a 600 mA; fonte 5A adequada permite orçamento USB agregado até 1,6A, compartilhado. Pi 4 possui limite agregado USB de ~1,2A. Medir consumo DDJ/controlador/tela; usar hub alimentado se necessário. Referência Raspberry Pi oficial nos docs.
+- **POC:** qualquer Raspberry já existente, ou um Linux x86/ARM genérico, + monitor HDMI + teclado/mouse só para o setup + DDJ-400 + cabo USB-B + fonte correta daquele aparelho + USB com biblioteca de teste. Não comprar um modelo específico para começar.
+- **MVP:** o aparelho em que o perfil de execução couber, com fonte adequada ao próprio modelo, SD boa quando for Raspberry, tela de referência 7" (800x480 ou 1024x600) ou outra resolução com o mesmo layout. DDJ-400 já é a interface de áudio; não adicionar DAC externo.
+- **Risco de energia (referência de fabricante, não escolha de modelo):** Pi 5 com fonte 3A limita periféricos a 600 mA; fonte 5A adequada permite orçamento USB agregado até 1,6A, compartilhado. Pi 4 possui limite agregado USB de ~1,2A. Medir consumo DDJ/controlador/tela na placa real; usar hub alimentado se necessário. Referência Raspberry Pi oficial nos docs.
 
 ## 14. Estratégia de evolução independente
 

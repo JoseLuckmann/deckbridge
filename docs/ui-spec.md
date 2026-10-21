@@ -1,6 +1,6 @@
 # UI/UX Detailed Specification — DeckBridge OS (P1–P4)
 
-**Data:** 2026-10-21 | **Dispositivos:** touchscreen landscape 800x480 mínimo e 1280x720 recomendada.  
+**Data:** 2026-10-21 | **Decisão OD-02 em 21/10/2026:** layout adaptável a qualquer resolução. Referência de tela de 7 polegadas: 800x480 e 1024x600, paisagem.  
 **Padrão:** controla-se primariamente pela DDJ-400; interface serve de estado, browsing e informações de DJ.  
 **Nota:** layouts abaixo são wireframes funcionais, não reproduções de interface comercial. Brand/assets produzidos pelo projeto, não copiados de Pioneer/AlphaTheta.
 
@@ -11,7 +11,9 @@
 - A interface não controla volume automaticamente, não solicita login, não depende de internet.
 - Uma falha de áudio sempre ganha prioridade sobre recomendação e animações.
 
-## 2. Wireframe: PERFORMANCE — paisagem (1280x720)
+## 2. Wireframe: PERFORMANCE — estrutura, não um tamanho fixo
+
+O desenho abaixo mostra a ordem das informações. Nas referências 800x480 e 1024x600 ele precisa caber inteiro. Em outra resolução, os mesmos blocos esticam ou encolhem sem cortar BPM, tempo e estado de PLAY. Em hardware fraco (OD-01), a waveform é o primeiro bloco a ser desligado.
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -30,7 +32,7 @@
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-Em 800x480, reduzir metadados a título/autor truncado, BPM, time, waveform simplificada, flags e barra de status. Não exibir um teclado on-screen permanente.
+Em 800x480, reduzir metadados a título/autor truncado, BPM, tempo, waveform simples, flags e barra de status. Em 1024x600 cabe um pouco mais de texto, com os mesmos blocos. Não exibir um teclado on-screen permanente.
 
 ## 3. Wireframe: BROWSE
 
@@ -107,7 +109,7 @@ stateDiagram-v2
 - UX-02: trocar de Browse para Performance durante reprodução sem atraso ou mudança de áudio.
 - UX-03: retirar USB durante browse; aviso e retorno seguro.
 - UX-04: DDJ ausente ao ligar; telas status e recuperação guiada.
-- UX-05: UI landscape 800x480, 1024x600 e 1280x720 (sem corte/overflow) quando suportado.
+- UX-05: UI landscape nas referências 800x480 e 1024x600, mais uma resolução diferente (sem corte/overflow). 1280x720 deixa de ser o padrão.
 - UX-06: tecla LOAD rápida 10x não carrega faixa no deck errado; debounce de input com logs de ação.
 - UX-07: navegar apenas pelo encoder com toque da tela desligado.
 - UX-08: E_AUDIO_4CH_MISSING visível até correção.

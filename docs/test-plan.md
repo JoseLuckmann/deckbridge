@@ -1,6 +1,9 @@
 # Test Plan / HIL & Release Qualification
 
-**Data:** 2026-10-21 | **Estado:** protocolo especificado, **sem execução**.
+**Data:** 2026-10-21 | **Estado:** protocolo especificado, **sem execução em hardware**.  
+**OD-03 (21/10/2026):** testes de desempenho e de áudio priorizam MP3 e WAV. FLAC e AIFF podem entrar, sem serem o critério principal.  
+**OD-01:** cada ensaio registra o aparelho lido na hora. Um resultado não vale para outro modelo.  
+**OD-02:** checagem visual de referência em 800x480 e 1024x600, mais uma resolução diferente.
 
 ## 1. Métricas e instrumentos
 
@@ -20,8 +23,8 @@
 
 ## 2. Cenários de áudio
 
-- A-01: 44.1kHz/512 frames, 2 decks com MP3 em Pi (se suportado).
-- A-02: 48kHz/512 frames, 2 decks com WAV.
+- A-01: 44.1kHz/512 frames, 2 decks com MP3 (prioridade OD-03), no aparelho sob teste.
+- A-02: 48kHz/512 frames, 2 decks com WAV (prioridade OD-03).
 - A-03: 48kHz/256 frames para comparação; se xrun, retornar ao buffer mais seguro.
 - A-04: scratches repetidos e pitch ajustado rapidamente, FX em pelo menos um deck, enquanto navega em 1000 tracks.
 - A-05: DJ mix master crossfader A->B e PFL B independente durante 15 min.
@@ -63,7 +66,8 @@
 |---|---|---|---|---|
 | USB A, RB versão informada pelo proprietário | coletar | coletar | hot/memory/loop/grid | A EXECUTAR |
 | USB B, segunda exportação gerada independente | coletar | coletar | variação tempo/key/artwork | A EXECUTAR |
-| fixture sem RB, WAV simples | n/a | n/a | n/a | A EXECUTAR |
+| fixture sem RB, WAV simples (prioridade OD-03) | n/a | n/a | n/a | A EXECUTAR |
+| fixture sem RB, MP3 simples (prioridade OD-03) | n/a | n/a | n/a | A EXECUTAR |
 | OneLibrary-only (P5) | não | sim | em ANLZ | SP-009 bloqueável |
 
 Não preencher tabela acima com compatibilidade de outra versão se não foi testada nesta implementação.

@@ -25,7 +25,7 @@
 - [x] Núcleo RT isolado de rede, parsing e IA.
 - [x] Licenças e separação entre projetos de referência explicadas.
 - [x] Pipeline de POC em Pi antigo sem compra nova definido.
-- [ ] Modelo real Raspberry do proprietário identificado (OD-01, bloquear HIL).
+- [x] OD-01 decidida em 21/10/2026: sem modelo único; HIL continua necessário em cada aparelho real antes de declarar suporte.
 - [ ] DDJ firmware e mapeamentos reais capturados (T009).
 - [ ] Export real da versão do rekordbox do usuário auditado (T014).
 - [ ] Performance latência/x-runs medida na placa escolhida (T018/T049).

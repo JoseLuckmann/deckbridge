@@ -3,6 +3,8 @@
 **Edição:** 1.0.0 · **Data:** 21/10/2026 · **Estado:** especificação, ainda não software implementado.
 
 > **Importante:** este arquivo consolida todos os documentos normativos, técnicos e de implementação. As pastas independentes no ZIP são a fonte primária para GitHub Spec Kit; este arquivo existe para ingestão em um único contexto. O código e os testes físicos ainda precisam ser executados.
+>
+> **Atualização 21/10/2026:** OD-01, OD-02 e OD-03 foram decididas nos arquivos separados. Este consolidado não foi regenerado (`tools/build_spec_bundle.py` não está no repositório). Em divergência, valem os arquivos separados.
 
 ## Índice de documentos consolidados
 

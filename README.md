@@ -3,7 +3,7 @@
 **Estado:** especificação de engenharia inicial (não é software implementado)  
 **Data:** 2026-10-21  
 **Idioma:** pt-BR  
-**Hardware-alvo:** Pioneer DJ DDJ-400 + Raspberry Pi 4/5; POC em Raspberry antigo conforme inventário  
+**Hardware-alvo:** Pioneer DJ DDJ-400 + Raspberry Pi de vários modelos (inclusive antigos) e, de preferência, Linux x86/ARM genérico. Nenhum modelo é obrigatório (OD-01, 21/10/2026). Tela de referência: 7 polegadas, 800x480 ou 1024x600, layout adaptável (OD-02). Áudio prioritário: MP3 e WAV (OD-03).  
 **Motor:** Mixxx 2.5.6 estável (baseline a validar no repositório)  
 **Responsável pela visão:** proprietário do projeto (decisões pendentes em `spec.md`)
 

@@ -2,7 +2,7 @@
 
 **Versão:** 1.0.0 | **Formato:** IDs permanentes `T001...`, dependências explícitas, saída + evidência.  
 **Estados permitidos:** `TODO`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED_HARDWARE`, `BLOCKED_OWNER`, `DEFERRED`.  
-**Status inicial de todas as tarefas:** `TODO`, exceto onde indicado. Nenhuma tarefa de implementação foi executada neste pacote.
+**Status inicial deste pacote:** `TODO`. A partir de 21/10/2026 as tarefas de software da Fase 0 passam a ter estado próprio na linha e no `implementation-log`. Tarefa sem marca continua `TODO`.
 
 ## Regras de execução
 
@@ -27,12 +27,12 @@
 - [ ] **T010** `[HIL]` Enumerar canais de saída áudio da DDJ-400 em Linux; distinguir números lógicos e indexes do backend. **Deps:** T005. **Teste:** reproduzir sinais separados 1–2/3–4.
 - [ ] **T011** `[HIL]` Instalar Mixxx estável no Pi antigo e configurar mapping/ALSA com backup. **Deps:** T005,T007,T008. **Teste:** app inicia sem crash, controladora aparece.
 - [ ] **T012** `[HIL]` Realizar teste master/cue + 2 decks e play/cue/sync/tempo/FX/fader/jog com sample test. **Deps:** T009,T010,T011. **Teste:** matriz 15min + registros áudio/log (G0).
-- [ ] **T013** `[P]` Criar fixtures sintéticas de MP3/WAV/FLAC/AIFF e metadados + imagens de USB permitidas; direitos/atribuição. **Deps:** T001. **Teste:** hashes reproduzíveis, sem músicas comerciais.
+- [ ] **T013** `[P]` Criar fixtures sintéticas de MP3/WAV/FLAC/AIFF e metadados + imagens de USB permitidas; direitos/atribuição. **Deps:** T001. **Teste:** hashes reproduzíveis, sem músicas comerciais. **OD-03 (21/10/2026):** MP3 e WAV são a prioridade de testes e desempenho; FLAC e AIFF permanecem, sem serem o foco.
 - [ ] **T014** `[HIL]` Produzir USB teste no rekordbox, identificar export legacy/OneLibrary e gravar expected metadata (5 faixas, 3 playlists, cues, loops, beatgrids). **Deps:** T013 e OD-04. **Teste:** manter arquivos de teste privados quando tiverem mídia protegida.
 - [ ] **T015** `[P]` Analisar árvore do código de import RB da versão Mixxx fixada e os padrões ANLZ; criar matriz semântica de cues. **Deps:** T002,T013. **Entrega:** `docs/compatibility/rekordbox-format-matrix.md`.
 - [ ] **T016** `[HIL]` Rodar import de USB real na build em Pi, comparar playlists/markers com expected, sem write. **Deps:** T011,T014,T015. **Teste:** hashes pré/pós; diff de cues/loops.
 - [ ] **T017** `[P]` Benchmark de CPU/RAM/temperatura/x-runs em desktop e harness Pi (15min). **Deps:** T004,T006. **Teste:** relatórios sem extrapolações.
-- [ ] **T018** `[HIL]` Coletar benchmark de Pi antigo nas condições reais. **Deps:** T012,T017. **Teste:** gravação de dados em 15min; definir decisão Pi 3/4/5.
+- [ ] **T018** `[HIL]` Coletar benchmark no aparelho real que estiver ligado. **Deps:** T012,T017. **Teste:** gravação de dados em 15min. **OD-01 (21/10/2026):** o resultado alimenta o perfil de execução; não escolhe um modelo único de Raspberry.
 - [ ] **T019** Consolidar **Gate G0**, riscos, backlog reordenado e blockers owner, com matriz FR-001...004. **Deps:** T009,T010,T012,T016,T018. **Resultado:** `G0-evidence.md` PASS/FAIL/BLOCKED, sem liberar G1 com FAIL grave.
 
 ## Fase 1 — produto mínimo DDJ-400 standalone
@@ -43,7 +43,7 @@
 - [ ] **T023** `[P]` Implementar state machine de device/controller/audio/source, códigos de erro do plano. **Deps:** T020. **Teste:** transições e idempotência, property tests se possível.
 - [ ] **T024** `[P]` Implementar Format Probe de legacy/OneLibrary/audio-only/unknown sem alterar USB, com recursos limitados. **Deps:** T022. **Teste:** PDB válido, arquivos truncados, huge paths, timeout.
 - [ ] **T025** Integrar mount/source com descoberta/rescan USB Mixxx; resolver SP-003 antes de patch C++. **Deps:** T015,T022,T024. **Teste:** conectar USB em set ativo e visualizar fonte sem resetar áudio.
-- [ ] **T026** `[P]` Definir skin compacta baseada em mecanismos Mixxx, wireframes 800x480 e 1280x720. **Deps:** T002. **Teste:** screenshots das 4 telas em pelo menos 2 resoluções.
+- [ ] **T026** `[P]` Definir skin compacta baseada em mecanismos Mixxx, wireframes de referência 800x480 e 1024x600, layout adaptável a outras resoluções (OD-02, 21/10/2026). **Deps:** T002. **Teste:** screenshots das 4 telas nessas duas referências e numa resolução diferente.
 - [ ] **T027** Implementar `PERFORMANCE` skin com 2 decks, waveform, BPM, tempo, estado, cues e loops. **Deps:** T026. **Teste:** screenshots/visibilidade; sem uso de webview pesada.
 - [ ] **T028** Implementar `BROWSE` e fluxo source/playlist/track/load para encoder e DDJ-400. **Deps:** T008,T025,T026. **Teste:** 100 faixas e navegação sem mouse.
 - [ ] **T029** Mapear combinações de botões para alternar BROWSE/PERFORMANCE/STATUS, sem quebrar controles de performance. **Deps:** T008,T028. **Teste:** mapeamento explícito por estados + HIL.
@@ -66,7 +66,7 @@
 - [ ] **T043** Implementar updater manual transacional e rollback em falha, bloqueado durante set. **Deps:** T041,T042. **Teste:** image good/bad e corte de atualização em bancada.
 - [ ] **T044** `[P]` Desenvolver captura e relatório de áudio xruns/CPU/thermal sem afetar RT. **Deps:** T032,T040. **Teste:** stress com instrumentação on/off.
 - [ ] **T045** `[P]` Melhorar waveform/artwork cache local com LRU e limites; não cachear áudio em P2 sem autorização específica. **Deps:** T024,T039. **Teste:** no USB writes, storage limit.
-- [ ] **T046** `[P]` Ajustar render e acessibilidade a 800x480/1280x720 e touch landscape; revisão humana. **Deps:** T027,T028. **Teste:** tela/rotação/touch real.
+- [ ] **T046** `[P]` Ajustar render e acessibilidade à referência 800x480/1024x600 e a outra resolução, touch landscape (OD-02, 21/10/2026); revisão humana. **Deps:** T027,T028. **Teste:** tela/rotação/touch real.
 - [ ] **T047** `[P]` Harden SD, logs, configs, usuários/serviços, udev, USB parser quotas e política de rede. **Deps:** T036,T041. **Teste:** port scan, root escalation checks, fuzz.
 - [ ] **T048** `[P]` Gerar SBOM, licença/NOTICE, bundle de fontes correspondentes de código modificado. **Deps:** T003,T041. **Teste:** auditoria legal e licença por arquivo.
 - [ ] **T049** `[HIL]` Executar benchmark 120min com 2 decks; monitorar underruns audíveis, latência e throttling. **Deps:** T040,T044,T046. **Teste:** NFR-001/002/004.

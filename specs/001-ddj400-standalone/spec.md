@@ -27,8 +27,8 @@ A DDJ-400 é dependente de host para o software de mixagem. O rekordbox Android 
 
 ### 1.3 Alvos de entrega
 
-- **P0 — Prova técnica:** funciona em Pi antigo *quando viável*: USB/MIDI, áudio 4 canais, Mixxx 2 decks, importação básica USB; monitor/teclado temporários aceitáveis. Sem promessa de performance até HIL.
-- **P1 — MVP standalone:** Pi 4B 4 GB ou Pi 5 4+ GB validado; boot para tela pequena; controladora integral; biblioteca rekordbox USB (legado `export.pdb`); confiabilidade e ações de falha; USB somente leitura.
+- **P0 — Prova técnica:** o mesmo programa em Raspberry de modelos diversos e em Linux x86/ARM genérico, *quando a máquina aguentar*: USB/MIDI, áudio 4 canais, Mixxx 2 decks, importação básica USB; monitor/teclado temporários aceitáveis. Sem promessa de performance até HIL em cada aparelho.
+- **P1 — MVP standalone:** nenhum modelo de Raspberry é obrigatório (OD-01, 21/10/2026). Hardware fraco degrada a interface em vez de ser excluído. Boot para a tela de referência de 7 polegadas, 800x480 ou 1024x600 (OD-02), com layout que também cabe em outras resoluções. Controladora integral; biblioteca rekordbox USB (legado `export.pdb`); confiabilidade e ações de falha; USB somente leitura. Nenhum aparelho está homologado.
 - **P2 — Produto estável:** imagem reprodutível, atualização/rollback, melhorias UX, diagnósticos e robustez.
 - **P3 — Smart DJ:** telemetria de sets, tracklist, ranking não intrusivo de próxima faixa, PWA local opt-in.
 - **P4 — DJ Trainer:** guiado e analytics por frase/transição; evolução posterior.
@@ -61,7 +61,7 @@ P0 e P1 são obrigatórios. P2 antes de considerar apresentações públicas. P3
 
 ### 3.1 P0 — compatibilidade técnica
 
-- Detectar Pi, versão de SO, RAM, energia e dispositivos USB; registrar resultados.
+- Detectar em execução arquitetura, RAM, núcleos, energia e dispositivos USB; registrar resultados. O modelo do Raspberry, quando existir, é um dado lido, não um requisito. Se a máquina for fraca, desligar waveforms e efeitos pesados (OD-01, 21/10/2026).
 - Instalar/buildar Mixxx estável adequado à arquitetura; evitar fork invasivo se mapping nativo funcionar.
 - Detectar DDJ-400 simultaneamente como USB MIDI e USB áudio.
 - Validar canais 1–2 (master) e 3–4 (headphones) na controladora; confirmar medindo os sinais, não apenas vendo o dispositivo.
@@ -71,7 +71,7 @@ P0 e P1 são obrigatórios. P2 antes de considerar apresentações públicas. P3
 
 ### 3.2 P1 — MVP standalone
 
-- Login automático controlado/local, boot direto no software DJ, tela de 800x480 ou superior como baseline operacional.
+- Login automático controlado/local, boot direto no software DJ. Referência visual: tela de 7 polegadas a 800x480 ou 1024x600 (OD-02, 21/10/2026). O layout se adapta a outras resoluções.
 - Biblioteca navega via encoder e botão LOAD, sem mouse ou teclado durante apresentação.
 - Visualização de estado de dois decks: artista, faixa, BPM analisado/atual, tempo, posição, waveform, cue, loop, sync, tempo/pitch, VU e áudio.
 - FX, EQ, play, cue, sync, browse, hot cues, loops, pitch slider, jog wheels, faders, crossfader, PFL/pre-escuta, volume e feedback LED conforme mapeamento DDJ-400; documentar diferenças físicas/firmware.
@@ -86,12 +86,12 @@ P0 e P1 são obrigatórios. P2 antes de considerar apresentações públicas. P3
 ### 3.3 P2 — confiabilidade e experiência
 
 - Imagem SD reprodutível, instalador idempotente, artefatos assinados/verificados, pin de upstream, rollback.
-- Interface otimizada para 5/7 polegadas, variantes 800x480 e 1280x720 paisagem.
+- Interface adaptável a qualquer resolução em paisagem. Referência de produto: 7 polegadas, 800x480 e 1024x600 (OD-02, 21/10/2026). Outras resoluções, inclusive maiores, usam o mesmo layout sem serem o padrão.
 - Diagnóstico de alimentação, temperatura, CPU, x-runs, captura de logs de falha e checagem do mount read-only.
 - Testes contínuos de 2 horas em perfil de hardware validado.
 - Cache opcional de waveform/artwork/metadados em armazenamento **local** (não em USB), com limites e GC.
 - Indicador de disco ausente/incompatível, recuperação segura de estado local, safe-mode sem plugins.
-- Perfil de config para Pi 4/5 sem presumir equivalência de performance do Pi 3.
+- Perfil de desempenho escolhido em execução pela RAM e pelos núcleos, não pelo nome do modelo. Placa fraca desliga waveforms e efeitos pesados. Pi 4, Pi 5 e placas antigas são exemplos a medir, não uma lista fechada (OD-01, 21/10/2026).
 
 ### 3.4 P3 — inteligência e companion
 
@@ -146,7 +146,7 @@ P0 e P1 são obrigatórios. P2 antes de considerar apresentações públicas. P3
 | FR-011 | Detecção hotplug + rescan | P1 | USB novo aparece sem restart engine |
 | FR-012 | Erros explícitos de USB/formatos | P1 | UI informativa sem travamento |
 | FR-013 | Estado local separado de origem USB | P1 | Nenhuma escrita na origem |
-| FR-014 | UI landscape 800x480 / 1280x720 | P2 | Legibilidade e controles mensurados |
+| FR-014 | UI landscape adaptável; referência 7" 800x480 e 1024x600 | P2 | Sem corte nessas duas referências e numa resolução diferente; legibilidade medida |
 | FR-015 | Diagnóstico de áudio, alimentação, crashes | P2 | Logs exportáveis com dados mínimos |
 | FR-016 | Instalação e rollback | P2 | Upgrade/rollback sem perder config |
 | FR-017 | Registro de eventos / histórico de set | P3 | Eventos no banco com timestamps válidos |
@@ -182,7 +182,7 @@ Limite: algumas funções/controles são de áudio analógico/firmware e podem n
 |---|---|---|
 | NFR-001 | 0 x-runs audíveis introduzidos em teste contínuo de 120 min, 2 decks, perfil validado | JACK/PipeWire/ALSA + logs e loopback; falha se houver corte audível |
 | NFR-002 | Latência control-to-sound perceptualmente utilizável; alvo inicial <=25 ms com hardware validado | medição loopback/jog/pads; ajustar buffer, documentar limites |
-| NFR-003 | Boot até UI utilizável: alvo <=60 s Pi 5; Pi 4 e Pi 3 somente benchmark | 10 cold boots; p95 registrado, falha ao exceder somente depois da baseline |
+| NFR-003 | Boot até UI utilizável medido em cada máquina. Objetivo de engenharia <=60 s só em placa capaz; hardware fraco é medido e pode degradar visuais, sem modelo único do produto | 10 cold boots naquela máquina; p95 registrado; não comparar placas diferentes como se fossem a mesma |
 | NFR-004 | CPU de pico sustentável: reservar ao menos 25% de margem média no perfil escolhido | 120min CPU por processo/core, temperatura, throttling |
 | NFR-005 | Biblioteca 10 mil faixas (metadados) navegável sem congelamento de áudio | fixture sintética; <300ms p95 interação após indexação (meta) |
 | NFR-006 | 0 escrita em USB durante MVP | montagem RO + hashes de arquivos sensíveis antes/depois; monitor de I/O |
@@ -206,7 +206,8 @@ Limite: algumas funções/controles são de áudio analógico/firmware e podem n
 | USB com OneLibrary `exportLibrary.db` | P5 | Detecção em P1; leitura condicionada a acesso técnico/lícito | SQLCipher, ANLZ externos, WAL; nunca escrita no pendrive |
 | Biblioteca `master.db` interna do rekordbox PC | Fora MVP | Não importar | formato diferente, não é export USB |
 | XML exportado pelo rekordbox | P3 opcional | Importação offline de metadados | não substitui garantia de USB para palco |
-| MP3/FLAC/WAV/AIFF no USB comum | P0/P1 | leitura do decoder Mixxx | track files sem metadata RB ainda reproduzem |
+| MP3 e WAV no USB comum | P0 | leitura do decoder Mixxx; prioridade de testes e desempenho (OD-03, 21/10/2026) | faixas sem metadata RB ainda reproduzem |
+| FLAC e AIFF no USB comum | P1 se o decoder da build existir | leitura quando o Mixxx fixado decodificar | suportados, fora da prioridade de desempenho |
 
 ### 7.2 Semântica
 
@@ -308,21 +309,20 @@ Enquanto o deck está tocando arquivos no USB, a remoção física pode interrom
 
 ## 11. Matriz de verificação por perfis de hardware
 
-| Perfil | Uso | Status de suporte (inicial) |
+| Perfil | Uso | Status de suporte (21/10/2026) |
 |---|---|---|
-| H0: Raspberry Pi existente do proprietário (modelo desconhecido) | provas mínimas/benchmark | **a descobrir por comandos** |
-| H1: Pi 4B, 4 GB, Raspberry Pi OS 64 bit | alvo funcional mínimo candidato | **suporte planejado, validar HIL DDJ-400** |
-| H2: Pi 5, 4/8 GB, Raspberry Pi OS 64 bit | alvo recomendado final | **suporte planejado, validar HIL DDJ-400** |
-| H3: Linux desktop x86_64 | CI, UX, testes parser, simulação MIDI | **sem substituir HIL** |
-| H4: Pi 3B/3B+ | descoberta MIDI/áudio; Mixxx se possível | **POC best effort; sem compromisso com dois decks estáveis** |
+| H0: o aparelho que estiver ligado; o modelo é lido na hora e pode ficar desconhecido | benchmark daquela máquina | **a medir; não há modelo escolhido de antemão** |
+| H1: Raspberry Pi OS em placas diversas, inclusive antigas; Pi 4 e Pi 5 são exemplos, não requisito | aparelho | **planejado para o máximo de placas; HIL com DDJ-400 ainda não feito; placa fraca degrada a interface** |
+| H2: Linux genérico x86_64 ou ARM | desenvolvimento, CI e uso quando a máquina couber | **alvo desejado (OD-01); não substitui a prova com a DDJ-400** |
+| H3: pouca RAM ou poucos núcleos, em qualquer arquitetura | o mesmo programa com menos desenho na tela | **política de degradação definida; dois decks estáveis não estão prometidos nessa faixa até o benchmark da máquina** |
 
-Inventariar: CPU/RAM, distro/versão, kernel, display (tipo e resolução), fonte, armazenamento, modelo DDJ e firmware, filesystem e origem USB, mixxx build tag, temperatura e ambiente. Não declarar 'Pi 4/5 funcionam' para nossa combinação antes de testar.
+Inventariar: CPU/RAM/núcleos, distro/versão, kernel, display (tipo e resolução), fonte, armazenamento, modelo DDJ e firmware, filesystem e origem USB, mixxx build tag, temperatura e ambiente. Não declarar que um modelo funciona com a DDJ-400 antes de testar essa combinação. A ausência de um modelo específico não bloqueia o desenvolvimento.
 
 ## 12. Acessibilidade, UX e observabilidade
 
 - UI com hierarquia visual: informação de deck > tempo/waveform > metadata > diagnóstico.
 - Controles físicos são fonte primária durante tocar; áreas touch opcionais devem ser >=44px de alvo visual quando aplicável.
-- Em 800x480 apresentar 2 decks e estado da biblioteca sem elementos não essenciais; toggle Browse/Performance pelo encoder ou SHIFT sem depender de toque.
+- Nas referências 800x480 e 1024x600, apresentar 2 decks e o estado da biblioteca sem elementos não essenciais; o mesmo layout se adapta a outras resoluções. Toggle Browse/Performance pelo encoder ou SHIFT sem depender de toque. Em hardware fraco, a waveform some antes de sumir BPM, tempo e estado de PLAY.
 - Feedback na tela para source ausente, áudio sem dispositivo, sem saída master e status de gravação.
 - Logs estruturados locais: `ts_utc`, `monotonic_ns`, `severity`, `subsystem`, `device_id`, `session_id`, `event`, `details_sanitized`.
 - Saúde local: CPU, memória, temperatura, throttling, USB disconnect, status de outputs, contagem de underruns quando disponível.
@@ -382,13 +382,22 @@ Inventariar: CPU/RAM, distro/versão, kernel, display (tipo e resolução), font
 - D-09: ferramentas de analytics/IA somente fora da thread de áudio.
 - D-10: licença open source respeitando as dependências; nome independente de marcas existentes.
 
-### 14.2 OWNER_DECISION — perguntas que não impedem P0/P1
+### 14.2 Decisões do proprietário
+
+#### Decididas em 21/10/2026
+
+Estas três deixam de ser `OWNER_DECISION`. Os defaults antigos não valem mais.
+
+| ID | Decisão do proprietário | O que muda |
+|---|---|---|
+| OD-01 | Funcionar no máximo possível de aparelhos: Raspberry Pi de modelos diversos, inclusive antigos, e de preferência também Linux x86/ARM genérico. Não depender de um modelo. Detectar capacidades em execução e degradar com elegância (exemplo: desligar waveforms e efeitos pesados em hardware fraco). | Complementa D-06 sem apagá-la: Raspberry Pi OS 64-bit segue como base do aparelho; o programa também mira Linux genérico. D-01 (Raspberry + DDJ-400, não driver Android) permanece. |
+| OD-02 | Interface adaptável a qualquer resolução. Padrão e referência de tela: 7 polegadas, 800x480 e 1024x600. | Substitui o default anterior de 7" 1280x720. D-04 (controles físicos e paisagem; P0 pode seguir sem tela) permanece. |
+| OD-03 | Formatos principais: MP3 e WAV. Outros formatos podem ser suportados; MP3 e WAV são a prioridade de testes e de desempenho. | FLAC e AIFF saem da prioridade de desempenho e continuam no escopo se o decoder existir. |
+
+#### Ainda abertas — `OWNER_DECISION` (não impedem P0/P1)
 
 | ID | Pergunta | Default escolhido | Quando precisa decidir |
 |---|---|---|---|
-| OD-01 | Qual Raspberry antigo, RAM e SO atual? | tratar como desconhecido; coletar com comandos antes de HIL | Gate G0 |
-| OD-02 | Qual tela: 5", 7" ou sem tela inicial? | 7" 1280x720 landscape para produto; HDMI monitor para P0 | antes de comprar carcaça/UI final |
-| OD-03 | Fonte de músicas principal? MP3, FLAC, WAV, AIFF? | MP3 e WAV P0; FLAC e AIFF P1 se Mixxx suportar na build | fixtures G1 |
 | OD-04 | Qual versão do rekordbox e tipo de export USB? | export tradicional em paralelo ao OneLibrary quando disponível | fixtures G1 |
 | OD-05 | Quer operar com fonte na tomada ou bateria? | tomada oficial; bateria adiada | escolha de carcaça P2 |
 | OD-06 | Licença do produto final / intenção comercial? | estudo pessoal open source com GPL apropriada; sem exploração de marcas | antes de publicar repo/fork distribuído |
