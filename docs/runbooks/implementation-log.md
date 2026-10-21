@@ -107,8 +107,8 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-21 | T078 | BLOCKED_HARDWARE | `a4e1c98` | roteiro numerado escrito | execução no fim | dono segue os 12 passos |
 | 2026-10-21 | T079 | PASS | `a4e1c98` | `evidence.py` recusa `SIMULATED` para HIL e para G0/G1 | — | manter a regra quando T075 existir |
 | 2026-10-21 | ADR Android | proposta | `0a912d5` | `docs/adr/0004-android-viabilidade.md` | não aceita; não altera ADR-0001, ADR-0002 nem o plano | dono responde OD-11 a OD-16 |
-| 2026-10-21 | OD-11 e A001–A013 | aceito / parcial | a preencher | APK debug; testes JVM; 42 testes Python | escuta no tablet `BLOCKED_HARDWARE`; OD-12..OD-16 provisórias | dono instala e manda o relatório |
-| 2026-10-21 | A015–A022 | parcial | a preencher | parser, fixture, testes JVM, prints do emulador se a rodada gravar | pendrive real e escuta `BLOCKED_HARDWARE`; OneLibrary não lida | dono autoriza o USB e manda o relatório |
+| 2026-10-21 | OD-11 e A001–A013 | aceito / parcial | `fa9b413` | APK debug; testes JVM; 42 testes Python | escuta no tablet `BLOCKED_HARDWARE`; OD-12..OD-16 provisórias | dono instala e manda o relatório |
+| 2026-10-21 | A015–A022 | parcial | `fa9b413` | parser, fixture, 8 testes JVM, 42 testes Python | pendrive real e escuta `BLOCKED_HARDWARE`; prints do emulador não saíram; OneLibrary não lida | dono autoriza o USB e manda o relatório |
 
 ### Proposta Android
 - Estado: proposta, não aceita
