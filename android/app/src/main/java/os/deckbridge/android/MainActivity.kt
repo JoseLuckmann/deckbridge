@@ -16,9 +16,9 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,11 +26,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -39,9 +34,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -57,8 +55,8 @@ import os.deckbridge.logic.SyntheticRekordbox
 import os.deckbridge.logic.buildDiagnosticReport
 import os.deckbridge.logic.loadRekordbox
 import os.deckbridge.logic.TempoAssembler
+import os.deckbridge.logic.StagePalette
 import os.deckbridge.logic.interpretPerformance
-import os.deckbridge.logic.textSp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,9 +65,7 @@ class MainActivity : ComponentActivity() {
         val play = intent?.getBooleanExtra("deckbridge.play", false) ?: false
         val midi = intent?.getBooleanExtra("deckbridge.midi", false) ?: false
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                App(screen, play, midi)
-            }
+            App(screen, play, midi)
         }
     }
 }
@@ -212,65 +208,58 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { page = 0 }) { Text("Diagnóstico") }
-            Button(onClick = { page = 1 }) { Text("Biblioteca") }
-            Button(onClick = { page = 2 }) { Text("Decks") }
-        }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (page) {
-                0 -> DiagnosticPage(midiLines, null) { describe(byteArrayOf(0x90.toByte(), 0x0B, 0x7F), true) }
-                1 -> BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val widthPx = with(LocalDensity.current) { maxWidth.toPx() }.toInt()
-                    LibraryPage(
-                        catalog = catalog,
-                        loading = loading,
-                        notice = notice,
-                        usbLabel = usbLabel,
-                        selectedId = selected,
-                        onSelect = { selected = it },
-                        onAuthorize = { uri ->
-                            if (uri == null) return@LibraryPage
-                            runCatching { keepReadPermission(context, uri) }
-                            openVolume(DocumentVolume(context, uri, "pendrive autorizado"))
-                        },
-                        onSimulate = {
-                            loading = true
-                            Thread {
-                                val simulated = SyntheticRekordbox.volume()
-                                handler.post { openVolume(simulated) }
-                            }.start()
-                        },
-                        onReloadPersisted = {
-                            val persisted = persistedRekordboxVolumes(context)
-                            if (persisted.isEmpty()) notice = "Nenhuma permissão guardada com export.pdb."
-                            else openVolume(persisted.first())
-                        },
-                        onLoadDeck = { track, deck ->
-                            deckTracks = deckTracks.toMutableList().also { it[deck] = track }
-                            page = 2
-                        },
-                        widthPx = widthPx,
-                    )
-                }
-                else -> DeckPage(
-                    catalog = catalog,
-                    volume = volume,
-                    deviceId = usbAudioDeviceId(context) ?: 0,
-                    autoplay = play,
-                    loaded = deckTracks,
-                    onLoaded = { deck, track ->
-                        deckTracks = deckTracks.toMutableList().also { it[deck] = track }
-                    },
-                )
+    Box(Modifier.fillMaxSize()) {
+        when (page) {
+            0 -> DiagnosticPage(midiLines, null, onPage = { page = it }) {
+                describe(byteArrayOf(0x90.toByte(), 0x0B, 0x7F), true)
             }
+            1 -> LibraryPage(
+                catalog = catalog,
+                loading = loading,
+                notice = notice,
+                usbLabel = usbLabel,
+                selectedId = selected,
+                onSelect = { selected = it },
+                onAuthorize = { uri ->
+                    if (uri == null) return@LibraryPage
+                    runCatching { keepReadPermission(context, uri) }
+                    openVolume(DocumentVolume(context, uri, "pendrive autorizado"))
+                },
+                onSimulate = {
+                    loading = true
+                    Thread {
+                        val simulated = SyntheticRekordbox.volume()
+                        handler.post { openVolume(simulated) }
+                    }.start()
+                },
+                onReloadPersisted = {
+                    val persisted = persistedRekordboxVolumes(context)
+                    if (persisted.isEmpty()) notice = "Nenhuma permissão guardada com export.pdb."
+                    else openVolume(persisted.first())
+                },
+                onLoadDeck = { track, deck ->
+                    deckTracks = deckTracks.toMutableList().also { it[deck] = track }
+                    page = 2
+                },
+                onPage = { page = it },
+            )
+            else -> DeckPage(
+                catalog = catalog,
+                volume = volume,
+                deviceId = usbAudioDeviceId(context) ?: 0,
+                autoplay = play,
+                loaded = deckTracks,
+                onLoaded = { deck, track ->
+                    deckTracks = deckTracks.toMutableList().also { it[deck] = track }
+                },
+                onPage = { page = it },
+            )
         }
     }
 }
 
 @Composable
-internal fun DiagnosticPage(events: List<String>, jvmBanner: String?, onSimulate: () -> Unit) {
+internal fun DiagnosticPage(events: List<String>, jvmBanner: String?, onPage: (Int) -> Unit = {}, onSimulate: () -> Unit) {
     val context = LocalContext.current
     var identity by remember { mutableStateOf(readIdentity(context)) }
     var battery by remember { mutableStateOf(readBattery(context)) }
@@ -312,6 +301,7 @@ internal fun DiagnosticPage(events: List<String>, jvmBanner: String?, onSimulate
         heard = heard,
         report = report,
         jvmBanner = jvmBanner,
+        onPage = onPage,
         onRefresh = { refresh() },
         onMaster = { engine = NativeEngine.start(deviceId, 1) },
         onPhones = { engine = NativeEngine.start(deviceId, 2) },
@@ -339,6 +329,7 @@ fun DiagnosticScreen(
     heard: Heard,
     report: String,
     jvmBanner: String?,
+    onPage: (Int) -> Unit = {},
     onRefresh: () -> Unit,
     onMaster: () -> Unit,
     onPhones: () -> Unit,
@@ -347,32 +338,78 @@ fun DiagnosticScreen(
     onHeard: (Heard) -> Unit,
     onShare: () -> Unit,
 ) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val widthPx = with(LocalDensity.current) { maxWidth.toPx() }.toInt()
-        val size = textSp(widthPx).sp
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (jvmBanner != null) Text(jvmBanner, fontSize = size, color = androidx.compose.ui.graphics.Color(0xFFFFC857))
-            Text(headline, fontSize = size)
-            Text(identityLine, fontSize = size)
-            Text(ramLine, fontSize = size)
-            Button(onClick = onRefresh) { Text("Atualizar dispositivos") }
-            Button(onClick = onMaster) { Text("Tom no master (1–2)") }
-            Button(onClick = onPhones) { Text("Tom no fone (3–4)") }
-            Button(onClick = onStop) { Text("Parar tom") }
-            Button(onClick = onSimulate) { Text("MIDI simulado") }
-            Text("O MIDI simulado não é a DDJ-400. Serve para ver o nome do mapa.", fontSize = size)
-            Text(engineLine, fontSize = size)
-            Text("O que você ouviu?", fontSize = size)
-            Heard.entries.forEach { option ->
-                Row {
-                    RadioButton(selected = heard == option, onClick = { onHeard(option) })
-                    Text(heardLabel(option), modifier = Modifier.padding(top = 12.dp), fontSize = size)
+    StageScaffold(page = 0, onPage = onPage, simulationNote = simulationNote(jvmBanner, jvmBanner != null)) {
+        Row(
+            Modifier.fillMaxSize().padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(
+                Modifier.weight(1.05f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextInk(headline, fontSize = 22.sp, weight = FontWeight.SemiBold)
+                Panel {
+                    TextInk(identityLine, fontSize = 16.sp, weight = FontWeight.SemiBold)
+                    TextInk(ramLine, fontSize = 16.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+                TextInk("O que você ouviu?", fontSize = 14.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+                Heard.entries.forEach { option ->
+                    StageButton(
+                        label = heardLabel(option),
+                        onClick = { onHeard(option) },
+                        selected = heard == option,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                TextInk(
+                    "O MIDI simulado não é a DDJ-400. Serve para ver o nome do mapa.",
+                    fontSize = 14.sp,
+                    color = Color(StagePalette.inkMuted),
+                )
+            }
+            Column(
+                Modifier.weight(0.95f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    StageButton("Atualizar", onRefresh, Modifier.weight(1f), fontSize = 13.sp)
+                    StageButton("Master 1–2", onMaster, Modifier.weight(1f), fontSize = 13.sp)
+                    StageButton("Fone 3–4", onPhones, Modifier.weight(1f), fontSize = 13.sp)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    StageButton("Parar tom", onStop, Modifier.weight(1f), fontSize = 13.sp)
+                    StageButton("MIDI simulado", onSimulate, Modifier.weight(1f), fontSize = 13.sp)
+                    StageButton("Relatório", onShare, Modifier.weight(1f), fontSize = 13.sp)
+                }
+                Panel {
+                    TextInk("Motor", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+                    TextInk(engineLine, fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+                if (events.isNotEmpty()) {
+                    Panel {
+                        TextInk("MIDI", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+                        events.forEach { TextInk(it, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)) }
+                    }
+                }
+                Panel {
+                    TextInk("Relatório", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+                    TextInk(report, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
-            events.forEach { Text(it, fontSize = size) }
-            Button(onClick = onShare) { Text("Compartilhar relatório") }
-            Text(report, fontSize = size)
         }
+    }
+}
+
+@Composable
+private fun Panel(content: @Composable () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(StagePalette.panel))
+            .padding(12.dp),
+    ) {
+        content()
     }
 }
 

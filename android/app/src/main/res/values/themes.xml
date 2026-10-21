@@ -3,6 +3,9 @@
     <style name="Theme.DeckBridge" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">#121418</item>
         <item name="android:navigationBarColor">#121418</item>
-        <item name="android:windowBackground">#121418</item>
+        <item name="android:windowBackground">#10141A</item>
+        <item name="android:textColor">#F4F7FB</item>
+        <item name="android:textColorPrimary">#F4F7FB</item>
+        <item name="android:textColorSecondary">#C9D3DF</item>
     </style>
 </resources>

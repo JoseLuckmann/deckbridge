@@ -1,7 +1,5 @@
 package os.deckbridge.android
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.platform.ComposeView
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Test
@@ -30,7 +28,6 @@ class ScreenShotsWide {
         capture("$PRINTS/01-diagnostico.png") { activity ->
             activity.setContentView(ComposeView(activity).apply {
                 setContent {
-                    MaterialTheme(colorScheme = darkColorScheme()) {
                         DiagnosticScreen(
                             headline = "Prova A0. O som desta tela ainda não é prova até você mandar o relatório.",
                             identityLine = "JVM Renderização · Android JVM · SoC UNKNOWN",
@@ -48,7 +45,6 @@ class ScreenShotsWide {
                             onHeard = {},
                             onShare = {},
                         )
-                    }
                 }
             })
         }
@@ -59,7 +55,7 @@ class ScreenShotsWide {
         val catalog = simulatedCatalog()
         val folder = catalog.playlists.first { it.name == "Sets" }.id
         capture("$PRINTS/02-biblioteca-playlists.png") { activity ->
-            activity.setContentView(library(activity, catalog, folder, 1600))
+            activity.setContentView(library(activity, catalog, folder))
         }
     }
 
@@ -68,7 +64,7 @@ class ScreenShotsWide {
         val catalog = simulatedCatalog()
         val playlist = catalog.playlists.first { it.name == "Abertura" }.id
         capture("$PRINTS/03-biblioteca-faixas.png") { activity ->
-            activity.setContentView(library(activity, catalog, playlist, 1600))
+            activity.setContentView(library(activity, catalog, playlist))
         }
     }
 
@@ -111,25 +107,22 @@ private fun capture(path: String, fill: (ScreenshotActivity) -> Unit) {
     activity.window.decorView.captureRoboImage(path)
 }
 
-private fun library(activity: ScreenshotActivity, catalog: RbCatalog, selected: Int, widthPx: Int): ComposeView {
+private fun library(activity: ScreenshotActivity, catalog: RbCatalog, selected: Int): ComposeView {
     return ComposeView(activity).apply {
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                LibraryPage(
-                    catalog = catalog,
-                    loading = false,
-                    notice = "Pendrive simulado aberto. SIMULAÇÃO.",
-                    usbLabel = "pendrive simulado",
-                    selectedId = selected,
-                    onSelect = {},
-                    onAuthorize = {},
-                    onSimulate = {},
-                    onReloadPersisted = {},
-                    onLoadDeck = { _, _ -> },
-                    widthPx = widthPx,
-                    jvmBanner = BANNER,
-                )
-            }
+            LibraryPage(
+                catalog = catalog,
+                loading = false,
+                notice = "Pendrive simulado aberto. SIMULAÇÃO.",
+                usbLabel = "pendrive simulado",
+                selectedId = selected,
+                onSelect = {},
+                onAuthorize = {},
+                onSimulate = {},
+                onReloadPersisted = {},
+                onLoadDeck = { _, _ -> },
+                jvmBanner = BANNER,
+            )
         }
     }
 }
@@ -138,7 +131,6 @@ private fun decks(activity: ScreenshotActivity, catalog: RbCatalog): ComposeView
     val tracks = catalog.tracks
     return ComposeView(activity).apply {
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
                 DeckScreen(
                     catalog = catalog,
                     loaded = listOf(tracks[0], tracks[1]),
@@ -168,7 +160,6 @@ private fun decks(activity: ScreenshotActivity, catalog: RbCatalog): ComposeView
                     onHot = { _, _ -> },
                     onLoose = { _, _ -> },
                 )
-            }
         }
     }
 }

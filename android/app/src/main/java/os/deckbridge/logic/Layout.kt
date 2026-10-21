@@ -14,28 +14,38 @@ fun textSp(width: Int): Int = when {
 
 fun performanceFrames(width: Int, height: Int, waveforms: Boolean): List<Frame> {
     val margin = 8
-    val bannerH = maxOf(28, height / 12)
-    val footerH = maxOf(24, height / 14)
+    val bannerH = maxOf(48, height / 14)
+    val footerH = maxOf(20, height / 18)
     val bodyTop = margin + bannerH + 4
     val bodyH = height - bodyTop - footerH - margin - 4
     val gap = 8
-    val deckW = (width - 2 * margin - gap) / 2
+    val mixerW = when {
+        width >= 1600 -> 200
+        width >= 900 -> 148
+        else -> 112
+    }
+    val deckW = (width - 2 * margin - mixerW - 2 * gap) / 2
     val frames = mutableListOf(
         Frame("banner", margin, margin, width - 2 * margin, bannerH),
         Frame("deck_a", margin, bodyTop, deckW, bodyH),
-        Frame("deck_b", margin + deckW + gap, bodyTop, deckW, bodyH),
+        Frame("mixer", margin + deckW + gap, bodyTop, mixerW, bodyH),
+        Frame("deck_b", margin + deckW + gap + mixerW + gap, bodyTop, deckW, bodyH),
     )
-    val line = if (height >= 1000) 36 else 22
+    val line = if (height >= 1000) 40 else if (height >= 600) 28 else 20
     val innerY = bodyTop + 8
-    listOf("a" to (margin + 8), "b" to (margin + deckW + gap + 8)).forEach { (prefix, origin) ->
+    val deckOrigin = listOf(
+        "a" to (margin + 8),
+        "b" to (margin + deckW + gap + mixerW + gap + 8),
+    )
+    deckOrigin.forEach { (prefix, origin) ->
         val innerW = deckW - 16
         frames += Frame("title_$prefix", origin, innerY, innerW, line)
-        frames += Frame("bpm_$prefix", origin, innerY + line, innerW / 2, line)
-        frames += Frame("time_$prefix", origin + innerW / 2, innerY + line, innerW - innerW / 2, line)
-        frames += Frame("play_$prefix", origin, innerY + 2 * line, innerW, line)
+        frames += Frame("bpm_$prefix", origin, innerY + line, innerW / 2, line + 8)
+        frames += Frame("time_$prefix", origin + innerW / 2, innerY + line, innerW - innerW / 2, line + 8)
+        frames += Frame("play_$prefix", origin, innerY + 2 * line + 8, innerW, line)
         val cuesY = bodyTop + bodyH - 28
         if (waveforms) {
-            val waveTop = innerY + 3 * line
+            val waveTop = innerY + 3 * line + 8
             val waveH = cuesY - waveTop - 4
             if (waveH >= 16) {
                 frames += Frame("waveform_$prefix", origin, waveTop, innerW, waveH)

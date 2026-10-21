@@ -148,6 +148,8 @@ OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Ras
 - [x] **A027** Leitura de `exportExt.pdb` (My Tags). **Estado:** `PASS` da fixture sintética. Export real `BLOCKED_HARDWARE`.
 - [x] **A028** OneLibrary com a chave pública documentada, só numa cópia local. **Estado:** `PASS` do caminho que não abre arquivo inválido e do caminho que lê um SQLite local de teste. A cifra de um `exportLibrary.db` real não foi exercida aqui.
 - [x] **A029** Sequências MIDI virtuais de jog, volume, crossfader, hot cue e pitch, com bytes do mapa oficial. **Estado:** `PASS` dos testes JVM. O jog não move o áudio. Não é a DDJ-400.
+- [x] **A030** Tema de palco do `docs/ui-spec.md`: contraste AA, BPM grande, dois decks com mixer ao centro, waveform maior, hot cues coloridos, navegação e faixa de simulação. **Estado:** `PASS` de renderização JVM nos seis prints. Não é o tablet.
+- [x] **A031** APK só `arm64-v8a`, com minify e shrinkResources. **Estado:** artefato gerado. Não instalado no tablet.
 
 ## Traçabilidade requisito -> tarefas -> testes/gates
 

@@ -11,10 +11,11 @@ Isto continua a prova A0. O app agora também lê uma exportação rekordbox em 
 - Decks: play, cue, pitch, volume, crossfader, sync por BPM, hot cues e loop do rekordbox em ciclo. A pré-escuta vai para os canais 3–4, em estéreo. Se o aparelho abrir menos de 4 canais, o fone **não** é jogado no master.
 - O pitch da DDJ-400 junta MSB e LSB (14 bits), como o script oficial: centro em `0x2000`, faixas 6%, 10%, 16% e 25%. A faixa inicial desta versão é 10%. O slider da tela continua linear, de metade ao dobro.
 - WAV e MP3 em estéreo. A forma de onda curta vem do ANLZ quando o arquivo tem a seção `PWAV`.
+- A tela segue `docs/ui-spec.md`: fundo escuro, texto claro, BPM e tempo grandes, dois decks com o mixer no centro, hot cues coloridos e navegação entre Diagnóstico, Biblioteca e Decks. A faixa SIMULAÇÃO fica numa linha curta.
 
 ## Instalar
 
-1. Copie `deckbridge-debug.apk` para o tablet.
+1. No tablet, copie `deckbridge-arm64.apk` (só arm64, versão 0.5.0-palco). O `deckbridge-debug.apk` traz as três ABIs e serve ao emulador.
 2. Permita instalar de origem desconhecida.
 3. Abra DeckBridge. A primeira tela é o diagnóstico.
 4. Na Biblioteca, toque em **Autorizar pendrive** e escolha a raiz do USB exportado pelo rekordbox.

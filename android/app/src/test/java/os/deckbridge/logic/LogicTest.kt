@@ -109,6 +109,20 @@ class LogicTest {
         assertTrue(low.none { it.name.startsWith("waveform") })
         assertEquals(22, textSp(2000))
         assertEquals(13, textSp(800))
+        assertTrue(performanceFrames(2000, 1200, true).any { it.name == "mixer" })
+        assertTrue(contrastRatio(StagePalette.ink, StagePalette.bg) >= 4.5)
+        assertTrue(contrastRatio(StagePalette.ink, StagePalette.panel) >= 4.5)
+        assertTrue(contrastRatio(StagePalette.inkMuted, StagePalette.panel) >= 4.5)
+        assertTrue(contrastRatio(StagePalette.simInk, StagePalette.simBg) >= 4.5)
+        assertTrue(contrastRatio(StagePalette.playInk, StagePalette.playBg) >= 4.5)
+        assertTrue(contrastRatio(StagePalette.ink, StagePalette.pauseBg) >= 4.5)
+        assertTrue(contrastRatio(StagePalette.navSelectedInk, StagePalette.navSelected) >= 4.5)
+        StagePalette.pads.forEach { pad ->
+            assertTrue(contrastRatio(inkOn(pad), pad) >= 4.5)
+        }
+        listOf(0xFF2828, 0x28B4FF, 0xFFC800, 0x00C850).forEach { stored ->
+            assertTrue(contrastRatio(inkOn(stored), stored) >= 4.5)
+        }
         assertEquals("mp3", localTrackKind("Faixa.MP3"))
         assertEquals("wav", localTrackKind("tom.wav"))
         assertEquals("recusado", localTrackKind("musica.flac"))

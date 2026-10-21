@@ -5,19 +5,25 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -26,11 +32,15 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,9 +54,10 @@ import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.ReadableVolume
 import os.deckbridge.logic.activeLoop
+import os.deckbridge.logic.StagePalette
+import os.deckbridge.logic.inkOn
 import os.deckbridge.logic.sideBySide
 import os.deckbridge.logic.syncPitch
-import os.deckbridge.logic.textSp
 
 @Composable
 fun DeckPage(
@@ -57,6 +68,7 @@ fun DeckPage(
     loaded: List<RbTrack?>,
     onLoaded: (Int, RbTrack?) -> Unit,
     jvmBanner: String? = null,
+    onPage: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current
     val identity = remember { readIdentity(context) }
@@ -213,6 +225,7 @@ fun DeckPage(
         waveforms = classifyWaveforms(identity.cores, identity.ramMb),
         loose = loose,
         jvmBanner = jvmBanner,
+        onPage = onPage,
         onPlay = { deck, playing ->
             if (deck == 0) playA = playing else playB = playing
             NativeEngine.transport(deck, playing)
@@ -263,6 +276,7 @@ fun DeckScreen(
     waveforms: Boolean,
     loose: String,
     jvmBanner: String?,
+    onPage: (Int) -> Unit = {},
     onPlay: (Int, Boolean) -> Unit,
     onCue: (Int) -> Unit,
     onPitch: (Int, Float) -> Unit,
@@ -273,30 +287,79 @@ fun DeckScreen(
     onHot: (Int, Int) -> Unit,
     onLoose: (Int, Uri) -> Unit,
 ) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val density = LocalDensity.current
-        val widthPx = with(density) { maxWidth.toPx() }.toInt()
-        val heightPx = with(density) { maxHeight.toPx() }.toInt()
-        val size = textSp(widthPx).sp
-        Column(Modifier.fillMaxSize().padding(2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (jvmBanner != null) Text(jvmBanner, fontSize = size, color = Color(0xFFFFC857))
-            Text(note, fontSize = size, maxLines = 2)
-            Text(channelsText, fontSize = size, maxLines = 2)
-            Text("Crossfader", fontSize = size)
-            Slider(value = cross, onValueChange = onCross)
-            if (sideBySide(widthPx, heightPx)) {
-                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DeckColumn("A", 0, loaded[0], catalog, playA, pitchA, volA, pflA, posA, waveforms, size, Modifier.weight(1f), onPlay, onCue, onPitch, onVolume, onPfl, onSync, onHot, onLoose)
-                    DeckColumn("B", 1, loaded[1], catalog, playB, pitchB, volB, pflB, posB, waveforms, size, Modifier.weight(1f), onPlay, onCue, onPitch, onVolume, onPfl, onSync, onHot, onLoose)
+    val simulated = jvmBanner != null || note.contains("SIMULA")
+    StageScaffold(page = 2, onPage = onPage, simulationNote = simulationNote(jvmBanner, simulated)) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val density = LocalDensity.current
+            val widthPx = with(density) { maxWidth.toPx() }.toInt()
+            val heightPx = with(density) { maxHeight.toPx() }.toInt()
+            val tall = heightPx >= 1000
+            val bpmSize = if (tall) 56.sp else if (heightPx >= 700) 42.sp else 32.sp
+            val titleSize = if (tall) 26.sp else if (heightPx >= 700) 20.sp else 16.sp
+            Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    TextInk(
+                        "A ${if (playA) "PLAY" else "PAUSE"}    B ${if (playB) "PLAY" else "PAUSE"}",
+                        fontSize = if (tall) 16.sp else 13.sp,
+                        weight = FontWeight.SemiBold,
+                        mono = true,
+                    )
+                    Box(Modifier.weight(1f))
+                    TextInk(channelsText, fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
                 }
-            } else {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    DeckColumn("A", 0, loaded[0], catalog, playA, pitchA, volA, pflA, posA, waveforms, size, Modifier.fillMaxWidth(), onPlay, onCue, onPitch, onVolume, onPfl, onSync, onHot, onLoose)
-                    DeckColumn("B", 1, loaded[1], catalog, playB, pitchB, volB, pflB, posB, waveforms, size, Modifier.fillMaxWidth(), onPlay, onCue, onPitch, onVolume, onPfl, onSync, onHot, onLoose)
+                if (note.isNotBlank()) {
+                    TextInk(note, fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
                 }
+                if (sideBySide(widthPx, heightPx)) {
+                    Row(
+                        Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        DeckColumn("A", 0, loaded[0], catalog, playA, pitchA, pflA, posA, waveforms, bpmSize, titleSize, Color(StagePalette.deckA), Modifier.weight(1f).fillMaxHeight(), onPlay, onCue, onPitch, onPfl, onSync, onHot, onLoose)
+                        MixerColumn(volA, volB, cross, onVolume, onCross, Modifier.width(if (widthPx >= 1600) 200.dp else 148.dp).fillMaxHeight())
+                        DeckColumn("B", 1, loaded[1], catalog, playB, pitchB, pflB, posB, waveforms, bpmSize, titleSize, Color(StagePalette.deckB), Modifier.weight(1f).fillMaxHeight(), onPlay, onCue, onPitch, onPfl, onSync, onHot, onLoose)
+                    }
+                } else {
+                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DeckColumn("A", 0, loaded[0], catalog, playA, pitchA, pflA, posA, waveforms, bpmSize, titleSize, Color(StagePalette.deckA), Modifier.fillMaxWidth().height(420.dp), onPlay, onCue, onPitch, onPfl, onSync, onHot, onLoose)
+                        MixerColumn(volA, volB, cross, onVolume, onCross, Modifier.fillMaxWidth().height(220.dp))
+                        DeckColumn("B", 1, loaded[1], catalog, playB, pitchB, pflB, posB, waveforms, bpmSize, titleSize, Color(StagePalette.deckB), Modifier.fillMaxWidth().height(420.dp), onPlay, onCue, onPitch, onPfl, onSync, onHot, onLoose)
+                    }
+                }
+                if (loose.isNotBlank()) TextInk(loose, fontSize = 13.sp, maxLines = 2)
             }
-            if (loose.isNotBlank()) Text(loose, fontSize = size)
         }
+    }
+}
+
+@Composable
+private fun MixerColumn(
+    volA: Float,
+    volB: Float,
+    cross: Float,
+    onVolume: (Int, Float) -> Unit,
+    onCross: (Float) -> Unit,
+    modifier: Modifier,
+) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(StagePalette.panel))
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        TextInk("MIXER", fontSize = 13.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+        Row(Modifier.weight(1f).fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            VerticalFader("VOL A", volA, { onVolume(0, it) }, Color(StagePalette.deckA), Modifier.weight(1f).fillMaxHeight())
+            VerticalFader("VOL B", volB, { onVolume(1, it) }, Color(StagePalette.deckB), Modifier.weight(1f).fillMaxHeight())
+        }
+        TextInk("Cross ${(cross * 100).toInt()}", fontSize = 13.sp, weight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+        Slider(
+            value = cross,
+            onValueChange = onCross,
+            modifier = Modifier.fillMaxWidth().height(32.dp),
+            colors = sliderColors(),
+        )
     }
 }
 
@@ -308,16 +371,16 @@ private fun DeckColumn(
     catalog: RbCatalog?,
     playing: Boolean,
     pitch: Float,
-    volumeLevel: Float,
     pfl: Boolean,
     position: Float,
     waves: Boolean,
-    size: TextUnit,
+    bpmSize: TextUnit,
+    titleSize: TextUnit,
+    accent: Color,
     modifier: Modifier,
     onPlay: (Int, Boolean) -> Unit,
     onCue: (Int) -> Unit,
     onPitch: (Int, Float) -> Unit,
-    onVolume: (Int, Float) -> Unit,
     onPfl: (Int, Boolean) -> Unit,
     onSync: (Int) -> Unit,
     onHot: (Int, Int) -> Unit,
@@ -330,61 +393,167 @@ private fun DeckColumn(
     val bpm = (track?.bpm ?: 0.0) * pitch
     val loop = activeLoop(analysis)
     val tags = track?.let { catalog?.trackTags?.get(it.id).orEmpty() }.orEmpty()
-    Column(modifier.verticalScroll(rememberScrollState()).padding(vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("Deck $name", fontSize = size)
-        Text(track?.title ?: "vazio", fontSize = size, maxLines = 1)
-        Text(track?.let { "${it.artist} · ${it.keyName}" } ?: "sem faixa", fontSize = size, maxLines = 1)
-        Text("BPM ${if (track == null) "—" else "%.1f".format(bpm)}", fontSize = size)
-        Text("${clock(position)}  ${if (playing) "PLAY" else "PAUSE"}", fontSize = size)
-        if (waves) Waveform(analysis, position, track?.durationSeconds ?: 0)
-        else Text("Forma de onda desligada neste perfil.", fontSize = size)
-        if (loop != null) Text("Loop ${loop.first}–${loop.second} ms", fontSize = size)
-        if (tags.isNotEmpty()) Text("Tags " + tags.joinToString { if (it.category.isBlank()) it.name else "${it.category}/${it.name}" }, fontSize = size)
-        Text("Hot cues", fontSize = size)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            for (index in 0..3) HotButton(index, analysis) { onHot(deck, index) }
+    val duration = track?.durationSeconds ?: 0
+    Column(
+        modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(StagePalette.panel))
+            .padding(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(8.dp).height(18.dp).clip(RoundedCornerShape(2.dp)).background(accent))
+            TextInk("DECK $name", fontSize = 13.sp, weight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
+            Box(Modifier.weight(1f))
+            PlayChip(playing)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            for (index in 4..7) HotButton(index, analysis) { onHot(deck, index) }
+        TextInk(track?.title ?: "Vazio", fontSize = titleSize, weight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+        TextInk(track?.artist ?: "Sem faixa", fontSize = 14.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.Bottom) {
+            TextInk(if (track == null) "—.—" else "%05.1f".format(bpm), fontSize = bpmSize, weight = FontWeight.Bold, mono = true)
+            TextInk(" BPM", fontSize = 14.sp, weight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
+            Box(Modifier.weight(1f))
+            TextInk(track?.keyName ?: "—", fontSize = if (bpmSize.value >= 48f) 28.sp else 20.sp, weight = FontWeight.Bold, mono = true)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Button(onClick = { onPlay(deck, !playing) }) { Text(if (playing) "Pausar" else "Play") }
-            Button(onClick = { onCue(deck) }) { Text("Cue") }
-            Button(onClick = { onPfl(deck, !pfl) }) { Text(if (pfl) "Fone on" else "Fone") }
-            Button(onClick = { onSync(deck) }) { Text("Sync BPM") }
+        TextInk(
+            "${clock(position)}  /  ${clock(duration.toFloat())}",
+            fontSize = if (bpmSize.value >= 48f) 22.sp else 16.sp,
+            weight = FontWeight.SemiBold,
+            mono = true,
+        )
+        if (waves) {
+            Waveform(analysis, position, duration, accent, Modifier.fillMaxWidth().weight(1f).padding(vertical = 6.dp))
+        } else {
+            TextInk("Forma de onda desligada neste perfil.", fontSize = 14.sp, modifier = Modifier.weight(1f))
         }
-        Text("Pitch", fontSize = size)
-        Slider(value = pitch, onValueChange = { onPitch(deck, it) }, valueRange = 0.5f..2f)
-        Text("Volume", fontSize = size)
-        Slider(value = volumeLevel, onValueChange = { onVolume(deck, it) })
-        Button(onClick = { picker.launch(arrayOf("audio/wav", "audio/mpeg", "audio/*")) }) { Text("WAV/MP3 avulso") }
+        if (loop != null || tags.isNotEmpty()) {
+            val extra = buildList {
+                if (loop != null) add("Loop ${clock(loop.first / 1000f)}–${clock(loop.second / 1000f)}")
+                if (tags.isNotEmpty()) add(tags.joinToString(" · ") { if (it.category.isBlank()) it.name else it.name })
+            }.joinToString("   ")
+            TextInk(extra, fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            for (index in 0..7) {
+                HotPad(index, analysis, Modifier.weight(1f)) { onHot(deck, index) }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextInk("Pitch", fontSize = 13.sp, weight = FontWeight.Bold)
+            Box(Modifier.weight(1f))
+            TextInk(pitchLabel(pitch), fontSize = 16.sp, weight = FontWeight.Bold, mono = true)
+        }
+        Slider(
+            value = pitch,
+            onValueChange = { onPitch(deck, it) },
+            valueRange = 0.5f..2f,
+            modifier = Modifier.fillMaxWidth().height(28.dp),
+            colors = sliderColors(),
+        )
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            StageButton(if (playing) "Pausar" else "Play", { onPlay(deck, !playing) }, Modifier.weight(1f), fontSize = 13.sp)
+            StageButton("Cue", { onCue(deck) }, Modifier.weight(1f), fontSize = 13.sp)
+            StageButton("Sync", { onSync(deck) }, Modifier.weight(1f), fontSize = 13.sp)
+            StageButton(if (pfl) "Fone on" else "Fone", { onPfl(deck, !pfl) }, Modifier.weight(1f), selected = pfl, fontSize = 13.sp)
+            StageButton("Arquivo", { picker.launch(arrayOf("audio/wav", "audio/mpeg", "audio/*")) }, Modifier.weight(1f), fontSize = 13.sp)
+        }
     }
 }
 
 @Composable
-private fun HotButton(index: Int, analysis: RbAnalysis?, onClick: () -> Unit) {
+private fun PlayChip(playing: Boolean) {
+    val fill = if (playing) Color(StagePalette.playBg) else Color(StagePalette.pauseBg)
+    val ink = if (playing) Color(StagePalette.playInk) else Color(StagePalette.ink)
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(fill)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        TextInk(if (playing) "PLAY" else "PAUSE", color = ink, fontSize = 13.sp, weight = FontWeight.Bold, mono = true)
+    }
+}
+
+@Composable
+private fun HotPad(index: Int, analysis: RbAnalysis?, modifier: Modifier, onClick: () -> Unit) {
     val cue = analysis?.hotCues?.firstOrNull { it.index == index }
-    Button(onClick = onClick, enabled = cue != null) {
-        Text(if (cue == null) "${index + 1}" else "${index + 1} ${cue.comment.ifBlank { "${cue.timeMs}ms" }}")
+    val stored = cue?.colorRgb
+    val fillRgb = stored ?: StagePalette.pads[index]
+    val active = cue != null
+    val fill = if (active) argb(fillRgb) else Color(StagePalette.panelRaised)
+    val ink = if (active) argb(inkOn(fillRgb)) else Color(StagePalette.ink)
+    val label = when {
+        cue == null -> "${index + 1}"
+        cue.comment.isBlank() -> "${index + 1}"
+        cue.comment.length <= 5 -> cue.comment
+        else -> "${index + 1}"
+    }
+    Box(
+        modifier
+            .height(36.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(fill)
+            .border(2.dp, argb(fillRgb), RoundedCornerShape(4.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            TextInk(label, color = ink, fontSize = 12.sp, weight = FontWeight.Bold, maxLines = 1)
+        }
     }
 }
 
 @Composable
-private fun Waveform(analysis: RbAnalysis?, position: Float, duration: Int) {
+private fun Waveform(analysis: RbAnalysis?, position: Float, duration: Int, accent: Color, modifier: Modifier) {
     val data = analysis?.waveform ?: ByteArray(0)
-    Canvas(Modifier.fillMaxWidth().height(42.dp)) {
-        if (data.isEmpty()) return@Canvas
-        val step = size.width / data.size
-        data.forEachIndexed { index, byte ->
-            val height = (byte.toInt() and 0xFF) / 255f * size.height
-            val x = index * step
-            drawLine(Color(0xFF3DDCFF), Offset(x, size.height), Offset(x, size.height - height), strokeWidth = step.coerceAtLeast(1f))
+    val loop = activeLoop(analysis)
+    Canvas(
+        modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color(StagePalette.waveBg)),
+    ) {
+        val mid = size.height / 2f
+        drawLine(Color(StagePalette.line), Offset(0f, mid), Offset(size.width, mid), strokeWidth = 1f)
+        if (data.isNotEmpty()) {
+            val step = size.width / data.size
+            data.forEachIndexed { index, byte ->
+                val amp = (byte.toInt() and 0xFF) / 255f * (size.height * 0.46f)
+                val x = index * step + step / 2f
+                drawLine(accent, Offset(x, mid - amp), Offset(x, mid + amp), strokeWidth = step.coerceAtLeast(1.5f))
+            }
+        }
+        if (duration > 0 && loop != null) {
+            val start = (loop.first / 1000f / duration).coerceIn(0f, 1f) * size.width
+            val end = (loop.second / 1000f / duration).coerceIn(0f, 1f) * size.width
+            drawRect(Color(0x553DDC97), Offset(start, 0f), Size((end - start).coerceAtLeast(2f), size.height))
+        }
+        analysis?.hotCues?.forEach { cue ->
+            if (duration <= 0) return@forEach
+            val x = (cue.timeMs / 1000f / duration).coerceIn(0f, 1f) * size.width
+            val color = argb(cue.colorRgb ?: StagePalette.pads[cue.index.coerceIn(0, 7)])
+            drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 2f)
         }
         if (duration > 0) {
             val x = (position / duration).coerceIn(0f, 1f) * size.width
-            drawLine(Color.White, Offset(x, 0f), Offset(x, size.height), strokeWidth = 2f)
+            drawLine(Color(StagePalette.ink), Offset(x, 0f), Offset(x, size.height), strokeWidth = 2f)
         }
     }
+}
+
+@Composable
+private fun sliderColors() = SliderDefaults.colors(
+    thumbColor = Color(StagePalette.ink),
+    activeTrackColor = Color(StagePalette.ink),
+    inactiveTrackColor = Color(StagePalette.line),
+)
+
+private fun pitchLabel(pitch: Float): String {
+    val percent = (pitch - 1f) * 100f
+    val sign = if (percent > 0.05f) "+" else ""
+    return "$sign${"%.1f".format(percent)}%"
 }
 
 private fun clock(seconds: Float): String {

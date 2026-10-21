@@ -14,11 +14,8 @@ android {
         applicationId = "os.deckbridge.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.4.0-prints"
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
-        }
+        versionCode = 4
+        versionName = "0.5.0-palco"
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
@@ -27,9 +24,32 @@ android {
         }
     }
 
+    flavorDimensions += "abi"
+    productFlavors {
+        create("multi") {
+            dimension = "abi"
+            isDefault = true
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            }
+        }
+        create("arm64") {
+            dimension = "abi"
+            ndk {
+                abiFilters += listOf("arm64-v8a")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -59,10 +79,24 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    lint {
+        checkReleaseBuilds = false
+    }
+
     packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+androidComponents {
+    beforeVariants(selector().withFlavor("abi" to "arm64")) { builder ->
+        builder.enableUnitTest = false
+        builder.enableAndroidTest = false
     }
 }
 

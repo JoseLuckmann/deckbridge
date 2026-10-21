@@ -7,13 +7,14 @@ Alvo 1, a partir de 21/10/2026: tablet ligado direto na DDJ-400. O Raspberry con
 - minSdk 26 (Android 8). Isso inclui o Galaxy Tab S6 Lite, que está entre Android 10 e 14. targetSdk 34.
 - Mapa de MIDI copiado do XML pinado do Mixxx 2.5.6. Não é captura da controladora.
 - Leitor próprio de `export.pdb`, `exportExt.pdb` e ANLZ. Ver `FORMATO.md`. OneLibrary abre uma cópia local com a chave pública documentada; se não abrir, a tela avisa.
-- O APK de debug inclui `x86_64` para o emulador, além de `arm64-v8a` e `armeabi-v7a` para o tablet.
+- O APK `multiDebug` inclui `x86_64` para o emulador, além de `arm64-v8a` e `armeabi-v7a`.
+- O APK para o Tab S6 Lite é só `arm64-v8a`, com minify e shrink. Sai menor. A assinatura é a de debug, para instalar direto.
 
 ```bash
 export ANDROID_HOME="$HOME/android-sdk"
-./gradlew test assembleDebug
+./gradlew testMultiDebugUnitTest assembleMultiDebug assembleArm64Release
 ```
 
-O APK de debug sai em `app/build/outputs/apk/debug/`. Instalar a prova A0 está em `docs/android/prova-a0.md`. A biblioteca e os decks estão em `docs/android/biblioteca-rekordbox.md`. Enquanto o tablet não devolver o relatório, a escuta fica `BLOCKED_HARDWARE`.
+O APK do tablet sai em `app/build/outputs/apk/arm64/release/`. O de debug com as três ABIs sai em `app/build/outputs/apk/multi/debug/`. Instalar a prova A0 está em `docs/android/prova-a0.md`. A biblioteca e os decks estão em `docs/android/biblioteca-rekordbox.md`. Enquanto o tablet não devolver o relatório, a escuta fica `BLOCKED_HARDWARE`.
 
 Oboe é Apache-2.0. O código deste app segue a licença provisória GPL-2.0-or-later do repositório. OD-06 continua aberta. OD-12 a OD-16 estão provisórias.
