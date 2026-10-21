@@ -109,7 +109,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-21 | ADR Android | proposta | `0a912d5` | `docs/adr/0004-android-viabilidade.md` | não aceita; não altera ADR-0001, ADR-0002 nem o plano | dono responde OD-11 a OD-16 |
 | 2026-10-21 | OD-11 e A001–A013 | aceito / parcial | `fa9b413` | APK debug; testes JVM; 42 testes Python | escuta no tablet `BLOCKED_HARDWARE`; OD-12..OD-16 provisórias | dono instala e manda o relatório |
 | 2026-10-21 | A015–A022 | parcial | `fa9b413` | parser, fixture, 8 testes JVM, 42 testes Python | pendrive real e escuta `BLOCKED_HARDWARE`; prints do emulador não saíram; OneLibrary não lida | dono autoriza o USB e manda o relatório |
-| 2026-10-21 | A023–A029 | parcial | a preencher | prints JVM, loop, estéreo, pitch 14 bits, exportExt, OneLibrary, MIDI virtual | escuta e pendrive real `BLOCKED_HARDWARE`; emulador A022 aberto | dono instala o APK e manda o relatório |
+| 2026-10-21 | A023–A029 | parcial | `c28f677` | prints JVM, loop, estéreo, pitch 14 bits, exportExt, OneLibrary, MIDI virtual | escuta e pendrive real `BLOCKED_HARDWARE`; emulador A022 aberto | dono instala o APK e manda o relatório |
 
 ### Proposta Android
 - Estado: proposta, não aceita
@@ -142,7 +142,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Telas reais do Compose, com o pendrive simulado, via Roborazzi 1.44 e Robolectric em gráficos nativos.
 - Prints: `/opt/cursor/artifacts/prints/01-diagnostico.png` (1600x900), `02-biblioteca-playlists.png`, `03-biblioteca-faixas.png`, `04-decks.png`, `05-decks-1024x600.png`, `06-decks-2000x1200.png`.
 - Cada imagem traz a faixa "Renderização em JVM. Não é o tablet nem a DDJ-400."
-- APK seguinte substitui o artefato. Ver o tamanho e o SHA no relatório da rodada.
+- APK desta rodada: `/opt/cursor/artifacts/deckbridge-debug.apk`, 29804000 bytes, SHA-256 `2877778e65ced7fa7dad6da60ed1bc7646e82e18c420becddac22382f86d14ea`, versão 0.4.0-prints. Substitui o artefato da rodada A0.
 - HIL executado? não
 
 ### T020 — configuração
