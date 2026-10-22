@@ -339,6 +339,14 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - HIL executado? não. O tom novo não acrescenta passo ao roteiro. Os passos 13 a 24 continuam por executar.
 - Busca por voz (A053) e quatro decks (A054) continuam por fazer.
 
+### Mix de demonstração dos efeitos
+- Estado: render no host; escuta BLOCKED_HARDWARE. Não é o tablet e não é a DDJ-400.
+- Ficheiro: `/opt/cursor/artifacts/demo-mix.mp3`, 3:42, 320 kbps. Roteiro em `docs/testing/demo-mix.md`. Forma de onda em `/opt/cursor/artifacts/demo-mix-wave.png`.
+- O PCM passa pelo `PeakLimiter` (tecto 0,98, pico 0,980). O MP3 leva −3 dB. True peak a 192 kHz: 0,847 (−1,44 dBTP), sem amostra acima de 1,0.
+- Duas faixas CC BY 3.0 (wrist watch e toodaze), sync a 120, troca de grave e filtro nos dois sentidos. Beat FX da lista, com o eco a mudar de 1/2 para 1/1. Color FX é só o filtro. RMX: as oito cenas, os quatro pads e o isolador em kill e +6 dB. Loop de 4, salto de 8 e slip.
+- A voz é espeak-ng pt-br, curta, por baixo da música. O knob de Color FX não tem ruído, pitch nem dub eco; esses gestos estão no Beat FX e no RMX.
+- HIL executado? não
+
 ### T020 — configuração
 - Estado: PASS
 - Perfil `runtime`, tela de referência 1024x600, `allow_write` recusado
