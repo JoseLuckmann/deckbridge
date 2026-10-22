@@ -126,6 +126,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-22 | mix | parcial | `52f1929` | MP3 3:42 dos efeitos no motor do host, 320 kbps, true peak −1,44 dBTP | não é o tablet; Color FX só tem o filtro; escuta `BLOCKED_HARDWARE` | dono ouve `/opt/cursor/artifacts/demo-mix.mp3` |
 | 2026-10-22 | 0.14.0 | parcial | `594f21b` | DSP suave, de/para, drum build, mix v2 3:20, true peak −1,17 dBTP, APK versionCode 17 | host, não o tablet; escuta `BLOCKED_HARDWARE`; spiral, helix e o balanço do roll ainda diferem do manual | dono ouve `/opt/cursor/artifacts/demo-mix-v2.mp3` |
 | 2026-10-22 | 0.14.1 | parcial | `e3c0e84` | one-shots CC0, grade do deck, mix 1:28, onset 0 ms, APK versionCode 18 | host, não o tablet; escuta `BLOCKED_HARDWARE`; palma é prévia MP3; spiral e helix continuam fora do manual | dono ouve `/opt/cursor/artifacts/demo-mix-drums.mp3` |
+| 2026-10-22 | specs | parcial | `b805a64` | STATUS.md, constituição 1.1.0, OD-17 a OD-24, tarefas com estado | gates G0 e G1 abertos; passos 13 a 24 por executar | dono lê `STATUS.md` |
 
 ### Proposta Android
 - Estado: proposta, não aceita
@@ -374,6 +375,14 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 20064590 bytes, SHA-256 `6cfec4bb1367d3a296a90be06514442d4c36652acfb8c4de731a816349ce0f7a`.
 - HIL executado? não. Os passos 13 a 24 continuam por executar.
 - Busca por voz (A053) e quatro decks (A054) continuam por fazer.
+
+### Specs e pacote 0.14.1
+- Estado: documento. A escuta continua BLOCKED_HARDWARE.
+- Commit: `b805a64`.
+- `STATUS.md` junta o histórico 0.5.0-palco a 0.14.1, o que a simulação faz, os buracos, o backlog e as decisões OD-01 a OD-24.
+- A constituição passa a 1.1.0 (ADR-0006): alvo 1 no tablet, alvo 2 no Pi, USB só leitura.
+- Cada tarefa de `tasks.md` tem estado. `PASS` é software ou documento. HIL sem aparelho fica `BLOCKED_HARDWARE`. A053 e A054 ficam `DEFERRED`.
+- HIL executado? não
 
 ### T020 — configuração
 - Estado: PASS
