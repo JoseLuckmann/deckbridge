@@ -111,7 +111,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-21 | A015–A022 | parcial | `fa9b413` | parser, fixture, 8 testes JVM, 42 testes Python | pendrive real e escuta `BLOCKED_HARDWARE`; prints do emulador não saíram; OneLibrary não lida | dono autoriza o USB e manda o relatório |
 | 2026-10-21 | A023–A029 | parcial | `c28f677` | prints JVM, loop, estéreo, pitch 14 bits, exportExt, OneLibrary, MIDI virtual | escuta e pendrive real `BLOCKED_HARDWARE`; emulador A022 aberto | dono instala o APK e manda o relatório |
 | 2026-10-21 | A030–A031 | parcial | `edfe33b` | tema de palco, seis prints JVM, APK arm64 | escuta e pendrive real `BLOCKED_HARDWARE`; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
-| 2026-10-22 | A032–A034 | parcial | a preencher | player CDJ, browser por cima, zoom, grade, Beat FX, APK 0.6.0 | escuta e pendrive real `BLOCKED_HARDWARE`; efeito de áudio não existe; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
+| 2026-10-22 | A032–A034 | parcial | `cafec07` | player CDJ, browser por cima, zoom, grade, Beat FX, APK 0.6.0 | escuta e pendrive real `BLOCKED_HARDWARE`; efeito de áudio não existe; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
 
 ### Proposta Android
 - Estado: proposta, não aceita
