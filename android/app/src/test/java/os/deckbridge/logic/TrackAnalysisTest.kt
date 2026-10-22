@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 class TrackAnalysisTest {
@@ -27,6 +29,41 @@ class TrackAnalysisTest {
         assertEquals(120.0, read.bpm, 1.5)
         assertTrue(read.beats.size > 20)
         assertTrue("erro ${read.gridErrorMs}", read.gridErrorMs in 0.0..30.0)
+    }
+
+    @Test
+    fun gridLocksToTheKickWhenTheHatIsOnTheOffbeat() {
+        val rate = 22050
+        val bpm = 120.0
+        val seconds = 16
+        val samples = FloatArray(rate * seconds)
+        val interval = rate * 60.0 / bpm
+        var beat = interval
+        while (beat + interval < samples.size) {
+            val at = beat.toInt()
+            val burst = (rate * 0.045).toInt()
+            for (offset in 0 until burst) {
+                val index = at + offset
+                if (index >= samples.size) break
+                val env = 1.0 - offset.toDouble() / burst
+                samples[index] = (env * sin(2.0 * PI * 70.0 * index / rate) * 0.8).toFloat()
+            }
+            val hat = (beat + interval / 2.0).toInt()
+            for (offset in 0 until 6) {
+                val index = hat + offset
+                if (index < samples.size) samples[index] = if (offset % 2 == 0) 0.95f else -0.95f
+            }
+            beat += interval
+        }
+        val read = analyzeTrack(samples, rate)
+        val kickErrors = read.beats.map { marker ->
+            val time = marker.timeMs / 1000.0
+            val nearest = (time / 0.5).roundToInt() * 0.5
+            abs(time - nearest) * 1000.0
+        }.filter { it < 200.0 }
+        val median = kickErrors.sorted()[kickErrors.size / 2]
+        val max = kickErrors.maxOrNull() ?: 999.0
+        assertTrue("mediana $median max $max bpm ${read.bpm}", median < 10.0 && max < 20.0)
     }
 
     @Test

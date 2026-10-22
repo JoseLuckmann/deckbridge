@@ -1,6 +1,8 @@
-# Corpus de música real — 0.12.0
+# Corpus de música real — 0.12.0 e 0.12.1
 
 Medido em 22/10/2026 no JVM deste host. Não é o tablet. Não é a DDJ-400. A escuta continua `BLOCKED_HARDWARE`.
+
+A seção de BPM, grade, tom, onda e mix abaixo de “Antes” é a passagem 0.12.0. A seção “Depois (0.12.1)” é a mesma pasta, com o detector e a paleta desta versão. Os prints de 0.12.0 ficam em `/opt/cursor/artifacts/prints/before-0.12.0/`. Os de 0.12.1 substituem os arquivos em `/opt/cursor/artifacts/prints/`.
 
 Os nove arquivos originais ficam em `/opt/cursor/artifacts/real-corpus`. Não entram no git. `tools/fetch_real_corpus.py` baixa de novo e confere o SHA-256. A licença de cada item no Internet Archive é CC BY 3.0 (`http://creativecommons.org/licenses/by/3.0/`), sem NC, sem ND e sem SA. Dá para redistribuir com atribuição. O tamanho (o FLAC tem 27 MB; o WAV derivado, 42 MB) é o motivo de ficarem fora do repositório.
 
@@ -59,9 +61,9 @@ Medido com ffmpeg neste host. O `MediaCodec` do app aceita MP3, FLAC, AAC e M4A,
 
 `decodeWav` no Silver: 154 ms, 10 584 000 frames. Correlação do canal esquerdo nos primeiros 5 s contra o ffmpeg: 1,00000. A passagem mono em 22 050 Hz já estava em disco, então o tempo do ffmpeg dessa conversão não foi medido de novo. O `decodeWav` desse mono, por faixa, ficou entre 10 ms e 52 ms.
 
-## BPM, grade e tom
+## Antes (0.12.0) — BPM, grade e tom
 
-O detector é o deste app: envelope de fluxo de onset, refinamento parabólico do lag, e croma por Goertzel com perfis de Krumhansl–Schmuckler. A confiança é a nota interna dele, não um tap humano.
+O detector dessa passagem: envelope de fluxo de onset de banda cheia, refinamento parabólico do lag, e croma por Goertzel com o perfil de Krumhansl–Schmuckler. A confiança é a nota interna dele, não um tap humano.
 
 | Faixa | BPM | Confiança | Erro mediano onset–grade | Tom detectado | Tom no ID3 |
 |---|---|---|---|---|---|
@@ -97,17 +99,17 @@ O heap é o uso do JVM (`totalMemory - freeMemory`), não o RSS e não o tablet.
 
 Em Ocean o break e o drop caem no mesmo segundo (316). A heurística não separou os dois. Os prints usam as quatro primeiras faixas, em que drop e break divergem.
 
-## Onda, loop e mix
+## Antes (0.12.0) — onda, loop e mix
 
-Prints JVM (Roborazzi), não o tablet, em `/opt/cursor/artifacts/prints/`:
+Prints JVM (Roborazzi), copiados para `/opt/cursor/artifacts/prints/before-0.12.0/` antes de serem substituídos:
 
 - `real-chromosome-boutique-drop.png` e `real-chromosome-boutique-break.png`
 - `real-ecosystem-drop.png` e `real-ecosystem-break.png`
 - `real-silver-drop.png` e `real-silver-break.png`
 - `real-morning-drop.png` e `real-morning-break.png`
-- `real-browse.png` (títulos reais na lista)
+- `real-browse.png`
 
-A cor é a mistura deste app (grave laranja, médio verde, agudo branco-azul) a partir das tags que nós mesmos gravamos. Dá para ver mudança de cor ao longo da visão geral. Isso não é uma leitura de um export do rekordbox, e não substitui ouvir a faixa.
+A cor dessa passagem mistura as bandas (grave puxa laranja e também o verde, agudo entra no vermelho e no verde). O corte era 180 Hz e 4 kHz, de primeira ordem, e a altura era o máximo das três bandas. Um pico global servia as três. Nas faixas reais a onda ficava quase toda verde. Não é uma leitura de um export do rekordbox.
 
 Mix offline de 120 s, Chromosome Boutique (a partir de 116 s, 139,94 BPM) com Ecosystem (a partir de 148 s, 129,37 BPM), eco alinhado à batida e fade de volume. Motor C++ hospedeiro, 48 kHz.
 
@@ -121,22 +123,90 @@ Mix offline de 120 s, Chromosome Boutique (a partir de 116 s, 139,94 BPM) com Ec
 | Energia da descontinuidade, com crossfade | 0,00058152 |
 | Início do loop de 4 batidas | 116,0 s |
 
-O crossfade de 48 amostras não reduziu o salto neste ponto: a fronteira seca já era pequena e a energia molhada ficou maior. O eco cai na batida (diferença de 0,11 amostra). Não houve clip nem NaN neste render.
+O crossfade linear de 48 amostras piorou o salto neste ponto: a fronteira seca já era pequena e a energia molhada ficou maior.
 
-Arquivos para ouvir no telefone:
+## Depois (0.12.1) — grade
 
-- `/opt/cursor/artifacts/real-mix-120s.wav` (23 040 044 bytes)
-- `/opt/cursor/artifacts/real-mix-excerpt.wav` (45 s, a partir de 40 s, 8 640 078 bytes)
-- `/opt/cursor/artifacts/real-mix-excerpt.mp3` (1 081 197 bytes, 192 kbps)
+O erro de cerca de um quarto de batida não era o atraso do LAME (576 amostras são ~13 ms e deslocam o arquivo inteiro), nem o centro do hop (~2,5 ms), nem o atraso de grupo do filtro. O onset de banda cheia dispara na batida e no contratempo. A mediana contra uma grade de semínima, com metade dos picos no contratempo, cai perto de batida/4. Um seguidor que alongava o período a cada snap fazia a fase andar a batida inteira: a mediana com sinal ficava perto de zero e o erro absoluto ficava nos dois lados.
 
-O relatório bruto está em `/opt/cursor/artifacts/real-music-report.txt`.
+A grade desta versão escolhe o BPM (90 a 180) que põe mais batidas a menos de 18 ms de um pico forte da banda grave (Butterworth de fase zero, 35–180 Hz, máximo local acima do percentil 84). O período fica fixo. Se há um pico a menos de 20 ms, o instante publicado é esse pico; o relógio não o segue. A cobertura é a fração das batidas que tinham esse pico. A mediana e o máximo abaixo são o resíduo depois desse encaixe, por isso ficam em décimas de milissegundo. Não é o erro de cada batida da faixa.
+
+| Faixa | BPM 0.12.0 | BPM 0.12.1 | Mediana kick | Máx. kick | Cobertura | Mediana banda cheia (métrica antiga) |
+|---|---|---|---|---|---|---|
+| Chromosome Boutique | 139,94 | 162,00 | 0,2 ms | 0,5 ms | 57% | 94,2 ms |
+| Ecosystem | 129,37 | 122,00 | 0,2 ms | 0,5 ms | 63% | 124,3 ms |
+| Silver | 141,83 | 141,00 | 0,2 ms | 0,5 ms | 72% | 100,6 ms |
+| Morning | 117,92 | 118,00 | 0,2 ms | 0,5 ms | 74% | 105,1 ms |
+| Ocean | 117,90 | 118,00 | 0,3 ms | 0,5 ms | 83% | 99,3 ms |
+| wrist watch | 120,28 | 120,00 | 0,2 ms | 0,5 ms | 84% | 114,5 ms |
+| toodaze | 120,24 | 120,00 | 0,3 ms | 0,5 ms | 93% | 70,0 ms |
+| Caught In The Beat | 143,23 | 120,00 | 0,3 ms | 0,5 ms | 62% | 112,2 ms |
+| At The Count | 152,23 | 152,00 | 0,2 ms | 0,5 ms | 77% | 89,4 ms |
+
+Morning, Ocean e At The Count ficam no mesmo tempo da 0.12.0 (118, 118 e 152). Silver volta a 141. Ecosystem passa a 122. Chromosome passa a 162, que é o tempo em que mais batidas caem num pico grave; 1,5 × 108 ≈ 162. Caught In The Beat passa de 143 para 120: a autocorrelação sem tecto apontava ~160, e a cobertura do kick prefere 120. A mediana de banda cheia continua entre 70 e 124 ms. Essa coluna existe para a métrica antiga não desaparecer.
+
+`tools/measure_reference.py` usa librosa 1.0 (licença ISC) só como régua neste host. Não entra no APK. Vários tempos do librosa saem uma oitava ou uma relação 3:2 abaixo do kick (Chromosome 107,67, Caught 107,67, Silver 143,55, Ecosystem 123,05, Morning e Ocean 117,45, Count 152,00). Não é a verdade da faixa.
+
+## Depois (0.12.1) — tom
+
+O croma continua Goertzel, oitavas 2–6, com mais peso nas graves, nos primeiros 80 quadros altos, e um teste de afinação de −20, 0 e +20 cents. O perfil é o EDMA ou o de Krumhansl, o que tiver mais margem. O peso MIREX usado aqui: 1 tom exato, 0,5 quinta do mesmo modo, 0,3 relativo, 0,2 paralelo, 0 no resto. A média nas três faixas com `TKEY` passa de 0,17 para 0,50.
+
+| Faixa | TKEY | 0.12.0 | 0.12.1 | MIREX | librosa (Krumhansl / EDMA) |
+|---|---|---|---|---|---|
+| Chromosome Boutique | Bm | Am | Bm | 1,00 | Dm / F |
+| Ecosystem | Ebm | Fm | Fm | 0,00 | Fm / Fm |
+| Silver | Em | Bm | Bm | 0,50 | Bm / D |
+
+Ecosystem continua Fm. O librosa, nos dois perfis, também diz Fm. O tag diz Ebm. Não forcei o tag contra o áudio. Silver é uma quinta acima do tag e coincide com o Krumhansl do librosa; o EDMA do librosa diz D. O CQT do librosa em Chromosome não coincide com o Goertzel deste app nem com o tag. A afinação medida não é uma rotação de 200 cents.
+
+Nas outras seis, sem `TKEY`: Morning F#m, Ocean Bm, wrist watch F#m, toodaze Am, Caught In The Beat Fm, At The Count Am. O librosa diz, na mesma ordem, F#m, Cm, Gm, Gm, Fm, Dbm. Não há ficha para fechar esses seis.
+
+## Depois (0.12.1) — cor RGB
+
+Cada coluna é soma. R é a energia grave, G a média, B a aguda, depois de um Butterworth de fase zero em 200 Hz e 2,2 kHz. Cada banda divide por um percentil dela na faixa inteira (grave p58, médio p94, agudo p55), e só então recebe peso (grave 1,15, médio 0,88, agudo 1,20) e gama 1,25. O percentil alto no médio impede que a banda larga pinte a faixa de verde. O chão é 12% da referência mais alta, para um resíduo quase vazio não normalizar a 255. A altura é o RMS das três, percentil 72, gama 1,15. A quantização é a do PWV5: 3 bits por canal.
+
+A legenda no INFO e em Sobre é um diagrama desenhado neste app (três círculos em soma): vermelho grave, verde médio, azul agudo; amarelo é linha, ciano é voz, rosa é batida, branco é coro. Não é a imagem enviada.
+
+Média de 81 colunas, já em 3 bits, na região da estrutura. A altura é 0–255.
+
+| Faixa | Build | Drop | Break |
+|---|---|---|---|
+| Chromosome Boutique | 172, 143, 150 · h 209 | 255, 129, 240 · h 226 rosa | 207, 188, 255 · h 237 rosa-claro |
+| Ecosystem | 126, 5, 21 · h 67 | 255, 139, 255 · h 250 rosa | 140, 101, 167 · h 133 |
+| Silver | 36, 78, 240 · h 86 azul | 255, 138, 255 · h 246 rosa | 53, 40, 203 · h 69 azul |
+| Morning | 0, 17, 2 · h 8 | 225, 122, 28 · h 215 laranja | 0, 33, 0 · h 10 |
+
+Os pixels acesos das mesmas tiras confirmam o mesmo sítio: Chromosome, Ecosystem e Silver no drop são sobretudo rosa; o build de Silver é azul; o drop de Morning é vermelho e amarelo (grave com melodia, pouco agudo nessa janela). O break e o build de Morning, nos segundos da heurística, quase não têm altura. Há colunas só vermelhas, só verdes, só azuis e brancas nas quatro faixas. Não pintei de azul uma janela que não tem chimbal.
+
+Os prints da tela, com essa paleta no PWV5, ficam em `/opt/cursor/artifacts/prints/`:
+
+- drop, build e break de Chromosome Boutique, Ecosystem, Silver e Morning
+- `real-browse.png`
+- `info-art.png` (legenda no INFO)
+
+## Depois (0.12.1) — emenda do loop
+
+O crossfade passou a potência igual. Na última amostra da rampa o valor é exactamente o que entra no loop, para um cosseno de π/2 em vírgula flutuante não reabrir uma emenda fechada. O áudio que entra é o que está imediatamente antes do início, na mesma fracção de amostra.
+
+No mix de 120 s (Chromosome Boutique a 162 BPM a partir de 116 s, Ecosystem a 122 BPM), a energia da emenda seca foi 0,00125770 e a molhada 0,00000000. O eco ficou em 17778 amostras contra 17777,78 da batida. Pico 0,66616. NaN 0. No teste C++ das nove faixas, loops de 1, 4 e 8 batidas e três fracções de início: 81 emendas, 0 piores que o seco.
+
+O trecho de 45 s foi gerado de novo com esses BPM:
+
+- `/opt/cursor/artifacts/real-mix-120s.wav`
+- `/opt/cursor/artifacts/real-mix-excerpt.wav` (45 s)
+- `/opt/cursor/artifacts/real-mix-excerpt.mp3`
+
+O relatório bruto, com o carimbo `analise 0.12.1 rgb`, está em `/opt/cursor/artifacts/real-music-report.txt`.
 
 ## O que esta passagem não fecha
 
 - Ninguém ouviu o mix nem as faixas neste host. Ouvir no tablet e na DDJ-400 continua `BLOCKED_HARDWARE`.
 - O `MediaCodec` não decodificou nada aqui.
-- O tom não coincidiu com o `TKEY` nas três faixas que o trazem.
-- A grade nas faixas reais fica perto de 100 ms. No clique sintético fica dentro de 30 ms.
-- Ocean não separa drop e break.
+- A cobertura do kick fica entre 57% (Chromosome Boutique) e 93% (toodaze). As outras batidas não têm um pico grave a 20 ms. O máximo de 0,5 ms é o resíduo das que tinham.
+- A mediana de banda cheia continua perto de 100 ms. Essa métrica conta o contratempo.
+- Ecosystem fica Fm contra o `TKEY` Ebm. O detector externo concorda com Fm, não com o tag.
+- Caught In The Beat ficou em 120. Uma leitura de chapéu, sem o kick, aponta perto de 160.
+- O drop de Morning nesta janela é laranja (grave e médio), não rosa. O build de Silver é o exemplo azul.
+- Ocean continua com break e drop no mesmo segundo (316).
 - Ajuste de grade, reverse e Active Loop foram exercidos na JVM. Não foram ouvidos.
 - O pendrive real do José ainda não chegou. `tools/inspect_usb.py PASTA` e `tools/inspect_usb.py PASTA --jvm` leem uma pasta sem gravar nela. O relatório JVM sai em `/tmp/deckbridge-inspect.txt`.

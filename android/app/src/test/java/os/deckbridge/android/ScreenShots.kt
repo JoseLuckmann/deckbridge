@@ -451,6 +451,20 @@ class ScreenShotsReal {
                     ),
                 )
             }
+            capture("$PRINTS/real-${shot.slug}-build.png") { activity ->
+                activity.setContentView(
+                    player(
+                        activity,
+                        catalog,
+                        WaveZoom.BARS_4,
+                        BeatFxState(),
+                        posA = shot.buildSec,
+                        posB = shot.drop,
+                        leftTitle = shot.title,
+                        rightTitle = shot.title,
+                    ),
+                )
+            }
             capture("$PRINTS/real-${shot.slug}-break.png") { activity ->
                 activity.setContentView(
                     player(

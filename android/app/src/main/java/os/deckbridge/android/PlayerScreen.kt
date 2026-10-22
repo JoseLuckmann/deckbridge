@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -804,6 +805,29 @@ private fun InfoCard(track: RbTrack?, art: ByteArray?, analysis: RbAnalysis?, wa
         if (origin.isNotBlank()) {
             TextInk(origin, fontSize = 12.sp, color = Color(if (origin == "analisado no app") StagePalette.accentOrange else StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp))
         }
+        RgbColorLegend(Modifier.fillMaxWidth().padding(top = 8.dp))
+    }
+}
+
+@Composable
+internal fun RgbColorLegend(modifier: Modifier = Modifier) {
+    Column(modifier) {
+        TextInk("RGB da onda", fontSize = 12.sp, weight = FontWeight.Bold)
+        Canvas(Modifier.fillMaxWidth().height(84.dp).padding(top = 4.dp)) {
+            drawRect(Color(0xFF08090C))
+            val radius = size.height * 0.40f
+            val cx = size.width / 2f
+            val cy = size.height * 0.50f
+            val spread = radius * 0.58f
+            fun blob(color: Color, dx: Float, dy: Float) {
+                drawCircle(color, radius, Offset(cx + dx, cy + dy), blendMode = BlendMode.Plus)
+            }
+            blob(Color(0xFFE01818), -spread, -spread * 0.42f)
+            blob(Color(0xFF18A832), spread, -spread * 0.42f)
+            blob(Color(0xFF1848E0), 0f, spread * 0.70f)
+        }
+        TextInk("Vermelho grave, verde médio, azul agudo.", fontSize = 10.sp, color = Color(StagePalette.inkMuted), maxLines = 3)
+        TextInk("Amarelo é linha. Ciano é voz. Rosa é batida. Branco é coro.", fontSize = 10.sp, color = Color(StagePalette.inkMuted), maxLines = 3)
     }
 }
 

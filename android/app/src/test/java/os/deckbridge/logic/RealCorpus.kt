@@ -3,7 +3,7 @@ package os.deckbridge.logic
 import java.io.File
 import kotlin.math.min
 
-data class RealShot(val title: String, val slug: String, val drop: Float, val breakSec: Float)
+data class RealShot(val title: String, val slug: String, val drop: Float, val breakSec: Float, val buildSec: Float)
 
 data class RealReady(
     val catalog: RbCatalog,
@@ -25,7 +25,7 @@ object RealCorpus {
         synchronized(this) {
             cached?.let { return it }
             val pdb = File(usb, "PIONEER/rekordbox/export.pdb")
-            if (reportFile.isFile && pdb.isFile) {
+            if (reportFile.isFile && pdb.isFile && reportFile.readText().contains("analise 0.12.1 rgb")) {
                 val catalog = loadRekordbox(FolderVolume(usb, "export deste app"))
                 if (catalog.error == null && catalog.tracks.size >= 6) {
                     val ready = RealReady(catalog, usb, shotsOf(catalog), reportFile.readText())
@@ -44,7 +44,8 @@ object RealCorpus {
             val analysis = catalog.analyses[track.id]
             val drop = analysis?.hotCues?.firstOrNull { it.comment == "Drop" }?.timeMs ?: 0
             val breakMs = analysis?.hotCues?.firstOrNull { it.comment == "Break" }?.timeMs ?: 0
-            RealShot(track.title, track.fileName.substringBeforeLast('.'), drop / 1000f, breakMs / 1000f)
+            val buildMs = analysis?.hotCues?.firstOrNull { it.comment == "Build" }?.timeMs ?: 0
+            RealShot(track.title, track.fileName.substringBeforeLast('.'), drop / 1000f, breakMs / 1000f, buildMs / 1000f)
         }
     }
 
@@ -106,7 +107,9 @@ object RealCorpus {
             )
             songs += song
             mix += Measured(spec, mono, read, decodeMs, wavMs, waveMs, before, after, pcm.sampleRate, pcm.frameCount)
-            if (shots.size < 4) shots += RealShot(spec.title, spec.slug, drop.toFloat(), breakSec.toFloat())
+            if (shots.size < 4) {
+                shots += RealShot(spec.title, spec.slug, drop.toFloat(), breakSec.toFloat(), read.structure.buildSec.toFloat())
+            }
         }
         check(songs.isNotEmpty()) { "nenhuma faixa do corpus foi analisada" }
         val volume = ourMusicVolume(songs)
@@ -114,6 +117,7 @@ object RealCorpus {
         val catalog = loadRekordbox(FolderVolume(usb, "export deste app"))
         check(catalog.error == null) { catalog.error ?: "erro" }
         check(catalog.tracks.size == songs.size)
+        lines += "analise 0.12.1 rgb"
         lines += "faixas analisadas: ${songs.size}"
         lines += "faixas no export: ${catalog.tracks.size}"
         lines += "playlists: ${catalog.playlists.joinToString { it.name }}"
@@ -128,8 +132,10 @@ object RealCorpus {
             lines += "decodeWav: ${item.wavMs} ms, ${item.frames} frames, ${item.rate} Hz"
             lines += "BPM detectado ${"%.2f".format(item.read.bpm)} confiança ${"%.2f".format(item.read.bpmConfidence)}"
             lines += "BPM publicado: não estava no item"
-            lines += "erro mediano onset contra a grade: ${"%.1f".format(item.read.gridErrorMs)} ms"
-            lines += "tom detectado ${item.read.keyName} confiança ${"%.2f".format(item.read.keyConfidence)} metadado ${item.spec.keyMeta.ifBlank { "ausente" }}"
+            lines += "erro do kick grave na batida (até 20 ms): mediana ${"%.1f".format(item.read.gridErrorMs)} ms, máximo ${"%.1f".format(item.read.gridErrorMaxMs)} ms, cobertura ${"%.0f".format(item.read.gridCoverage * 100)}%"
+            lines += "erro mediano onset de banda cheia, métrica 0.12.0: ${"%.1f".format(item.read.fullBandErrorMs)} ms"
+            val mirex = if (item.spec.keyMeta.isBlank()) "sem TKEY" else "%.2f".format(mirexWeight(item.read.keyName, item.spec.keyMeta))
+            lines += "tom detectado ${item.read.keyName} confiança ${"%.2f".format(item.read.keyConfidence)} metadado ${item.spec.keyMeta.ifBlank { "ausente" }} MIREX $mirex"
             lines += "estrutura s intro ${"%.1f".format(item.read.structure.introSec)} build ${"%.1f".format(item.read.structure.buildSec)} drop ${"%.1f".format(item.read.structure.dropSec)} break ${"%.1f".format(item.read.structure.breakSec)}"
             lines += "análise ${item.read.elapsedMs} ms, onda ${item.waveMs} ms, heap antes ${item.beforeMb} MB depois ${item.afterMb} MB"
         }

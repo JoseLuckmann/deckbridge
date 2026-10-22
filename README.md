@@ -73,7 +73,7 @@ Simulação não é prova no hardware. O roteiro único para a DDJ-400 e o Raspb
 
 O alvo 1, desde 21/10/2026, é o app Android em `android/`. O Raspberry é o alvo 2. Como instalar a prova A0 no tablet está em `docs/android/prova-a0.md`. A leitura do pendrive rekordbox e os dois decks estão em `docs/android/biblioteca-rekordbox.md`. Ouvir master e fone nesse app ainda não foi feito aqui. Prints do emulador não substituem o tablet.
 
-A tela 0.12.0 mede um corpus CC BY 3.0 fora do git (`tools/fetch_real_corpus.py`, `docs/testing/real-music-corpus.md`) e lê uma pasta de exportação sem gravar nela (`tools/inspect_usb.py`). O export em `/opt/cursor/artifacts/real-music-usb` é deste app, não do rekordbox. A escuta continua `BLOCKED_HARDWARE`.
+A tela 0.12.1 mede um corpus CC BY 3.0 fora do git (`tools/fetch_real_corpus.py`, `docs/testing/real-music-corpus.md`) e lê uma pasta de exportação sem gravar nela (`tools/inspect_usb.py`). O export em `/opt/cursor/artifacts/real-music-usb` é deste app, não do rekordbox. A escuta continua `BLOCKED_HARDWARE`.
 
 ## Ferramentas da fase 0
 

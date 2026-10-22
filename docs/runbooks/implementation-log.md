@@ -273,6 +273,18 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19529671 bytes, SHA-256 `42e0d015f707c1c589eaf5ec26f72a690865db31a2029a055c243df6763f97a7`.
 - HIL executado? não
 
+### Tela 0.12.1
+- Estado: JVM e binário hospedeiro; escuta BLOCKED_HARDWARE
+- Grade: o erro de ~100 ms era onset de banda cheia no contratempo, mais um seguidor que alongava o período. O atraso do LAME (~13 ms) desloca o arquivo inteiro e não abre esse vão. O BPM é o que mais batidas põe a menos de 18 ms de um pico grave. O período fica fixo. O instante publicado encosta no pico se ele está a menos de 20 ms. Mediana e máximo do resíduo: 0,2–0,3 ms e 0,5 ms. Cobertura: 57% a 93%. A mediana de banda cheia continua 70–124 ms.
+- BPM mantidos perto da 0.12.0: Morning 118, Ocean 118, At The Count 152, Silver 141. Ecosystem 122. Chromosome 162 (cobertura do kick; 1,5× de ~108). Caught In The Beat 120, não o ~160 da autocorrelação sem tecto.
+- Tom: média MIREX nas três faixas com TKEY de 0,17 para 0,50 (Chromosome Bm = Bm, Silver Bm contra Em é quinta, Ecosystem Fm contra Ebm é 0). O librosa (ISC, script `tools/measure_reference.py`, fora do APK) também diz Fm em Ecosystem. Não se forçou o tag.
+- RGB: soma por coluna. Grave vermelho, médio verde, agudo azul, cortes 200 Hz e 2,2 kHz, percentil da faixa (p58 / p94 / p55), peso depois do percentil, gama 1,25, altura pelo RMS. PWV5 em 3 bits. Drops de Chromosome, Ecosystem e Silver ficam rosa. O build de Silver fica azul. O drop de Morning fica laranja (grave e melodia, pouco agudo nessa janela). A legenda no INFO e em Sobre é desenho deste app.
+- Loop: crossfade de potência igual. Na última amostra o valor é o que entra. 81 emendas reais, 0 piores que o seco. No mix, energia seca 0,00125770 e molhada 0,00000000. Pico 0,66616. NaN 0.
+- JVM: 67 testes, 0 falhas. DSP hospedeiro e gravação hospedeira: ALL PASS. Python: 42 passed.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4236217 bytes, SHA-256 `e4a160ec8e19da4b1f8f0196ec34c4c77df9272d6c07ce71bc2ba1348cbefad5`, versão 0.12.1 (versionCode 13), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19539107 bytes, SHA-256 `ce08efa653ddbe62b18e9e1d87f5bd7f383665ff4aee9837e32a8b975026f424`.
+- HIL executado? não
+
 ### T020 — configuração
 - Estado: PASS
 - Perfil `runtime`, tela de referência 1024x600, `allow_write` recusado
@@ -293,7 +305,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 ### T078 — roteiro final
 - Estado: documento PASS; execução BLOCKED_HARDWARE
 - Arquivo: `docs/hil/roteiro-validacao-final.md`
-- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Os passos 13 a 21 continuam por executar
+- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Em 0.12.1 os passos continuam os mesmos: a grade, o tom, a cor e a emenda do loop não são um gesto novo na controladora. Os passos 13 a 21 continuam por executar
 
 ## Template de registro
 

@@ -1,9 +1,11 @@
 package os.deckbridge.logic
 
 import kotlin.math.PI
-import kotlin.math.exp
+import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -74,16 +76,13 @@ fun decodePwv5Word(word: Int): IntArray {
 }
 
 /**
- * Graves puxam o vermelho para o laranja, médios ficam verdes,
- * agudos sobem os três canais e fecham no branco-azul.
+ * RGB aditivo, um canal por banda. Grave vermelho, médio verde, agudo azul.
+ * Amarelo, ciano, rosa e branco saem da soma, não de uma mistura extra.
  */
 fun blendRgb(low: Int, mid: Int, high: Int): Int {
-    val bass = low.coerceIn(0, 255)
-    val middle = mid.coerceIn(0, 255)
-    val treble = high.coerceIn(0, 255)
-    val red = (bass + treble * 0.85 + middle * 0.05).toInt().coerceIn(0, 255)
-    val green = (middle + bass * 0.28 + treble * 0.80).toInt().coerceIn(0, 255)
-    val blue = (treble + middle * 0.10).toInt().coerceIn(0, 255)
+    val red = low.coerceIn(0, 255)
+    val green = mid.coerceIn(0, 255)
+    val blue = high.coerceIn(0, 255)
     return (red shl 16) or (green shl 8) or blue
 }
 
@@ -389,7 +388,7 @@ private fun colorWave(bands: WaveBands, perSecond: Double, source: String): Colo
         val low = bands.low[index].toInt() and 0xFF
         val mid = bands.mid[index].toInt() and 0xFF
         val high = bands.high[index].toInt() and 0xFF
-        height[index] = max(low, max(mid, high)).toByte()
+        height[index] = columnLoudness(bands, index, low, mid, high).toByte()
         rgb[index] = blendRgb(low, mid, high)
     }
     return ColorWave(height, rgb, perSecond, source)
@@ -400,17 +399,26 @@ private fun heightOf(bands: WaveBands): ByteArray {
         val low = bands.low[index].toInt() and 0xFF
         val mid = bands.mid[index].toInt() and 0xFF
         val high = bands.high[index].toInt() and 0xFF
-        max(low, max(mid, high)).toByte()
+        columnLoudness(bands, index, low, mid, high).toByte()
     }
+}
+
+private fun columnLoudness(bands: WaveBands, index: Int, low: Int, mid: Int, high: Int): Int {
+    if (index < bands.loud.size) return bands.loud[index].toInt() and 0xFF
+    val energy = low * low + mid * mid + high * high
+    return sqrt(energy / 3.0).toInt().coerceIn(0, 255)
 }
 
 private fun splitBands(samples: FloatArray, rate: Int, columns: Int): WaveBands {
     val low = DoubleArray(columns)
     val mid = DoubleArray(columns)
     val high = DoubleArray(columns)
-    if (samples.isNotEmpty() && rate > 0) {
-        val lowBand = zeroPhaseLowpass(samples, exp(-2.0 * PI * 180.0 / rate).toFloat(), 2)
-        val belowHigh = zeroPhaseLowpass(samples, exp(-2.0 * PI * 4000.0 / rate).toFloat(), 3)
+    val loud = DoubleArray(columns)
+    if (samples.isNotEmpty() && rate > 0 && columns > 0) {
+        // 200 Hz e 2,2 kHz. A banda do meio é larga e quase contínua; o grave e o
+        // agudo são mais pontudos. O percentil de cada uma compensa isso.
+        val lowBand = zeroPhaseButterworth(samples, rate, 200.0)
+        val belowHigh = zeroPhaseButterworth(samples, rate, 2200.0)
         val per = samples.size.toDouble() / columns
         val window = (rate * 0.032).roundToInt().coerceIn(32, rate)
         val half = window / 2
@@ -438,44 +446,82 @@ private fun splitBands(samples: FloatArray, rate: Int, columns: Int): WaveBands 
                 low[column] = sqrt(eL / n)
                 mid[column] = sqrt(eM / n)
                 high[column] = sqrt(eH / n)
+                loud[column] = sqrt((eL + eM + eH) / n)
             }
         }
     }
-    var peak = 1e-6
-    for (index in 0 until columns) {
-        peak = max(peak, low[index])
-        peak = max(peak, mid[index])
-        peak = max(peak, high[index])
-    }
-    fun pack(values: DoubleArray) = ByteArray(columns) { index ->
-        (values[index] / peak * 255.0).toInt().coerceIn(0, 255).toByte()
-    }
-    return WaveBands(pack(low), pack(mid), pack(high))
+    // Grave e agudo usam um percentil mais baixo: o corpo da linha e o padrão do
+    // chimbal chegam no teto, não só o pico. O médio usa um percentil alto para
+    // não pintar a faixa inteira de verde.
+    val lowRef = percentile(low, 0.58)
+    val midRef = percentile(mid, 0.94)
+    val highRef = percentile(high, 0.55)
+    val loudRef = percentile(loud, 0.72)
+    val floor = max(lowRef, max(midRef, highRef)) * 0.12
+    return WaveBands(
+        shapeBand(low, max(lowRef, floor), 1.15, 1.25),
+        shapeBand(mid, max(midRef, floor), 0.88, 1.25),
+        shapeBand(high, max(highRef, floor), 1.20, 1.25),
+        shapeBand(loud, loudRef, 1.0, 1.15),
+    )
 }
 
-/** Passa-baixas de um polo, ida e volta, repetido. A fase zero evita o grave cair no médio. */
-private fun zeroPhaseLowpass(samples: FloatArray, coef: Float, passes: Int): FloatArray {
-    var current = samples
-    val keep = coef.coerceIn(0f, 0.999f)
-    val mix = 1f - keep
-    var out = samples
-    repeat(passes.coerceAtLeast(1)) {
-        val count = current.size
-        out = FloatArray(count)
-        if (count == 0) return out
-        var state = current[0]
-        for (index in 0 until count) {
-            state = keep * state + mix * current[index]
-            out[index] = state
-        }
-        state = out[count - 1]
-        for (index in count - 1 downTo 0) {
-            state = keep * state + mix * out[index]
-            out[index] = state
-        }
-        current = out
+private fun percentile(values: DoubleArray, fraction: Double): Double {
+    if (values.isEmpty()) return 1e-6
+    val copy = values.copyOf()
+    copy.sort()
+    val index = ((copy.size - 1) * fraction).roundToInt().coerceIn(0, copy.lastIndex)
+    return copy[index].coerceAtLeast(1e-8)
+}
+
+private fun shapeBand(values: DoubleArray, reference: Double, weight: Double, gamma: Double): ByteArray {
+    return ByteArray(values.size) { index ->
+        val norm = (values[index] / reference * weight).coerceIn(0.0, 1.6)
+        val curved = norm.pow(gamma).coerceIn(0.0, 1.0)
+        (curved * 255.0).roundToInt().coerceIn(0, 255).toByte()
     }
-    return out
+}
+
+private class WaveBiquad(b0: Double, b1: Double, b2: Double, a0: Double, a1: Double, a2: Double) {
+    private val nb0 = (b0 / a0).toFloat()
+    private val nb1 = (b1 / a0).toFloat()
+    private val nb2 = (b2 / a0).toFloat()
+    private val na1 = (a1 / a0).toFloat()
+    private val na2 = (a2 / a0).toFloat()
+    private var z1 = 0f
+    private var z2 = 0f
+
+    fun process(x: Float): Float {
+        val y = nb0 * x + z1
+        z1 = nb1 * x - na1 * y + z2
+        z2 = nb2 * x - na2 * y
+        return y
+    }
+}
+
+private fun butterworthLowpass(rate: Int, freq: Double): WaveBiquad {
+    val w0 = 2.0 * PI * freq / rate
+    val cosine = cos(w0)
+    val sine = sin(w0)
+    val alpha = sine / (2.0 * 0.7071067811865476)
+    val b0 = (1.0 - cosine) / 2.0
+    val b1 = 1.0 - cosine
+    val b2 = (1.0 - cosine) / 2.0
+    val a0 = 1.0 + alpha
+    val a1 = -2.0 * cosine
+    val a2 = 1.0 - alpha
+    return WaveBiquad(b0, b1, b2, a0, a1, a2)
+}
+
+private fun zeroPhaseButterworth(samples: FloatArray, rate: Int, freq: Double): FloatArray {
+    if (samples.isEmpty()) return samples
+    val forward = FloatArray(samples.size)
+    val forth = butterworthLowpass(rate, freq)
+    for (index in samples.indices) forward[index] = forth.process(samples[index])
+    val back = FloatArray(samples.size)
+    val reverse = butterworthLowpass(rate, freq)
+    for (index in samples.indices.reversed()) back[index] = reverse.process(forward[index])
+    return back
 }
 
 private fun downsampleBands(source: WaveBands, columns: Int): WaveBands {
@@ -484,23 +530,28 @@ private fun downsampleBands(source: WaveBands, columns: Int): WaveBands {
     val low = ByteArray(count)
     val mid = ByteArray(count)
     val high = ByteArray(count)
+    val loud = ByteArray(count)
+    val hasLoud = source.loud.size >= source.columns
     for (index in 0 until count) {
         val start = index * source.columns / count
         val end = ((index + 1) * source.columns / count).coerceAtLeast(start + 1).coerceAtMost(source.columns)
         var l = 0
         var m = 0
         var h = 0
+        var g = 0
         for (at in start until end) {
             l += source.low[at].toInt() and 0xFF
             m += source.mid[at].toInt() and 0xFF
             h += source.high[at].toInt() and 0xFF
+            g += if (hasLoud) source.loud[at].toInt() and 0xFF else columnLoudness(source, at, source.low[at].toInt() and 0xFF, source.mid[at].toInt() and 0xFF, source.high[at].toInt() and 0xFF)
         }
         val n = (end - start).coerceAtLeast(1)
         low[index] = (l / n).toByte()
         mid[index] = (m / n).toByte()
         high[index] = (h / n).toByte()
+        loud[index] = (g / n).toByte()
     }
-    return WaveBands(low, mid, high)
+    return WaveBands(low, mid, high, loud)
 }
 
 fun devSettingBytes(color: Int, position: Int): ByteArray {

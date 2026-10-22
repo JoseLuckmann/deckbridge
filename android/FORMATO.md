@@ -42,7 +42,7 @@ Fontes citadas no código (`WaveColor.kt`):
 Cabeçalho comum da tag: fourcc, `len_header` u32 big-endian, `len_tag` u32 big-endian. O corpo que este leitor usa começa em tag+12.
 
 - PWV5 (detalhe RGB, cerca de 150 colunas por segundo): em tag+12 `entryBytes` = 2, tag+16 a contagem, tag+20 um u32 (nas fixtures `0x00960305`), dados em tag+24. Cada entrada é um u16 big-endian: 3 bits R, 3 G, 3 B, 5 de altura, 2 bits baixos sem uso. A escala é `n * 255 / 7` e `n * 255 / 31`.
-- PWV4 (prévia RGB, em geral 1200 colunas): `entryBytes` = 6, dados em tag+24. Os seis bytes são da mesma coluna. Os bytes 3, 4 e 5 são grave, médio e agudo. A altura é o máximo dos três. A cor mistura esses três bytes (grave puxa laranja, médio verde, agudo branco-azul). Não é o desenho de um parser de terceiros.
+- PWV4 (prévia RGB, em geral 1200 colunas): `entryBytes` = 6, dados em tag+24. Os seis bytes são da mesma coluna. Os bytes 3, 4 e 5 são grave, médio e agudo. A altura é a intensidade geral da coluna, não o máximo das bandas. A cor é a soma aditiva desses três bytes (grave vermelho, médio verde, agudo azul). Não é o desenho de um parser de terceiros.
 - PWV3 (detalhe azul, 150 colunas por segundo): um byte, brancura nos 3 bits altos e altura nos 5 baixos, dados em tag+24.
 - PWV7 (detalhe de 3 bandas): três bytes por coluna, médio, agudo, grave, nessa ordem. Dados em tag+24.
 - PWV6 (prévia de 3 bandas): o mesmo trio, dados em tag+20. Não há o u32 extra entre a contagem e os bytes.
@@ -50,7 +50,7 @@ Cabeçalho comum da tag: fourcc, `len_header` u32 big-endian, `len_tag` u32 big-
 - PWVC entra no `.2EX` e não é desenhado.
 - PWB3 continua a ser uma secção deste projeto. Um export real não a traz.
 
-A onda grande, por modo: RGB usa PWV5 e, se faltar, PWV4. 3 BANDAS usa PWV7 e, se faltar, PWV6. AZUL usa PWV3 e, se faltar, PWAV. O cartão do deck usa a prévia do mesmo modo (PWV4, PWV6 ou PWAV). Se a tag daquele modo não está no volume, o app calcula três bandas a partir do WAV mono (passa-baixas em 180 Hz e 4000 Hz, ida e volta, duas e três passagens, um pico global) e o INFO mostra “analisado no app”. O volume não é escrito.
+A onda grande, por modo: RGB usa PWV5 e, se faltar, PWV4. 3 BANDAS usa PWV7 e, se faltar, PWV6. AZUL usa PWV3 e, se faltar, PWAV. O cartão do deck usa a prévia do mesmo modo (PWV4, PWV6 ou PWAV). Se a tag daquele modo não está no volume, o app calcula três bandas a partir do WAV mono (Butterworth de fase zero em 200 Hz e 2,2 kHz, percentil de cada banda na faixa inteira, peso depois do percentil) e o INFO mostra “analisado no app”. O volume não é escrito.
 
 A preferência de cor não é lida de `MYSETTING.DAT`, `MYSETTING2.DAT` nem `DJMMYSETTING.DAT`: essas páginas públicas não documentam o byte. O app lê só `PIONEER/DEVSETTING.DAT` ou `PIONEER/rekordbox/DEVSETTING.DAT`. Cabeçalho de 104 bytes (96 de texto, little-endian). O byte de cor é o offset 104+10: `0x01` azul, `0x03` RGB, `0x04` 3 bandas. A posição do playhead é o offset 104+13: `0x01` centro (50% nesta tela), `0x02` esquerda (20%). Qualquer outro byte fica sem modo. O menu pode desligar “Usar configuração do pendrive”.
 
@@ -58,7 +58,7 @@ A tag desconhecida, com comprimento válido, é ignorada. `.DAT` ausente gera av
 
 O corpus de variantes (páginas, títulos longos e unicode, arte ausente, ANLZ ausente, `.EXT`/`.2EX`, PWV3/PWV5/PWV7, cues com e sem comentário e cor, memory cue e loop, playlists, linha apagada, caminhos com caracteres fora do ASCII, 5.000 faixas e fuzz) é gerado por `usbVariantReport()`. “Estilo rekordbox 5/6/7” aqui significa quais tags estão presentes, não um campo de versão lido de um export daqueles programas. Os caminhos exFAT/FAT32 são cadeias dentro do PDB, não um disco montado.
 
-## Export deste app (0.12.0)
+## Export deste app (0.12.1)
 
 `ourMusicVolume` grava um PDB e ANLZ nossos, com PWV4, PWV5, PWV6, PWV7, PWV3, PWAV, hot cues, memory cues e um loop, a partir da análise deste repositório. A pasta `/opt/cursor/artifacts/real-music-usb` é esse export. Não é uma cópia do rekordbox e não deve ser tratada como uma. O deslocamento e o estica da grade (G−, G+, S−, S+, G0) ficam na memória do app. O volume não recebe esses bytes.
 

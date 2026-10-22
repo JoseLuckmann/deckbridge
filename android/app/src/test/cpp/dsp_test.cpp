@@ -1,8 +1,10 @@
 #include "../../main/cpp/dsp.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -312,6 +314,100 @@ int main() {
     const float wet = deckbridge::readLooped(seam.data(), 8000, seamEnd - 1.0, seamStart, seamEnd, deckbridge::kFadeSamples);
     const float wetJump = wet - seam[1000];
     expect(wetJump * wetJump < dryJump * dryJump, "loop crossfade lowers the boundary jump");
+
+    std::vector<float> flat(8000, 0.f);
+    flat[999] = 0.6f;
+    const float dryFlat = flat[4999] - flat[1000];
+    const float wetFlat = deckbridge::readLooped(flat.data(), 8000, 4999.0, 1000.0, 5000.0, deckbridge::kFadeSamples) - flat[1000];
+    expect(dryFlat * dryFlat < 1e-12f, "synthetic dry seam is already closed");
+    expect(wetFlat * wetFlat <= dryFlat * dryFlat + 1e-12f, "crossfade does not open a closed seam");
+
+    const char *corpus[] = {
+        "/opt/cursor/artifacts/real-corpus/mono/01-chromosome-boutique.wav",
+        "/opt/cursor/artifacts/real-corpus/mono/02-ecosystem.wav",
+        "/opt/cursor/artifacts/real-corpus/mono/07-silver.wav",
+        "/opt/cursor/artifacts/real-corpus/mono/morning-original-mix.wav",
+        "/opt/cursor/artifacts/real-corpus/mono/ocean-original-mix.wav",
+        "/opt/cursor/artifacts/real-corpus/mono/wrist-watch.wav",
+        "/opt/cursor/artifacts/real-corpus/mono/toodaze.wav",
+        "/opt/cursor/artifacts/real-corpus/mono/caught-in-the-beat.wav",
+        "/opt/cursor/artifacts/real-corpus/mono/at-the-count.wav",
+    };
+    const double bpms[] = {139.94, 129.37, 141.83, 117.92, 117.90, 120.28, 120.24, 160.40, 152.23};
+    const double beats[] = {1.0, 4.0, 8.0};
+    int seams = 0;
+    int worse = 0;
+    for (int track = 0; track < 9; ++track) {
+        std::ifstream in(corpus[track], std::ios::binary);
+        if (!in) continue;
+        in.seekg(0, std::ios::end);
+        const auto bytes = static_cast<int>(in.tellg());
+        if (bytes < 44) continue;
+        in.seekg(0);
+        std::vector<char> file(bytes);
+        in.read(file.data(), bytes);
+        if (std::string(file.data(), 4) != "RIFF") continue;
+        int rate = 0;
+        int channels = 0;
+        int bits = 0;
+        int dataAt = -1;
+        int dataBytes = 0;
+        int cursor = 12;
+        while (cursor + 8 <= bytes) {
+            const std::string tag(file.data() + cursor, 4);
+            const uint32_t size = static_cast<unsigned char>(file[cursor + 4]) |
+                                  (static_cast<unsigned char>(file[cursor + 5]) << 8) |
+                                  (static_cast<unsigned char>(file[cursor + 6]) << 16) |
+                                  (static_cast<unsigned char>(file[cursor + 7]) << 24);
+            if (tag == "fmt " && cursor + 8 + 16 <= bytes) {
+                channels = static_cast<unsigned char>(file[cursor + 10]) | (static_cast<unsigned char>(file[cursor + 11]) << 8);
+                rate = static_cast<unsigned char>(file[cursor + 12]) | (static_cast<unsigned char>(file[cursor + 13]) << 8) |
+                       (static_cast<unsigned char>(file[cursor + 14]) << 16) | (static_cast<unsigned char>(file[cursor + 15]) << 24);
+                bits = static_cast<unsigned char>(file[cursor + 22]) | (static_cast<unsigned char>(file[cursor + 23]) << 8);
+            } else if (tag == "data") {
+                dataAt = cursor + 8;
+                dataBytes = static_cast<int>(size);
+                break;
+            }
+            cursor += 8 + static_cast<int>(size) + (size % 2);
+        }
+        if (dataAt < 0 || rate < 8000 || channels != 1 || bits != 16) continue;
+        const int frames = std::min(dataBytes / 2, (bytes - dataAt) / 2);
+        std::vector<float> audio(frames);
+        for (int index = 0; index < frames; ++index) {
+            const int at = dataAt + index * 2;
+            const int raw = static_cast<int16_t>(static_cast<unsigned char>(file[at]) |
+                                                  (static_cast<unsigned char>(file[at + 1]) << 8));
+            audio[index] = raw / 32768.f;
+        }
+        for (double beatCount : beats) {
+            const double length = beatCount * rate * 60.0 / bpms[track];
+            for (double frac : {0.25, 0.45, 0.7}) {
+                const double start = frames * frac;
+                const double end = start + length;
+                if (end >= frames - 2 || start < deckbridge::kFadeSamples) continue;
+                // O playhead dá um passo de 1 amostra: a posição end-1 cai no loop e a
+                // seguinte envolve para loopStart. A emenda é esse salto, nos dois lados interpolados.
+                const double pos = end - 1.0;
+                const float next = deckbridge::readInterp(audio.data(), frames, start);
+                const float dryBefore = deckbridge::readInterp(audio.data(), frames, pos);
+                const float wetBefore = deckbridge::readLooped(audio.data(), frames, pos, start, end, deckbridge::kFadeSamples);
+                const float dryEnergy = (dryBefore - next) * (dryBefore - next);
+                const float wetEnergy = (wetBefore - next) * (wetBefore - next);
+                seams += 1;
+                if (wetEnergy > dryEnergy + 1e-8f) {
+                    worse += 1;
+                    std::printf(
+                        "worse track %d beats %.0f frac %.2f start %.3f end %.3f dry %.8f wet %.8f dryE %.8e wetE %.8e\n",
+                        track, beatCount, frac, start, end, dryBefore - next, wetBefore - next, dryEnergy, wetEnergy);
+                }
+            }
+        }
+    }
+    if (seams > 0) {
+        std::printf("real seams %d worse %d\n", seams, worse);
+        expect(worse == 0, "crossfade seam is never worse than dry on the nine tracks");
+    }
 
     if (failures != 0) {
         std::printf("%d FAILED\n", failures);

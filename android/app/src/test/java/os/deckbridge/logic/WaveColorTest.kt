@@ -160,6 +160,53 @@ class WaveColorTest {
         val high = tones.rgbDetail.rgb[tones.rgbDetail.columns / 2]
         assertTrue((high and 0xFF) > ((high shr 16) and 0xFF) / 2)
     }
+
+    @Test
+    fun kickMidAndHatKeepDifferentHuesAfterQuantization() {
+        val rate = 22050
+        fun tone(freq: Double) = FloatArray(rate * 2) { index ->
+            (0.75 * sin(2.0 * Math.PI * freq * index / rate)).toFloat()
+        }
+        fun quantized(freq: Double): IntArray = quantizedOf(tone(freq), rate)
+        fun quantizedMix(sampleRate: Int, vararg partials: Pair<Double, Double>): IntArray {
+            val mixed = FloatArray(sampleRate * 2) { index ->
+                var sample = 0.0
+                partials.forEach { (freq, amp) ->
+                    sample += amp * sin(2.0 * Math.PI * freq * index / sampleRate)
+                }
+                sample.toFloat().coerceIn(-1f, 1f)
+            }
+            return quantizedOf(mixed, sampleRate)
+        }
+        val kick = quantized(70.0)
+        val vocal = quantized(800.0)
+        val hat = quantized(8000.0)
+        assertTrue("grave ${kick.toList()}", kick[0] >= 6 && kick[0] > kick[1] && kick[0] > kick[2])
+        assertTrue("medio ${vocal.toList()}", vocal[1] >= 6 && vocal[1] > vocal[0] && vocal[1] > vocal[2])
+        assertTrue("agudo ${hat.toList()}", hat[2] >= 5 && hat[2] > hat[0] && hat[2] > hat[1])
+        val beat = quantizedMix(rate, 70.0 to 0.7, 8000.0 to 0.55)
+        assertTrue("batida ${beat.toList()}", beat[0] >= 5 && beat[2] >= 5 && beat[0] > beat[1] && beat[2] > beat[1])
+        val chorus = quantizedMix(rate, 70.0 to 0.65, 800.0 to 0.55, 8000.0 to 0.45)
+        assertTrue("coro ${chorus.toList()}", chorus[0] >= 5 && chorus[1] >= 4 && chorus[2] >= 5)
+        val mixed = FloatArray(rate * 4) { index ->
+            val amp = if (index < rate * 2) 0.8 else 0.05
+            (amp * sin(2.0 * Math.PI * 70.0 * index / rate)).toFloat()
+        }
+        val wave = wavesFromPcm(mixed, rate)
+        val loudHeight = wave.rgbDetail.height[wave.rgbDetail.columns / 4].toInt() and 0xFF
+        val quietHeight = wave.rgbDetail.height[wave.rgbDetail.columns * 3 / 4].toInt() and 0xFF
+        assertTrue("altura forte $loudHeight fraca $quietHeight", loudHeight > quietHeight + 40)
+    }
+}
+
+private fun quantizedOf(samples: FloatArray, rate: Int): IntArray {
+    val wave = wavesFromPcm(samples, rate).rgbDetail
+    val color = wave.rgb[wave.columns / 2]
+    return intArrayOf(
+        quantize3((color shr 16) and 0xFF),
+        quantize3((color shr 8) and 0xFF),
+        quantize3(color and 0xFF),
+    )
 }
 
 private fun pwavBody(entries: ByteArray): ByteArray {

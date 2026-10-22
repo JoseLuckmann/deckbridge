@@ -118,13 +118,21 @@ inline float readInterp(const float *data, int frames, double position) {
 
 inline float readLooped(const float *data, int frames, double position, double loopStart, double loopEnd, int fade) {
     const float dry = readInterp(data, frames, position);
-    if (!(loopEnd > loopStart) || fade <= 0) return dry;
+    if (!(loopEnd > loopStart) || fade <= 1) return dry;
     if (position < loopStart || position >= loopEnd) return dry;
     const double into = loopEnd - position;
     if (into >= static_cast<double>(fade) || into < 0.0) return dry;
-    const float keep = static_cast<float>(into / static_cast<double>(fade));
-    const float incoming = readInterp(data, frames, position - (loopEnd - loopStart));
-    return dry * keep + incoming * (1.f - keep);
+    // t = 0 no início da janela e 1 na última amostra, que cai em cima de loopStart.
+    // O áudio de entrada é o trecho imediatamente anterior ao início, deslocado uma
+    // amostra para o crossfade terminar na primeira amostra do loop, não na anterior.
+    const double span = static_cast<double>(fade - 1);
+    const double t = std::min(1.0, std::max(0.0, (static_cast<double>(fade) - into) / span));
+    // A última amostra (into <= 1) é exatamente o ponto de aterrissagem do wrap.
+    // cos(pi/2) em float não é zero e vazava o seco, abrindo uma emenda já fechada.
+    const float incoming = readInterp(data, frames, loopStart - (into - 1.0));
+    if (t >= 1.0) return incoming;
+    const float angle = static_cast<float>(t * 1.5707963267948966);
+    return dry * std::cos(angle) + incoming * std::sin(angle);
 }
 
 inline void renderRoll(const float *src, int frames, int slice, float *dst) {

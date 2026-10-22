@@ -29,7 +29,12 @@ data class RbHotCue(val index: Int, val timeMs: Int, val comment: String, val co
 
 data class RbMemoryCue(val timeMs: Int, val loopEndMs: Int?, val comment: String)
 
-data class WaveBands(val low: ByteArray, val mid: ByteArray, val high: ByteArray) {
+data class WaveBands(
+    val low: ByteArray,
+    val mid: ByteArray,
+    val high: ByteArray,
+    val loud: ByteArray = ByteArray(0),
+) {
     val columns: Int get() = minOf(low.size, mid.size, high.size)
 }
 
