@@ -125,6 +125,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-22 | A069 | parcial | `9d592d9` | tela 0.13.1, tom CQT + EDMA, MIREX 0,586 nas 58 e 0,519 em 190, APK arm64 | 0,65 não atingido; holdout 0,456; escuta `BLOCKED_HARDWARE`; Chromosome F ≠ Bm | dono instala o APK arm64 0.13.1 |
 | 2026-10-22 | mix | parcial | `52f1929` | MP3 3:42 dos efeitos no motor do host, 320 kbps, true peak −1,44 dBTP | não é o tablet; Color FX só tem o filtro; escuta `BLOCKED_HARDWARE` | dono ouve `/opt/cursor/artifacts/demo-mix.mp3` |
 | 2026-10-22 | 0.14.0 | parcial | `594f21b` | DSP suave, de/para, drum build, mix v2 3:20, true peak −1,17 dBTP, APK versionCode 17 | host, não o tablet; escuta `BLOCKED_HARDWARE`; spiral, helix e o balanço do roll ainda diferem do manual | dono ouve `/opt/cursor/artifacts/demo-mix-v2.mp3` |
+| 2026-10-22 | 0.14.1 | parcial | `e3c0e84` | one-shots CC0, grade do deck, mix 1:28, onset 0 ms, APK versionCode 18 | host, não o tablet; escuta `BLOCKED_HARDWARE`; palma é prévia MP3; spiral e helix continuam fora do manual | dono ouve `/opt/cursor/artifacts/demo-mix-drums.mp3` |
 
 ### Proposta Android
 - Estado: proposta, não aceita
@@ -360,6 +361,20 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - HIL executado? não. Os passos 13 a 24 continuam por executar.
 - Busca por voz (A053) e quatro decks (A054) continuam por fazer.
 
+### Tela 0.14.1
+- Estado: host; escuta BLOCKED_HARDWARE. Não é o tablet e não é a DDJ-400.
+- Commit: `e3c0e84`.
+- O roll da 0.14.0 contava samples num relógio que começava em zero. O ataque agora sai quando a fase do deck cruza a grade: posição lida, BPM da grade e downbeat. O pitch e o sync já estão no passo da cabeça. O bloco não empurra o hit para o início do buffer. A latência de saída é a mesma da faixa.
+- `tools/drum_grid_test.cpp`: pior erro 0 ms (0 samples) a 120, 128, 140 e 174 BPM, pitch 0,92, 1,00 e 1,08, blocos de 1 e de 256. Gráfico em `docs/research/plots/drum-onset.svg`.
+- Padrão: 4 compassos são 1+1+1+1; 8 são 2+2+3+1; 16 são 4+4+7+1. O 1/32 é o último compasso. Troca só na fronteira. Começo na próxima semínima. Para no downbeat. Gap opcional no último meio tempo. Volume sobe. Passa-altas de 40 Hz até cerca de 180 Hz, mistura até 40%. Pitch opcional de cerca de 10% no fim.
+- Sons: FLAC 48 kHz CC0 em `android/app/src/main/assets/drums/`. Bumbo, caixa e chimbal da Karoryfer Big Rusty Drums. Palma em três prévias HQ do Freesound, com cauda curta. URLs em `docs/licenses/drum-samples.md`. Sem sample da Pioneer. Se o arquivo não abrir, o motor usa modelagem física. A caixa levou soft clip (drive 2,4) para o corpo sentar mais perto do bumbo. A tela e o Shift+SAMPLER escolhem kick, clap, snare ou kick+clap, 4/8/16 compassos e o gap.
+- DSP hospedeiro: ALL PASS. `fx_measure`: FAILS 0. O caminho sintetizado da 0.14.0 continua quando o build está em zero, e o `BUILD_HITS` antigo ainda passa. Tom, tempo e cache `0131` não mudaram.
+- Mix: `/opt/cursor/artifacts/demo-mix-drums.mp3`, 1:28,6 (88,583 s), 320 kbps, 3545325 bytes. PCM 0,980. MP3 −4,5 dB, true peak a 192 kHz 0,883 (−1,08 dBTP), sem amostra acima de 1,0. NaN 0. Roteiro em `docs/testing/demo-mix-drums.md`. Os quatro primeiros segundos são a síntese antiga, fora da grade. Ninguém ouviu o ficheiro aqui.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4467924 bytes, SHA-256 `4c17fecc3dea8307c01be6cba30187b801ae36ec174ab6276d3ae82a18e99d70`, versão 0.14.1 (versionCode 18), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so`, `libsqlcipher.so` e os cinco FLAC. Falta o ícone, como nas versões anteriores. O APK 0.14.0 (4271249 bytes, `071b08d672a836e747b04931fc446f294ff79a9d14c1ea104cbebbb03e87e94b`) fica só neste diário.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 20064590 bytes, SHA-256 `6cfec4bb1367d3a296a90be06514442d4c36652acfb8c4de731a816349ce0f7a`.
+- HIL executado? não. Os passos 13 a 24 continuam por executar.
+- Busca por voz (A053) e quatro decks (A054) continuam por fazer.
+
 ### T020 — configuração
 - Estado: PASS
 - Perfil `runtime`, tela de referência 1024x600, `allow_write` recusado
@@ -380,7 +395,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 ### T078 — roteiro final
 - Estado: documento PASS; execução BLOCKED_HARDWARE
 - Arquivo: `docs/hil/roteiro-validacao-final.md`
-- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Em 0.12.1 os passos continuam os mesmos: a grade, o tom, a cor e a emenda do loop não são um gesto novo na controladora. Em 0.12.2 a análise de uma pasta sem export também não é um gesto na controladora. Em 0.13.0 os passos 22 a 24 cobrem slip, medidor de fase, MATCHING, SUGGEST, beat jump 64, frase, cues automáticos e auto gain. Em 0.13.1 o tom novo não é um gesto na controladora. Em 0.14.0 o DSP dos efeitos também não fecha passo de controladora. Os passos 13 a 24 continuam por executar
+- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Em 0.12.1 os passos continuam os mesmos: a grade, o tom, a cor e a emenda do loop não são um gesto novo na controladora. Em 0.12.2 a análise de uma pasta sem export também não é um gesto na controladora. Em 0.13.0 os passos 22 a 24 cobrem slip, medidor de fase, MATCHING, SUGGEST, beat jump 64, frase, cues automáticos e auto gain. Em 0.13.1 o tom novo não é um gesto na controladora. Em 0.14.0 o DSP dos efeitos também não fecha passo de controladora. Em 0.14.1 os one-shots e a grade do drum build também não fecham passo de controladora. Os passos 13 a 24 continuam por executar
 
 ## Template de registro
 
