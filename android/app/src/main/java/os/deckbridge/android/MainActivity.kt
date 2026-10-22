@@ -74,14 +74,9 @@ class MainActivity : ComponentActivity() {
 private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
     val context = LocalContext.current
     var page by remember {
-        mutableIntStateOf(
-            when {
-                play || screen == "decks" -> 2
-                screen == "biblioteca" -> 1
-                else -> 0
-            },
-        )
+        mutableIntStateOf(if (play || screen == "decks" || screen == "biblioteca") 2 else 0)
     }
+    var browsePulse by remember { mutableIntStateOf(if (screen == "biblioteca") 1 else 0) }
     var volume by remember { mutableStateOf<ReadableVolume?>(null) }
     var catalog by remember { mutableStateOf<RbCatalog?>(null) }
     val catalogHolder = remember { arrayOf<RbCatalog?>(null) }
@@ -89,12 +84,12 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
     var loading by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("Só leitura. Permissão persistente depois de autorizar o pendrive.") }
     var usbLabel by remember { mutableStateOf(removableVolumeLabel(context)) }
-    var selected by remember { mutableStateOf<Int?>(null) }
     var deckTracks by remember { mutableStateOf(listOf<RbTrack?>(null, null)) }
     var midiLines by remember { mutableStateOf(listOf<String>()) }
     val map = remember { MidiMap.loadResource() }
     val assembler = remember { MidiAssembler() }
     val tempo = remember { TempoAssembler() }
+    PerformanceHub.tempo = tempo
     val handler = remember { Handler(Looper.getMainLooper()) }
     val oneLibrary = remember { AndroidOneLibrary(context) }
 
@@ -125,7 +120,6 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
                 volume = next
                 catalog = loaded
                 loading = false
-                selected = loaded.playlists.firstOrNull { !it.folder }?.id
                 notice = if (loaded.error != null) {
                     "Falha ${loaded.error}. O app não gravou no volume."
                 } else if (next.simulated) {
@@ -200,7 +194,6 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
             }
             volume = loadedPair.first
             catalog = loadedPair.second
-            selected = loadedPair.second.playlists.firstOrNull { it.name == "Abertura" }?.id
             notice = "Pendrive simulado aberto para esta tela. SIMULAÇÃO."
         }
         if (injectMidi) {
@@ -213,15 +206,19 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
             0 -> DiagnosticPage(midiLines, null, onPage = { page = it }) {
                 describe(byteArrayOf(0x90.toByte(), 0x0B, 0x7F), true)
             }
-            1 -> LibraryPage(
+            else -> DeckPage(
                 catalog = catalog,
-                loading = loading,
-                notice = notice,
-                usbLabel = usbLabel,
-                selectedId = selected,
-                onSelect = { selected = it },
+                volume = volume,
+                deviceId = usbAudioDeviceId(context) ?: 0,
+                autoplay = play,
+                loaded = deckTracks,
+                onLoaded = { deck, track ->
+                    deckTracks = deckTracks.toMutableList().also { it[deck] = track }
+                },
+                usbLabel = usbLabel.ifBlank { if (catalog?.simulated == true) "USB simulado" else "" },
+                browsePulse = browsePulse,
                 onAuthorize = { uri ->
-                    if (uri == null) return@LibraryPage
+                    if (uri == null) return@DeckPage
                     runCatching { keepReadPermission(context, uri) }
                     openVolume(DocumentVolume(context, uri, "pendrive autorizado"))
                 },
@@ -232,27 +229,14 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
                         handler.post { openVolume(simulated) }
                     }.start()
                 },
-                onReloadPersisted = {
-                    val persisted = persistedRekordboxVolumes(context)
-                    if (persisted.isEmpty()) notice = "Nenhuma permissão guardada com export.pdb."
-                    else openVolume(persisted.first())
+                onPage = { next ->
+                    if (next == 1) {
+                        browsePulse += 1
+                        page = 2
+                    } else {
+                        page = next
+                    }
                 },
-                onLoadDeck = { track, deck ->
-                    deckTracks = deckTracks.toMutableList().also { it[deck] = track }
-                    page = 2
-                },
-                onPage = { page = it },
-            )
-            else -> DeckPage(
-                catalog = catalog,
-                volume = volume,
-                deviceId = usbAudioDeviceId(context) ?: 0,
-                autoplay = play,
-                loaded = deckTracks,
-                onLoaded = { deck, track ->
-                    deckTracks = deckTracks.toMutableList().also { it[deck] = track }
-                },
-                onPage = { page = it },
             )
         }
     }

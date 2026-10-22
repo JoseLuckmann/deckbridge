@@ -111,6 +111,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-21 | A015–A022 | parcial | `fa9b413` | parser, fixture, 8 testes JVM, 42 testes Python | pendrive real e escuta `BLOCKED_HARDWARE`; prints do emulador não saíram; OneLibrary não lida | dono autoriza o USB e manda o relatório |
 | 2026-10-21 | A023–A029 | parcial | `c28f677` | prints JVM, loop, estéreo, pitch 14 bits, exportExt, OneLibrary, MIDI virtual | escuta e pendrive real `BLOCKED_HARDWARE`; emulador A022 aberto | dono instala o APK e manda o relatório |
 | 2026-10-21 | A030–A031 | parcial | `edfe33b` | tema de palco, seis prints JVM, APK arm64 | escuta e pendrive real `BLOCKED_HARDWARE`; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
+| 2026-10-22 | A032–A034 | parcial | a preencher | player CDJ, browser por cima, zoom, grade, Beat FX, APK 0.6.0 | escuta e pendrive real `BLOCKED_HARDWARE`; efeito de áudio não existe; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
 
 ### Proposta Android
 - Estado: proposta, não aceita
@@ -154,6 +155,21 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Prints regenerados, mesmos nomes, em `/opt/cursor/artifacts/prints/`.
 - APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 3873001 bytes, SHA-256 `0f460bf848f4810e443034fc6a744aa3e04d49a7b1298898b063a08d34d24122`, versão 0.5.0-palco, só arm64-v8a, minify e shrink. Assinatura de debug.
 - APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 18370544 bytes, SHA-256 `7be1ebb38d19caefc58e5c231647fa6ee0f09c24a2275474136bb7bfc4cbb4c5`. Substitui o artefato da secção anterior.
+- HIL executado? não
+
+### Player CDJ e APK 0.6.0
+- Estado: interface refeita na JVM; escuta e pendrive real BLOCKED_HARDWARE
+- A tela abre nos dois decks. SOURCE e BROWSE abrem a biblioteca por cima. LOAD DECK 1 e LOAD DECK 2 voltam ao player.
+- Zoom de 2 compassos até a faixa inteira, compartilhado, com botões e gesto. Não há controle livre na DDJ-400; Beat esquerda/direita continuam no Beat FX.
+- A grade fica no tempo da faixa: batida, compasso e frase de 16. O playhead anda com o pitch; os traços não esticam sozinhos.
+- Beat FX mostra nome, fração, canal, ON e nível a partir do MIDI. Não há processamento de echo, reverb ou dos outros nomes.
+- KEY é só um badge. O mapa oficial não tem key lock.
+- O prato empurra o áudio por uma escala provisória de segundos. Não é medida da controladora.
+- As três cores da onda são um desenho sobre o PWAV curto e os beats. Não é FFT nem PWV3/PWV4/PWV5.
+- O quantize começa ligado na tela. Isso não é o estado lido da controladora.
+- Prints em `/opt/cursor/artifacts/prints/`: `player-2000x1200.png`, `player-1024x600.png`, `browse-categories.png`, `browse-tracks.png`, `zoom-in.png`, `zoom-out.png`, `beatfx.png`, `diagnostico.png`. Faixa curta: "SIMULAÇÃO · Renderização em JVM. Não é o tablet nem a DDJ-400."
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4005281 bytes, SHA-256 `0f0f1b7a049f2913eb72d0115c558501d801145ab9829e8b1288b32019b9e1a1`, versão 0.6.0, só arm64-v8a, minify e shrink. Assinatura de debug. Substitui o artefato 0.5.0-palco.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 18464300 bytes, SHA-256 `e48c685cafacf4a7a7ecf4e5f07bff6bbc4dd6cecec0d034ddc1ffe4835a420c`.
 - HIL executado? não
 
 ### T020 — configuração

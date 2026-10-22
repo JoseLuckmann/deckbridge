@@ -241,6 +241,18 @@ public:
         decks_[1].pfl = pflB;
     }
 
+    void seekSeconds(int deck, double seconds) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        placeSeconds(deck, seconds, false);
+    }
+
+    void nudge(int deck, double seconds) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
+        const double now = decks_[deck].position / decks_[deck].sampleRate;
+        placeSeconds(deck, now + seconds, true);
+    }
+
     float positionSeconds(int deck) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return 0.f;
@@ -315,6 +327,17 @@ public:
     }
 
 private:
+    void placeSeconds(int deck, double seconds, bool wrap) {
+        if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
+        Deck &target = decks_[deck];
+        double pos = seconds * target.sampleRate;
+        const double frames = static_cast<double>(target.left.size());
+        if (pos < 0.0) pos = 0.0;
+        if (frames > 1.0 && pos > frames - 1.0) pos = frames - 1.0;
+        target.position = pos;
+        if (wrap) target.wrapLoop();
+    }
+
     void closeLocked() {
         if (stream_) {
             stream_->requestStop();
@@ -453,4 +476,14 @@ Java_os_deckbridge_android_NativeEngine_nativeSetMix(
 extern "C" JNIEXPORT jfloat JNICALL
 Java_os_deckbridge_android_NativeEngine_nativePosition(JNIEnv *, jobject, jint deck) {
     return engine().positionSeconds(deck);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSeek(JNIEnv *, jobject, jint deck, jfloat seconds) {
+    engine().seekSeconds(deck, seconds);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeNudge(JNIEnv *, jobject, jint deck, jfloat seconds) {
+    engine().nudge(deck, seconds);
 }

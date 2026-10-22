@@ -6,7 +6,11 @@ data class PerformanceAction(
     val hotIndex: Int = -1,
     val slider: Double? = null,
 ) {
-    enum class Kind { PLAY, CUE, HOT_CUE, VOLUME, CROSSFADER, PITCH, JOG }
+    enum class Kind {
+        PLAY, CUE, HOT_CUE, VOLUME, CROSSFADER, PITCH, JOG,
+        BROWSE_MOVE, BROWSE_ENTER, BROWSE_BACK, LOAD,
+        BEAT_FX, FILTER, QUANTIZE, SYNC, MASTER,
+    }
 }
 
 fun masterGain(volume: Double, crossfader: Double, deckIsB: Boolean): Double {
@@ -82,6 +86,10 @@ class TempoAssembler {
 
     fun rangeOf(deck: Int): Double = if (deck in 0..1) range[deck] else DEFAULT_TEMPO_RANGE
 
+    fun setRange(deck: Int, value: Double) {
+        if (deck in 0..1) range[deck] = value
+    }
+
     fun interpret(hit: ControlHit, value: Int): PerformanceAction? {
         if (!hit.mapped) return null
         val deck = when (hit.group) {
@@ -113,7 +121,87 @@ class TempoAssembler {
 }
 
 fun interpretPerformance(hit: ControlHit, value: Int, tempo: TempoAssembler): PerformanceAction? {
-    return tempo.interpret(hit, value) ?: performanceAction(hit, value)
+    return tempo.interpret(hit, value) ?: performanceAction(hit, value) ?: surfaceAction(hit, value)
+}
+
+/**
+ * Browse, Beat FX, filtro e quantize. O sentido do encoder BROWSE não foi confirmado na controladora:
+ * 1..63 avança, 65..127 recua (127 = um passo). Isso é convenção de encoder relativo, não medida da DDJ-400.
+ */
+fun surfaceAction(hit: ControlHit, value: Int): PerformanceAction? {
+    if (!hit.mapped) return null
+    if (hit.key == "MoveVertical") {
+        val steps = when {
+            value == 0 -> 0
+            value < 64 -> value
+            else -> value - 128
+        }
+        if (steps == 0) return null
+        return PerformanceAction(-1, PerformanceAction.Kind.BROWSE_MOVE, slider = steps.toDouble())
+    }
+    if (value <= 0 && hit.key != "PioneerDDJ400.beatFxLevelDepthRotate" && hit.key != "super1") {
+        return null
+    }
+    val deck = when {
+        hit.group.contains("Channel2") -> 1
+        hit.group.contains("Channel1") -> 0
+        else -> -1
+    }
+    return when (hit.key) {
+        "MoveFocusForward" -> PerformanceAction(-1, PerformanceAction.Kind.BROWSE_ENTER)
+        "MoveFocusBackward" -> PerformanceAction(-1, PerformanceAction.Kind.BROWSE_BACK)
+        "LoadSelectedTrack" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.LOAD) else null
+        "PioneerDDJ400.beatFxSelectPressed" -> PerformanceAction(-1, PerformanceAction.Kind.BEAT_FX, hotIndex = 1)
+        "PioneerDDJ400.beatFxSelectShiftPressed" -> PerformanceAction(-1, PerformanceAction.Kind.BEAT_FX, hotIndex = 2)
+        "PioneerDDJ400.beatFxLeftPressed" -> PerformanceAction(-1, PerformanceAction.Kind.BEAT_FX, hotIndex = 3)
+        "PioneerDDJ400.beatFxRightPressed" -> PerformanceAction(-1, PerformanceAction.Kind.BEAT_FX, hotIndex = 4)
+        "PioneerDDJ400.beatFxOnOffPressed" -> PerformanceAction(-1, PerformanceAction.Kind.BEAT_FX, hotIndex = 5)
+        "PioneerDDJ400.beatFxOnOffShiftPressed" -> PerformanceAction(-1, PerformanceAction.Kind.BEAT_FX, hotIndex = 6)
+        "PioneerDDJ400.beatFxChannel" -> {
+            val channel = when {
+                hit.description.contains("MASTER") -> 2
+                hit.description.contains("CH2") || hit.description.contains("DECK 2") -> 1
+                else -> 0
+            }
+            PerformanceAction(channel, PerformanceAction.Kind.BEAT_FX, hotIndex = 7)
+        }
+        "PioneerDDJ400.beatFxLevelDepthRotate" -> {
+            PerformanceAction(-1, PerformanceAction.Kind.BEAT_FX, hotIndex = 8, slider = value.coerceIn(0, 127).toDouble())
+        }
+        "super1" -> {
+            if (hit.midino != 23 && hit.midino != 24) null
+            else PerformanceAction(deck, PerformanceAction.Kind.FILTER, slider = value.coerceIn(0, 127) / 127.0)
+        }
+        "PioneerDDJ400.toggleQuantize" -> PerformanceAction(deck, PerformanceAction.Kind.QUANTIZE)
+        "PioneerDDJ400.syncPressed" -> PerformanceAction(deck, PerformanceAction.Kind.SYNC)
+        "PioneerDDJ400.syncLongPressed" -> PerformanceAction(deck, PerformanceAction.Kind.MASTER)
+        else -> null
+    }
+}
+
+/** Posição 0 = −faixa, 0,5 = centro, 1 = +faixa, pela mesma conta de 14 bits do MIDI. */
+fun pitchFromFader(position: Double, range: Double = DEFAULT_TEMPO_RANGE): Double {
+    val full = ((1.0 - position.coerceIn(0.0, 1.0)) * 16383.0).let { kotlin.math.round(it).toInt() }.coerceIn(0, 16383)
+    return pitchFromTempo14((full shr 7) and 0x7F, full and 0x7F, range)
+}
+
+fun faderFromPitch(pitch: Double, range: Double = DEFAULT_TEMPO_RANGE): Double {
+    if (range <= 0.0) return 0.5
+    val rate = ((pitch - 1.0) / range).coerceIn(-1.0, 1.0)
+    val full = (8192.0 * (1.0 - rate)).coerceIn(0.0, 16383.0)
+    return (1.0 - full / 16383.0).coerceIn(0.0, 1.0)
+}
+
+fun tempoRangeLabel(range: Double): String = when {
+    kotlin.math.abs(range - 0.06) < 1e-9 -> "±6"
+    kotlin.math.abs(range - 0.10) < 1e-9 -> "±10"
+    kotlin.math.abs(range - 0.16) < 1e-9 -> "±16"
+    kotlin.math.abs(range - 0.25) < 1e-9 -> "WIDE"
+    else -> "±${kotlin.math.round(range * 100).toInt()}"
+}
+
+fun jogSeconds(bend: Double): Double {
+    return if (kotlin.math.abs(bend) >= 20.0) bend / 800.0 else bend / 160.0
 }
 
 /** Avança o playhead. Se o loop tem fim maior que o começo, o trecho recomeça. */

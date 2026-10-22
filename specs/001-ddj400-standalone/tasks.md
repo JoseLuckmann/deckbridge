@@ -150,6 +150,9 @@ OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Ras
 - [x] **A029** Sequências MIDI virtuais de jog, volume, crossfader, hot cue e pitch, com bytes do mapa oficial. **Estado:** `PASS` dos testes JVM. O jog não move o áudio. Não é a DDJ-400.
 - [x] **A030** Tema de palco do `docs/ui-spec.md`: contraste AA, BPM grande, dois decks com mixer ao centro, waveform maior, hot cues coloridos, navegação e faixa de simulação. **Estado:** `PASS` de renderização JVM nos seis prints. Não é o tablet.
 - [x] **A031** APK só `arm64-v8a`, com minify e shrinkResources. **Estado:** artefato gerado. Não instalado no tablet.
+- [x] **A032** Player no espírito de duas telas de CDJ, desenho próprio: onda com zoom, grade de beats, visão geral, hot cues A–H, fase, badges. **Estado:** `PASS` de renderização JVM. Não é o tablet. Sem logo nem asset de terceiro.
+- [x] **A033** Biblioteca abre por SOURCE/BROWSE e fecha ao carregar. Encoder BROWSE e LOAD da DDJ-400 navegam esse browser. **Estado:** `PASS` do teste com bytes do mapa. O sentido do encoder não foi medido na controladora.
+- [x] **A034** Indicador de Beat FX (nome, fração, canal, ON, nível) e filtro por deck, a partir do MIDI. Zoom na tela. APK 0.6.0 arm64. **Estado:** o indicador não processa o efeito. Escuta `BLOCKED_HARDWARE`. Não instalado no tablet.
 
 ## Traçabilidade requisito -> tarefas -> testes/gates
 
