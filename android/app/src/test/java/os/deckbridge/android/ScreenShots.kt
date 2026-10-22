@@ -82,45 +82,21 @@ class ScreenShotsTablet {
     }
 
     @Test
-    fun browseCategories() {
+    fun browseList() {
         val catalog = simulatedCatalog()
-        capture("$PRINTS/browse-categories.png") { activity ->
-            activity.setContentView(player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), BrowsePlace()))
-        }
-    }
-
-    @Test
-    fun browseTracks() {
-        val catalog = simulatedCatalog()
-        val playlist = catalog.playlists.first { it.name == "Abertura" }.id
-        val place = BrowsePlace(inList = true, playlistId = playlist, index = 0)
-        capture("$PRINTS/browse-tracks.png") { activity ->
+        val playlist = catalog.playlists.first { it.name == "Todas" }.id
+        val place = BrowsePlace(inList = true, playlistId = playlist, index = 4)
+        capture("$PRINTS/browse-list.png") { activity ->
             activity.setContentView(player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), place))
         }
     }
 
     @Test
-    fun zoomIn() {
+    fun beatFxZoom() {
         val catalog = simulatedCatalog()
-        capture("$PRINTS/zoom-in.png") { activity ->
-            activity.setContentView(player(activity, catalog, WaveZoom.BARS_2, BeatFxState()))
-        }
-    }
-
-    @Test
-    fun zoomOut() {
-        val catalog = simulatedCatalog()
-        capture("$PRINTS/zoom-out.png") { activity ->
-            activity.setContentView(player(activity, catalog, WaveZoom.TRACK, BeatFxState()))
-        }
-    }
-
-    @Test
-    fun beatFx() {
-        val catalog = simulatedCatalog()
-        val fx = BeatFxState(effect = 0, fraction = 5, channel = 0, on = true, level = 96)
-        capture("$PRINTS/beatfx.png") { activity ->
-            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, fx))
+        val fx = BeatFxState(effect = 1, fraction = 5, channel = 0, on = true, level = 96)
+        capture("$PRINTS/beatfx-zoom.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_2, fx, posA = 14.1f))
         }
     }
 }
@@ -138,25 +114,30 @@ private fun player(
     zoom: WaveZoom,
     fx: BeatFxState,
     browse: BrowsePlace? = null,
+    posA: Float = 9.2f,
+    posB: Float = 4.4f,
 ): ComposeView {
-    val tracks = catalog.tracks
+    val left = catalog.tracks.first { it.title == "Night Bus" }
+    val right = catalog.tracks.first { it.title == "Glasshouse" }
     val faces = listOf(
-        DeckFace(playing = true, position = 1.5f, pitch = 1f, fader = 0.5f, filter = 96),
+        DeckFace(playing = true, position = posA, pitch = 1f, fader = 0.5f, onAir = true, remain = true),
         DeckFace(
             playing = true,
-            position = 0.6f,
-            pitch = 1.06f,
+            position = posB,
+            pitch = 1.04f,
             range = 0.16,
-            fader = faderFromPitch(1.06, 0.16).toFloat(),
+            fader = faderFromPitch(1.04, 0.16).toFloat(),
             remain = true,
             sync = true,
+            onAir = false,
         ),
     )
     return ComposeView(activity).apply {
         setContent {
             PlayerScreen(
                 catalog = catalog,
-                tracks = listOf(tracks[0], tracks[1]),
+                tracks = listOf(left, right),
+                clock = "21:14",
                 faces = faces,
                 master = 0,
                 quantize = true,

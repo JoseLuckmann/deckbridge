@@ -253,6 +253,21 @@ public:
         placeSeconds(deck, now + seconds, true);
     }
 
+    void setBeatFx(int effect, bool on, int level, int channel, float bpm, float beats) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        fxEffect_ = effect;
+        fxOn_ = on;
+        fxChannel_ = channel;
+        fxWet_ = std::clamp(level / 127.f, 0.f, 1.f);
+        const double beatSec = bpm > 1.f ? 60.0 / static_cast<double>(bpm) : 0.5;
+        const double delaySec = beatSec * static_cast<double>(beats <= 0.f ? 1.f : beats);
+        fxDelaySamples_ = std::clamp(static_cast<int>(delaySec * 48000.0), 1, kDelayCap - 1);
+        if (delayL_.empty()) {
+            delayL_.assign(kDelayCap, 0.f);
+            delayR_.assign(kDelayCap, 0.f);
+        }
+    }
+
     float positionSeconds(int deck) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return 0.f;
@@ -273,8 +288,22 @@ public:
                 float al = 0.f, ar = 0.f, bl = 0.f, br = 0.f;
                 decks_[0].read(rate, al, ar);
                 decks_[1].read(rate, bl, br);
-                const float masterL = al * (1.f - cross_) * decks_[0].volume + bl * cross_ * decks_[1].volume;
-                const float masterR = ar * (1.f - cross_) * decks_[0].volume + br * cross_ * decks_[1].volume;
+                if (fxOn_) {
+                    if (fxChannel_ == 0) {
+                        al = fxSample(al, delayL_);
+                        ar = fxSample(ar, delayR_);
+                    } else if (fxChannel_ == 1) {
+                        bl = fxSample(bl, delayL_);
+                        br = fxSample(br, delayR_);
+                    }
+                }
+                float masterL = al * (1.f - cross_) * decks_[0].volume + bl * cross_ * decks_[1].volume;
+                float masterR = ar * (1.f - cross_) * decks_[0].volume + br * cross_ * decks_[1].volume;
+                if (fxOn_ && fxChannel_ == 2) {
+                    masterL = fxSample(masterL, delayL_);
+                    masterR = fxSample(masterR, delayR_);
+                }
+                if (fxOn_) advanceFx();
                 float phoneL = 0.f;
                 float phoneR = 0.f;
                 if (phonesOpen) {
@@ -327,6 +356,29 @@ public:
     }
 
 private:
+    float fxSample(float input, std::vector<float> &buffer) {
+        if (buffer.empty() || fxEffect_ > 2) return input;
+        const int size = static_cast<int>(buffer.size());
+        int delay = fxDelaySamples_;
+        float feedback = fxEffect_ == 0 ? 0.48f : 0.08f;
+        if (fxEffect_ == 2) {
+            delay = 180 + static_cast<int>(140.f * std::sin(flangerPhase_));
+            feedback = 0.35f;
+        }
+        int read = delayWrite_ - delay;
+        while (read < 0) read += size;
+        const float wet = buffer[static_cast<size_t>(read)];
+        buffer[static_cast<size_t>(delayWrite_)] = input + wet * feedback * fxWet_;
+        return input * (1.f - fxWet_) + wet * fxWet_;
+    }
+
+    void advanceFx() {
+        if (delayL_.empty()) return;
+        delayWrite_ = (delayWrite_ + 1) % static_cast<int>(delayL_.size());
+        flangerPhase_ += 0.0012f;
+        if (flangerPhase_ > 6.2831853f) flangerPhase_ -= 6.2831853f;
+    }
+
     void placeSeconds(int deck, double seconds, bool wrap) {
         if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
         Deck &target = decks_[deck];
@@ -395,8 +447,18 @@ private:
     std::atomic<int> openedChannels_{0};
     std::atomic<bool> opened_{false};
     std::atomic<bool> phonesAudible_{false};
+    static constexpr int kDelayCap = 96000;
     Deck decks_[2];
     float cross_ = 0.5f;
+    std::vector<float> delayL_;
+    std::vector<float> delayR_;
+    int delayWrite_ = 0;
+    int fxDelaySamples_ = 12000;
+    int fxEffect_ = 0;
+    int fxChannel_ = 2;
+    float fxWet_ = 0.4f;
+    float flangerPhase_ = 0.f;
+    bool fxOn_ = false;
     double phase_[4]{};
     int sampleRate_ = 0;
     bool phonesSent_ = false;
@@ -486,4 +548,10 @@ Java_os_deckbridge_android_NativeEngine_nativeSeek(JNIEnv *, jobject, jint deck,
 extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeNudge(JNIEnv *, jobject, jint deck, jfloat seconds) {
     engine().nudge(deck, seconds);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetBeatFx(
+        JNIEnv *, jobject, jint effect, jboolean on, jint level, jint channel, jfloat bpm, jfloat beats) {
+    engine().setBeatFx(effect, on == JNI_TRUE, level, channel, bpm, beats);
 }

@@ -14,6 +14,7 @@ data class AnlzFile(
     val beats: List<AnlzBeat>,
     val cues: List<AnlzCue>,
     val waveform: ByteArray,
+    val bands: WaveBands? = null,
 )
 
 fun parseAnlz(bytes: ByteArray): AnlzFile {
@@ -25,6 +26,7 @@ fun parseAnlz(bytes: ByteArray): AnlzFile {
     val beats = mutableListOf<AnlzBeat>()
     val cues = mutableListOf<AnlzCue>()
     var waveform = ByteArray(0)
+    var bands: WaveBands? = null
     var cursor = header
     while (cursor + 12 <= bytes.size) {
         val tag = bytes.copyOfRange(cursor, cursor + 4).toString(Charsets.US_ASCII)
@@ -37,10 +39,11 @@ fun parseAnlz(bytes: ByteArray): AnlzFile {
             "PCOB" -> cues += readCues(bytes, body, bodyEnd)
             "PCO2" -> cues += readCues2(bytes, body, bodyEnd)
             "PWAV", "PWV2" -> waveform = readWave(bytes, body, bodyEnd)
+            "PWB3" -> bands = readBands(bytes, body, bodyEnd)
         }
         cursor += lenTag
     }
-    return AnlzFile(beats, cues, waveform)
+    return AnlzFile(beats, cues, waveform, bands)
 }
 
 private fun readBeats(bytes: ByteArray, at: Int, end: Int): List<AnlzBeat> {
@@ -128,6 +131,17 @@ private fun cueFrom(hot: Int, type: Int, timeMs: Int, loopMs: Int, comment: Stri
     return AnlzCue(index, timeMs, loop, comment, color)
 }
 
+private fun readBands(bytes: ByteArray, at: Int, end: Int): WaveBands? {
+    if (at + 4 > end) return null
+    val count = bytes.u32be(at).toInt()
+    val start = at + 4
+    if (count <= 0 || count > 4000 || start + count * 3 > end) return null
+    val low = bytes.copyOfRange(start, start + count)
+    val mid = bytes.copyOfRange(start + count, start + count * 2)
+    val high = bytes.copyOfRange(start + count * 2, start + count * 3)
+    return WaveBands(low, mid, high)
+}
+
 private fun readWave(bytes: ByteArray, at: Int, end: Int): ByteArray {
     if (at + 8 > end) return ByteArray(0)
     val len = bytes.u32be(at).toInt()
@@ -141,5 +155,6 @@ fun mergeAnalysis(dat: AnlzFile?, ext: AnlzFile?): AnlzFile {
     val extCues = ext?.cues.orEmpty()
     val cues = if (extCues.isNotEmpty()) extCues else dat?.cues.orEmpty()
     val wave = dat?.waveform?.takeIf { it.isNotEmpty() } ?: ext?.waveform ?: ByteArray(0)
-    return AnlzFile(beats, cues, wave)
+    val bands = dat?.bands ?: ext?.bands
+    return AnlzFile(beats, cues, wave, bands)
 }

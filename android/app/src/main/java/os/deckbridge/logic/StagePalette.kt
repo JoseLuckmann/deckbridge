@@ -6,12 +6,15 @@ import kotlin.math.pow
 
 /** Cores do palco. Texto não decorativo fica em contraste WCAG AA (4,5:1) sobre o fundo em que aparece. */
 object StagePalette {
-    val bg = 0xFF0D0D0F.toInt()
-    val panel = 0xFF1A1B1F.toInt()
-    val panelRaised = 0xFF2A2C33.toInt()
-    val ink = 0xFFF5F6F8.toInt()
+    val bg = 0xFF000000.toInt()
+    val panel = 0xFF0C0C0E.toInt()
+    val panelRaised = 0xFF16161A.toInt()
+    val ink = 0xFFF4F7FB.toInt()
     val inkMuted = 0xFFC8CDD6.toInt()
-    val line = 0xFF3C404A.toInt()
+    val line = 0xFF3A3D44.toInt()
+    val accentBlue = 0xFF8EBEFF.toInt()
+    val accentOrange = 0xFFFF9A2E.toInt()
+    val onAir = 0xFFD0121A.toInt()
     val playBg = 0xFFB6FFC8.toInt()
     val playInk = 0xFF06210E.toInt()
     val pauseBg = 0xFF2C3038.toInt()

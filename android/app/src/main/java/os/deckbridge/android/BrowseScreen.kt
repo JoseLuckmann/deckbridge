@@ -1,14 +1,17 @@
 package os.deckbridge.android
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,8 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,6 +39,11 @@ import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.StagePalette
 import os.deckbridge.logic.browseRows
+import os.deckbridge.logic.keysCompatible
+
+private val selectedRow = Color(0xFF123E86)
+private val keyFill = Color(0xFF12381C)
+private val keyInk = Color(0xFFB6FFC8)
 
 @Composable
 fun BrowseScreen(
@@ -41,6 +52,7 @@ fun BrowseScreen(
     historyIds: List<Int>,
     usbLabel: String,
     jvmBanner: String?,
+    focusKey: String = "",
     onClose: () -> Unit,
     onMove: (Int) -> Unit,
     onEnter: () -> Unit,
@@ -55,74 +67,83 @@ fun BrowseScreen(
     val rows = browseRows(catalog, place, historyIds)
     val safeIndex = if (rows.isEmpty()) 0 else place.index.coerceIn(0, rows.lastIndex)
     val selected = rows.getOrNull(safeIndex)
-    BoxFill {
-        Column(Modifier.fillMaxSize().padding(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                TextInk("SOURCE", fontSize = 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
-                TextInk(usbLabel.ifBlank { "USB" }, fontSize = 16.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
-                Mini("BACK", onBack)
-                Mini("FECHAR", onClose)
-                Mini("LOAD DECK 1", { selected?.track?.let { onLoad(it, 0) } })
-                Mini("LOAD DECK 2", { selected?.track?.let { onLoad(it, 1) } })
-            }
+    Column(Modifier.fillMaxSize().background(Color(StagePalette.bg))) {
+        Row(
+            Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            TextInk("SOURCE", fontSize = 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentBlue))
+            TextInk(usbLabel.ifBlank { "USB1" }, fontSize = 13.sp, weight = FontWeight.SemiBold, maxLines = 1)
             if (!jvmBanner.isNullOrBlank()) {
-                TextInk("SIMULAÇÃO · $jvmBanner", fontSize = 11.sp, color = Color(StagePalette.simInk), maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+                TextInk("SIMULAÇÃO · Renderização em JVM", fontSize = 10.sp, color = Color(StagePalette.simInk), maxLines = 1, modifier = Modifier.weight(1f))
+            } else {
+                Box(Modifier.weight(1f))
             }
-            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Mini("AUTORIZAR", onAuthorize)
-                Mini("SIMULADO", onSimulate)
-                Mini("HISTORY", { onCategory(BrowseCategory.HISTORY) })
-                Mini("▲", { onMove(-1) })
-                Mini("▼", { onMove(1) })
-                Mini("ABRIR", onEnter)
-            }
-            Row(Modifier.fillMaxWidth().weight(1f).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Column(
-                    Modifier.width(168.dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(Color(StagePalette.panel)).verticalScroll(rememberScrollState()).padding(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    TextInk("CATEGORIA", fontSize = 10.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
-                    BrowseCategory.entries.forEach { category ->
-                        val highlighted = if (place.inList) place.category == category else BrowseCategory.entries.getOrNull(place.index) == category
-                        Mini(category.label, { onCategory(category) }, selected = highlighted, fill = true)
+            BrowseChip("BACK", onBack)
+            BrowseChip("LOAD 1") { selected?.track?.let { onLoad(it, 0) } }
+            BrowseChip("LOAD 2") { selected?.track?.let { onLoad(it, 1) } }
+            BrowseChip("▲") { onMove(-1) }
+            BrowseChip("▼") { onMove(1) }
+            BrowseChip("ABRIR", onEnter)
+            BrowseChip("USB") { onSimulate() }
+            BrowseChip("FECHAR", onClose)
+        }
+        if (place.category == BrowseCategory.SEARCH && place.inList) {
+            BasicTextField(
+                value = place.query,
+                onValueChange = onQuery,
+                textStyle = TextStyle(color = Color(StagePalette.ink), fontSize = 14.sp),
+                cursorBrush = SolidColor(Color(StagePalette.accentBlue)),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).border(1.dp, Color(StagePalette.line)).padding(horizontal = 8.dp, vertical = 6.dp),
+                decorationBox = { inner ->
+                    if (place.query.isEmpty()) TextInk("Título ou artista", color = Color(StagePalette.inkMuted), fontSize = 13.sp)
+                    inner()
+                },
+            )
+        }
+        Row(Modifier.fillMaxWidth().weight(1f)) {
+            Column(
+                Modifier.width(72.dp).fillMaxHeight().border(1.dp, Color(StagePalette.line)).verticalScroll(rememberScrollState()).padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                BrowseCategory.entries.forEach { category ->
+                    val on = place.category == category
+                    Column(
+                        Modifier.fillMaxWidth().clickable { onCategory(category) }.padding(vertical = 5.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        CategoryGlyph(category, on)
+                        TextInk(shortLabel(category), color = if (on) Color(StagePalette.accentBlue) else Color(StagePalette.inkMuted), fontSize = 8.sp, weight = FontWeight.Bold, maxLines = 1)
+                        if (on) Box(Modifier.padding(top = 2.dp).width(16.dp).height(2.dp).background(Color(StagePalette.accentBlue)))
                     }
                 }
-                Column(
-                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(Color(StagePalette.panel)).padding(8.dp),
+            }
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                Row(
+                    Modifier.fillMaxWidth().height(22.dp).border(1.dp, Color(StagePalette.line)).padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (place.category == BrowseCategory.SEARCH && place.inList) {
-                        BasicTextField(
-                            value = place.query,
-                            onValueChange = onQuery,
-                            textStyle = TextStyle(color = Color(StagePalette.ink), fontSize = 16.sp),
-                            cursorBrush = SolidColor(Color(StagePalette.ink)),
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(Color(StagePalette.bg)).padding(8.dp),
-                            decorationBox = { inner ->
-                                if (place.query.isEmpty()) TextInk("Buscar título ou artista", color = Color(StagePalette.inkMuted), fontSize = 14.sp)
-                                inner()
-                            },
-                        )
-                    }
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        TextInk("FAIXA", Modifier.weight(1f), fontSize = 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
-                        TextInk("BPM", Modifier.width(64.dp), fontSize = 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
-                        TextInk("TOM", Modifier.width(48.dp), fontSize = 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
-                    }
-                    if (rows.isEmpty()) {
-                        TextInk(
-                            if (place.category == BrowseCategory.HISTORY) "Sem histórico nesta sessão." else "Lista vazia.",
-                            fontSize = 16.sp,
-                            modifier = Modifier.padding(top = 12.dp),
-                        )
-                    }
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                        rows.forEachIndexed { index, row ->
-                            BrowseLine(row, index == safeIndex) { onPick(index) }
-                        }
+                    TextInk("#", Modifier.width(36.dp), fontSize = 10.sp, color = Color(StagePalette.inkMuted), weight = FontWeight.Bold)
+                    TextInk("TITLE", Modifier.weight(1f), fontSize = 10.sp, color = Color(StagePalette.inkMuted), weight = FontWeight.Bold)
+                    TextInk("BPM", Modifier.width(64.dp), fontSize = 10.sp, color = Color(StagePalette.inkMuted), weight = FontWeight.Bold)
+                    TextInk("KEY", Modifier.width(64.dp), fontSize = 10.sp, color = Color(StagePalette.inkMuted), weight = FontWeight.Bold)
+                }
+                if (rows.isEmpty()) {
+                    TextInk(
+                        if (place.category == BrowseCategory.HISTORY) "Sem histórico nesta sessão." else "Lista vazia.",
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    rows.forEachIndexed { index, row ->
+                        BrowseLine(row, index, index == safeIndex, catalog, focusKey) { onPick(index) }
                     }
                 }
-                if (selected?.track != null) {
-                    TrackInfo(selected.track, catalog, Modifier.width(240.dp).fillMaxHeight())
+                Row(Modifier.fillMaxWidth().height(22.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TextInk("${rows.size} itens", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.weight(1f))
+                    TextInk("AUTORIZAR", fontSize = 10.sp, color = Color(StagePalette.accentBlue), weight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onAuthorize))
                 }
             }
         }
@@ -130,64 +151,103 @@ fun BrowseScreen(
 }
 
 @Composable
-private fun BoxFill(content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxSize().background(Color(StagePalette.bg))) { content() }
-}
-
-@Composable
-private fun BrowseLine(row: BrowseRow, selected: Boolean, onClick: () -> Unit) {
-    val fill = if (selected) Color(StagePalette.navSelected) else Color.Transparent
-    val ink = if (selected) Color(StagePalette.navSelectedInk) else Color(StagePalette.ink)
-    val muted = if (selected) Color(StagePalette.navSelectedInk) else Color(StagePalette.inkMuted)
+private fun BrowseLine(
+    row: BrowseRow,
+    index: Int,
+    selected: Boolean,
+    catalog: RbCatalog,
+    focusKey: String,
+    onClick: () -> Unit,
+) {
+    val fill = if (selected) selectedRow else Color.Transparent
+    val ink = Color.White
+    val muted = if (selected) Color(0xFFD5DDEA) else Color(StagePalette.inkMuted)
+    val compatible = row.track != null && keysCompatible(focusKey, row.keyName)
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(4.dp)).background(fill).clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().height(40.dp).background(fill).clickable(onClick = onClick).padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        TextInk((index + 1).toString(), Modifier.width(36.dp), color = muted, fontSize = 12.sp, mono = true, maxLines = 1)
         if (row.track != null) {
-            val color = Color(0xFF000000.toInt() or (StagePalette.pads[kotlin.math.abs(row.track.id) % StagePalette.pads.size] and 0xFFFFFF))
-            Column(Modifier.size(28.dp).clip(RoundedCornerShape(3.dp)).background(color)) {}
+            MiniWave(catalog.analyses[row.track.id], Modifier.width(78.dp).height(28.dp).padding(end = 8.dp))
+        } else {
+            Box(Modifier.width(78.dp).height(28.dp), contentAlignment = Alignment.Center) {
+                TextInk(if (row.folder) "▸" else "·", color = Color(StagePalette.accentBlue), fontSize = 14.sp)
+            }
         }
-        Column(Modifier.weight(1f).padding(start = 8.dp)) {
-            TextInk(row.title, color = ink, fontSize = 16.sp, weight = FontWeight.SemiBold, maxLines = 1)
-            if (row.artist.isNotBlank()) TextInk(row.artist, color = muted, fontSize = 12.sp, maxLines = 1)
+        Column(Modifier.weight(1f).padding(end = 8.dp)) {
+            TextInk(row.title, color = ink, fontSize = 13.sp, weight = FontWeight.SemiBold, maxLines = 1)
+            if (row.artist.isNotBlank()) TextInk(row.artist, color = muted, fontSize = 10.sp, maxLines = 1)
         }
-        TextInk(row.bpm, Modifier.width(64.dp), color = ink, fontSize = 16.sp, weight = FontWeight.Bold, mono = true)
-        TextInk(row.keyName, Modifier.width(48.dp), color = ink, fontSize = 16.sp, weight = FontWeight.Bold, mono = true)
-    }
-}
-
-@Composable
-private fun TrackInfo(track: RbTrack, catalog: RbCatalog, modifier: Modifier) {
-    val tags = catalog.trackTags[track.id].orEmpty()
-    Column(modifier.clip(RoundedCornerShape(8.dp)).background(Color(StagePalette.panel)).padding(10.dp)) {
-        TextInk("INFO", fontSize = 10.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
-        TextInk(track.title, fontSize = 18.sp, weight = FontWeight.SemiBold, maxLines = 2, modifier = Modifier.padding(top = 6.dp))
-        TextInk(track.artist, fontSize = 14.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
-        TextInk("${"%.1f".format(track.bpm)} BPM", fontSize = 20.sp, weight = FontWeight.Bold, mono = true, modifier = Modifier.padding(top = 8.dp))
-        TextInk(track.keyName, fontSize = 18.sp, weight = FontWeight.Bold, mono = true)
-        TextInk(track.album.ifBlank { "Sem álbum" }, fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 1, modifier = Modifier.padding(top = 6.dp))
-        if (tags.isNotEmpty()) {
-            TextInk(tags.joinToString(" · ") { it.name }, fontSize = 13.sp, maxLines = 2, modifier = Modifier.padding(top = 6.dp))
+        TextInk(row.bpm, Modifier.width(64.dp), color = ink, fontSize = 13.sp, weight = FontWeight.Medium, mono = true, maxLines = 1)
+        if (row.track != null && row.keyName.isNotBlank() && row.keyName != "—") {
+            Box(
+                Modifier.width(52.dp).height(20.dp).clip(RoundedCornerShape(2.dp)).background(if (compatible) keyFill else Color.Transparent),
+                contentAlignment = Alignment.Center,
+            ) {
+                TextInk(row.keyName, color = if (compatible) keyInk else ink, fontSize = 12.sp, weight = FontWeight.Bold, maxLines = 1)
+            }
+        } else {
+            Box(Modifier.width(52.dp))
         }
     }
 }
 
 @Composable
-private fun Mini(label: String, onClick: () -> Unit, selected: Boolean = false, fill: Boolean = false) {
-    val background = if (selected) Color(StagePalette.navSelected) else Color(StagePalette.panelRaised)
-    val ink = if (selected) Color(StagePalette.navSelectedInk) else Color(StagePalette.ink)
-    TextInk(
-        label,
-        color = ink,
-        fontSize = 13.sp,
-        weight = FontWeight.SemiBold,
-        maxLines = 1,
-        modifier = Modifier
-            .then(if (fill) Modifier.fillMaxWidth() else Modifier)
-            .clip(RoundedCornerShape(4.dp))
-            .background(background)
-            .border(1.dp, Color(StagePalette.line), RoundedCornerShape(4.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-    )
+private fun CategoryGlyph(category: BrowseCategory, on: Boolean) {
+    val color = if (on) Color(StagePalette.accentBlue) else Color(StagePalette.ink)
+    Canvas(Modifier.size(18.dp)) {
+        val s = size.minDimension
+        when (category) {
+            BrowseCategory.PLAYLIST -> {
+                repeat(3) { line ->
+                    val y = s * (0.22f + line * 0.26f)
+                    drawLine(color, Offset(s * 0.15f, y), Offset(s * 0.85f, y), 1.4f)
+                }
+            }
+            BrowseCategory.TRACK -> {
+                drawCircle(color, s * 0.16f, Offset(s * 0.38f, s * 0.62f), style = Stroke(1.4f))
+                drawLine(color, Offset(s * 0.54f, s * 0.62f), Offset(s * 0.54f, s * 0.18f), 1.4f)
+                drawLine(color, Offset(s * 0.54f, s * 0.18f), Offset(s * 0.78f, s * 0.30f), 1.4f)
+            }
+            BrowseCategory.ARTIST -> {
+                drawCircle(color, s * 0.16f, Offset(s * 0.5f, s * 0.32f), style = Stroke(1.3f))
+                drawArc(color, 200f, 140f, false, Offset(s * 0.18f, s * 0.48f), Size(s * 0.64f, s * 0.46f), style = Stroke(1.3f))
+            }
+            BrowseCategory.ALBUM -> drawCircle(color, s * 0.32f, Offset(s * 0.5f, s * 0.5f), style = Stroke(1.4f))
+            BrowseCategory.BPM -> drawCircle(color, s * 0.28f, Offset(s * 0.5f, s * 0.5f), style = Stroke(1.4f))
+            BrowseCategory.KEY -> {
+                drawCircle(color, s * 0.16f, Offset(s * 0.38f, s * 0.62f), style = Stroke(1.3f))
+                drawLine(color, Offset(s * 0.5f, s * 0.5f), Offset(s * 0.82f, s * 0.2f), 1.4f)
+            }
+            BrowseCategory.TAG -> drawRoundRect(color, Offset(s * 0.18f, s * 0.28f), Size(s * 0.64f, s * 0.42f), style = Stroke(1.3f))
+            BrowseCategory.HISTORY -> drawCircle(color, s * 0.32f, Offset(s * 0.5f, s * 0.5f), style = Stroke(1.4f))
+            BrowseCategory.SEARCH -> {
+                drawCircle(color, s * 0.24f, Offset(s * 0.42f, s * 0.42f), style = Stroke(1.5f))
+                drawLine(color, Offset(s * 0.6f, s * 0.6f), Offset(s * 0.82f, s * 0.82f), 1.6f)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowseChip(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier.height(22.dp).clip(RoundedCornerShape(4.dp)).background(Color(StagePalette.panelRaised)).border(1.dp, Color(StagePalette.line), RoundedCornerShape(4.dp)).clickable(onClick = onClick).padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        TextInk(label, color = Color(StagePalette.accentBlue), fontSize = 10.sp, weight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+private fun shortLabel(category: BrowseCategory): String = when (category) {
+    BrowseCategory.PLAYLIST -> "LIST"
+    BrowseCategory.TRACK -> "TRK"
+    BrowseCategory.ARTIST -> "ART"
+    BrowseCategory.ALBUM -> "ALB"
+    BrowseCategory.BPM -> "BPM"
+    BrowseCategory.KEY -> "KEY"
+    BrowseCategory.TAG -> "TAG"
+    BrowseCategory.HISTORY -> "HIS"
+    BrowseCategory.SEARCH -> "SRC"
 }

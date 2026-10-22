@@ -26,12 +26,20 @@ fun windowSeconds(zoom: WaveZoom, bpm: Double, duration: Double): Double {
 }
 
 /** Fração 0..1 na janela. No zoom com playhead fixo, o centro da faixa é o playhead. */
-fun markerFraction(time: Double, center: Double, window: Double, wholeTrack: Boolean, duration: Double): Double {
+fun markerFraction(
+    time: Double,
+    center: Double,
+    window: Double,
+    wholeTrack: Boolean,
+    duration: Double,
+    anchor: Double = 0.5,
+): Double {
     if (window <= 0.0) return 0.0
     return if (wholeTrack) {
         if (duration <= 0.0) 0.0 else (time / duration).coerceIn(0.0, 1.0)
     } else {
-        ((time - (center - window / 2.0)) / window).coerceIn(-0.2, 1.2)
+        val start = center - window * anchor.coerceIn(0.05, 0.95)
+        ((time - start) / window).coerceIn(-0.2, 1.2)
     }
 }
 
@@ -301,11 +309,80 @@ data class DeckFace(
     val pitch: Float = 1f,
     val range: Double = DEFAULT_TEMPO_RANGE,
     val fader: Float = 0.5f,
-    val remain: Boolean = false,
+    val remain: Boolean = true,
     val sync: Boolean = false,
     val keyLock: Boolean = false,
     val filter: Int = 64,
+    val onAir: Boolean = true,
 )
+
+val LETTER_COLORS = intArrayOf(
+    0xFF3B3B,
+    0x2EE0FF,
+    0x3DDC6A,
+    0xB44DFF,
+    0x3DDC6A,
+    0xFF8A1E,
+    0x3B6CFF,
+    0xFFE14A,
+)
+
+val PHRASE_COLORS = intArrayOf(0x7A4DFF, 0x3DDC6A, 0xFF8A1E, 0xE23B4A)
+
+fun phraseColor(barIndex: Int): Int = PHRASE_COLORS.let { colors ->
+    val block = if (barIndex < 0) 0 else barIndex / 4
+    colors[block % colors.size]
+}
+
+fun barsFromSeconds(seconds: Double, bpm: Double): Double {
+    if (bpm <= 1.0) return 0.0
+    return seconds / (240.0 / bpm)
+}
+
+/** 0 eco, 1 delay, 2 flanger. Os outros nomes não entram no motor. */
+fun beatFxAudioKind(effect: Int): Int = when (BEAT_FX_NAMES.getOrElse(effect) { "" }) {
+    "Echo" -> 0
+    "Delay" -> 1
+    "Flanger" -> 2
+    else -> 9
+}
+
+/** Fração do Beat FX em batidas. 1/1 é uma batida, não um compasso. */
+fun beatFxBeats(fractionLabel: String): Double = when (fractionLabel) {
+    "1/16" -> 0.0625
+    "1/8" -> 0.125
+    "1/4" -> 0.25
+    "1/2" -> 0.5
+    "3/4" -> 0.75
+    "1", "1/1" -> 1.0
+    "2", "2/1" -> 2.0
+    "4/1" -> 4.0
+    "8/1" -> 8.0
+    else -> 1.0
+}
+
+private val MUSICAL_KEYS = listOf("Abm", "Ebm", "Bbm", "Fm", "Cm", "Gm", "Dm", "Am", "Em", "Bm", "F#m", "C#m", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F", "C", "G", "D", "A")
+
+fun keysCompatible(focus: String, other: String): Boolean {
+    if (focus.isBlank() || other.isBlank()) return false
+    if (focus.equals(other, ignoreCase = true)) return true
+    val camelot = Regex("(\\d+)([ABab])")
+    val left = camelot.matchEntire(focus.trim())
+    val right = camelot.matchEntire(other.trim())
+    if (left != null && right != null) {
+        val a = left.groupValues[1].toInt()
+        val b = right.groupValues[1].toInt()
+        val diff = kotlin.math.min(kotlin.math.abs(a - b), 12 - kotlin.math.abs(a - b))
+        return diff <= 1
+    }
+    val ia = MUSICAL_KEYS.indexOfFirst { it.equals(focus, true) }
+    val ib = MUSICAL_KEYS.indexOfFirst { it.equals(other, true) }
+    if (ia < 0 || ib < 0) return false
+    val da = ia % 12
+    val db = ib % 12
+    val diff = kotlin.math.min(kotlin.math.abs(da - db), 12 - kotlin.math.abs(da - db))
+    return diff <= 1
+}
 
 fun loopLengthLabel(startMs: Int, endMs: Int, bpm: Double): String {
     val seconds = (endMs - startMs) / 1000.0

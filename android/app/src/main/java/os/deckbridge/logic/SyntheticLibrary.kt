@@ -6,21 +6,48 @@ import kotlin.math.sin
 private const val PAGE_LEN = 4096
 
 object SyntheticRekordbox {
+    private var cached: MemoryVolume? = null
+
     fun volume(): MemoryVolume {
+        cached?.let { return it }
+        val built = uncachedVolume()
+        cached = built
+        return built
+    }
+
+    private fun uncachedVolume(): MemoryVolume {
         val click120 = click(bpm = 120.0, seconds = 8, rate = 48000, freq = 440.0)
         val click100 = click(bpm = 100.0, seconds = 8, rate = 48000, freq = 330.0)
         val wav120 = wavMono16(click120, 48000)
         val wav100 = wavMono16(click100, 48000)
+        val rendered = patternSongs().map { song ->
+            val pcm = renderPattern(song)
+            val columns = (song.seconds * song.bpm / 60.0 * 16).toInt().coerceIn(480, 1600)
+            val bands = analyzeBands(pcm, 22050, columns)
+            RenderedSong(song, wavMono16(pcm, 22050), bands, song.title.lowercase().replace(" ", "-"))
+        }
         val files = linkedMapOf(
-            "PIONEER/rekordbox/export.pdb" to pdb(wav120.size, wav100.size),
+            "PIONEER/rekordbox/export.pdb" to pdb(wav120.size, wav100.size, rendered),
             "PIONEER/rekordbox/exportLibrary.db" to "NOTASQLITE".toByteArray(Charsets.US_ASCII),
             "PIONEER/rekordbox/exportExt.pdb" to extPdb(),
-            "PIONEER/USBANLZ/ANLZ0001.DAT" to anlzDat(bpm = 120, beats = 16, hot = listOf(0 to 1, 2000 to 2), memoryMs = 500),
+            "PIONEER/USBANLZ/ANLZ0001.DAT" to anlzDat(
+                bpm = 120,
+                beats = 16,
+                hot = listOf(0 to 1, 2000 to 2),
+                memoryMs = 500,
+                bands = analyzeBands(click120, 48000, 64),
+            ),
             "PIONEER/USBANLZ/ANLZ0001.EXT" to anlzExt(
                 hot = listOf(CueSpec(1, 0, "Intro", 255, 40, 40), CueSpec(2, 2000, "Meio", 40, 180, 255)),
                 memory = listOf(CueSpec(0, 500, "Memoria", 0, 0, 0)),
             ),
-            "PIONEER/USBANLZ/ANLZ0002.DAT" to anlzDat(bpm = 100, beats = 13, hot = listOf(0 to 1, 3000 to 3), memoryMs = 600),
+            "PIONEER/USBANLZ/ANLZ0002.DAT" to anlzDat(
+                bpm = 100,
+                beats = 13,
+                hot = listOf(0 to 1, 3000 to 3),
+                memoryMs = 600,
+                bands = analyzeBands(click100, 48000, 64),
+            ),
             "PIONEER/USBANLZ/ANLZ0002.EXT" to anlzExt(
                 hot = listOf(CueSpec(1, 0, "A", 255, 200, 0), CueSpec(3, 3000, "C", 0, 200, 80)),
                 memory = listOf(CueSpec(0, 600, "Entrada", 0, 0, 0)),
@@ -29,68 +56,160 @@ object SyntheticRekordbox {
             "CONTENTS/faixa-120.wav" to wav120,
             "CONTENTS/faixa-100.wav" to wav100,
         )
+        rendered.forEachIndexed { index, song ->
+            val number = index + 3
+            val stem = "ANLZ%04d".format(number)
+            val cues = patternCues(song.song)
+            val loop = if (index % 3 == 0) {
+                val cue = cues[2]
+                CueSpec(0, cue.timeMs, cue.comment, cue.red, cue.green, cue.blue) to (cue.timeMs + (60000 / song.song.bpm) * 4)
+            } else {
+                null
+            }
+            files["PIONEER/USBANLZ/$stem.DAT"] = anlzDat(
+                bpm = song.song.bpm,
+                beats = (song.song.seconds * song.song.bpm / 60).coerceAtLeast(4),
+                hot = cues.map { it.timeMs to it.hot },
+                memoryMs = 200,
+                bands = song.bands,
+            )
+            files["PIONEER/USBANLZ/$stem.EXT"] = anlzExt(
+                hot = cues,
+                memory = listOf(CueSpec(0, 200, "Memoria", 220, 40, 40)),
+                loop = loop,
+            )
+            files["CONTENTS/${song.slug}.wav"] = song.wav
+        }
         return MemoryVolume(files, "pendrive simulado", true)
     }
 
-    private fun pdb(sizeA: Int, sizeB: Int): ByteArray {
+    private fun pdb(sizeA: Int, sizeB: Int, music: List<RenderedSong>): ByteArray {
         val pages = mutableListOf(ByteArray(PAGE_LEN))
         data class Chain(val first: Int, val last: Int)
         fun addChain(type: Int, rows: List<ByteArray>, present: List<Boolean>): Chain {
-            val emptyIndex = pages.size
-            val empty = ByteArray(PAGE_LEN)
-            pages += empty
-            val dataIndex = pages.size
-            val data = ByteArray(PAGE_LEN)
-            pages += data
-            writePageHeader(empty, emptyIndex, type, dataIndex, 0, 0)
-            var cursor = PAGE_HEADER_END
-            val offsets = IntArray(rows.size)
-            rows.forEachIndexed { index, row ->
-                require(cursor + row.size < PAGE_LEN - 0x24)
-                row.copyInto(data, cursor)
-                offsets[index] = cursor - PAGE_HEADER_END
-                cursor += row.size
-                if (cursor % 2 != 0) cursor += 1
+            val chunks = ArrayList<MutableList<Int>>()
+            var bucket = mutableListOf<Int>()
+            var used = 0
+            fun cap(count: Int): Int {
+                val groups = if (count <= 0) 1 else (count - 1) / 16 + 1
+                return PAGE_LEN - PAGE_HEADER_END - groups * 0x24 - 16
             }
-            writeIndex(data, present, offsets)
-            writePageHeader(data, dataIndex, type, 0x00FFFFFF, present.size, present.count { it })
-            return Chain(emptyIndex, dataIndex)
+            rows.forEachIndexed { index, row ->
+                val pad = if (row.size % 2 == 0) 0 else 1
+                if (bucket.isNotEmpty() && used + row.size + pad > cap(bucket.size + 1)) {
+                    chunks += bucket
+                    bucket = mutableListOf()
+                    used = 0
+                }
+                bucket += index
+                used += row.size + pad
+            }
+            if (bucket.isNotEmpty() || chunks.isEmpty()) chunks += bucket
+            val emptyIndex = pages.size
+            pages += ByteArray(PAGE_LEN)
+            val dataIndexes = chunks.map {
+                val index = pages.size
+                pages += ByteArray(PAGE_LEN)
+                index
+            }
+            writePageHeader(pages[emptyIndex], emptyIndex, type, dataIndexes.first(), 0, 0)
+            chunks.forEachIndexed { chunkIndex, indexes ->
+                val dataIndex = dataIndexes[chunkIndex]
+                val next = if (chunkIndex == chunks.lastIndex) 0x00FFFFFF else dataIndexes[chunkIndex + 1]
+                val data = pages[dataIndex]
+                var cursor = PAGE_HEADER_END
+                val offsets = IntArray(indexes.size)
+                indexes.forEachIndexed { local, rowIndex ->
+                    val row = rows[rowIndex]
+                    row.copyInto(data, cursor)
+                    offsets[local] = cursor - PAGE_HEADER_END
+                    cursor += row.size
+                    if (cursor % 2 != 0) cursor += 1
+                }
+                val flags = indexes.map { present[it] }
+                writeIndex(data, flags, offsets)
+                writePageHeader(data, dataIndex, type, next, indexes.size, flags.count { it })
+            }
+            return Chain(emptyIndex, dataIndexes.last())
         }
         val tables = mutableListOf<IntArray>()
         fun table(type: Int, rows: List<ByteArray>, present: List<Boolean> = List(rows.size) { true }) {
             val chain = addChain(type, rows, present)
             tables += intArrayOf(type, chain.first, chain.last)
         }
-        table(2, listOf(artistRow(1, "João Sintetico"), artistRow(2, "Casa")))
-        table(3, listOf(albumRow(1, 1, "Sessao")))
-        table(1, listOf(inlineNameRow(1, "House", after = 4)))
-        table(5, listOf(inlineNameRow(1, "8A", after = 8, secondId = 1), inlineNameRow(2, "4A", after = 8, secondId = 2)))
-        table(
-            0,
-            listOf(
-                trackRow(1, "Click 120", "faixa-120.wav", "CONTENTS/faixa-120.wav", "PIONEER/USBANLZ/ANLZ0001.DAT", 12000, 8, 48000, sizeA, 1, 1, 1, 1),
-                trackRow(2, "Click 100", "faixa-100.wav", "CONTENTS/faixa-100.wav", "PIONEER/USBANLZ/ANLZ0002.DAT", 10000, 8, 48000, sizeB, 2, 1, 1, 2),
-                ByteArray(16) { 0xFF.toByte() },
-            ),
-            listOf(true, true, false),
+        val artistNames = listOf("João Sintetico", "Casa", "Nara Vale", "Lumen K", "Otis March", "Kite Room")
+        val artistIds = mapOf(
+            "João Sintetico" to 1,
+            "Casa" to 2,
+            "Nara Vale" to 3,
+            "Lumen K" to 4,
+            "Otis March" to 5,
+            "Kite Room" to 6,
         )
+        val albumNames = listOf("Sessao", "North Line", "Second Shift", "Warm Concrete")
+        val keyNames = listOf("8A", "4A") + music.map { it.song.key }.distinct()
+        table(2, artistNames.mapIndexed { index, name -> artistRow(index + 1, name) })
+        table(3, albumNames.mapIndexed { index, name -> albumRow(index + 1, 1, name) })
+        table(1, listOf(inlineNameRow(1, "House", after = 4)))
+        table(5, keyNames.mapIndexed { index, name -> inlineNameRow(index + 1, name, after = 8, secondId = index + 1) })
+        val trackRows = mutableListOf(
+            trackRow(1, "Click 120", "faixa-120.wav", "CONTENTS/faixa-120.wav", "PIONEER/USBANLZ/ANLZ0001.DAT", 12000, 8, 48000, sizeA, 1, 1, 1, 1),
+            trackRow(2, "Click 100", "faixa-100.wav", "CONTENTS/faixa-100.wav", "PIONEER/USBANLZ/ANLZ0002.DAT", 10000, 8, 48000, sizeB, 2, 1, 1, 2),
+        )
+        music.forEachIndexed { index, song ->
+            val id = index + 3
+            val stem = "ANLZ%04d.DAT".format(id)
+            val keyId = keyNames.indexOf(song.song.key) + 1
+            val albumId = albumNames.indexOf(song.song.album) + 1
+            trackRows += trackRow(
+                id,
+                song.song.title,
+                "${song.slug}.wav",
+                "CONTENTS/${song.slug}.wav",
+                "PIONEER/USBANLZ/$stem",
+                song.song.bpm * 100,
+                song.song.seconds,
+                22050,
+                song.wav.size,
+                artistIds.getValue(song.song.artist),
+                albumId,
+                1,
+                keyId,
+            )
+        }
+        trackRows += ByteArray(16) { 0xFF.toByte() }
+        table(0, trackRows, List(trackRows.size) { it != trackRows.lastIndex })
         table(
             7,
             listOf(
                 playlistRow(1, 0, "Sets", folder = true, sort = 0),
                 playlistRow(2, 1, "Abertura", folder = false, sort = 1),
                 playlistRow(3, 0, "Todas", folder = false, sort = 2),
+                playlistRow(4, 1, "Warmup", folder = false, sort = 3),
+                playlistRow(5, 1, "Peak", folder = false, sort = 4),
+                playlistRow(6, 1, "Close", folder = false, sort = 5),
             ),
         )
-        table(
-            8,
-            listOf(
-                entryRow(0, 1, 2),
-                entryRow(1, 2, 2),
-                entryRow(0, 1, 3),
-                entryRow(1, 2, 3),
-            ),
+        val entries = mutableListOf(
+            entryRow(0, 1, 2),
+            entryRow(1, 2, 2),
         )
+        val allIds = listOf(1, 2) + music.indices.map { it + 3 }
+        allIds.forEachIndexed { position, id -> entries += entryRow(position, id, 3) }
+        music.indices.forEach { index ->
+            val playlist = when {
+                index < 8 -> 4
+                index < 16 -> 5
+                else -> 6
+            }
+            val position = when {
+                index < 8 -> index
+                index < 16 -> index - 8
+                else -> index - 16
+            }
+            entries += entryRow(position, index + 3, playlist)
+        }
+        table(8, entries)
         val file = ByteArray(pages.size * PAGE_LEN)
         pages.forEachIndexed { index, page -> page.copyInto(file, index * PAGE_LEN) }
         file.putU32le(4, PAGE_LEN)
@@ -343,9 +462,9 @@ private fun trackRow(
     return row
 }
 
-private data class CueSpec(val hot: Int, val timeMs: Int, val comment: String, val red: Int, val green: Int, val blue: Int)
+private data class RenderedSong(val song: PatternSong, val wav: ByteArray, val bands: WaveBands, val slug: String)
 
-private fun anlzDat(bpm: Int, beats: Int, hot: List<Pair<Int, Int>>, memoryMs: Int): ByteArray {
+private fun anlzDat(bpm: Int, beats: Int, hot: List<Pair<Int, Int>>, memoryMs: Int, bands: WaveBands? = null): ByteArray {
     val beatBody = BeWriter()
     beatBody.u32(0)
     beatBody.u32(0x80000)
@@ -358,12 +477,30 @@ private fun anlzDat(bpm: Int, beats: Int, hot: List<Pair<Int, Int>>, memoryMs: I
     }
     val memory = cueSection(0, listOf(plainCue(0, memoryMs)))
     val hots = cueSection(1, hot.map { plainCue(it.second, it.first) })
-    val wave = ByteArray(64) { index -> (80 + (index * 17) % 140).toByte() }
+    val wave = if (bands == null) {
+        ByteArray(64) { index -> (80 + (index * 17) % 140).toByte() }
+    } else {
+        overviewFromBands(bands)
+    }
     val waveBody = BeWriter()
     waveBody.u32(wave.size)
     waveBody.u32(0x10000)
     waveBody.bytes(wave)
-    return anlzFile(listOf(section("PQTZ", beatBody.toByteArray()), memory, hots, section("PWAV", waveBody.toByteArray())))
+    val sections = mutableListOf(
+        section("PQTZ", beatBody.toByteArray()),
+        memory,
+        hots,
+        section("PWAV", waveBody.toByteArray()),
+    )
+    if (bands != null) {
+        val body = BeWriter()
+        body.u32(bands.columns)
+        body.bytes(bands.low.copyOf(bands.columns))
+        body.bytes(bands.mid.copyOf(bands.columns))
+        body.bytes(bands.high.copyOf(bands.columns))
+        sections += section("PWB3", body.toByteArray())
+    }
+    return anlzFile(sections)
 }
 
 private fun anlzExt(

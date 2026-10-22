@@ -82,6 +82,11 @@ object NativeEngine {
         nativeNudge(deck, seconds)
     }
 
+    fun setBeatFx(effect: Int, on: Boolean, level: Int, channel: Int, bpm: Float, beats: Float) {
+        if (!loaded) return
+        nativeSetBeatFx(effect, on, level, channel, bpm, beats)
+    }
+
     private fun ensure() {
         if (!loaded) {
             System.loadLibrary("deckbridge-engine")
@@ -135,4 +140,5 @@ object NativeEngine {
     private external fun nativePosition(deck: Int): Float
     private external fun nativeSeek(deck: Int, seconds: Float)
     private external fun nativeNudge(deck: Int, seconds: Float)
+    private external fun nativeSetBeatFx(effect: Int, on: Boolean, level: Int, channel: Int, bpm: Float, beats: Float)
 }

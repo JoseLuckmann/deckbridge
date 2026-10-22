@@ -15,7 +15,7 @@ Isto continua a prova A0. O app agora também lê uma exportação rekordbox em 
 
 ## Instalar
 
-1. No tablet, copie `deckbridge-arm64.apk` (só arm64, versão 0.6.0). O `deckbridge-debug.apk` traz as três ABIs e serve ao emulador.
+1. No tablet, copie `deckbridge-arm64.apk` (só arm64, versão 0.7.0). O `deckbridge-debug.apk` traz as três ABIs e serve ao emulador.
 2. Permita instalar de origem desconhecida.
 3. Abra DeckBridge. A primeira tela é o diagnóstico. ESTADO no player volta para ela.
 4. No player, toque em BROWSE. AUTORIZAR pede a raiz do USB exportado pelo rekordbox, só leitura.
@@ -29,7 +29,8 @@ Isto continua a prova A0. O app agora também lê uma exportação rekordbox em 
 - O emulador desta máquina continua sem print fiel: o KVM acusou `kvm_spurious_fault` na rodada anterior.
 - OneLibrary só abre se a cópia local aceitar a chave pública. O arquivo sintético não abre.
 - O prato (jog) empurra o áudio por uma escala provisória de segundos. Não é a curva medida da DDJ-400. A escuta continua `BLOCKED_HARDWARE`.
-- O indicador BEAT FX reflete o MIDI. O app não processa echo, reverb nem os outros efeitos.
+- Echo, Delay e Flanger processam o mixer da rota 3. Reverb, Phaser, Roll, Trans e Filter ficam secos. A escuta não foi feita.
+- A onda colorida do pendrive simulado sai da seção PWB3 deste projeto (grave, médio e agudo por coluna, cada banda no próprio pico). Um export real não tem essa seção. A barra de frase debaixo da visão geral é simulada pelo número do compasso.
 - O botão KEY não altera o áudio. Não há controle de key lock no mapa oficial da DDJ-400.
 - O zoom da forma de onda fica na tela. Beat esquerda/direita continuam sendo Beat FX. O sentido do encoder BROWSE não foi medido na controladora.
 - OD-04 segue aberta.

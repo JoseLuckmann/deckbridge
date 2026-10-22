@@ -28,12 +28,17 @@ data class RbHotCue(val index: Int, val timeMs: Int, val comment: String, val co
 
 data class RbMemoryCue(val timeMs: Int, val loopEndMs: Int?, val comment: String)
 
+data class WaveBands(val low: ByteArray, val mid: ByteArray, val high: ByteArray) {
+    val columns: Int get() = minOf(low.size, mid.size, high.size)
+}
+
 data class RbAnalysis(
     val beats: List<AnlzBeat>,
     val hotCues: List<RbHotCue>,
     val memoryCues: List<RbMemoryCue>,
     val mainCueMs: Int,
     val waveform: ByteArray,
+    val bands: WaveBands? = null,
 )
 
 data class RbTag(val name: String, val category: String)
@@ -204,7 +209,7 @@ private fun analysisFor(volume: ReadableVolume, path: String): RbAnalysis {
         RbMemoryCue(it.timeMs, it.loopEndMs, it.comment)
     }
     val main = memory.firstOrNull { it.loopEndMs == null }?.timeMs ?: 0
-    return RbAnalysis(merged.beats, hot, memory, main, merged.waveform)
+    return RbAnalysis(merged.beats, hot, memory, main, merged.waveform, merged.bands)
 }
 
 private fun sibling(pdbPath: String, name: String): String {

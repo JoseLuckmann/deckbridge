@@ -16,7 +16,7 @@ class RekordboxTest {
     @Test
     fun syntheticExportRoundTripsTracksPlaylistsAndAnalysis() {
         assertNull(catalog.error)
-        assertEquals(2, catalog.tracks.size)
+        assertEquals(24, catalog.tracks.size)
         val first = catalog.tracks.first { it.id == 1 }
         assertEquals("Click 120", first.title)
         assertEquals("João Sintetico", first.artist)
@@ -53,6 +53,17 @@ class RekordboxTest {
         assertEquals(2400, loop.second)
         assertNull(activeLoop(analysis))
         assertTrue(catalog.warnings.none { it.contains("exportExt.pdb") })
+        val night = catalog.tracks.first { it.title == "Night Bus" }
+        assertEquals("Nara Vale", night.artist)
+        assertEquals("Am", night.keyName)
+        assertEquals(124.0, night.bpm, 0.001)
+        assertEquals(32, night.durationSeconds)
+        val bands = catalog.analyses.getValue(night.id).bands
+        assertNotNull(bands)
+        assertTrue(bands!!.columns > 32)
+        assertEquals(listOf("Intro", "Phase A 1", "Break1", "Build", "Drop", "Groove", "Fill", "Outro"), catalog.analyses.getValue(night.id).hotCues.sortedBy { it.index }.map { it.comment })
+        assertEquals((3..10).toList(), catalog.playlists.first { it.name == "Warmup" }.trackIds)
+        assertEquals(24, catalog.playlists.first { it.name == "Todas" }.trackIds.size)
     }
 
     @Test

@@ -112,6 +112,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-21 | A023–A029 | parcial | `c28f677` | prints JVM, loop, estéreo, pitch 14 bits, exportExt, OneLibrary, MIDI virtual | escuta e pendrive real `BLOCKED_HARDWARE`; emulador A022 aberto | dono instala o APK e manda o relatório |
 | 2026-10-21 | A030–A031 | parcial | `edfe33b` | tema de palco, seis prints JVM, APK arm64 | escuta e pendrive real `BLOCKED_HARDWARE`; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
 | 2026-10-22 | A032–A034 | parcial | `cafec07` | player CDJ, browser por cima, zoom, grade, Beat FX, APK 0.6.0 | escuta e pendrive real `BLOCKED_HARDWARE`; efeito de áudio não existe; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
+| 2026-10-22 | A035–A038 | parcial | a preencher | tela 0.7.0, browser denso, 24 faixas, PWB3, echo/delay/flanger, APK arm64 | escuta e pendrive real `BLOCKED_HARDWARE`; frase simulada; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
 
 ### Proposta Android
 - Estado: proposta, não aceita
@@ -170,6 +171,21 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Prints em `/opt/cursor/artifacts/prints/`: `player-2000x1200.png`, `player-1024x600.png`, `browse-categories.png`, `browse-tracks.png`, `zoom-in.png`, `zoom-out.png`, `beatfx.png`, `diagnostico.png`. Faixa curta: "SIMULAÇÃO · Renderização em JVM. Não é o tablet nem a DDJ-400."
 - APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4005281 bytes, SHA-256 `0f0f1b7a049f2913eb72d0115c558501d801145ab9829e8b1288b32019b9e1a1`, versão 0.6.0, só arm64-v8a, minify e shrink. Assinatura de debug. Substitui o artefato 0.5.0-palco.
 - APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 18464300 bytes, SHA-256 `e48c685cafacf4a7a7ecf4e5f07bff6bbc4dd6cecec0d034ddc1ffe4835a420c`.
+- HIL executado? não
+
+### Tela 0.7.0 e APK
+- Estado: interface refeita na JVM; escuta e pendrive real BLOCKED_HARDWARE
+- Duas ondas empilhadas, playhead perto de 30% da esquerda, traços brancos por batida e vermelhos no início do compasso, números 4, 8…, hot cues 2×4 com o comentário, cartão com REMAIN, ON AIR, BPM e visão geral.
+- A barra de cores debaixo da visão geral segue o índice do compasso (roxo, verde, laranja, vermelho). Não é análise de frase lida de um arquivo.
+- PWB3 é uma seção deste projeto: energia grave/média/aguda por coluna, cada banda normalizada pelo próprio pico. Um export real não traz PWB3; a tela cai no PWAV mono.
+- Echo, Delay e Flanger entram no mixer da rota 3. Reverb, Phaser, Roll, Trans e Filter continuam só no nome.
+- AUTO no Beat FX segue o BPM do deck atribuído vezes o pitch. Não há detector de BPM à parte.
+- QUANTIZE 1/4 é o rótulo da tela para o snap na batida. O quantize começa ligado. Isso não é leitura da controladora.
+- As faixas sintéticas duram 18 s ou 32 s. O relógio grande mostra esse tempo, não uma faixa de quatro minutos.
+- KEY não altera o áudio. O zoom não tem MIDI. O sentido do encoder BROWSE não foi medido. O jog usa segundos provisórios.
+- Prints em `/opt/cursor/artifacts/prints/`: `player-2000x1200.png`, `player-1024x600.png`, `browse-list.png`, `beatfx-zoom.png`, `diagnostico.png`. Faixa pequena: "SIMULAÇÃO · Renderização em JVM".
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4025021 bytes, SHA-256 `946213adb5ef58efd2295fb86c4351334b091da7e12038e0bd855465df273a02`, versão 0.7.0, só arm64-v8a, minify e shrink. Assinatura de debug.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 18523296 bytes, SHA-256 `d2fc5d98090df20762933af21ebf9df8b81ab6245082c623371c897c487469c6`.
 - HIL executado? não
 
 ### T020 — configuração

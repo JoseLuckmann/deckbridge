@@ -13,7 +13,7 @@
 
 ## 2. Wireframe: PERFORMANCE — estrutura, não um tamanho fixo
 
-A tela Android atual abre no player, com os dois decks lado a lado, no espírito de duas telas de CDJ. A biblioteca não fica fixa embaixo: SOURCE ou BROWSE abre o browser por cima e LOAD volta ao player. O desenho abaixo continua a ordem das informações, não um logo nem um asset de terceiro.
+A tela Android 0.7.0 abre no player em paisagem: barra SOURCE, BROWSE, TAG LIST, PLAYLIST, SEARCH e MENU; coluna curta por deck; duas ondas empilhadas com o playhead perto de 30% da esquerda; painel BEAT FX à direita; grelha HOT CUE de 2×4; cartões embaixo com tempo, BPM e visão geral. A lista densa abre por cima. O desenho é próprio: sem logo e sem nome de produto de terceiros. O wireframe abaixo continua a ordem das informações.
 
 O desenho abaixo mostra a ordem das informações. Nas referências 800x480 e 1024x600 ele precisa caber inteiro. Em outra resolução, os mesmos blocos esticam ou encolhem sem cortar BPM, tempo e estado de PLAY. Em hardware fraco (OD-01), a waveform é o primeiro bloco a ser desligado.
 

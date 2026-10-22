@@ -27,6 +27,8 @@ import os.deckbridge.logic.ReadableVolume
 import os.deckbridge.logic.WaveZoom
 import os.deckbridge.logic.activeLoop
 import os.deckbridge.logic.backBrowse
+import os.deckbridge.logic.beatFxAudioKind
+import os.deckbridge.logic.beatFxBeats
 import os.deckbridge.logic.browseRows
 import os.deckbridge.logic.enterBrowse
 import os.deckbridge.logic.faderFromPitch
@@ -77,6 +79,8 @@ fun DeckPage(
     var stored by remember { mutableStateOf(BrowsePlace()) }
     var history by remember { mutableStateOf(listOf<Int>()) }
     var note by remember { mutableStateOf("") }
+    var active by remember { mutableIntStateOf(0) }
+    var clock by remember { mutableStateOf(java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))) }
     var consumed by remember { mutableStateOf(mapOf<Int, Int>()) }
     var started by remember { mutableStateOf(false) }
     val tree = rememberLauncherForActivityResult(OpenTreeReadOnly()) { uri -> onAuthorize(uri) }
@@ -202,7 +206,11 @@ fun DeckPage(
                 NativeEngine.cue(deck)
             }
             PerformanceAction.Kind.HOT_CUE -> if (deck in 0..1) hotCue(deck, action.hotIndex)
-            PerformanceAction.Kind.VOLUME -> if (deck == 0) volA = action.slider!!.toFloat() else if (deck == 1) volB = action.slider!!.toFloat()
+            PerformanceAction.Kind.VOLUME -> {
+                val level = action.slider!!.toFloat()
+                if (deck == 0) volA = level else if (deck == 1) volB = level
+                if (deck in 0..1) edit(deck) { it.copy(onAir = level > 0.2f) }
+            }
             PerformanceAction.Kind.CROSSFADER -> cross = action.slider!!.toFloat()
             PerformanceAction.Kind.PITCH -> {
                 if (deck !in 0..1) return
@@ -250,6 +258,7 @@ fun DeckPage(
             PerformanceAction.Kind.SYNC -> syncDeck(deck)
             PerformanceAction.Kind.MASTER -> if (deck in 0..1) master = deck
         }
+        if (deck in 0..1) active = deck
         pushMix()
     }
 
@@ -263,6 +272,30 @@ fun DeckPage(
     }
 
     LaunchedEffect(pitchA, pitchB, volA, volB, cross, pflA, pflB) { pushMix() }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            clock = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+            delay(15_000)
+        }
+    }
+
+    LaunchedEffect(fx, pitchA, pitchB, master, loaded) {
+        val deck = when (fx.channel) {
+            1 -> 1
+            2 -> master
+            else -> 0
+        }
+        val bpm = (loaded.getOrNull(deck)?.bpm ?: 120.0) * (if (deck == 0) pitchA else pitchB)
+        NativeEngine.setBeatFx(
+            beatFxAudioKind(fx.effect),
+            fx.on,
+            fx.level,
+            fx.channel,
+            bpm.toFloat(),
+            beatFxBeats(fx.fractionLabel()).toFloat(),
+        )
+    }
 
     LaunchedEffect(browsePulse) {
         if (browsePulse > 0) browse = stored
@@ -326,6 +359,8 @@ fun DeckPage(
         browse = browse,
         historyIds = history,
         usbLabel = usbLabel,
+        clock = clock,
+        activeDeck = active,
         status = note,
         onPage = onPage,
         onBrowse = { browse = stored },
@@ -414,6 +449,10 @@ fun DeckPage(
             val place = browse
             if (place != null) browse = place.copy(query = query, index = 0)
         },
+        onActive = { active = it },
+        onFxChange = { fx = it },
+        onOpenCategory = { category -> browse = openCategory(stored, category) },
+        onSeek = { deck, seconds -> seekTo(deck, seconds) },
         onLoad = { track, deck ->
             val source = volume
             if (source != null) {

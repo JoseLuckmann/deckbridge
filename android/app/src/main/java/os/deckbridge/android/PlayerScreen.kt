@@ -4,11 +4,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,11 +15,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,33 +30,26 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.BoxWithConstraints
+import os.deckbridge.logic.BEAT_FX_FRACTIONS
+import os.deckbridge.logic.BEAT_FX_NAMES
 import os.deckbridge.logic.BeatFxState
 import os.deckbridge.logic.BrowseCategory
 import os.deckbridge.logic.BrowsePlace
 import os.deckbridge.logic.DeckFace
-import os.deckbridge.logic.MarkerKind
+import os.deckbridge.logic.LETTER_COLORS
 import os.deckbridge.logic.RbAnalysis
 import os.deckbridge.logic.RbCatalog
-import os.deckbridge.logic.RbHotCue
 import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.StagePalette
 import os.deckbridge.logic.WaveZoom
 import os.deckbridge.logic.activeLoop
-import os.deckbridge.logic.beatsUntil
-import os.deckbridge.logic.gridLines
+import os.deckbridge.logic.barsFromSeconds
+import os.deckbridge.logic.beatFxBeats
 import os.deckbridge.logic.inkOn
 import os.deckbridge.logic.loopLengthLabel
-import os.deckbridge.logic.markerFraction
-import os.deckbridge.logic.tempoRangeLabel
-import os.deckbridge.logic.windowSeconds
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -73,6 +67,8 @@ fun PlayerScreen(
     browse: BrowsePlace? = null,
     historyIds: List<Int> = emptyList(),
     usbLabel: String = "",
+    clock: String = "--:--",
+    activeDeck: Int = 0,
     onPage: (Int) -> Unit = {},
     onBrowse: () -> Unit = {},
     onBrowseClose: () -> Unit = {},
@@ -99,21 +95,79 @@ fun PlayerScreen(
     onBrowseCategory: (BrowseCategory) -> Unit = {},
     onQuery: (String) -> Unit = {},
     onLoad: (RbTrack, Int) -> Unit = { _, _ -> },
+    onActive: (Int) -> Unit = {},
+    onFxChange: (BeatFxState) -> Unit = {},
+    onOpenCategory: (BrowseCategory) -> Unit = {},
+    onSeek: (Int, Float) -> Unit = { _, _ -> },
     status: String = "",
 ) {
-    val note = if (jvmBanner.isNullOrBlank()) null else "SIMULAÇÃO · $jvmBanner"
-    Box(Modifier.fillMaxSize().background(Color(StagePalette.bg))) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp)) {
-            TopBar(note, zoom.first(), zoomLink, onBrowse, onPage, onZoom, onLink)
-            FxBar(fx)
-            if (status.isNotBlank()) {
-                TextInk(status, fontSize = 12.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
+    var info by remember { mutableStateOf(false) }
+    var grid by remember { mutableStateOf(false) }
+    var fxPanel by remember { mutableStateOf(true) }
+    val note = if (jvmBanner.isNullOrBlank()) null else "SIMULAÇÃO · Renderização em JVM"
+    val masterTrack = tracks.getOrNull(master)
+    val masterFace = faces.getOrElse(master) { DeckFace() }
+    val setRemain = remainClock(masterTrack, masterFace)
+    val fxDeck = when (fx.channel) {
+        1 -> 1
+        2 -> master
+        else -> 0
+    }
+    val fxBpm = (tracks.getOrNull(fxDeck)?.bpm ?: 0.0) * (faces.getOrElse(fxDeck) { DeckFace() }.pitch)
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color(StagePalette.bg))) {
+        val compact = maxWidth < 1400.dp || maxHeight < 700.dp
+        val side = if (compact) 112.dp else 168.dp
+        val rail = if (compact) 156.dp else 228.dp
+        Column(Modifier.fillMaxSize().padding(horizontal = if (compact) 4.dp else 8.dp, vertical = if (compact) 3.dp else 6.dp)) {
+            TopBar(
+                compact = compact,
+                note = note,
+                clock = clock,
+                remain = setRemain,
+                onBrowse = onBrowse,
+                onOpenCategory = onOpenCategory,
+                onMenu = { onPage(0) },
+                onInfo = { info = !info },
+            )
+            Row(
+                Modifier.fillMaxWidth().weight(1f).padding(top = if (compact) 3.dp else 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp),
+            ) {
+                Column(Modifier.width(side).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    DeckInfo(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, catalog, quantize, compact, Modifier.weight(1f))
+                    DeckInfo(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, catalog, quantize, compact, Modifier.weight(1f))
+                }
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    ZoomedWave(0, tracks.getOrNull(0), analysisOf(catalog, tracks.getOrNull(0)), faces.getOrElse(0) { DeckFace() }, zoom.first(), grid, onZoom, onSeek, Modifier.weight(1f).fillMaxWidth())
+                    ZoomedWave(1, tracks.getOrNull(1), analysisOf(catalog, tracks.getOrNull(1)), faces.getOrElse(1) { DeckFace() }, if (zoomLink) zoom.first() else zoom.getOrElse(1) { zoom.first() }, grid, onZoom, onSeek, Modifier.weight(1f).fillMaxWidth())
+                }
+                FxRail(
+                    fx = fx,
+                    bpm = fxBpm,
+                    zoom = zoom.first(),
+                    grid = grid,
+                    fxPanel = fxPanel,
+                    quantize = quantize,
+                    status = status,
+                    compact = compact,
+                    onFxChange = onFxChange,
+                    onGrid = { grid = it },
+                    onFxPanel = { fxPanel = it },
+                    onZoom = { onZoom(0, it) },
+                    modifier = Modifier.width(rail).fillMaxHeight(),
+                )
             }
-            Row(Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                DeckCdj(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, catalog, master == 0, quantize, zoom.getOrElse(0) { WaveZoom.BARS_8 }, fx, Modifier.weight(1f).fillMaxHeight(), onPlay, onCue, onHot, onSync, onMaster, onKey, onRemain, onRange, onFader, onScratch, onJump, onZoom, onQuantize)
-                PhaseMeter(faces.getOrElse(0) { DeckFace() }, faces.getOrElse(1) { DeckFace() }, tracks, Modifier.width(28.dp).fillMaxHeight())
-                DeckCdj(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, catalog, master == 1, quantize, if (zoomLink) zoom.first() else zoom.getOrElse(1) { zoom.first() }, fx, Modifier.weight(1f).fillMaxHeight(), onPlay, onCue, onHot, onSync, onMaster, onKey, onRemain, onRange, onFader, onScratch, onJump, onZoom, onQuantize)
+            HotCueBand(catalog, tracks, compact, onActive, onHot, Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 6.dp))
+            Row(
+                Modifier.fillMaxWidth().height(if (compact) 132.dp else 196.dp).padding(top = if (compact) 3.dp else 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0)), master == 0, activeDeck == 0, quantize, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay)
+                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1)), master == 1, activeDeck == 1, quantize, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay)
             }
+        }
+        if (info) {
+            InfoCard(tracks.getOrNull(activeDeck), Modifier.align(Alignment.TopEnd).padding(12.dp)) { info = false }
         }
         if (browse != null && catalog != null) {
             BrowseScreen(
@@ -122,6 +176,7 @@ fun PlayerScreen(
                 historyIds = historyIds,
                 usbLabel = usbLabel,
                 jvmBanner = jvmBanner,
+                focusKey = tracks.getOrNull(master)?.keyName.orEmpty(),
                 onClose = onBrowseClose,
                 onMove = onBrowseMove,
                 onEnter = onBrowseEnter,
@@ -139,444 +194,451 @@ fun PlayerScreen(
 
 @Composable
 private fun TopBar(
+    compact: Boolean,
     note: String?,
-    zoom: WaveZoom,
-    link: Boolean,
+    clock: String,
+    remain: String,
     onBrowse: () -> Unit,
-    onPage: (Int) -> Unit,
-    onZoom: (Int, WaveZoom) -> Unit,
-    onLink: (Boolean) -> Unit,
+    onOpenCategory: (BrowseCategory) -> Unit,
+    onMenu: () -> Unit,
+    onInfo: () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Chip("SOURCE", onBrowse)
-        Chip("BROWSE", onBrowse)
-        Chip("−", { onZoom(0, zoom.zoomOut()) })
-        TextInk(zoom.label(), fontSize = 13.sp, weight = FontWeight.Bold, mono = true, modifier = Modifier.width(52.dp))
-        Chip("+", { onZoom(0, zoom.zoomIn()) })
-        Chip(if (link) "LINK" else "SOLO", { onLink(!link) }, selected = link)
+    Row(Modifier.fillMaxWidth().height(if (compact) 26.dp else 32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        NavButton("SOURCE", compact, onBrowse)
+        NavButton("BROWSE", compact, onBrowse)
+        NavButton("TAG LIST", compact) { onOpenCategory(BrowseCategory.TAG) }
+        NavButton("PLAYLIST", compact) { onOpenCategory(BrowseCategory.PLAYLIST) }
+        NavButton("SEARCH", compact) { onOpenCategory(BrowseCategory.SEARCH) }
+        NavButton("MENU", compact, onMenu)
+        Spacer(Modifier.weight(1f))
         if (note != null) {
-            Box(
-                Modifier.weight(1f).padding(horizontal = 6.dp).clip(RoundedCornerShape(3.dp)).background(Color(StagePalette.simBg)).padding(horizontal = 6.dp, vertical = 2.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                TextInk(note, color = Color(StagePalette.simInk), fontSize = 11.sp, maxLines = 1)
-            }
-        } else {
-            Spacer(Modifier.weight(1f))
+            TextInk(note, color = Color(StagePalette.simInk), fontSize = if (compact) 9.sp else 10.sp, maxLines = 1, modifier = Modifier.widthIn(max = if (compact) 148.dp else 240.dp))
         }
-        Chip("ESTADO", { onPage(0) })
+        TextInk(clock, fontSize = if (compact) 12.sp else 14.sp, weight = FontWeight.Medium, mono = true, modifier = Modifier.padding(start = 8.dp))
+        TextInk("REMAIN", fontSize = 9.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 8.dp))
+        TextInk(remain, fontSize = if (compact) 12.sp else 14.sp, weight = FontWeight.Medium, mono = true)
+        NavButton("INFO", compact, onInfo)
     }
 }
 
 @Composable
-private fun FxBar(fx: BeatFxState) {
-    val onFill = if (fx.on) Color(StagePalette.playBg) else Color(StagePalette.panelRaised)
-    val onInk = if (fx.on) Color(StagePalette.playInk) else Color(StagePalette.ink)
-    Row(
-        Modifier.fillMaxWidth().padding(top = 4.dp).height(26.dp).clip(RoundedCornerShape(4.dp)).background(Color(StagePalette.panel)).padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        TextInk("BEAT FX", fontSize = 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
-        TextInk(fx.name(), fontSize = 14.sp, weight = FontWeight.SemiBold)
-        TextInk(fx.fractionLabel(), fontSize = 14.sp, weight = FontWeight.Bold, mono = true)
-        TextInk("CH ${fx.channelLabel()}", fontSize = 13.sp, weight = FontWeight.Bold, mono = true)
-        Box(Modifier.clip(RoundedCornerShape(3.dp)).background(onFill).padding(horizontal = 6.dp, vertical = 1.dp)) {
-            TextInk(if (fx.on) "ON" else "OFF", color = onInk, fontSize = 12.sp, weight = FontWeight.Bold)
-        }
-        TextInk("LVL ${fx.level}", fontSize = 13.sp, weight = FontWeight.Bold, mono = true)
-    }
-}
-
-@Composable
-private fun DeckCdj(
+private fun DeckInfo(
     deck: Int,
     track: RbTrack?,
     face: DeckFace,
     catalog: RbCatalog?,
-    master: Boolean,
     quantize: Boolean,
-    zoom: WaveZoom,
-    fx: BeatFxState,
+    compact: Boolean,
     modifier: Modifier,
-    onPlay: (Int) -> Unit,
-    onCue: (Int) -> Unit,
-    onHot: (Int, Int) -> Unit,
-    onSync: (Int) -> Unit,
-    onMaster: (Int) -> Unit,
-    onKey: (Int) -> Unit,
-    onRemain: (Int) -> Unit,
-    onRange: (Int) -> Unit,
-    onFader: (Int, Float) -> Unit,
-    onScratch: (Int, Float) -> Unit,
-    onJump: (Int, Int) -> Unit,
-    onZoom: (Int, WaveZoom) -> Unit,
-    onQuantize: () -> Unit,
 ) {
-    val analysis = track?.let { catalog?.analyses?.get(it.id) }
-    val accentRgb = if (deck == 0) StagePalette.deckA else StagePalette.deckB
-    val accent = argb(accentRgb)
-    val badgeInk = argb(inkOn(accentRgb))
+    val analysis = analysisOf(catalog, track)
+    val bpm = track?.bpm ?: 0.0
+    val bars = if (track == null) null else barsFromSeconds(face.position.toDouble(), bpm)
     val loop = activeLoop(analysis)
-    val duration = track?.durationSeconds ?: 0
-    val percent = (face.pitch - 1f) * 100f
-    val shown = if (face.remain) (duration - face.position).coerceAtLeast(0f) else face.position
-    BoxWithConstraints(modifier.clip(RoundedCornerShape(8.dp)).background(Color(StagePalette.panel)).border(1.dp, Color(StagePalette.line), RoundedCornerShape(8.dp)).padding(6.dp)) {
-        val compact = maxHeight < 700.dp
-        val bpmSize = if (compact) 26.sp else 40.sp
-        val titleSize = if (compact) 15.sp else 18.sp
-        val timeSize = if (compact) 14.sp else 18.sp
-        val art = if (compact) 32.dp else 44.dp
-        Column(Modifier.fillMaxSize()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(22.dp).clip(RoundedCornerShape(4.dp)).background(accent), contentAlignment = Alignment.Center) {
-                    TextInk("${deck + 1}", color = badgeInk, fontSize = 13.sp, weight = FontWeight.Bold, mono = true)
-                }
-                Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                    TextInk(track?.title ?: "Sem faixa", fontSize = titleSize, weight = FontWeight.SemiBold, maxLines = 1)
-                    TextInk(track?.artist ?: "—", fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
-                }
-                CoverArt(track?.id ?: 0, track?.title.orEmpty(), art)
-            }
-            Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.Bottom) {
-                TextInk(if (track == null) "—.—" else "%05.1f".format((track.bpm * face.pitch)), fontSize = bpmSize, weight = FontWeight.Bold, mono = true)
-                Column(Modifier.padding(start = 8.dp, bottom = 4.dp)) {
-                    TextInk(tempoText(percent), fontSize = 16.sp, weight = FontWeight.Bold, mono = true)
-                    Chip(tempoRangeLabel(face.range), { onRange(deck) }, fontSize = 11.sp)
-                }
-                Spacer(Modifier.weight(1f))
-                Column(horizontalAlignment = Alignment.End) {
-                    TextInk(track?.keyName ?: "—", fontSize = 22.sp, weight = FontWeight.Bold, mono = true)
-                    TextInk(if (face.remain) "REMAIN" else "ELAPSED", fontSize = 10.sp, color = Color(StagePalette.inkMuted))
-                    TextInk(clock(shown), fontSize = timeSize, weight = FontWeight.Bold, mono = true, modifier = Modifier.clickable { onRemain(deck) })
-                }
-            }
-            Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Badge("MASTER", master, accentRgb) { onMaster(deck) }
-                Badge("SYNC", face.sync, accentRgb) { onSync(deck) }
-                Badge("KEY", face.keyLock, accentRgb) { onKey(deck) }
-                Badge(if (quantize) "Q" else "Q OFF", quantize, accentRgb, onQuantize)
-                if (loop != null && track != null) {
-                    TextInk("LOOP ${loopLengthLabel(loop.first, loop.second, track.bpm)}", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(0xFFB6FFC8.toInt()))
-                }
-                if (fx.hitsDeck(deck)) {
-                    TextInk("FX ON", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.playBg))
-                }
-                TextInk(filterLabel(face.filter), fontSize = 12.sp, weight = FontWeight.Bold, mono = true, color = Color(StagePalette.inkMuted))
-            }
-            ScrollingWave(
-                analysis = analysis,
-                position = face.position,
-                duration = duration,
-                bpm = track?.bpm ?: 0.0,
-                zoom = zoom,
-                fxOn = fx.hitsDeck(deck),
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp),
-                onZoomIn = { onZoom(deck, zoom.zoomIn()) },
-                onZoomOut = { onZoom(deck, zoom.zoomOut()) },
-            )
-            OverviewWave(analysis, face.position, duration, Modifier.fillMaxWidth().height(if (compact) 20.dp else 28.dp).padding(top = 4.dp))
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                for (index in 0..7) {
-                    HotPad(index, analysis?.hotCues?.firstOrNull { it.index == index }, Modifier.weight(1f)) { onHot(deck, index) }
-                }
-            }
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Chip(if (face.playing) "PLAY" else "PLAY", { onPlay(deck) }, selected = face.playing)
-                Chip("CUE", { onCue(deck) })
-                Chip("SYNC", { onSync(deck) }, selected = face.sync)
-                Chip("−1", { onJump(deck, -1) })
-                Chip("+1", { onJump(deck, 1) })
-                Platter(face.position, track?.bpm ?: 120.0, accent, Modifier.size(36.dp)) {
-                    onScratch(deck, it)
-                }
-                Spacer(Modifier.weight(1f))
-                TempoFader(face.fader, accent, if (compact) 36.dp else 52.dp) { onFader(deck, it) }
-            }
+    Column(
+        modifier.fillMaxWidth().border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(if (compact) 4.dp else 8.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp),
+    ) {
+        TextInk("DECK ${deck + 1}", fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.Bold, maxLines = 1)
+        Box(Modifier.width(if (compact) 28.dp else 36.dp).height(2.dp).background(Color(StagePalette.accentBlue)))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            UsbMark()
+            TextInk("USB1", fontSize = if (compact) 10.sp else 12.sp, weight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp), maxLines = 1)
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextInk("KEY", fontSize = if (compact) 9.sp else 11.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 28.dp else 36.dp))
+            TextInk(track?.keyName?.ifBlank { "—" } ?: "—", fontSize = if (compact) 12.sp else 16.sp, weight = FontWeight.SemiBold, maxLines = 1)
+        }
+        if (bars == null) {
+            TextInk("—", color = Color(StagePalette.accentOrange), fontSize = if (compact) 12.sp else 16.sp, weight = FontWeight.Bold)
+        } else {
+            TextInk("%.1f Bars".format(bars), color = Color(StagePalette.accentOrange), fontSize = if (compact) 12.sp else 16.sp, weight = FontWeight.Bold, maxLines = 1)
+        }
+        if (loop != null && track != null) {
+            MetaLine("LOOP", loopLengthLabel(loop.first, loop.second, track.bpm), compact)
+        } else {
+            MetaLine("JUMP", "1", compact)
+        }
+        MetaLine("Q", if (quantize) "1/4" else "OFF", compact)
     }
 }
 
 @Composable
-private fun ScrollingWave(
-    analysis: RbAnalysis?,
-    position: Float,
-    duration: Int,
+private fun MetaLine(label: String, value: String, compact: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        TextInk(label, fontSize = if (compact) 9.sp else 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 36.dp else 44.dp), maxLines = 1)
+        TextInk(value, fontSize = if (compact) 10.sp else 12.sp, weight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun UsbMark() {
+    Canvas(Modifier.width(12.dp).height(14.dp)) {
+        val ink = Color(StagePalette.ink)
+        drawRoundRect(ink, topLeft = Offset(size.width * 0.22f, size.height * 0.38f), size = Size(size.width * 0.56f, size.height * 0.55f), style = Stroke(1.3f))
+        drawLine(ink, Offset(size.width * 0.36f, size.height * 0.16f), Offset(size.width * 0.36f, size.height * 0.42f), 1.2f)
+        drawLine(ink, Offset(size.width * 0.5f, size.height * 0.06f), Offset(size.width * 0.5f, size.height * 0.42f), 1.2f)
+        drawLine(ink, Offset(size.width * 0.64f, size.height * 0.16f), Offset(size.width * 0.64f, size.height * 0.42f), 1.2f)
+    }
+}
+
+@Composable
+private fun FxRail(
+    fx: BeatFxState,
     bpm: Double,
     zoom: WaveZoom,
-    fxOn: Boolean,
+    grid: Boolean,
+    fxPanel: Boolean,
+    quantize: Boolean,
+    status: String,
+    compact: Boolean,
+    onFxChange: (BeatFxState) -> Unit,
+    onGrid: (Boolean) -> Unit,
+    onFxPanel: (Boolean) -> Unit,
+    onZoom: (WaveZoom) -> Unit,
     modifier: Modifier,
-    onZoomIn: () -> Unit,
-    onZoomOut: () -> Unit,
 ) {
-    val whole = zoom == WaveZoom.TRACK
-    val window = windowSeconds(zoom, bpm, duration.toDouble())
-    val lines = gridLines(bpm, duration.toDouble(), analysis?.beats.orEmpty())
-    val next = analysis?.hotCues?.filter { it.timeMs / 1000f > position }?.minByOrNull { it.timeMs }
-    val until = next?.let { beatsUntil(position.toDouble(), it.timeMs / 1000.0, bpm) }
-    Box(modifier.clip(RoundedCornerShape(4.dp)).background(Color(StagePalette.waveBg))) {
-        Canvas(
-            Modifier.fillMaxSize().pointerInput(zoom) {
-                detectTransformGestures { _, _, change, _ ->
-                    if (change > 1.08f) onZoomIn()
-                    if (change < 0.92f) onZoomOut()
-                }
-            },
-        ) {
-            val gutter = 18f
-            val top = gutter
-            val bottom = size.height - gutter
-            val mid = (top + bottom) / 2f
-            val half = (bottom - top) * 0.46f
-            val columns = 180
-            val loop = activeLoop(analysis)
-            if (loop != null && duration > 0) {
-                val a = markerFraction(loop.first / 1000.0, position.toDouble(), window, whole, duration.toDouble())
-                val b = markerFraction(loop.second / 1000.0, position.toDouble(), window, whole, duration.toDouble())
-                val left = (a.coerceAtMost(b) * size.width).toFloat()
-                val right = (a.coerceAtLeast(b) * size.width).toFloat()
-                if (right > left) drawRect(Color(0x332EE6A6), Offset(left, top), Size(right - left, bottom - top))
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.weight(1f).fillMaxWidth().border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(if (compact) 4.dp else 8.dp)) {
+            TextInk("BEAT FX", fontSize = if (compact) 10.sp else 12.sp, weight = FontWeight.Bold)
+            if (fxPanel) {
+                FxBody(fx, bpm, compact, onFxChange)
+            } else {
+                TextInk("STATUS", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp))
+                TextInk(status.ifBlank { "À espera de uma faixa." }, fontSize = if (compact) 10.sp else 12.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 4)
+                TextInk(if (quantize) "QUANTIZE 1/4" else "QUANTIZE OFF", color = Color(StagePalette.accentBlue), fontSize = 11.sp, weight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                TextInk("LVL ${fx.level}", fontSize = 11.sp, mono = true, modifier = Modifier.padding(top = 2.dp))
             }
-            for (column in 0 until columns) {
-                val time = if (whole) duration * column / columns.toDouble() else (position - window / 2.0) + window * column / columns.toDouble()
-                val (low, midBand, high) = bandsAt(analysis, duration.toDouble(), time)
-                val x = column * size.width / columns
-                drawLine(Color(StagePalette.waveLow), Offset(x, mid - low * half), Offset(x, mid + low * half), strokeWidth = (size.width / columns).coerceAtLeast(1.4f))
-                drawLine(Color(StagePalette.waveMid), Offset(x, mid - midBand * half * 0.72f), Offset(x, mid + midBand * half * 0.72f), strokeWidth = (size.width / columns * 0.7f).coerceAtLeast(1f))
-                drawLine(Color(StagePalette.waveHigh), Offset(x, mid - high * half * 0.45f), Offset(x, mid + high * half * 0.45f), strokeWidth = 1f)
-            }
-            lines.forEach { line ->
-                val fraction = markerFraction(line.seconds, position.toDouble(), window, whole, duration.toDouble())
-                if (fraction < 0.0 || fraction > 1.0) return@forEach
-                val x = (fraction * size.width).toFloat()
-                val reach = when (line.kind) {
-                    MarkerKind.PHRASE -> gutter
-                    MarkerKind.BAR -> 13f
-                    MarkerKind.BEAT -> 7f
-                }
-                val stroke = when (line.kind) {
-                    MarkerKind.PHRASE -> 3f
-                    MarkerKind.BAR -> 2.2f
-                    MarkerKind.BEAT -> 1.7f
-                }
-                val color = if (line.kind == MarkerKind.BEAT) Color(StagePalette.inkMuted) else Color(StagePalette.ink)
-                drawLine(color, Offset(x, top - reach), Offset(x, top + 5f), strokeWidth = stroke)
-                drawLine(color, Offset(x, bottom - 5f), Offset(x, bottom + reach), strokeWidth = stroke)
-                if (line.kind == MarkerKind.PHRASE) {
-                    drawLine(color.copy(alpha = 0.45f), Offset(x, top), Offset(x, bottom), strokeWidth = 1.6f)
-                }
-            }
-            analysis?.hotCues?.forEach { cue ->
-                val fraction = markerFraction(cue.timeMs / 1000.0, position.toDouble(), window, whole, duration.toDouble())
-                if (fraction < 0.0 || fraction > 1.0) return@forEach
-                val x = (fraction * size.width).toFloat()
-                drawLine(argb(cue.colorRgb ?: StagePalette.pads[cue.index.coerceIn(0, 7)]), Offset(x, top), Offset(x, bottom), strokeWidth = 2f)
-            }
-            val head = if (whole && duration > 0) (position / duration).coerceIn(0f, 1f) * size.width else size.width / 2f
-            drawLine(Color(StagePalette.ink), Offset(head, 0f), Offset(head, size.height), strokeWidth = 2f)
         }
-        TextInk(
-            buildString {
-                append(if (whole) "FAIXA" else "${zoom.bars} BARS")
-                if (until != null) append("   ${if (until >= 0) "+" else ""}$until")
-            },
-            fontSize = 11.sp,
-            weight = FontWeight.Bold,
-            modifier = Modifier.align(Alignment.BottomStart).padding(6.dp),
-        )
-        if (fxOn) {
-            TextInk("FX ON", fontSize = 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.playBg), modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Choice("ZOOM", !grid, compact, Modifier.weight(1f)) { onGrid(false) }
+            Choice("GRID", grid, compact, Modifier.weight(1f)) { onGrid(true) }
         }
-        Row(Modifier.align(Alignment.BottomEnd).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Chip("−", onZoomOut, fontSize = 12.sp)
-            Chip("+", onZoomIn, fontSize = 12.sp)
+        if (!grid) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Choice("−", false, compact) { onZoom(zoom.zoomOut()) }
+                TextInk(if (zoom.bars == null) "ALL" else "${zoom.bars}", fontSize = 12.sp, weight = FontWeight.Bold, mono = true, modifier = Modifier.weight(1f), maxLines = 1)
+                Choice("+", false, compact) { onZoom(zoom.zoomIn()) }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Choice("STATUS", !fxPanel, compact, Modifier.weight(1f)) { onFxPanel(false) }
+            Choice("BEAT FX", fxPanel, compact, Modifier.weight(1f)) { onFxPanel(true) }
         }
     }
 }
 
 @Composable
-private fun OverviewWave(analysis: RbAnalysis?, position: Float, duration: Int, modifier: Modifier) {
-    Canvas(modifier.clip(RoundedCornerShape(3.dp)).background(Color(StagePalette.waveBg))) {
-        val data = analysis?.waveform ?: ByteArray(0)
-        val mid = size.height / 2f
-        if (data.isNotEmpty()) {
-            val step = size.width / data.size
-            data.forEachIndexed { index, byte ->
-                val amp = (byte.toInt() and 0xFF) / 255f * (size.height * 0.42f)
-                val x = index * step
-                drawLine(Color(StagePalette.waveLow), Offset(x, mid - amp), Offset(x, mid + amp), strokeWidth = step.coerceAtLeast(1f))
-            }
-        }
-        if (duration > 0) {
-            val x = (position / duration).coerceIn(0f, 1f) * size.width
-            drawRect(Color(0x88000000), Offset(0f, 0f), Size(x, size.height))
-            drawLine(Color(StagePalette.ink), Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.5f)
-        }
-        activeLoop(analysis)?.let { loop ->
-            if (duration <= 0) return@let
-            val a = loop.first / 1000f / duration * size.width
-            val b = loop.second / 1000f / duration * size.width
-            drawRect(Color(0x553DDC97), Offset(a, 0f), Size((b - a).coerceAtLeast(2f), size.height))
-        }
-        analysis?.hotCues?.forEach { cue ->
-            if (duration <= 0) return@forEach
-            val x = cue.timeMs / 1000f / duration * size.width
-            drawLine(argb(cue.colorRgb ?: StagePalette.pads[cue.index.coerceIn(0, 7)]), Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.5f)
-        }
-        analysis?.memoryCues?.forEach { cue ->
-            if (duration <= 0) return@forEach
-            val x = cue.timeMs / 1000f / duration * size.width
-            drawLine(Color(StagePalette.ink), Offset(x, 0f), Offset(x, size.height * 0.45f), strokeWidth = 1.2f)
-        }
-    }
-}
-
-@Composable
-private fun PhaseMeter(a: DeckFace, b: DeckFace, tracks: List<RbTrack?>, modifier: Modifier) {
-    val delta = os.deckbridge.logic.phaseOffset(a.position.toDouble(), tracks.getOrNull(0)?.bpm ?: 0.0, b.position.toDouble(), tracks.getOrNull(1)?.bpm ?: 0.0)
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        TextInk("PH", fontSize = 10.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
-        Canvas(Modifier.fillMaxWidth().weight(1f).padding(vertical = 8.dp)) {
-            val mid = size.height / 2f
-            drawLine(Color(StagePalette.line), Offset(size.width / 2f, 0f), Offset(size.width / 2f, size.height), 1f)
-            drawLine(Color(StagePalette.ink), Offset(2f, mid), Offset(size.width - 2f, mid), 1f)
-            val y = mid - (delta.toFloat() * size.height * 0.8f)
-            drawCircle(Color(StagePalette.deckA), radius = 4f, center = Offset(size.width / 2f, y))
-        }
-    }
-}
-
-@Composable
-private fun Platter(position: Float, bpm: Double, accent: Color, modifier: Modifier, onDrag: (Float) -> Unit) {
-    val turns = if (bpm > 1.0) position * bpm.toFloat() / 60f else position
-    Canvas(
-        modifier
-            .clip(CircleShape)
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { _, drag ->
-                    val beat = if (bpm > 1.0) 60f / bpm.toFloat() else 0.5f
-                    onDrag(drag / 120f * beat)
-                }
-            },
-    ) {
-        drawCircle(Color(StagePalette.waveBg))
-        drawCircle(accent, style = Stroke(width = 3f))
-        rotate(turns * 360f) {
-            drawLine(Color(StagePalette.ink), Offset(size.width / 2f, size.height / 2f), Offset(size.width / 2f, 4f), strokeWidth = 2f)
-        }
-        drawCircle(accent, radius = 4f)
-    }
-}
-
-@Composable
-private fun TempoFader(value: Float, accent: Color, barHeight: Dp, onChange: (Float) -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        TextInk("TEMPO", fontSize = 9.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+private fun FxBody(fx: BeatFxState, bpm: Double, compact: Boolean, onFxChange: (BeatFxState) -> Unit) {
+    val on = fx.on
+    val nameFill = if (on) Color(StagePalette.accentBlue) else Color(StagePalette.panelRaised)
+    val nameInk = if (on) Color(inkOn(StagePalette.accentBlue)) else Color(StagePalette.accentBlue)
+    Row(Modifier.fillMaxWidth().padding(top = if (compact) 4.dp else 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(
-            Modifier
-                .padding(top = 2.dp)
-                .width(18.dp)
-                .height(barHeight)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color(StagePalette.waveBg))
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, _, _ ->
-                        val next = (value - pan.y / size.height).coerceIn(0f, 1f)
-                        onChange(next)
+            Modifier.weight(1f).height(if (compact) 28.dp else 40.dp).clip(RoundedCornerShape(2.dp)).background(nameFill).border(1.dp, Color(StagePalette.accentBlue)).clickable {
+                onFxChange(fx.copy(on = !fx.on))
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            TextInk(fx.name().uppercase(), color = nameInk, fontSize = if (compact) 14.sp else 20.sp, weight = FontWeight.Bold, maxLines = 1)
+        }
+        Box(
+            Modifier.width(if (compact) 22.dp else 28.dp).height(if (compact) 28.dp else 40.dp).border(1.dp, Color(StagePalette.line)).clickable {
+                onFxChange(fx.copy(effect = (fx.effect + 1) % BEAT_FX_NAMES.size))
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            TextInk("›", color = Color(StagePalette.accentBlue), fontSize = 16.sp, weight = FontWeight.Bold)
+        }
+    }
+    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        TextInk(if (bpm > 1.0) "%.2f".format(bpm) else "—", fontSize = if (compact) 14.sp else 18.sp, weight = FontWeight.Medium, mono = true)
+        TextInk("BPM", fontSize = 9.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 4.dp))
+        Spacer(Modifier.weight(1f))
+        Box(Modifier.border(1.dp, Color(0xFF5CDBF0), RoundedCornerShape(2.dp)).padding(horizontal = 4.dp, vertical = 1.dp)) {
+            TextInk("AUTO", color = Color(0xFF5CDBF0), fontSize = 9.sp, weight = FontWeight.Bold)
+        }
+    }
+    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        listOf("3/4", "1", "2").forEach { label ->
+            val selected = bigFractionSelected(fx, label)
+            FractionCell(label, selected, compact, Modifier.weight(1f)) {
+                onFxChange(fx.copy(fraction = fractionIndex(label)))
+            }
+        }
+    }
+    val beats = beatFxBeats(fx.fractionLabel())
+    val ms = if (bpm > 1.0) (beats * 60000.0 / bpm).roundToInt() else 0
+    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
+        TextInk("TIME", fontSize = 9.sp, color = Color(StagePalette.inkMuted))
+        Spacer(Modifier.weight(1f))
+        TextInk(if (bpm > 1.0) ms.toString() else "—", fontSize = if (compact) 13.sp else 16.sp, weight = FontWeight.Medium, mono = true)
+        TextInk(" ms", fontSize = 10.sp, color = Color(StagePalette.inkMuted))
+    }
+    TextInk("X-PAD PARAMETER", fontSize = 8.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp), maxLines = 1)
+    TextInk("BEAT", fontSize = 9.sp, color = Color(0xFF5CDBF0), weight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
+    Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        listOf("1/16", "1/8", "1/4", "1/2", "3/4", "1").forEach { label ->
+            FractionCell(label, xpadSelected(fx, label), compact, Modifier.weight(1f)) {
+                onFxChange(fx.copy(fraction = fractionIndex(label)))
+            }
+        }
+    }
+    TextInk("CH SELECT", fontSize = 9.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp))
+    Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        listOf("1" to 0, "2" to 1, "MST" to 2).forEach { (label, channel) ->
+            Choice(label, fx.channel == channel, compact, Modifier.weight(1f)) { onFxChange(fx.copy(channel = channel)) }
+        }
+    }
+}
+
+@Composable
+private fun HotCueBand(
+    catalog: RbCatalog?,
+    tracks: List<RbTrack?>,
+    compact: Boolean,
+    onActive: (Int) -> Unit,
+    onHot: (Int, Int) -> Unit,
+    modifier: Modifier,
+) {
+    Row(modifier.height(if (compact) 78.dp else 108.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        HotGrid(0, analysisOf(catalog, tracks.getOrNull(0)), compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot)
+        HotGrid(1, analysisOf(catalog, tracks.getOrNull(1)), compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot)
+    }
+}
+
+@Composable
+private fun HotGrid(
+    deck: Int,
+    analysis: RbAnalysis?,
+    compact: Boolean,
+    modifier: Modifier,
+    onActive: (Int) -> Unit,
+    onHot: (Int, Int) -> Unit,
+) {
+    Column(modifier) {
+        TextInk("HOT CUE", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+        repeat(2) { row ->
+            Row(Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                repeat(4) { column ->
+                    val index = row * 4 + column
+                    val cue = analysis?.hotCues?.firstOrNull { it.index == index }
+                    val letter = ('A' + index).toString()
+                    val color = argb(LETTER_COLORS[index])
+                    Row(
+                        Modifier.weight(1f).fillMaxHeight().background(Color(StagePalette.panel)).border(1.dp, Color(StagePalette.line)).clickable {
+                            onActive(deck)
+                            onHot(deck, index)
+                        }.padding(horizontal = if (compact) 3.dp else 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TextInk(letter, color = color, fontSize = if (compact) 12.sp else 15.sp, weight = FontWeight.Bold)
+                        TextInk(
+                            cue?.comment?.ifBlank { "" } ?: "",
+                            fontSize = if (compact) 9.sp else 12.sp,
+                            color = if (cue == null) Color(StagePalette.inkMuted) else Color(StagePalette.ink),
+                            maxLines = 1,
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
                     }
                 }
-                .pointerInput(Unit) {
-                    detectTapGestures { offset ->
-                        onChange((1f - offset.y / size.height).coerceIn(0f, 1f))
-                    }
-                },
-        ) {
-            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(value.coerceIn(0.04f, 1f)).background(accent))
-            Box(Modifier.align(Alignment.Center).fillMaxWidth().height(1.dp).background(Color(StagePalette.ink)))
+            }
         }
     }
 }
 
 @Composable
-private fun HotPad(index: Int, cue: RbHotCue?, modifier: Modifier, onClick: () -> Unit) {
-    val letter = ('A' + index).toString()
-    val rgb = cue?.colorRgb ?: StagePalette.pads[index]
-    val active = cue != null
-    val fill = if (active) argb(rgb) else Color(StagePalette.panelRaised)
-    val ink = if (active) argb(inkOn(rgb)) else Color(StagePalette.ink)
-    Box(
-        modifier.height(28.dp).clip(RoundedCornerShape(3.dp)).background(fill).border(1.dp, argb(rgb), RoundedCornerShape(3.dp)).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        TextInk(if (cue?.comment?.isNotBlank() == true && cue.comment.length <= 4) cue.comment else letter, color = ink, fontSize = 11.sp, weight = FontWeight.Bold, maxLines = 1)
-    }
-}
-
-@Composable
-private fun CoverArt(seed: Int, title: String, size: Dp) {
-    Canvas(Modifier.size(size).clip(RoundedCornerShape(4.dp)).background(Color(StagePalette.panelRaised))) {
-        val base = StagePalette.pads[abs(seed) % StagePalette.pads.size]
-        drawRect(argb(base), size = Size(this.size.width * 0.62f, this.size.height))
-        drawRect(Color(StagePalette.ink), topLeft = Offset(this.size.width * 0.62f, 0f), size = Size(this.size.width * 0.38f, this.size.height * 0.45f))
-        drawRect(Color(StagePalette.bg), topLeft = Offset(this.size.width * 0.62f, this.size.height * 0.45f), size = Size(this.size.width * 0.38f, this.size.height * 0.55f))
-        if (title.isNotEmpty()) {
-            drawCircle(Color(StagePalette.bg), radius = this.size.minDimension * 0.12f, center = Offset(this.size.width * 0.28f, this.size.height * 0.62f))
-        }
-    }
-}
-
-@Composable
-private fun Chip(label: String, onClick: () -> Unit, selected: Boolean = false, fontSize: TextUnit = 12.sp) {
-    val fill = if (selected) Color(StagePalette.navSelected) else Color(StagePalette.panelRaised)
-    val ink = if (selected) Color(StagePalette.navSelectedInk) else Color(StagePalette.ink)
-    Box(
-        Modifier.height(26.dp).clip(RoundedCornerShape(4.dp)).background(fill).border(1.dp, Color(StagePalette.line), RoundedCornerShape(4.dp)).clickable(onClick = onClick).padding(horizontal = 7.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        TextInk(label, color = ink, fontSize = fontSize, weight = FontWeight.SemiBold, maxLines = 1)
-    }
-}
-
-@Composable
-private fun Badge(label: String, on: Boolean, accentRgb: Int, onClick: () -> Unit) {
-    val fill = if (on) argb(accentRgb) else Color(StagePalette.panelRaised)
-    val ink = if (on) argb(inkOn(accentRgb)) else Color(StagePalette.ink)
-    Box(Modifier.clip(RoundedCornerShape(3.dp)).background(fill).clickable(onClick = onClick).padding(horizontal = 5.dp, vertical = 2.dp)) {
-        TextInk(label, color = ink, fontSize = 10.sp, weight = FontWeight.Bold, maxLines = 1)
-    }
-}
-
-private fun bandsAt(analysis: RbAnalysis?, duration: Double, time: Double): Triple<Float, Float, Float> {
-    val overview = analysis?.waveform ?: ByteArray(0)
-    val amp = if (overview.isEmpty() || duration <= 0.0) {
-        0.25f
+private fun DeckCard(
+    deck: Int,
+    track: RbTrack?,
+    face: DeckFace,
+    analysis: RbAnalysis?,
+    master: Boolean,
+    active: Boolean,
+    quantize: Boolean,
+    compact: Boolean,
+    modifier: Modifier,
+    onActive: (Int) -> Unit,
+    onRemain: (Int) -> Unit,
+    onRange: (Int) -> Unit,
+    onMaster: (Int) -> Unit,
+    onQuantize: () -> Unit,
+    onPlay: (Int) -> Unit,
+) {
+    val duration = (track?.durationSeconds ?: 0).toDouble()
+    val shown = if (track == null) {
+        0.0
+    } else if (face.remain) {
+        (duration - face.position).coerceAtLeast(0.0)
     } else {
-        val index = ((time / duration) * (overview.size - 1)).roundToInt().coerceIn(0, overview.lastIndex)
-        (overview[index].toInt() and 0xFF) / 255f
+        face.position.toDouble().coerceAtLeast(0.0)
     }
-    val beat = analysis?.beats?.minByOrNull { abs(it.timeMs / 1000.0 - time) }
-    val dist = if (beat == null) 1.0 else abs(beat.timeMs / 1000.0 - time)
-    val peak = if (dist < 0.045) (1.0 - dist / 0.045).toFloat() else 0f
-    return Triple(
-        (amp * 0.9f).coerceIn(0.05f, 1f),
-        (amp * 0.5f + peak * 0.75f).coerceIn(0f, 1f),
-        (peak * 0.95f + amp * 0.12f).coerceIn(0f, 1f),
-    )
+    val clock = splitClock(shown)
+    val percent = (face.pitch - 1f) * 100f
+    val pitched = if (track == null) 0.0 else track.bpm * face.pitch
+    Column(
+        modifier.border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).clickable { onActive(deck) }.padding(if (compact) 4.dp else 8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val badgeFill = if (active) Color(StagePalette.accentBlue) else Color(StagePalette.panelRaised)
+            val badgeInk = if (active) Color(inkOn(StagePalette.accentBlue)) else Color(StagePalette.ink)
+            Box(Modifier.clip(RoundedCornerShape(2.dp)).background(badgeFill).padding(horizontal = 5.dp, vertical = 1.dp)) {
+                TextInk("DECK ${deck + 1}", color = badgeInk, fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold)
+            }
+            TextInk("♪", color = Color(StagePalette.accentBlue), fontSize = if (compact) 12.sp else 14.sp, modifier = Modifier.padding(start = 6.dp))
+            TextInk(track?.title ?: "Sem faixa", fontSize = if (compact) 12.sp else 15.sp, weight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            if (face.onAir) {
+                Box(Modifier.clip(RoundedCornerShape(2.dp)).background(Color(StagePalette.onAir)).padding(horizontal = 5.dp, vertical = 1.dp)) {
+                    TextInk("ON AIR", color = Color.White, fontSize = if (compact) 8.sp else 10.sp, weight = FontWeight.Bold)
+                }
+            }
+        }
+        Row(Modifier.padding(top = if (compact) 2.dp else 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).clickable { onRemain(deck) }) {
+                TextInk(if (face.remain) "REMAIN" else "TIME", fontSize = 9.sp, color = Color(StagePalette.inkMuted))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    TextInk(clock.first, fontSize = if (compact) 22.sp else 36.sp, weight = FontWeight.Medium, mono = true, maxLines = 1)
+                    TextInk(clock.second, fontSize = if (compact) 12.sp else 16.sp, weight = FontWeight.Medium, mono = true, modifier = Modifier.padding(bottom = if (compact) 2.dp else 5.dp))
+                }
+            }
+            Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 8.dp).clickable { onRange(deck) }) {
+                TextInk("TEMPO", fontSize = 9.sp, color = Color(StagePalette.inkMuted))
+                TextInk(tempoText(percent), fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.SemiBold, mono = true, maxLines = 1)
+                Box(Modifier.padding(top = 2.dp).clip(RoundedCornerShape(2.dp)).background(Color(StagePalette.playBg)).padding(horizontal = 4.dp, vertical = 1.dp)) {
+                    TextInk(rangeBadge(face.range), color = Color(StagePalette.playInk), fontSize = 10.sp, weight = FontWeight.Bold)
+                }
+            }
+            Column(horizontalAlignment = Alignment.End, modifier = Modifier.clickable { onMaster(deck) }) {
+                if (master) {
+                    Box(Modifier.clip(RoundedCornerShape(2.dp)).background(Color(StagePalette.accentOrange)).padding(horizontal = 4.dp, vertical = 1.dp)) {
+                        TextInk("MASTER", color = Color(inkOn(StagePalette.accentOrange)), fontSize = 8.sp, weight = FontWeight.Bold)
+                    }
+                } else {
+                    Spacer(Modifier.height(12.dp))
+                }
+                val border = if (master) Color(StagePalette.accentOrange) else Color(StagePalette.ink)
+                val parts = bpmParts(pitched)
+                Row(
+                    Modifier.padding(top = 2.dp).border(1.5.dp, border).padding(horizontal = if (compact) 4.dp else 8.dp, vertical = if (compact) 2.dp else 4.dp),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    TextInk(parts.first, fontSize = if (compact) 18.sp else 28.sp, weight = FontWeight.Medium, mono = true)
+                    TextInk(parts.second, fontSize = if (compact) 11.sp else 14.sp, weight = FontWeight.Medium, mono = true, modifier = Modifier.padding(bottom = if (compact) 1.dp else 3.dp))
+                }
+            }
+        }
+        OverviewWave(track, analysis, face.position.toDouble(), Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp))
+        PhraseBar(track, Modifier.fillMaxWidth().height(if (compact) 4.dp else 7.dp))
+        Row(Modifier.padding(top = if (compact) 2.dp else 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.clickable { onPlay(deck) }) { Lamp(if (face.playing) "PLAY" else "PAUSE", face.playing, compact) }
+            Lamp("A.HOT CUE", true, compact)
+            Lamp("AUTO CUE", analysis?.mainCueMs != null && analysis.mainCueMs >= 0, compact)
+            Box(Modifier.clickable(onClick = onQuantize)) {
+                Lamp(if (quantize) "QUANTIZE 1/4" else "QUANTIZE", quantize, compact)
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoCard(track: RbTrack?, modifier: Modifier, onClose: () -> Unit) {
+    Column(modifier.width(260.dp).background(Color(StagePalette.panel)).border(1.dp, Color(StagePalette.line)).padding(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextInk("INFO", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentBlue), modifier = Modifier.weight(1f))
+            NavButton("FECHAR", compact = true, onClick = onClose)
+        }
+        TextInk(track?.title ?: "Sem faixa", fontSize = 16.sp, weight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp), maxLines = 2)
+        TextInk(track?.artist ?: "", fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
+        TextInk(track?.album ?: "", fontSize = 13.sp, maxLines = 1)
+        TextInk(listOfNotNull(track?.keyName?.takeIf { it.isNotBlank() }, track?.let { "%.1f BPM".format(it.bpm) }).joinToString("  ·  "), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+@Composable
+private fun NavButton(label: String, compact: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.height(if (compact) 22.dp else 26.dp).clip(RoundedCornerShape(5.dp)).background(Color(StagePalette.panelRaised)).border(1.dp, Color(StagePalette.line), RoundedCornerShape(5.dp)).clickable(onClick = onClick).padding(horizontal = if (compact) 6.dp else 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        TextInk(label, color = Color(StagePalette.accentBlue), fontSize = if (compact) 10.sp else 12.sp, weight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun Choice(label: String, selected: Boolean, compact: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier.height(if (compact) 20.dp else 24.dp).border(if (selected) 1.5.dp else 1.dp, Color(if (selected) StagePalette.accentBlue else StagePalette.line), RoundedCornerShape(2.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        TextInk(label, color = if (selected) Color(StagePalette.accentBlue) else Color(StagePalette.ink), fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun FractionCell(label: String, selected: Boolean, compact: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val fill = if (selected) Color(0xFF5E636C.toInt()) else Color(StagePalette.bg)
+    val ink = if (selected) Color.White else Color(StagePalette.accentBlue)
+    Box(modifier.height(if (compact) 18.dp else 22.dp).background(fill).border(1.dp, Color(if (selected) 0xFF5E636C.toInt() else StagePalette.line)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        TextInk(label, color = ink, fontSize = if (compact) 8.sp else 10.sp, weight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun Lamp(label: String, on: Boolean, compact: Boolean) {
+    TextInk(label, color = if (on) Color(StagePalette.accentBlue) else Color(StagePalette.inkMuted), fontSize = if (compact) 8.sp else 10.sp, weight = FontWeight.Bold, maxLines = 1)
+}
+
+private fun analysisOf(catalog: RbCatalog?, track: RbTrack?): RbAnalysis? = track?.let { catalog?.analyses?.get(it.id) }
+
+private fun remainClock(track: RbTrack?, face: DeckFace): String {
+    if (track == null) return "--:--"
+    val left = (track.durationSeconds - face.position).toInt().coerceAtLeast(0)
+    return "%d:%02d".format(left / 60, left % 60)
+}
+
+private fun splitClock(seconds: Double): Pair<String, String> {
+    val millis = (seconds.coerceAtLeast(0.0) * 1000.0).roundToInt()
+    val whole = millis / 1000
+    return "%02d:%02d".format(whole / 60, whole % 60) to ".%03d".format(millis % 1000)
 }
 
 private fun tempoText(percent: Float): String {
-    val sign = if (percent > 0.05f) "+" else ""
+    val sign = if (percent >= 0f) "+" else ""
     return "$sign${"%.1f".format(percent)}%"
 }
 
-private fun filterLabel(value: Int): String {
-    val delta = ((value - 64) * 100) / 64
-    val sign = if (delta > 0) "+" else ""
-    return "FLT $sign$delta"
+private fun rangeBadge(range: Double): String = when {
+    abs(range - 0.06) < 1e-6 -> "6%"
+    abs(range - 0.10) < 1e-6 -> "10%"
+    abs(range - 0.16) < 1e-6 -> "16%"
+    abs(range - 0.25) < 1e-6 -> "WIDE"
+    else -> "${(range * 100).roundToInt()}%"
 }
 
-private fun clock(seconds: Float): String {
-    val whole = seconds.toInt().coerceAtLeast(0)
-    val frac = ((seconds - whole) * 10).toInt().coerceIn(0, 9)
-    return "%d:%02d.%d".format(whole / 60, whole % 60, frac)
+private fun bpmParts(bpm: Double): Pair<String, String> {
+    if (bpm <= 1.0) return "---" to ""
+    val tenths = (bpm * 10.0).roundToInt()
+    return (tenths / 10).toString() to ".${tenths % 10}"
+}
+
+private fun bigFractionSelected(fx: BeatFxState, label: String): Boolean = when (label) {
+    "3/4" -> fx.fractionLabel() == "3/4"
+    "1" -> fx.fractionLabel() == "1/1"
+    "2" -> fx.fractionLabel() == "2/1"
+    else -> false
+}
+
+private fun xpadSelected(fx: BeatFxState, label: String): Boolean = when (label) {
+    "1" -> fx.fractionLabel() == "1/1"
+    else -> fx.fractionLabel() == label
+}
+
+private fun fractionIndex(label: String): Int {
+    val key = when (label) {
+        "1" -> "1/1"
+        "2" -> "2/1"
+        else -> label
+    }
+    val index = BEAT_FX_FRACTIONS.indexOf(key)
+    return if (index < 0) 5 else index
 }

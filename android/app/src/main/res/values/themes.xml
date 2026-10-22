@@ -3,7 +3,7 @@
     <style name="Theme.DeckBridge" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">#121418</item>
         <item name="android:navigationBarColor">#121418</item>
-        <item name="android:windowBackground">#0D0D0F</item>
+        <item name="android:windowBackground">#000000</item>
         <item name="android:textColor">#F4F7FB</item>
         <item name="android:textColorPrimary">#F4F7FB</item>
         <item name="android:textColorSecondary">#C9D3DF</item>

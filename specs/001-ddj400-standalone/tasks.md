@@ -153,6 +153,10 @@ OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Ras
 - [x] **A032** Player no espírito de duas telas de CDJ, desenho próprio: onda com zoom, grade de beats, visão geral, hot cues A–H, fase, badges. **Estado:** `PASS` de renderização JVM. Não é o tablet. Sem logo nem asset de terceiro.
 - [x] **A033** Biblioteca abre por SOURCE/BROWSE e fecha ao carregar. Encoder BROWSE e LOAD da DDJ-400 navegam esse browser. **Estado:** `PASS` do teste com bytes do mapa. O sentido do encoder não foi medido na controladora.
 - [x] **A034** Indicador de Beat FX (nome, fração, canal, ON, nível) e filtro por deck, a partir do MIDI. Zoom na tela. APK 0.6.0 arm64. **Estado:** o indicador não processa o efeito. Escuta `BLOCKED_HARDWARE`. Não instalado no tablet.
+- [x] **A035** Tela 0.7.0 no espírito da waveform empilhada: barra SOURCE/BROWSE/TAG LIST/PLAYLIST/SEARCH/MENU, coluna de deck, duas ondas com playhead a cerca de 30%, painel BEAT FX, hot cues 2×4, cartões de baixo. Desenho próprio, sem logo nem nome de produto. **Estado:** `PASS` de renderização JVM em 2000×1200 e 1024×600. Não é o tablet.
+- [x] **A036** Browser denso: miniatura da onda, número, título, BPM, tom com realce de tom compatível, linha selecionada. **Estado:** `PASS` de renderização JVM. Não é um export real.
+- [x] **A037** Pendrive simulado com 24 faixas (2 cliques + 22 peças sintéticas), cues nomeados e seção PWB3 (graves/médios/agudos por coluna, normalizados pelo pico de cada banda). **Estado:** `PASS` do teste JVM. Não é FFT de um arquivo comercial nem PWV3/PWV4/PWV5.
+- [x] **A038** Echo, Delay e Flanger processam o mixer (rota 3). Os outros nomes ficam secos. APK 0.7.0 arm64. **Estado:** o código está no motor. Escuta `BLOCKED_HARDWARE`. Não instalado no tablet. A022 continua aberto.
 
 ## Traçabilidade requisito -> tarefas -> testes/gates
 
