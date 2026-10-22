@@ -121,6 +121,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-22 | A063–A065 | parcial | `ca075ab` | corpus CC BY 3.0, export deste app, cinco itens de ecrã, inspeção só leitura, APK 0.12.0 | escuta, MediaCodec e pendrive do dono `BLOCKED_HARDWARE`; grade real perto de 100 ms; tom ≠ TKEY | dono ouve o trecho e, quando a pasta chegar, roda `tools/inspect_usb.py` |
 | 2026-10-22 | A066 | parcial | `9453e82` | tela 0.12.1, grade no kick, tom MIREX 0,50, RGB aditivo, emenda de loop, APK arm64 | escuta e pendrive do dono `BLOCKED_HARDWARE`; cobertura do kick 57–93%; Ecosystem Fm ≠ TKEY Ebm | dono instala o APK arm64 0.12.1 e ouve o trecho |
 | 2026-10-22 | A067 | parcial | `efbd367` | tela 0.12.2, corpus GiantSteps, Acc1 0,655, Acc2 0,724, MIREX 0,476, pasta sem export, APK arm64 | alvos 0,85 / 0,95 / 0,70 não atingidos; escuta `BLOCKED_HARDWARE`; Chromosome 154,2 e tom Am, TKEY é Bm | dono instala o APK arm64 0.12.2 e abre uma pasta sem export |
+| 2026-10-22 | A068 | parcial | `78bd7c9` | tela 0.13.0, slip, frases 16/26 a 1 compasso, MATCHING, SUGGEST, auto gain, APK arm64 | escuta `BLOCKED_HARDWARE`; sem auto gain lido do export; voz e 4 decks por fazer | dono instala o APK arm64 0.13.0 |
 
 ### Proposta Android
 - Estado: proposta, não aceita
