@@ -23,6 +23,8 @@ data class AnlzFile(
     val bandPreview: WaveBands? = null,
     val blueDetail: ByteArray = ByteArray(0),
     val bluePreview: ByteArray = ByteArray(0),
+    val phrases: List<PhraseSpan> = emptyList(),
+    val phraseMood: String = "",
 )
 
 fun parseAnlz(bytes: ByteArray): AnlzFile {
@@ -45,6 +47,7 @@ private fun parseAnlzBody(bytes: ByteArray): AnlzFile {
     val cues = mutableListOf<AnlzCue>()
     val issues = mutableListOf<String>()
     var waveform = ByteArray(0)
+    var phraseTag: ByteArray? = null
     var pwv7: WaveBands? = null
     var pwv6: WaveBands? = null
     var pwv5: ColorWave? = null
@@ -73,6 +76,7 @@ private fun parseAnlzBody(bytes: ByteArray): AnlzFile {
             "PWV6" -> pwv6 = readPwv6(bytes, cursor, bodyEnd)
             "PWVC" -> Unit
             "PWB3" -> pwb3 = readBands(bytes, body, bodyEnd)
+            "PSSI" -> phraseTag = bytes.copyOfRange(cursor, bodyEnd)
         }
         cursor += lenTag
     }
@@ -86,7 +90,58 @@ private fun parseAnlzBody(bytes: ByteArray): AnlzFile {
         else -> ""
     }
     val bluePreview = decodePreviewHeights(waveform)
-    return AnlzFile(beats, cues, waveform, bands, source, issues, pwv5, pwv4, pwv7, pwv6, pwv3, bluePreview)
+    val parsed = phraseTag?.let { readPssi(it, beats) }
+    return AnlzFile(
+        beats, cues, waveform, bands, source, issues, pwv5, pwv4, pwv7, pwv6, pwv3, bluePreview,
+        parsed?.first.orEmpty(), parsed?.second.orEmpty(),
+    )
+}
+
+private fun readPssi(tag: ByteArray, beats: List<AnlzBeat>): Pair<List<PhraseSpan>, String>? {
+    if (tag.size < 18 + 14) return null
+    val entryBytes = tag.u32be(12).toInt()
+    if (entryBytes != 24) return null
+    val count = tag.u16be(16)
+    if (count <= 0 || count > 512) return null
+    val body = tag.copyOfRange(18, tag.size)
+    if (body.size >= 8 && body.u16be(6) > 20) unmaskPssi(body, count)
+    if (body.size < 14) return null
+    val mood = body.u16be(0)
+    if (mood !in 1..3) return null
+    val endBeat = body.u16be(8)
+    val moodName = when (mood) { 1 -> "high"; 3 -> "low"; else -> "mid" }
+    val raw = ArrayList<IntArray>(count)
+    var cursor = 14
+    repeat(count) {
+        if (cursor + 24 > body.size) return@repeat
+        raw += intArrayOf(
+            body.u16be(cursor + 2),
+            body.u16be(cursor + 4),
+            body.u8(cursor + 7),
+            body.u8(cursor + 9),
+            body.u8(cursor + 19),
+            body.u8(cursor + 21),
+            body.u16be(cursor + 22),
+        )
+        cursor += 24
+    }
+    if (raw.isEmpty()) return null
+    fun beatMs(beat: Int): Int {
+        if (beat <= 0) return 0
+        val known = beats.getOrNull(beat - 1)
+        if (known != null) return known.timeMs
+        val bpm = beats.firstOrNull()?.bpm ?: 120.0
+        return ((beat - 1) * 60000.0 / bpm.coerceAtLeast(1.0)).toInt()
+    }
+    val spans = raw.mapIndexed { index, row ->
+        val label = pssiLabel(mood, row[1], row[2], row[3], row[4])
+        val start = beatMs(row[0])
+        val endBeatNo = if (index + 1 < raw.size) raw[index + 1][0] else endBeat
+        val end = beatMs(endBeatNo).coerceAtLeast(start)
+        val fill = if (row[5] != 0) beatMs(row[6]) else null
+        PhraseSpan(start, end, phraseFamily(label), label, moodName, fill)
+    }
+    return spans to moodName
 }
 
 private fun readBeats(bytes: ByteArray, at: Int, end: Int): List<AnlzBeat> {
@@ -302,5 +357,7 @@ fun mergeAnalysis(dat: AnlzFile?, ext: AnlzFile?, ex2: AnlzFile? = null): AnlzFi
         else -> ""
     }
     val issues = dat?.issues.orEmpty() + ext?.issues.orEmpty() + ex2?.issues.orEmpty()
-    return AnlzFile(beats, cues, wave, bands, source, issues, rgbDetail, rgbPreview, bandDetail, bandPreview, blueDetail, bluePreview)
+    val phrases = listOf(ext?.phrases, dat?.phrases, ex2?.phrases).firstOrNull { it?.isNotEmpty() == true }.orEmpty()
+    val mood = listOf(ext, dat, ex2).firstOrNull { it?.phrases?.isNotEmpty() == true }?.phraseMood.orEmpty()
+    return AnlzFile(beats, cues, wave, bands, source, issues, rgbDetail, rgbPreview, bandDetail, bandPreview, blueDetail, bluePreview, phrases, mood)
 }

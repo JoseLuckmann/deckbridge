@@ -10,5 +10,11 @@ O dono só tem a DDJ-400 e o Raspberry no fim do projeto. Até lá, nada abaixo 
 6. Tirar o pendrive durante a música e provocar uma falha de áudio (T038). Não pode gravar no pendrive nem voltar a tocar sozinho.
 7. Só então reunir o gate G1 (T039). Enquanto isso, `docs/benchmarks/G1-evidence.md` permanece aberto e bloqueado.
 8. Na DDJ-400, com o painel RMX ligado na tela, confirmar que o modo de pad SAMPLER (notas 0x30–0x37) dispara Scene FX nos pads 1–4 e o X-Pad nos pads 5–8, que SHIFT+SAMPLER não foi tomado, que LEVEL/DEPTH muda a intensidade, e que o isolador da tela mata e abre as bandas. Confirmar também a sensibilidade do jog e o sentido do encoder BROWSE. Até esse teste, o mapeamento RMX, a sensibilidade do jog e o sentido do encoder ficam provisórios e `BLOCKED_HARDWARE`. Não marcar PASS a partir do computador, da JVM nem do APK.
+9. Slip com a faixa em pausa, no scratch, com o hot cue premido e em reverse. O ponto de fundo continua a andar. Ao soltar, a cabeça volta a esse ponto. Até ouvir isto na DDJ-400, `BLOCKED_HARDWARE`.
+10. No menu, WAVEFORM / PHASE METER. O medidor mostra a fase do compasso de cada deck em relação ao master. `BLOCKED_HARDWARE`.
+11. No BROWSE, MATCHING lista faixas compatíveis em BPM e tom com o master. SUGGEST mostra a linha do motivo e não repete o que já esteve no ar. `BLOCKED_HARDWARE`.
+12. A barra de frase e os cues automáticos (A no primeiro downbeat, B no drop, C no break, D no outro, ou o preset INTRO). Os cues ficam no app. O hash do USB antes e depois continua igual. `BLOCKED_HARDWARE`.
+13. Beat jump de 64 batidas para a frente e para trás, na grade. `BLOCKED_HARDWARE`.
+14. Auto gain ligado: o cartão mostra o trim em dB e o master não clipa. Desligado, o trim some. `BLOCKED_HARDWARE`.
 
 Tentativa de montar uma imagem FAT neste ambiente, em 2026-10-21: `mkfs.vfat` criou o arquivo, e o `mount` respondeu `unknown filesystem type 'vfat'`. Não houve montagem. Os testes de montagem usam um runner falso.

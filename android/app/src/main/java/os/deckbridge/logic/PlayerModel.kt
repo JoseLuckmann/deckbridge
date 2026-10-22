@@ -206,6 +206,8 @@ enum class BrowseCategory(val label: String) {
     TAG("My Tag"),
     HISTORY("History"),
     SEARCH("Search"),
+    MATCHING("Matching"),
+    SUGGEST("Suggest"),
 }
 
 data class BrowsePlace(
@@ -233,10 +235,17 @@ data class BrowseRow(
     val playlistId: Int?,
     val groupKey: String?,
     val folder: Boolean,
+    val note: String = "",
 )
 
-fun browseRows(catalog: RbCatalog, place: BrowsePlace, historyIds: List<Int>): List<BrowseRow> {
-    val filtered = applyLibraryFilter(rawBrowseRows(catalog, place, historyIds), place)
+fun browseRows(
+    catalog: RbCatalog,
+    place: BrowsePlace,
+    historyIds: List<Int>,
+    master: RbTrack? = null,
+    gentle: Boolean = true,
+): List<BrowseRow> {
+    val filtered = applyLibraryFilter(rawBrowseRows(catalog, place, historyIds, master, gentle), place)
     return sortBrowseRows(filtered, place.sort, place.sortDesc)
 }
 
@@ -276,7 +285,13 @@ fun applyLibraryFilter(rows: List<BrowseRow>, place: BrowsePlace): List<BrowseRo
     }
 }
 
-private fun rawBrowseRows(catalog: RbCatalog, place: BrowsePlace, historyIds: List<Int>): List<BrowseRow> {
+private fun rawBrowseRows(
+    catalog: RbCatalog,
+    place: BrowsePlace,
+    historyIds: List<Int>,
+    master: RbTrack?,
+    gentle: Boolean,
+): List<BrowseRow> {
     if (!place.inList) {
         return BrowseCategory.entries.map { category ->
             BrowseRow(category.label, "", "", "", "", null, null, category.name, false)
@@ -319,6 +334,24 @@ private fun rawBrowseRows(catalog: RbCatalog, place: BrowsePlace, historyIds: Li
         BrowseCategory.HISTORY -> historyIds.mapNotNull { id -> tracks.firstOrNull { it.id == id } }.map(::row)
         BrowseCategory.SEARCH -> {
             filterTracks(tracks, place.query, place.bpmMin, place.bpmMax, place.keyFilter).map(::row)
+        }
+        BrowseCategory.MATCHING -> {
+            if (master == null) return listOf(BrowseRow("Sem master no deck", "Carregue uma faixa", "", "", "", null, null, null, false))
+            matchingRows(tracks, master).map(::row)
+        }
+        BrowseCategory.SUGGEST -> {
+            if (master == null) return listOf(BrowseRow("Sem master no deck", "Carregue uma faixa", "", "", "", null, null, null, false))
+            val playlists = catalog.playlists
+            suggestRows(
+                tracks,
+                master,
+                { id -> catalog.analyses[id]?.energy ?: 0.0 },
+                historyIds.toSet(),
+                { id -> playlists.any { playlist -> master.id in playlist.trackIds && id in playlist.trackIds } },
+                gentle,
+            ).map { ranked ->
+                row(ranked.track).copy(note = ranked.reason)
+            }
         }
     }
     return base
@@ -617,7 +650,13 @@ fun beatJumpPadBeats(pad: Int): Double = when (pad) {
     4 -> -4.0
     5 -> 4.0
     6 -> -8.0
-    else -> 8.0
+    7 -> 8.0
+    8 -> -16.0
+    9 -> 16.0
+    10 -> -32.0
+    11 -> 32.0
+    12 -> -64.0
+    else -> 64.0
 }
 
 /** Um passo ×16 ou ÷16, com o limite do pad 2 do script oficial. */
@@ -691,6 +730,11 @@ data class PlayerSettings(
     val jogSensitivity: Float = 1f,
     val historySeconds: Int = 10,
     val recordAac: Boolean = false,
+    val waveView: String = "WAVE",
+    val autoGain: Boolean = true,
+    val targetLufs: Double = -10.0,
+    val gentleSuggest: Boolean = true,
+    val cuePreset: String = "drop",
 )
 
 fun zoomFromBars(bars: Int): WaveZoom = WaveZoom.entries.firstOrNull { it.bars == bars } ?: WaveZoom.BARS_8

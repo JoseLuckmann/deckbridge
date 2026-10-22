@@ -107,6 +107,16 @@ object NativeEngine {
         nativeSetSlip(deck, enabled)
     }
 
+    fun hotCueRelease(deck: Int) {
+        if (!loaded) return
+        nativeHotCueRelease(deck)
+    }
+
+    fun setTrim(deck: Int, linear: Float) {
+        if (!loaded) return
+        nativeSetTrim(deck, linear)
+    }
+
     fun setLoop(deck: Int, startSec: Float, endSec: Float) {
         if (!loaded) return
         nativeSetLoop(deck, startSec, endSec)
@@ -188,6 +198,8 @@ object NativeEngine {
     private external fun nativeTransport(deck: Int, playing: Boolean)
     private external fun nativeCue(deck: Int)
     private external fun nativeHotCue(deck: Int, index: Int)
+    private external fun nativeHotCueRelease(deck: Int)
+    private external fun nativeSetTrim(deck: Int, linear: Float)
     private external fun nativeSetMix(
         volA: Float,
         volB: Float,

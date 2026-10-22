@@ -9,6 +9,12 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowLooper
+import os.deckbridge.logic.RbAnalysis
+import os.deckbridge.logic.RbPlaylist
+import os.deckbridge.logic.analyzeTrack
+import os.deckbridge.logic.autoCues
+import os.deckbridge.logic.banksFromCues
+import os.deckbridge.logic.wavesFromPcm
 import os.deckbridge.logic.BeatFxState
 import os.deckbridge.logic.BrowsePlace
 import os.deckbridge.logic.DeckFace
@@ -347,6 +353,7 @@ private fun player(
     rightTitle: String = "Glasshouse",
     settings: PlayerSettings = PlayerSettings(),
     usbLabel: String = "USB simulado",
+    historyIds: List<Int> = emptyList(),
 ): ComposeView {
     val left = catalog.tracks.first { it.title == leftTitle }
     val right = catalog.tracks.first { it.title == rightTitle }
@@ -387,6 +394,7 @@ private fun player(
                 fx = fx,
                 jvmBanner = BANNER,
                 browse = browse,
+                historyIds = historyIds,
                 usbLabel = usbLabel,
                 onPage = {},
                 onBrowse = {},
@@ -540,5 +548,151 @@ class ScreenShotsPlainFolder {
         assert(done.tracks.all { it.bpm > 0.0 && it.keyName.isNotBlank() })
         assert(done.analyses.values.all { it.rgbPreview != null && it.rgbApp })
         assert(done.scanNote.contains("sem export"))
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [33], qualifiers = "w2000dp-h1200dp-mdpi")
+class ScreenShotsPhrases {
+    @Test
+    fun phraseBarCuesGainPhaseAndSuggest() {
+        val morning = analyzed("morning-original-mix.wav", 1, "Morning (Original Mix)", "Miroslav Wilde", "House")
+        val caught = analyzed("caught-in-the-beat.wav", 2, "Caught In The Beat", "Broke For Free", "Funk")
+        assumeTrue(morning != null && caught != null)
+        val real = catalogOf(listOf(morning!!, caught!!), "corpus")
+        capture("$PRINTS/phrase-cues-gain.png") { activity ->
+            activity.setContentView(
+                player(
+                    activity,
+                    real,
+                    WaveZoom.BARS_8,
+                    BeatFxState(),
+                    posA = morning.second.structure.dropSec.toFloat(),
+                    posB = caught.second.structure.dropSec.toFloat(),
+                    leftTitle = morning.first.title,
+                    rightTitle = caught.first.title,
+                    settings = PlayerSettings(autoGain = true, targetLufs = -10.0),
+                    usbLabel = "corpus",
+                ),
+            )
+        }
+        val phase = catalogOf(
+            listOf(
+                synthetic(1, "Master", "Am", 120.0, -16.0),
+                synthetic(2, "Vizinho", "Am", 120.0, -16.0),
+            ),
+            "fase",
+        )
+        capture("$PRINTS/phase-meter.png") { activity ->
+            activity.setContentView(
+                player(
+                    activity,
+                    phase,
+                    WaveZoom.BARS_4,
+                    BeatFxState(),
+                    posA = 8f,
+                    posB = 8.5f,
+                    leftTitle = "Master",
+                    rightTitle = "Vizinho",
+                    settings = PlayerSettings(waveView = "PHASE", autoGain = true, targetLufs = -10.0),
+                ),
+            )
+        }
+        val master = synthetic(1, "Night Bus", "Am", 124.0, -14.0, 5.0)
+        val next = synthetic(2, "Glasshouse", "Em", 124.0, -13.0, 6.0)
+        val same = synthetic(3, "Mesmo", "Am", 124.0, -14.0, 5.2)
+        val played = synthetic(4, "Ja foi", "Am", 124.0, -14.0, 5.0)
+        val far = synthetic(5, "Longe", "C", 90.0, -12.0, 3.0)
+        val shelf = catalogOf(listOf(master, next, same, played, far), "biblioteca")
+        val matching = BrowsePlace(category = BrowseCategory.MATCHING, inList = true, index = 0)
+        capture("$PRINTS/browse-matching.png") { activity ->
+            activity.setContentView(
+                player(
+                    activity,
+                    shelf,
+                    WaveZoom.BARS_8,
+                    BeatFxState(),
+                    matching,
+                    leftTitle = "Night Bus",
+                    rightTitle = "Glasshouse",
+                    historyIds = listOf(4),
+                ),
+            )
+        }
+        val suggest = BrowsePlace(category = BrowseCategory.SUGGEST, inList = true, index = 0)
+        capture("$PRINTS/browse-suggest.png") { activity ->
+            activity.setContentView(
+                player(
+                    activity,
+                    shelf,
+                    WaveZoom.BARS_8,
+                    BeatFxState(),
+                    suggest,
+                    leftTitle = "Night Bus",
+                    rightTitle = "Glasshouse",
+                    historyIds = listOf(4),
+                    settings = PlayerSettings(gentleSuggest = true),
+                ),
+            )
+        }
+    }
+
+    private fun analyzed(file: String, id: Int, title: String, artist: String, genre: String): Triple<RbTrack, os.deckbridge.logic.TrackRead, RbAnalysis>? {
+        val wav = File("/opt/cursor/artifacts/real-corpus/mono/$file")
+        if (!wav.isFile) return null
+        val pcm = decodeWavMono(wav.readBytes()) ?: return null
+        val read = analyzeTrack(pcm.samples, pcm.rate)
+        val waves = wavesFromPcm(pcm.samples, pcm.rate)
+        val cues = autoCues(read.phrases, read.beats, "drop")
+        val track = RbTrack(id, title, artist, "", genre, read.keyName, read.bpm, pcm.samples.size / pcm.rate, pcm.rate, file, file, "")
+        val analysis = RbAnalysis(
+            beats = read.beats,
+            hotCues = cues.first,
+            memoryCues = cues.second,
+            mainCueMs = cues.first.firstOrNull()?.timeMs ?: 0,
+            waveform = ByteArray(0),
+            waveSource = "APP",
+            rgbDetail = waves.rgbDetail,
+            rgbPreview = waves.rgbPreview,
+            phrases = read.phrases,
+            loudnessLufs = read.loudnessLufs,
+            energy = read.energy,
+            hotCueBanks = banksFromCues(cues.first),
+            rgbApp = true,
+        )
+        return Triple(track, read, analysis)
+    }
+
+    private fun synthetic(id: Int, title: String, key: String, bpm: Double, lufs: Double, energy: Double = 5.0): Triple<RbTrack, os.deckbridge.logic.TrackRead, RbAnalysis> {
+        val track = RbTrack(id, title, "Artista", "Album", "House", key, bpm, 180, 44100, "$title.mp3", "$title.mp3", "")
+        val analysis = RbAnalysis(
+            beats = emptyList(),
+            hotCues = emptyList(),
+            memoryCues = emptyList(),
+            mainCueMs = 0,
+            waveform = ByteArray(0),
+            loudnessLufs = lufs,
+            energy = energy,
+        )
+        return Triple(track, os.deckbridge.logic.TrackRead(bpm, 1.0, 0.0, 0.0, 0.0, 1.0, key, 1.0, emptyList(), os.deckbridge.logic.StructurePoints(0.0, 0.0, 0.0, 0.0), 0L, emptyList(), lufs, energy), analysis)
+    }
+
+    private fun catalogOf(rows: List<Triple<RbTrack, os.deckbridge.logic.TrackRead, RbAnalysis>>, label: String): RbCatalog {
+        val tracks = rows.map { it.first }
+        return RbCatalog(
+            tracks = tracks,
+            playlists = listOf(RbPlaylist(1, 0, "Set", false, 0, tracks.map { it.id })),
+            analyses = rows.associate { it.first.id to it.third },
+            label = label,
+            simulated = true,
+            oneLibraryPresent = false,
+            oneLibraryReadable = false,
+            oneLibraryNote = "",
+            oneLibraryContentRows = 0,
+            trackTags = emptyMap(),
+            warnings = emptyList(),
+            error = null,
+        )
     }
 }

@@ -31,6 +31,11 @@ object SettingsStore {
     private val historySeconds = intPreferencesKey("history_seconds")
     private val recordAac = booleanPreferencesKey("record_aac")
     private val followUsb = booleanPreferencesKey("follow_usb_wave")
+    private val waveView = stringPreferencesKey("wave_view")
+    private val autoGain = booleanPreferencesKey("auto_gain")
+    private val targetLufs = doublePreferencesKey("target_lufs")
+    private val gentle = booleanPreferencesKey("gentle_suggest")
+    private val cuePreset = stringPreferencesKey("cue_preset")
 
     fun flow(context: Context): Flow<PlayerSettings> = context.playerStore.data.map { prefs ->
         PlayerSettings(
@@ -50,6 +55,11 @@ object SettingsStore {
             jogSensitivity = prefs[jog] ?: 1f,
             historySeconds = prefs[historySeconds] ?: 10,
             recordAac = prefs[recordAac] ?: false,
+            waveView = prefs[waveView] ?: "WAVE",
+            autoGain = prefs[autoGain] ?: true,
+            targetLufs = prefs[targetLufs] ?: -10.0,
+            gentleSuggest = prefs[gentle] ?: true,
+            cuePreset = prefs[cuePreset] ?: "drop",
         )
     }
 
@@ -71,6 +81,11 @@ object SettingsStore {
             prefs[historySeconds] = settings.historySeconds
             prefs[recordAac] = settings.recordAac
             prefs[followUsb] = settings.followUsb
+            prefs[waveView] = settings.waveView
+            prefs[autoGain] = settings.autoGain
+            prefs[targetLufs] = settings.targetLufs
+            prefs[gentle] = settings.gentleSuggest
+            prefs[cuePreset] = settings.cuePreset
         }
     }
 }

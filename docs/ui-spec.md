@@ -122,3 +122,4 @@ stateDiagram-v2
 - P2: organização de preferências e diagnóstico; telas adaptativas.
 - P3: contexto de set/tracklist, recomendações opcionais, conectividade PWA.
 - P4: overlays de frases e exercícios, nunca tirando o foco dos decks.
+- 0.13.0: a barra de frase usa PSSI quando o `.EXT` traz a tag, senão as seções detetadas no áudio (intro, subida, drop, break, outro), com cores deste app. O menu troca a onda pelo medidor de fase. BROWSE ganha MATCHING e SUGGEST. O cartão mostra o trim de auto gain. Os cues automáticos ficam no app.

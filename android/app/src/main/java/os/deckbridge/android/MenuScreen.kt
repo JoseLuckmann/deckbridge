@@ -268,6 +268,27 @@ private fun PlayerPane(settings: PlayerSettings, wide: Boolean, usbWaveNote: Str
                     Line("Hot cue") {
                         Chips(listOf("OFF" to !settings.hotCueAutoLoad, "ON" to settings.hotCueAutoLoad)) { onSettings(settings.copy(hotCueAutoLoad = it == 1)) }
                     }
+                    Line("Cues automáticos") {
+                        Chips(listOf("drop" to "QUEDA", "intro" to "INTRO").map { it.second to (settings.cuePreset == it.first) }) {
+                            onSettings(settings.copy(cuePreset = listOf("drop", "intro")[it]))
+                        }
+                    }
+                    Line("Auto gain") {
+                        Chips(listOf("OFF" to !settings.autoGain, "ON" to settings.autoGain)) {
+                            onSettings(settings.copy(autoGain = it == 1))
+                        }
+                    }
+                    Line("Alvo LUFS") {
+                        val marks = listOf(-14.0, -10.0, -8.0)
+                        Chips(marks.map { "${it.toInt()}" to (settings.targetLufs == it) }) {
+                            onSettings(settings.copy(targetLufs = marks[it], autoGain = true))
+                        }
+                    }
+                    Line("Sugestão") {
+                        Chips(listOf(true to "SUAVE", false to "SOBE").map { it.second to (settings.gentleSuggest == it.first) }) {
+                            onSettings(settings.copy(gentleSuggest = it == 0))
+                        }
+                    }
                 }
             },
             { modifier ->
@@ -304,6 +325,11 @@ private fun PlayerPane(settings: PlayerSettings, wide: Boolean, usbWaveNote: Str
             )
             Line("Zoom") {
                 Chips(listOf(2, 4, 8, 16).map { "$it" to (settings.zoomBars == it) }) { onSettings(settings.copy(zoomBars = listOf(2, 4, 8, 16)[it])) }
+            }
+            Line("Vista") {
+                Chips(listOf("WAVE" to "WAVEFORM", "PHASE" to "PHASE METER").map { it.second to (settings.waveView == it.first) }) {
+                    onSettings(settings.copy(waveView = listOf("WAVE", "PHASE")[it]))
+                }
             }
             Line("Playhead") {
                 val spots = listOf(0.20f to "20%", 0.30f to "30%", 0.50f to "50%")
@@ -412,7 +438,7 @@ private fun DiagnosticPane(wide: Boolean, onDiagnostics: () -> Unit) {
 @Composable
 private fun AboutPane(wide: Boolean) {
     GroupCard("Versão", Modifier.fillMaxWidth()) {
-        TextInk("DeckBridge 0.12.2", fontSize = 20.sp, weight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+        TextInk("DeckBridge 0.13.0", fontSize = 20.sp, weight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
         TextInk("Beat FX e REMIX FX são DSP original. Não é firmware comercial.", fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp))
         RgbColorLegend(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp))
     }

@@ -66,6 +66,8 @@ O corpus de variantes (páginas, títulos longos e unicode, arte ausente, ANLZ a
 
 Na 0.12.2, uma pasta sem `export.pdb` e com MP3, WAV, FLAC, AIFF, M4A ou AAC não ganha PDB. O app analisa cada ficheiro, mostra o progresso e guarda BPM, tom, batidas e a miniatura RGB no cache do app. O volume continua só de leitura.
 
+Na 0.13.0 o mesmo cache também guarda frases, LUFS e energia. Os hot cues automáticos são refeitos na memória a partir dessas frases. O USB não recebe esses cues. Se o `.EXT` trouxer PSSI, a barra usa essas frases e o índice de 16 compassos deixa de ser a fonte. O banco de hot cue que o export já traz é só leitura. Não há coluna de auto gain publicada na linha de conteúdo que este parser lê; o trim é o LUFS medido no áudio, ou zero se a medição não existe.
+
 ## Gravação
 
 O WAV estéreo de 16 bits é escrito por este projeto. O LAME não entra no APK: a licença do repositório é GPL-2.0-or-later provisória, o OD-06 continua aberto, e não se vincula o LGPL do LAME enquanto isso não estiver fechado. O AAC opcional usa o `MediaCodec` do Android (AAC-LC, contentor MPEG-4). A gravação e o histórico ficam na pasta do app ou numa pasta que o utilizador escolhe. O USB do rekordbox não é destino.

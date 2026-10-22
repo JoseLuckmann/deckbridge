@@ -50,6 +50,8 @@ fun BrowseScreen(
     catalog: RbCatalog,
     place: BrowsePlace,
     historyIds: List<Int>,
+    masterTrack: RbTrack? = null,
+    gentle: Boolean = true,
     usbLabel: String,
     jvmBanner: String?,
     focusKey: String = "",
@@ -68,7 +70,7 @@ fun BrowseScreen(
     onBpmWindow: () -> Unit = {},
     onSort: (os.deckbridge.logic.ListSort) -> Unit = {},
 ) {
-    val rows = browseRows(catalog, place, historyIds)
+    val rows = browseRows(catalog, place, historyIds, masterTrack, gentle)
     val safeIndex = if (rows.isEmpty()) 0 else place.index.coerceIn(0, rows.lastIndex)
     val selected = rows.getOrNull(safeIndex)
     Column(Modifier.fillMaxSize().background(Color(StagePalette.bg))) {
@@ -193,6 +195,7 @@ private fun BrowseLine(
         Column(Modifier.weight(1f).padding(end = 8.dp)) {
             TextInk(row.title, color = ink, fontSize = 13.sp, weight = FontWeight.SemiBold, maxLines = 1)
             if (row.artist.isNotBlank()) TextInk(row.artist, color = muted, fontSize = 10.sp, maxLines = 1)
+            if (row.note.isNotBlank()) TextInk(row.note, color = Color(StagePalette.accentOrange), fontSize = 10.sp, maxLines = 1)
         }
         TextInk(row.bpm, Modifier.width(64.dp), color = ink, fontSize = 13.sp, weight = FontWeight.Medium, mono = true, maxLines = 1)
         if (row.track != null && row.keyName.isNotBlank() && row.keyName != "—") {
@@ -240,6 +243,14 @@ private fun CategoryGlyph(category: BrowseCategory, on: Boolean) {
             BrowseCategory.SEARCH -> {
                 drawCircle(color, s * 0.24f, Offset(s * 0.42f, s * 0.42f), style = Stroke(1.5f))
                 drawLine(color, Offset(s * 0.6f, s * 0.6f), Offset(s * 0.82f, s * 0.82f), 1.6f)
+            }
+            BrowseCategory.MATCHING -> {
+                drawCircle(color, s * 0.12f, Offset(s * 0.32f, s * 0.5f))
+                drawCircle(color, s * 0.12f, Offset(s * 0.68f, s * 0.5f))
+            }
+            BrowseCategory.SUGGEST -> {
+                drawLine(color, Offset(s * 0.2f, s * 0.7f), Offset(s * 0.5f, s * 0.28f), 1.6f)
+                drawLine(color, Offset(s * 0.5f, s * 0.28f), Offset(s * 0.8f, s * 0.7f), 1.6f)
             }
         }
     }
@@ -293,4 +304,6 @@ private fun shortLabel(category: BrowseCategory): String = when (category) {
     BrowseCategory.TAG -> "TAG"
     BrowseCategory.HISTORY -> "HIS"
     BrowseCategory.SEARCH -> "SRC"
+    BrowseCategory.MATCHING -> "MAT"
+    BrowseCategory.SUGGEST -> "SUG"
 }

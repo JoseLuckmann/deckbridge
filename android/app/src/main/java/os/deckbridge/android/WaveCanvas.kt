@@ -280,16 +280,68 @@ internal fun OverviewWave(
 }
 
 @Composable
-internal fun PhraseBar(track: RbTrack?, modifier: Modifier = Modifier) {
+internal fun PhraseBar(track: RbTrack?, phrases: List<os.deckbridge.logic.PhraseSpan>, modifier: Modifier = Modifier) {
     Canvas(modifier.fillMaxWidth()) {
+        val duration = (track?.durationSeconds ?: 0).toDouble()
+        if (duration <= 0.0) return@Canvas
+        if (phrases.isNotEmpty()) {
+            phrases.forEach { phrase ->
+                val x = (phrase.startMs / 1000.0 / duration).coerceIn(0.0, 1.0).toFloat() * size.width
+                val end = (phrase.endMs / 1000.0 / duration).coerceIn(0.0, 1.0).toFloat() * size.width
+                drawRect(argb(os.deckbridge.logic.phraseKindColor(phrase.kind)), Offset(x, 0f), Size((end - x).coerceAtLeast(1f), size.height))
+                val fill = phrase.fillMs
+                if (fill != null) {
+                    val fx = (fill / 1000.0 / duration).coerceIn(0.0, 1.0).toFloat() * size.width
+                    drawRect(Color.White.copy(alpha = 0.85f), Offset(fx, 0f), Size((end - fx).coerceAtLeast(1f), 1.5f))
+                }
+            }
+            return@Canvas
+        }
         val bpm = track?.bpm ?: return@Canvas
-        val duration = (track.durationSeconds).toDouble()
-        if (bpm <= 1.0 || duration <= 0.0) return@Canvas
+        if (bpm <= 1.0) return@Canvas
         val bar = 240.0 / bpm
         val bars = (duration / bar).toInt().coerceAtLeast(1).coerceAtMost(256)
         val width = size.width / bars
         for (index in 0 until bars) {
             drawRect(argb(phraseColor(index)), Offset(index * width, 0f), Size(width + 0.6f, size.height))
+        }
+    }
+}
+
+@Composable
+internal fun PhaseMeter(
+    leftBpm: Double,
+    rightBpm: Double,
+    leftSec: Double,
+    rightSec: Double,
+    master: Int,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier.fillMaxWidth()) {
+        val rows = listOf(0 to leftBpm to leftSec, 1 to rightBpm to rightSec)
+        val gap = 6f
+        val rowH = (size.height - gap) / 2f
+        rows.forEachIndexed { index, pair ->
+            val deck = index
+            val bpm = if (deck == 0) leftBpm else rightBpm
+            val sec = if (deck == 0) leftSec else rightSec
+            val top = index * (rowH + gap)
+            drawRect(Color(StagePalette.waveBg), Offset(0f, top), Size(size.width, rowH))
+            val beats = 4
+            val cell = size.width / beats
+            for (beat in 0 until beats) {
+                val x = beat * cell
+                drawRect(Color(StagePalette.line), Offset(x, top), Size(1f, rowH))
+            }
+            val phase = os.deckbridge.logic.barPhase(sec, bpm)
+            val head = (phase.coerceIn(0.0, 1.0) * size.width).toFloat()
+            val ink = if (deck == master) Color(StagePalette.accentOrange) else Color(StagePalette.accentBlue)
+            drawRect(ink, Offset(head.coerceAtMost(size.width - 2f), top + 2f), Size(2f, rowH - 4f))
+            val otherBpm = if (deck == master) bpm else if (master == 0) leftBpm else rightBpm
+            val otherSec = if (master == 0) leftSec else rightSec
+            val offset = os.deckbridge.logic.phaseOffsetBeats(sec, bpm, otherSec, otherBpm)
+            val mark = ((offset + 2.0) / 4.0).coerceIn(0.0, 1.0).toFloat() * size.width
+            drawCircle(Color.White, 3.5f, Offset(mark, top + rowH / 2f))
         }
     }
 }

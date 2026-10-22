@@ -15,6 +15,7 @@ data class StructurePoints(
     val buildSec: Double,
     val dropSec: Double,
     val breakSec: Double,
+    val outroSec: Double = 0.0,
 )
 
 data class TrackRead(
@@ -29,6 +30,9 @@ data class TrackRead(
     val beats: List<AnlzBeat>,
     val structure: StructurePoints,
     val elapsedMs: Long,
+    val phrases: List<PhraseSpan> = emptyList(),
+    val loudnessLufs: Double = Double.NaN,
+    val energy: Double = 0.0,
 )
 
 private val MAJOR = doubleArrayOf(6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88)
@@ -57,7 +61,10 @@ fun analyzeTrack(samples: FloatArray, rate: Int): TrackRead {
     val kickError = kickGridError(peaks, beats, bpmPick.bpm)
     val fullError = fullBandGridError(full.values, full.rate, beats)
     val key = detectKey(samples, rate)
-    val structure = structurePoints(structureEnv.low, structureEnv.high, structureEnv.windowSec)
+    val duration = samples.size.toDouble() / rate
+    val sections = detectSections(structureEnv.low, structureEnv.high, structureEnv.windowSec, bpmPick.bpm, duration)
+    val loudness = integratedLufs(samples, rate)
+    val energy = energyLevel(samples)
     val elapsed = (System.nanoTime() - started) / 1_000_000
     return TrackRead(
         bpmPick.bpm,
@@ -69,8 +76,11 @@ fun analyzeTrack(samples: FloatArray, rate: Int): TrackRead {
         key.first,
         key.second,
         beats,
-        structure,
+        sections.points,
         elapsed,
+        sections.phrases,
+        loudness,
+        energy,
     )
 }
 

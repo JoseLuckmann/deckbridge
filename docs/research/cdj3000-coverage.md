@@ -120,9 +120,11 @@ Nada disto foi implementado. São classe 4, salvo o Beat Countdown e o Track Fil
 
 ## Recomendações
 
-Os cinco itens acima entraram no ecrã na 0.12.0. A escuta deles continua `BLOCKED_HARDWARE`. O que ainda fica de fora, se o dono quiser mais ecrã e não rede: categoria MATCHING, o resto do slip, e o medidor de fase no lugar da onda.
+Os cinco itens acima entraram no ecrã na 0.12.0. A escuta deles continua `BLOCKED_HARDWARE`.
 
-Não fazer nesta linha: Pro DJ Link, CloudDirectPlay, StreamingDirectPlay, Wi-Fi, ecrã dentro do prato, alavanca de slip reverse, gravar loops, grades ou bancos no USB.
+Na 0.13.0 entraram, ainda sem escuta: MATCHING, SUGGEST, o medidor de fase no lugar da onda, slip com a pausa, o scratch, o hot cue premido e o reverse (o ponto escondido continua; ao soltar, a cabeça volta), beat jump de 64, leitura de PSSI e banco de hot cue do export em só leitura. A DDJ-400 não tem alavanca física de slip reverse. O gesto de reverse em slip está no ecrã. Busca por voz e quatro decks continuam por fazer.
+
+Não fazer nesta linha: Pro DJ Link, CloudDirectPlay, StreamingDirectPlay, Wi-Fi, ecrã dentro do prato, gravar loops, grades ou bancos no USB.
 
 ## Fontes
 

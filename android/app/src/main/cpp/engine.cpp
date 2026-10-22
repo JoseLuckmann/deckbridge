@@ -69,6 +69,7 @@ struct Deck {
     bool reversed = false;
     bool userSlip = false;
     double slipAnchor = -1.0;
+    bool holdingCue = false;
     deckbridge::PitchShift shiftL;
     deckbridge::PitchShift shiftR;
 
@@ -111,7 +112,6 @@ struct Deck {
         }
         const double step = deckbridge::directedStep(pitch, rateMul, sampleRate, outputRate, reversed);
         if (slip >= 0.0) slip += (pitch * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
-        if (userSlip && slipAnchor >= 0.0) slipAnchor += step;
         position += step;
         if (rollLength > 1.0 && rollOrigin >= 0.0 && position >= rollOrigin + rollLength) {
             double over = std::fmod(position - rollOrigin, rollLength);
@@ -261,7 +261,12 @@ public:
     void transport(int deck, bool playing) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
-        decks_[deck].playing = playing && !decks_[deck].left.empty();
+        Deck &target = decks_[deck];
+        if (playing && target.userSlip && !target.playing && target.slipAnchor >= 0.0) {
+            target.position = clampFrame(target, target.slipAnchor);
+            target.holdingCue = false;
+        }
+        target.playing = playing && !target.left.empty();
     }
 
     void cue(int deck) {
@@ -274,8 +279,20 @@ public:
     void hotCue(int deck, int index) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1 || index < 0 || index >= kMaxHot) return;
-        if (decks_[deck].hot[index] < 0.0) return;
-        decks_[deck].position = decks_[deck].hot[index];
+        Deck &target = decks_[deck];
+        if (target.hot[index] < 0.0) return;
+        target.position = target.hot[index];
+        if (target.userSlip) target.holdingCue = true;
+    }
+
+    void releaseHotCue(int deck) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1) return;
+        Deck &target = decks_[deck];
+        if (target.userSlip && target.holdingCue && target.slipAnchor >= 0.0) {
+            target.position = clampFrame(target, target.slipAnchor);
+        }
+        target.holdingCue = false;
     }
 
     void setMix(float volA, float volB, float pitchA, float pitchB, float cross, bool pflA, bool pflB) {
@@ -289,6 +306,12 @@ public:
         decks_[1].pfl = pflB;
     }
 
+    void setTrim(int deck, float linear) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1) return;
+        trim_[deck] = std::clamp(linear, 0.05f, 4.f);
+    }
+
     void seekSeconds(int deck, double seconds) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         placeSeconds(deck, seconds, false);
@@ -297,6 +320,10 @@ public:
     void nudge(int deck, double seconds) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
+        if (seconds == 0.0 && decks_[deck].userSlip && decks_[deck].slipAnchor >= 0.0) {
+            decks_[deck].position = clampFrame(decks_[deck], decks_[deck].slipAnchor);
+            return;
+        }
         const double now = decks_[deck].position / decks_[deck].sampleRate;
         placeSeconds(deck, now + seconds, true);
     }
@@ -348,7 +375,11 @@ public:
     void setReverse(int deck, bool reversed) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
-        decks_[deck].reversed = reversed;
+        Deck &target = decks_[deck];
+        if (!reversed && target.reversed && target.userSlip && target.slipAnchor >= 0.0) {
+            target.position = clampFrame(target, target.slipAnchor);
+        }
+        target.reversed = reversed;
     }
 
     void setLoop(int deck, float startSec, float endSec) {
@@ -405,13 +436,20 @@ public:
                 float al = 0.f, ar = 0.f, bl = 0.f, br = 0.f;
                 decks_[0].rateMul = mixFx_.rateFor(0);
                 decks_[1].rateMul = mixFx_.rateFor(1);
+                tickSlip(0, rate);
+                tickSlip(1, rate);
                 decks_[0].read(rate, al, ar);
                 decks_[1].read(rate, bl, br);
                 mixFx_.processDeck(0, al, ar);
                 mixFx_.processDeck(1, bl, br);
+                al *= trim_[0];
+                ar *= trim_[0];
+                bl *= trim_[1];
+                br *= trim_[1];
                 float masterL = al * (1.f - cross_) * decks_[0].volume + bl * cross_ * decks_[1].volume;
                 float masterR = ar * (1.f - cross_) * decks_[0].volume + br * cross_ * decks_[1].volume;
                 mixFx_.processMaster(masterL, masterR);
+                masterLimit_.process(masterL, masterR);
                 liveRate_.store(rate);
                 recorder_.push(masterL, masterR);
                 float phoneL = 0.f;
@@ -485,6 +523,20 @@ private:
         }
     }
 
+    void tickSlip(int deck, int outputRate) {
+        Deck &target = decks_[deck];
+        if (!target.userSlip || target.slipAnchor < 0.0 || target.sampleRate <= 0 || outputRate <= 0) return;
+        const double forward = (std::max(0.0, target.pitch) * std::max(0.0, target.rateMul) * target.sampleRate) /
+                               static_cast<double>(outputRate);
+        target.slipAnchor += forward;
+    }
+
+    static double clampFrame(const Deck &target, double frame) {
+        const double frames = static_cast<double>(target.left.size());
+        const double limit = frames > 1.0 ? frames - 1.0 : 0.0;
+        return std::min(std::max(0.0, frame), limit);
+    }
+
     void placeSeconds(int deck, double seconds, bool wrap) {
         if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
         Deck &target = decks_[deck];
@@ -555,6 +607,8 @@ private:
     std::atomic<bool> phonesAudible_{false};
     Deck decks_[2];
     deckbridge::MixerFx mixFx_;
+    deckbridge::PeakLimiter masterLimit_;
+    float trim_[2]{1.f, 1.f};
     deckbridge::MasterRecorder recorder_;
     std::atomic<int> liveRate_{48000};
     int bufferFrames_ = 256;
@@ -630,9 +684,19 @@ Java_os_deckbridge_android_NativeEngine_nativeHotCue(JNIEnv *, jobject, jint dec
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeHotCueRelease(JNIEnv *, jobject, jint deck) {
+    engine().releaseHotCue(deck);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeSetMix(
         JNIEnv *, jobject, jfloat volA, jfloat volB, jfloat pitchA, jfloat pitchB, jfloat cross, jboolean pflA, jboolean pflB) {
     engine().setMix(volA, volB, pitchA, pitchB, cross, pflA == JNI_TRUE, pflB == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetTrim(JNIEnv *, jobject, jint deck, jfloat linear) {
+    engine().setTrim(deck, linear);
 }
 
 extern "C" JNIEXPORT jfloat JNICALL

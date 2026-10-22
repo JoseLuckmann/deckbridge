@@ -33,7 +33,7 @@ fun plainAudioFiles(root: File, limit: Int = 300): List<File> {
     return out
 }
 
-private const val PLAIN_ALGO = "0122"
+private const val PLAIN_ALGO = "0130"
 
 fun analyzePlainPcm(samples: FloatArray, rate: Int): Pair<TrackRead, PcmWaves> {
     return analyzeTrack(samples, rate) to wavesFromPcm(samples, rate)
@@ -48,6 +48,7 @@ fun loadPlainFolder(
     volume: ReadableVolume,
     cacheDir: File,
     decode: (fileName: String, bytes: ByteArray) -> Pair<FloatArray, Int>?,
+    cuePreset: String = "drop",
     onStep: (RbCatalog) -> Unit = {},
 ): RbCatalog {
     val paths = volume.listAudio()
@@ -95,7 +96,7 @@ fun loadPlainFolder(
             catalog.copy(warnings = catalog.warnings + "Áudio ausente: ${track.filePath}")
         } else {
             val stamp = sha256(bytes)
-            val cached = readPlainCache(File(cacheDir, "$PLAIN_ALGO-$stamp.txt"))
+            val cached = readPlainCache(File(cacheDir, "$PLAIN_ALGO-$stamp.txt"), cuePreset)
             val applied = if (cached != null) {
                 cached
             } else {
@@ -104,7 +105,7 @@ fun loadPlainFolder(
                     null
                 } else {
                     val (read, waves) = analyzePlainPcm(pcm.first, pcm.second)
-                    val fresh = packed(read, waves, pcm.second)
+                    val fresh = packed(read, waves, pcm.second, cuePreset)
                     writePlainCache(File(cacheDir, "$PLAIN_ALGO-$stamp.txt"), fresh)
                     fresh
                 }
@@ -144,17 +145,18 @@ private data class PackedPlain(
     val analysis: RbAnalysis,
 )
 
-private fun packed(read: TrackRead, waves: PcmWaves, rate: Int): PackedPlain {
+private fun packed(read: TrackRead, waves: PcmWaves, rate: Int, cuePreset: String): PackedPlain {
     val seconds = if (waves.rgbDetail.perSecond > 0.0) {
         (waves.rgbDetail.columns / waves.rgbDetail.perSecond).toInt().coerceAtLeast(1)
     } else {
         0
     }
+    val cues = autoCues(read.phrases, read.beats, cuePreset)
     val analysis = RbAnalysis(
         beats = read.beats,
-        hotCues = emptyList(),
-        memoryCues = emptyList(),
-        mainCueMs = 0,
+        hotCues = cues.first,
+        memoryCues = cues.second,
+        mainCueMs = cues.second.firstOrNull()?.timeMs ?: 0,
         waveform = waves.bluePreview,
         bands = waves.bandPreview,
         waveSource = "APP",
@@ -167,6 +169,11 @@ private fun packed(read: TrackRead, waves: PcmWaves, rate: Int): PackedPlain {
         rgbApp = true,
         bandApp = true,
         blueApp = true,
+        phrases = read.phrases,
+        phraseMood = "high",
+        loudnessLufs = read.loudnessLufs,
+        energy = read.energy,
+        hotCueBanks = banksFromCues(cues.first),
     )
     return PackedPlain(read.bpm, read.keyName, seconds, rate, analysis)
 }
@@ -196,7 +203,7 @@ private fun sha256(bytes: ByteArray): String {
 private fun writePlainCache(file: File, packed: PackedPlain) {
     val preview = packed.analysis.rgbPreview
     val lines = ArrayList<String>()
-    lines += "plain-cache-1"
+    lines += "plain-cache-2"
     lines += packed.bpm.toString()
     lines += packed.keyName
     lines += packed.seconds.toString()
@@ -217,13 +224,18 @@ private fun writePlainCache(file: File, packed: PackedPlain) {
         }
         lines += Base64.getEncoder().encodeToString(rgb)
     }
+    lines += packed.analysis.loudnessLufs.toString()
+    lines += packed.analysis.energy.toString()
+    lines += packed.analysis.phrases.joinToString("|") { phrase ->
+        "${phrase.startMs},${phrase.endMs},${phrase.kind}"
+    }
     file.writeText(lines.joinToString("\n"))
 }
 
-private fun readPlainCache(file: File): PackedPlain? {
+private fun readPlainCache(file: File, cuePreset: String): PackedPlain? {
     if (!file.isFile) return null
     val lines = file.readLines()
-    if (lines.size < 7 || lines[0] != "plain-cache-1") return null
+    if (lines.size < 7 || lines[0] != "plain-cache-2") return null
     val bpm = lines[1].toDoubleOrNull() ?: return null
     val keyName = lines[2]
     val seconds = lines[3].toIntOrNull() ?: return null
@@ -250,15 +262,31 @@ private fun readPlainCache(file: File): PackedPlain? {
         }
         ColorWave(height.copyOf(columns), rgb, 0.0, "APP")
     }
+    val loudness = lines.getOrNull(8)?.toDoubleOrNull() ?: Double.NaN
+    val energy = lines.getOrNull(9)?.toDoubleOrNull() ?: 0.0
+    val phrases = lines.getOrNull(10).orEmpty().split("|").mapNotNull { piece ->
+        if (piece.isBlank()) return@mapNotNull null
+        val parts = piece.split(",")
+        if (parts.size < 3) return@mapNotNull null
+        val start = parts[0].toIntOrNull() ?: return@mapNotNull null
+        val end = parts[1].toIntOrNull() ?: return@mapNotNull null
+        PhraseSpan(start, end, parts[2], parts[2], "high")
+    }
+    val cues = autoCues(phrases, beats, cuePreset)
     val analysis = RbAnalysis(
         beats = beats,
-        hotCues = emptyList(),
-        memoryCues = emptyList(),
-        mainCueMs = 0,
+        hotCues = cues.first,
+        memoryCues = cues.second,
+        mainCueMs = cues.second.firstOrNull()?.timeMs ?: 0,
         waveform = ByteArray(0),
         rgbPreview = preview,
         rgbApp = true,
         waveSource = "APP",
+        phrases = phrases,
+        phraseMood = "high",
+        loudnessLufs = loudness,
+        energy = energy,
+        hotCueBanks = banksFromCues(cues.first),
     )
     return PackedPlain(bpm, keyName, seconds, 0, analysis)
 }

@@ -154,6 +154,12 @@ fun DeckPage(
 
     fun pushMix() {
         NativeEngine.setMix(volA, volB, pitchA, pitchB, cross, pflA, pflB)
+        repeat(2) { deck ->
+            val track = liveLoaded.value.getOrNull(deck)
+            val lufs = track?.let { liveCatalog.value?.analyses?.get(it.id)?.loudnessLufs } ?: Double.NaN
+            val linear = os.deckbridge.logic.dbToLinear(os.deckbridge.logic.trimDb(lufs, settings.targetLufs, settings.autoGain))
+            NativeEngine.setTrim(deck, linear.toFloat())
+        }
     }
 
     fun setPitch(deck: Int, value: Float) {
@@ -231,7 +237,11 @@ fun DeckPage(
 
     fun placeNow(): BrowsePlace = browse ?: stored
 
-    fun rowsOf(place: BrowsePlace) = liveCatalog.value?.let { browseRows(it, place, history) }.orEmpty()
+    fun rowsOf(place: BrowsePlace): List<os.deckbridge.logic.BrowseRow> {
+        val catalog = liveCatalog.value ?: return emptyList()
+        val masterTrack = liveLoaded.value.getOrNull(master)
+        return browseRows(catalog, place, history, masterTrack, settings.gentleSuggest)
+    }
 
     fun loadSelected(deck: Int) {
         val source = liveVolume.value ?: return
@@ -265,19 +275,28 @@ fun DeckPage(
 
     fun hotCue(deck: Int, index: Int) {
         val bank = faces[deck].cueBank
-        if (bank != 0) {
-            val stored = cueBanks[deck][bank][index]
+        val track = liveLoaded.value.getOrNull(deck)
+        val analysis = track?.let { liveCatalog.value?.analyses?.get(it.id) }
+        val export = analysis?.hotCueBanks.orEmpty()
+        if (bank < export.size) {
+            val cue = export[bank].firstOrNull { it.index == index } ?: return
+            seekTo(deck, cue.timeMs / 1000f)
+            if (faces[deck].slip) NativeEngine.hotCue(deck, index)
+            return
+        }
+        val local = (bank - export.size).coerceAtLeast(0)
+        if (export.isNotEmpty() || bank != 0) {
+            val slot = local.coerceIn(0, 7)
+            val stored = cueBanks[deck][slot][index]
             if (stored >= 0f) {
                 seekTo(deck, stored)
-            } else {
+            } else if (export.isEmpty()) {
                 val at = faces[deck].position
-                cueBanks[deck][bank][index] = at
+                cueBanks[deck][slot][index] = at
                 seekTo(deck, at)
             }
             return
         }
-        val track = liveLoaded.value.getOrNull(deck)
-        val analysis = track?.let { liveCatalog.value?.analyses?.get(it.id) }
         val cue = analysis?.hotCues?.firstOrNull { it.index == index }
         if (cue != null && quantize) {
             val edit = GridEdit(faces[deck].gridShiftMs, faces[deck].gridStretch)
@@ -811,6 +830,7 @@ fun DeckPage(
             NativeEngine.cue(deck)
         },
         onHot = ::hotCue,
+        onHotUp = { deck, _ -> if (faces.getOrElse(deck) { DeckFace() }.slip) NativeEngine.hotCueRelease(deck) },
         onSync = ::syncDeck,
         onMaster = { master = it },
         onKey = { deck ->
@@ -826,8 +846,12 @@ fun DeckPage(
             edit(deck) { it.copy(fader = position, pitch = pitch, sync = false) }
         },
         onScratch = { deck, seconds ->
-            NativeEngine.nudge(deck, seconds)
-            edit(deck) { it.copy(position = (it.position + seconds).coerceAtLeast(0f)) }
+            if (seconds == 0f && faces.getOrElse(deck) { DeckFace() }.slip) {
+                NativeEngine.nudge(deck, 0f)
+            } else {
+                NativeEngine.nudge(deck, seconds)
+                edit(deck) { it.copy(position = (it.position + seconds).coerceAtLeast(0f)) }
+            }
         },
         onJump = { deck, beats -> jumpBy(deck, beats.toDouble()) },
         onBeatLoop = { deck, beats ->

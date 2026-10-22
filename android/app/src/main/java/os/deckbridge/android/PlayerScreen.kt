@@ -4,6 +4,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -64,6 +67,8 @@ import os.deckbridge.logic.nextCueSeconds
 import os.deckbridge.logic.cueBankLetter
 import os.deckbridge.logic.fineTempoText
 import os.deckbridge.logic.phraseBarsRemaining
+import os.deckbridge.logic.phraseNow
+import os.deckbridge.logic.trimDb
 import os.deckbridge.logic.historyCsv
 import os.deckbridge.logic.historyM3u8
 import os.deckbridge.logic.inkOn
@@ -95,6 +100,7 @@ fun PlayerScreen(
     onPlay: (Int) -> Unit = {},
     onCue: (Int) -> Unit = {},
     onHot: (Int, Int) -> Unit = { _, _ -> },
+    onHotUp: (Int, Int) -> Unit = { _, _ -> },
     onSync: (Int) -> Unit = {},
     onMaster: (Int) -> Unit = {},
     onKey: (Int) -> Unit = {},
@@ -220,8 +226,19 @@ fun PlayerScreen(
                     DeckInfo(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, catalog, quantize, settings.quantizeBeats, compact, Modifier.weight(1f))
                 }
                 Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    ZoomedWave(0, tracks.getOrNull(0), analysisOf(catalog, tracks.getOrNull(0)), faces.getOrElse(0) { DeckFace() }, zoom.first(), grid, onZoom, onSeek, Modifier.weight(1f).fillMaxWidth(), settings.playhead.toDouble(), waveModeIndex(settings.waveColor))
-                    ZoomedWave(1, tracks.getOrNull(1), analysisOf(catalog, tracks.getOrNull(1)), faces.getOrElse(1) { DeckFace() }, if (zoomLink) zoom.first() else zoom.getOrElse(1) { zoom.first() }, grid, onZoom, onSeek, Modifier.weight(1f).fillMaxWidth(), settings.playhead.toDouble(), waveModeIndex(settings.waveColor))
+                    if (settings.waveView == "PHASE") {
+                        PhaseMeter(
+                            tracks.getOrNull(0)?.bpm ?: 0.0,
+                            tracks.getOrNull(1)?.bpm ?: 0.0,
+                            faces.getOrElse(0) { DeckFace() }.position.toDouble(),
+                            faces.getOrElse(1) { DeckFace() }.position.toDouble(),
+                            master,
+                            Modifier.weight(1f).fillMaxWidth(),
+                        )
+                    } else {
+                        ZoomedWave(0, tracks.getOrNull(0), analysisOf(catalog, tracks.getOrNull(0), settings.cuePreset), faces.getOrElse(0) { DeckFace() }, zoom.first(), grid, onZoom, onSeek, Modifier.weight(1f).fillMaxWidth(), settings.playhead.toDouble(), waveModeIndex(settings.waveColor))
+                        ZoomedWave(1, tracks.getOrNull(1), analysisOf(catalog, tracks.getOrNull(1), settings.cuePreset), faces.getOrElse(1) { DeckFace() }, if (zoomLink) zoom.first() else zoom.getOrElse(1) { zoom.first() }, grid, onZoom, onSeek, Modifier.weight(1f).fillMaxWidth(), settings.playhead.toDouble(), waveModeIndex(settings.waveColor))
+                    }
                 }
                 FxRail(
                     fx = fx,
@@ -242,7 +259,7 @@ fun PlayerScreen(
                     modifier = Modifier.width(rail).fillMaxHeight(),
                 )
             }
-            HotCueBand(catalog, tracks, faces, compact, onActive, onHot, Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 6.dp))
+            HotCueBand(catalog, tracks, faces, compact, settings.cuePreset, onActive, onHot, onHotUp, Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 6.dp))
             PerformanceStrip(
                 deck = activeDeck,
                 face = faces.getOrElse(activeDeck) { DeckFace() },
@@ -258,8 +275,8 @@ fun PlayerScreen(
                 Modifier.fillMaxWidth().height(if (compact) 118.dp else 176.dp).padding(top = if (compact) 3.dp else 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0)), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor))
-                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1)), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor))
+                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0), settings.cuePreset), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings)
+                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1), settings.cuePreset), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings)
             }
         }
         if (info) {
@@ -288,6 +305,8 @@ fun PlayerScreen(
                 catalog = catalog,
                 place = browse,
                 historyIds = historyIds,
+                masterTrack = tracks.getOrNull(master),
+                gentle = settings.gentleSuggest,
                 usbLabel = usbLabel,
                 jvmBanner = jvmBanner,
                 focusKey = tracks.getOrNull(master)?.keyName.orEmpty(),
@@ -572,13 +591,17 @@ private fun HotCueBand(
     tracks: List<RbTrack?>,
     faces: List<DeckFace>,
     compact: Boolean,
+    preset: String,
     onActive: (Int) -> Unit,
     onHot: (Int, Int) -> Unit,
+    onHotUp: (Int, Int) -> Unit,
     modifier: Modifier,
 ) {
     Row(modifier.height(if (compact) 78.dp else 108.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        HotGrid(0, analysisOf(catalog, tracks.getOrNull(0)), faces.getOrElse(0) { DeckFace() }.cueBank, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot)
-        HotGrid(1, analysisOf(catalog, tracks.getOrNull(1)), faces.getOrElse(1) { DeckFace() }.cueBank, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot)
+        val left = faces.getOrElse(0) { DeckFace() }
+        val right = faces.getOrElse(1) { DeckFace() }
+        HotGrid(0, analysisOf(catalog, tracks.getOrNull(0), preset), left.cueBank, left.slip, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot, onHotUp)
+        HotGrid(1, analysisOf(catalog, tracks.getOrNull(1), preset), right.cueBank, right.slip, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot, onHotUp)
     }
 }
 
@@ -587,10 +610,12 @@ private fun HotGrid(
     deck: Int,
     analysis: RbAnalysis?,
     bank: Int,
+    slip: Boolean,
     compact: Boolean,
     modifier: Modifier,
     onActive: (Int) -> Unit,
     onHot: (Int, Int) -> Unit,
+    onHotUp: (Int, Int) -> Unit,
 ) {
     Column(modifier) {
         TextInk("HOT CUE ${cueBankLetter(bank)}", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
@@ -598,13 +623,23 @@ private fun HotGrid(
             Row(Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 repeat(4) { column ->
                     val index = row * 4 + column
-                    val cue = if (bank == 0) analysis?.hotCues?.firstOrNull { it.index == index } else null
+                    val bankCues = analysis?.hotCueBanks?.getOrNull(bank) ?: if (bank == 0) analysis?.hotCues else null
+                    val cue = bankCues?.firstOrNull { it.index == index }
                     val letter = ('A' + index).toString()
                     val color = argb(LETTER_COLORS[index])
                     Row(
-                        Modifier.weight(1f).fillMaxHeight().background(Color(StagePalette.panel)).border(1.dp, Color(StagePalette.line)).clickable {
-                            onActive(deck)
-                            onHot(deck, index)
+                        Modifier.weight(1f).fillMaxHeight().background(Color(StagePalette.panel)).border(1.dp, Color(StagePalette.line)).pointerInput(deck, index, slip) {
+                            awaitEachGesture {
+                                awaitFirstDown()
+                                onActive(deck)
+                                onHot(deck, index)
+                                var down = true
+                                while (down) {
+                                    val event = awaitPointerEvent()
+                                    down = event.changes.any { it.pressed }
+                                }
+                                if (slip) onHotUp(deck, index)
+                            }
                         }.padding(horizontal = if (compact) 3.dp else 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -638,7 +673,7 @@ private fun PerformanceStrip(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(Modifier.fillMaxWidth().height(if (compact) 22.dp else 28.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
             TextInk("D${deck + 1}", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentBlue), modifier = Modifier.width(if (compact) 22.dp else 28.dp))
-            listOf(-32, -16, -8, -4, -2, -1, 1, 2, 4, 8, 16, 32).forEach { beats ->
+            listOf(-64, -32, -16, -8, -4, -2, -1, 1, 2, 4, 8, 16, 32, 64).forEach { beats ->
                 Choice(if (beats > 0) "+$beats" else "$beats", false, compact, Modifier.weight(1f)) { onJump(beats) }
             }
         }
@@ -696,6 +731,7 @@ private fun DeckCard(
     artworkOf: (RbTrack?) -> ByteArray?,
     onSeek: (Int, Float) -> Unit,
     waveMode: Int = 0,
+    settings: PlayerSettings = PlayerSettings(),
 ) {
     val duration = (track?.durationSeconds ?: 0).toDouble()
     val shown = if (track == null) {
@@ -763,10 +799,13 @@ private fun DeckCard(
         val nextAt = nextCueSeconds(analysis, face.position.toDouble())
         val cueBeats = if (track == null || nextAt == null) null else beatsUntilCue(face.position.toDouble(), nextAt, shownBpm)
         val phraseLeft = if (track == null) 0 else phraseBarsRemaining(face.position.toDouble(), shownBpm)
+        val phraseLabel = phraseNow(analysis?.phrases.orEmpty(), face.position.toDouble(), shownBpm)
+        val gain = trimDb(analysis?.loudnessLufs ?: Double.NaN, settings.targetLufs, settings.autoGain)
         val status = buildList {
             if (face.keyShift != 0) add(if (face.keyShift > 0) "KEY +${face.keyShift}" else "KEY ${face.keyShift}")
             if (cueBeats != null) add("CUE ${"%.1f".format(cueBeats)}")
-            if (phraseLeft > 0) add("FR $phraseLeft")
+            if (phraseLabel != null) add(phraseLabel) else if (phraseLeft > 0) add("FR $phraseLeft")
+            if (settings.autoGain && gain.isFinite() && analysis != null) add("GAIN ${"%+.1f".format(gain)} dB")
             if (face.slip) add("SLIP")
             if (face.emergency) add("EMERG")
             if (face.reversed) add("REV")
@@ -777,7 +816,7 @@ private fun DeckCard(
             TextInk(status.joinToString("  "), fontSize = if (compact) 8.sp else 10.sp, color = Color(StagePalette.accentOrange), maxLines = 1, modifier = Modifier.padding(top = 1.dp))
         }
         OverviewWave(track, analysis, face.position.toDouble(), Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), waveMode) { seconds -> onSeek(deck, seconds) }
-        PhraseBar(track, Modifier.fillMaxWidth().height(if (compact) 4.dp else 7.dp))
+        PhraseBar(track, analysis?.phrases.orEmpty(), Modifier.fillMaxWidth().height(if (compact) 4.dp else 7.dp))
         Row(Modifier.padding(top = if (compact) 2.dp else 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.clickable { onPlay(deck) }) { Lamp(if (face.playing) "PLAY" else "PAUSE", face.playing, compact) }
             Lamp("A.HOT CUE", true, compact)
@@ -871,7 +910,12 @@ private fun Lamp(label: String, on: Boolean, compact: Boolean) {
     TextInk(label, color = if (on) Color(StagePalette.accentBlue) else Color(StagePalette.inkMuted), fontSize = if (compact) 8.sp else 10.sp, weight = FontWeight.Bold, maxLines = 1)
 }
 
-private fun analysisOf(catalog: RbCatalog?, track: RbTrack?): RbAnalysis? = track?.let { catalog?.analyses?.get(it.id) }
+private fun analysisOf(catalog: RbCatalog?, track: RbTrack?, preset: String = "drop"): RbAnalysis? {
+    val raw = track?.let { catalog?.analyses?.get(it.id) } ?: return null
+    if (raw.waveSource != "APP" || raw.phrases.isEmpty()) return raw
+    val cues = os.deckbridge.logic.autoCues(raw.phrases, raw.beats, preset)
+    return raw.copy(hotCues = cues.first, memoryCues = cues.second, hotCueBanks = os.deckbridge.logic.banksFromCues(cues.first))
+}
 
 private fun remainClock(track: RbTrack?, face: DeckFace): String {
     if (track == null) return "--:--"

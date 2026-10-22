@@ -160,6 +160,42 @@ int main() {
     slip.release();
     expect(std::abs(slip.audible - 24000.0) < 1e-6, "slip release jumps to the hidden playhead");
 
+    deckbridge::TransportSlip transport;
+    transport.armAt(1000.0);
+    transport.pause();
+    for (int index = 0; index < 4800; ++index) transport.tick(1.0);
+    expect(std::abs(transport.audible - 1000.0) < 1e-6 && std::abs(transport.hidden - 5800.0) < 1e-6, "slip pause keeps the background moving");
+    transport.resume();
+    expect(std::abs(transport.audible - 5800.0) < 1e-6, "slip resume returns to the background");
+    transport.armAt(0.0);
+    transport.setReversed(true);
+    for (int index = 0; index < 1000; ++index) transport.tick(1.0);
+    expect(transport.audible < 0.0 && std::abs(transport.hidden - 1000.0) < 1e-6, "slip reverse hears backward while the background runs forward");
+    transport.setReversed(false);
+    expect(std::abs(transport.audible - 1000.0) < 1e-6, "slip reverse release returns to the background");
+    transport.armAt(2000.0);
+    transport.holdAt(50.0);
+    for (int index = 0; index < 800; ++index) transport.tick(1.0);
+    expect(std::abs(transport.audible - 50.0) < 1e-6 && std::abs(transport.hidden - 2800.0) < 1e-6, "slip hot cue holds while the background runs");
+    transport.releaseHold();
+    expect(std::abs(transport.audible - 2800.0) < 1e-6, "slip hot cue release returns to the background");
+    transport.armAt(0.0);
+    transport.jog(400.0);
+    for (int index = 0; index < 100; ++index) transport.tick(1.0);
+    transport.disarm();
+    expect(std::abs(transport.audible - 100.0) < 1e-6, "slip jog release returns to the background");
+
+    deckbridge::PeakLimiter limiter;
+    float hotL = 3.f;
+    float hotR = -2.5f;
+    limiter.process(hotL, hotR);
+    expect(std::fabs(hotL) <= 0.98f && std::fabs(hotR) <= 0.98f, "limiter holds the master under the ceiling");
+    deckbridge::PeakLimiter quiet;
+    float lowL = 0.1f;
+    float lowR = -0.1f;
+    quiet.process(lowL, lowR);
+    expect(std::fabs(lowL - 0.1f) < 1e-4f && std::fabs(lowR + 0.1f) < 1e-4f, "limiter leaves a quiet pair alone");
+
     const char *scenes[] = {"Echo build-up", "Noise sweep up", "Spiral up", "Reverb up", "Reverb down", "Echo LPF down",
                             "Tape stop", "Dub echo"};
     for (int sceneId = 0; sceneId < 8; ++sceneId) {

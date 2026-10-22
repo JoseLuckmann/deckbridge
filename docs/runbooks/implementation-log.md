@@ -302,6 +302,23 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19551643 bytes, SHA-256 `bd84c4e2b766fb52a8790795b8ebcb527a4ca73a5cb3b1d0fcbedb97027732c4`.
 - HIL executado? não
 
+### Tela 0.13.0
+- Estado: JVM deste host; escuta BLOCKED_HARDWARE. Não é o tablet e não é a DDJ-400.
+- Slip: o ponto escondido avança para a frente com o pitch mesmo em pausa, em reverse, com hot cue premido ou no scratch. Ao soltar, a cabeça volta. O teste C++ cobre pausa, regresso, reverse, hot cue e jog. A DDJ-400 não tem alavanca de reverse.
+- Fase: o menu troca WAVEFORM por PHASE METER. Cada deck desenha a fase do compasso e o desvio em batidas face ao master.
+- MATCHING: BPM a 6% (incluindo dobro e metade) e tom compatível, ordenado pela proximidade. SUGGEST: vizinhos Camelot, salto de energia +1/+2/+7, distância de BPM, energia da análise, género e playlist em comum, sem o que já esteve no ar. A linha é do tipo `8A→9A, 124 BPM, energia +1`.
+- PSSI: tag do `.EXT`, com a máscara publicada, humor high/mid/low e os nomes Intro, Up, Down, Chorus, Bridge, Verse, Outro, mais fill-in. A barra usa essas frases e larga o índice de 16 compassos. As cores são deste app.
+- Pasta sem export: seções intro, build, drop, break e outro, encaixadas em 8 e, quando cai perto, em 16. Cues automáticos na memória do app (QUEDA: A downbeat, B drop, C break, D outro). O USB não é escrito. Banco de hot cue vindo do export é só leitura. Beat jump inclui ±64.
+- Frases no corpus real: 16/26 fronteiras a 1 compasso e 20/26 a 4. Método e tabela em `docs/testing/phrase-annotations.md`. Ecosystem, o segundo break de Caught e o outro de Silver ficam de fora. Quatro acertos de outro são a cauda do ficheiro.
+- Auto gain: LUFS integrado, alvo −10 (também −14 e −8), trim ±12 dB no cartão. Um seno de 1 kHz a −20 dBFS fica a 2 LU de −23,7. O limiter segura o master em 0,98 e não mexe num par baixo. Não se leu auto gain do export.
+- Tempo e tom do 0.12.2 não mudaram: Acc1 0,655, Acc2 0,724, MIREX 0,476. Abaixo de 0,85 / 0,95 / 0,70.
+- Prints: `phrase-cues-gain.png`, `phase-meter.png`, `browse-matching.png`, `browse-suggest.png`.
+- JVM: 79 testes, 0 falhas. DSP hospedeiro e gravação hospedeira: ALL PASS. Python: 42 passed.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4264901 bytes, SHA-256 `204373723cb6aa50e7c5a999ae1aa3b0d396a16d326265ade72dd61dd01a8449`, versão 0.13.0 (versionCode 15), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19591251 bytes, SHA-256 `3124f2ce667fad7827097383fce046e182bfe60ae77fe59fdcb8578e677f6478`.
+- HIL executado? não
+- Busca por voz (A053) e quatro decks (A054) continuam por fazer.
+
 ### T020 — configuração
 - Estado: PASS
 - Perfil `runtime`, tela de referência 1024x600, `allow_write` recusado
@@ -322,7 +339,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 ### T078 — roteiro final
 - Estado: documento PASS; execução BLOCKED_HARDWARE
 - Arquivo: `docs/hil/roteiro-validacao-final.md`
-- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Em 0.12.1 os passos continuam os mesmos: a grade, o tom, a cor e a emenda do loop não são um gesto novo na controladora. Em 0.12.2 a análise de uma pasta sem export também não é um gesto na controladora. Os passos 13 a 21 continuam por executar
+- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Em 0.12.1 os passos continuam os mesmos: a grade, o tom, a cor e a emenda do loop não são um gesto novo na controladora. Em 0.12.2 a análise de uma pasta sem export também não é um gesto na controladora. Em 0.13.0 os passos 22 a 24 cobrem slip, medidor de fase, MATCHING, SUGGEST, beat jump 64, frase, cues automáticos e auto gain. Os passos 13 a 24 continuam por executar
 
 ## Template de registro
 

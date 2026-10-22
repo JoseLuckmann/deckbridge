@@ -55,6 +55,11 @@ data class RbAnalysis(
     val rgbApp: Boolean = false,
     val bandApp: Boolean = false,
     val blueApp: Boolean = false,
+    val phrases: List<PhraseSpan> = emptyList(),
+    val phraseMood: String = "",
+    val loudnessLufs: Double = Double.NaN,
+    val energy: Double = 0.0,
+    val hotCueBanks: List<List<RbHotCue>> = emptyList(),
 )
 
 data class RbTag(val name: String, val category: String)
@@ -281,6 +286,9 @@ private fun analysisFor(volume: ReadableVolume, track: RbTrack, warnings: Mutabl
         rgbApp = filled.rgbApp,
         bandApp = filled.bandApp,
         blueApp = filled.blueApp,
+        phrases = file.phrases,
+        phraseMood = file.phraseMood,
+        hotCueBanks = banksFromCues(hot),
     )
 }
 

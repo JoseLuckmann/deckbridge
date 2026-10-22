@@ -174,6 +174,87 @@ struct SlipClock {
     }
 };
 
+// O fundo anda para a frente no tempo do pitch, mesmo em pausa, scratch, hot cue ou reverse.
+// Ao soltar, o audível volta a esse fundo.
+struct TransportSlip {
+    double audible = 0.0;
+    double hidden = 0.0;
+    bool armed = false;
+    bool paused = false;
+    bool reversed = false;
+    bool holding = false;
+
+    void armAt(double position) {
+        audible = position;
+        hidden = position;
+        armed = true;
+        paused = false;
+        reversed = false;
+        holding = false;
+    }
+
+    void disarm() {
+        if (armed) audible = hidden;
+        armed = false;
+        paused = false;
+        reversed = false;
+        holding = false;
+    }
+
+    void tick(double forward) {
+        const double step = forward > 0.0 ? forward : 0.0;
+        if (!armed) {
+            if (!paused && !holding) audible += reversed ? -step : step;
+            hidden = audible;
+            return;
+        }
+        hidden += step;
+        if (paused || holding) return;
+        audible += reversed ? -step : step;
+    }
+
+    void jog(double delta) { audible += delta; }
+
+    void pause() { paused = true; }
+
+    void resume() {
+        if (armed) audible = hidden;
+        paused = false;
+        holding = false;
+    }
+
+    void setReversed(bool on) {
+        if (!on && reversed && armed) audible = hidden;
+        reversed = on;
+    }
+
+    void holdAt(double cue) {
+        holding = true;
+        paused = false;
+        audible = cue;
+    }
+
+    void releaseHold() {
+        if (armed) audible = hidden;
+        holding = false;
+    }
+};
+
+struct PeakLimiter {
+    float envelope = 1.f;
+    float ceiling = 0.98f;
+
+    void process(float &left, float &right) {
+        const float peak = std::max(std::fabs(left), std::fabs(right));
+        const float need = peak > ceiling ? ceiling / peak : 1.f;
+        if (need < envelope) envelope = need;
+        else envelope += (1.f - envelope) * 0.002f;
+        if (envelope > 1.f) envelope = 1.f;
+        left *= envelope;
+        right *= envelope;
+    }
+};
+
 struct Biquad {
     float b0 = 1.f, b1 = 0.f, b2 = 0.f, a1 = 0.f, a2 = 0.f, z1 = 0.f, z2 = 0.f;
 
