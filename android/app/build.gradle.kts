@@ -14,8 +14,8 @@ android {
         applicationId = "os.deckbridge.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "0.11.0"
+        versionCode = 12
+        versionName = "0.12.0"
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
@@ -103,6 +103,8 @@ androidComponents {
 tasks.withType<Test>().configureEach {
     systemProperty("roborazzi.test.record", "true")
     systemProperty("roborazzi.output.dir", "/opt/cursor/artifacts/prints")
+    systemProperty("usb.folder", System.getProperty("usb.folder") ?: "")
+    systemProperty("usb.report", System.getProperty("usb.report") ?: "")
 }
 
 dependencies {

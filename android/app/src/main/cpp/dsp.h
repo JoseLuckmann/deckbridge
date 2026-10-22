@@ -26,6 +26,32 @@ inline double samplesPerBeat(double bpm, double sampleRate) {
     return sampleRate * 60.0 / bpm;
 }
 
+inline double directedStep(double pitch, double rateMul, int sampleRate, int outputRate, bool reversed) {
+    if (sampleRate <= 0 || outputRate <= 0) return 0.0;
+    const double step = (std::max(0.0, pitch) * std::max(0.0, rateMul) * static_cast<double>(sampleRate)) /
+                        static_cast<double>(outputRate);
+    return reversed ? -step : step;
+}
+
+inline double wrapReverseLoop(double position, double loopStart, double loopEnd, bool reversed) {
+    if (!(loopEnd > loopStart)) return position;
+    const double length = loopEnd - loopStart;
+    if (position >= loopEnd) {
+        double over = std::fmod(position - loopEnd, length);
+        if (over < 0.0) over += length;
+        return loopStart + over;
+    }
+    if (reversed && position < loopStart) {
+        double back = std::fmod(loopStart - position, length);
+        if (back < 0.0) back += length;
+        double wrapped = loopEnd - back;
+        if (wrapped >= loopEnd) wrapped = loopStart;
+        if (wrapped < loopStart) wrapped = loopStart;
+        return wrapped;
+    }
+    return position;
+}
+
 inline double wrapLoopSample(double position, double loopStart, double loopEnd) {
     if (!(loopEnd > loopStart)) return position;
     const double length = loopEnd - loopStart;

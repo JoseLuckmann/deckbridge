@@ -20,7 +20,7 @@ A tabela tem 45 linhas. Uma linha pode citar duas classes; a contagem abaixo usa
 | Classe | Linhas | Feitas nesta 0.10.0 | Recomendação curta |
 |---|---|---|---|
 | 1 já estava | 16 | o realce de tom passou a aceitar Camelot e nota musical no mesmo sítio | manter |
-| 2 no ecrã | 14 | 9 (Key Shift, Key Sync, filtro, contagem ao cue, bloco de 16, agulha, slip, emergency loop, banco) | a seguir: ordenar a lista, Active Loop no ponto, reverse, grelha |
+| 2 no ecrã | 14 | 9 na 0.10.0; na 0.12.0 entraram ordenar, Active Loop no ponto, reverse, grelha e contagem ao memory cue | o que resta é MATCHING, o resto do slip e o medidor de fase |
 | 3 mapa DDJ-400 | 6, já dentro das 16 | 0 novas | não roubar o BEAT SYNC para o Key Sync |
 | 4 fora de alcance | 11 | 0 | não prometer Pro DJ Link, nuvem, Wi-Fi nem o ecrã do prato |
 | mista (1 e 2, ou 1 e 4) | 4: Active Loop, Tag List, modo do prato, On Air | 0 | o resto de cada uma está na própria linha |
@@ -56,7 +56,7 @@ A capa (tabela de artwork e ficheiros em `PIONEER/Artwork`) é leitura de biblio
 | Loop de 4 e de 8 | Manual, botões 4 BEAT e 8 BEAT | 1 e 3: pads de beat loop `beatloop_4_toggle` (nota 0x64) e `beatloop_8_toggle` (0x65) em 0x97/0x99 | — | feito | Manter |
 | Metade e dobro do loop | Manual | 1 e 3: `PioneerDDJ400.cueLoopCallLeft` / `cueLoopCallRight` | — | feito | Manter |
 | Reloop / exit | Manual | 1 e 3: `reloop_toggle` 0x4D; shift `reloop_andstop` 0x50 | — | feito | Manter |
-| Active Loop | Manual: o loop gravado começa quando a cabeça chega lá | 1 parcial, resto 2 | M | ao carregar, o loop da memória fica armado. Não espera pela cabeça | Tarefa: armar ao passar no ponto |
+| Active Loop | Manual: o loop gravado começa quando a cabeça chega lá | 1 parcial, resto 2 | M | na 0.12.0 o loop da memória arma na carga e só entra quando a cabeça cruza o início | Ouvir no hardware |
 | Emergency Loop | Manual, Emergency Loop | 2 | S | feito, com as diferenças acima | Ouvir no hardware |
 | Gravar loop no USB | Manual, MEMORY | 4 | — | a leitura de memory cue já existe. Escrever o USB está fora (ADR-0002) | Não gravar o pendrive |
 | Slip | Manual, Slip | 2 | S / M | o regresso ao ponto está feito. Pausa, scratch, hot cue e reverse em slip ficam de fora | Tarefa M para o resto |
@@ -69,10 +69,10 @@ A capa (tabela de artwork e ficheiros em `PIONEER/Artwork`) é leitura de biblio
 | Track Filter | Manual: só na biblioteca; não vale em TAG LIST, SEARCH, MATCHING, HOT CUE BANK nem FOLDER | 2 | S | janela de BPM e tom compatível na lista. Não é o ecrã inteiro de edição | Chega para já |
 | Search | Manual, SEARCH | 1 | — | título, artista, BPM e tom exato | Manter |
 | Tag List | Manual. Converter em playlist grava o dispositivo | 1 a lista da sessão; 4 a gravação | — | etiquetas da sessão. O USB não é destino | Manter |
-| Ordenar a lista ao tocar no título | Manual, track list | 2 | S | não feito | Próxima tarefa pequena |
+| Ordenar a lista ao tocar no título | Manual, track list | 2 | S | na 0.12.0 o cabeçalho ordena título, BPM, tom e tempo, e inverte no segundo toque | Manter |
 | Categoria MATCHING | O manual cita a categoria ao excluir o Track Filter | 2 | S | não há categoria própria. O realce do tom compatível já existe (classe 1) | Tarefa S se a lista MATCHING fizer falta |
 | Tom no ecrã e realce de vizinhos | Manual, indicador Key; realce nosso a partir da roda | 1 | — | feito. `Am` e `8A` contam como o mesmo tom | Manter |
-| Beat countdown | Manual, ecrã de onda: compassos e batidas até ao cue gravado mais próximo | 2 | S | batidas até ao próximo hot cue. Não inclui o memory cue | Alargar ao memory cue se for preciso |
+| Beat countdown | Manual, ecrã de onda: compassos e batidas até ao cue gravado mais próximo | 2 | S | na 0.12.0 a contagem usa o hot cue ou o memory cue, o que estiver mais perto à frente | Manter |
 | Frase / PSSI | A análise pública do ANLZ descreve frases. O manual deste leitor descreve o beat countdown, não um ecrã PSSI. O anúncio de 2020 fala de dados de frase para iluminação | 2 | L | a barra colorida e o “FR” são o índice do compasso, de 16 em 16 | Não tratar isto como PSSI. Parse real fica em tarefa L |
 | Cor da onda BLUE / RGB / 3BAND | Manual, atalho WAVEFORM COLOR. BLUE é o valor de fábrica | 1 | — | as três estão no menu. Na 0.11.0 a cor lida o export (PWV5/PWV4, PWV7/PWV6, PWV3/PWAV). Sem a tag, o app analisa o WAV | Manter |
 | Zoom | Manual, modo Zoom | 1 | — | feito | Manter |
@@ -82,7 +82,7 @@ A capa (tabela de artwork e ficheiros em `PIONEER/Artwork`) é leitura de biblio
 | Ecrã do prato (arte, slip, sync, ponto, vinyl, cue, master) | Manual, Jog display | 4 | — | o prato físico não existe. A arte foi para o cartão do deck | Não desenhar um prato falso como se fosse o LCD |
 | Vinyl / CDJ | Manual | 1 o modo; 4 o tato | — | o menu tem o modo. Os segundos do jog continuam provisórios | Medir no hardware |
 | Ajuste de velocidade do vinyl | Manual, TOUCH & RELEASE / TOUCH / RELEASE | 4 | — | não há esse mecanismo | Deixar |
-| Reverse | Manual | 2 | M | não feito. Não há alavanca equivalente confirmada no mapa da DDJ-400 | Tarefa M no ecrã |
+| Reverse | Manual | 2 | M | na 0.12.0 o botão REV inverte o passo no motor. Não há alavanca equivalente confirmada no mapa da DDJ-400. Slip reverse continua fora | Ouvir no hardware |
 | Faixas de tempo ±6 / ±10 / ±16 / WIDE | Manual: unidades 0,02%, 0,05%, 0,05% e 0,5%. WIDE até ±100% | 1 as quatro faixas da DDJ-400 (6, 10, 16, WIDE); 2 o texto fino | S | as faixas já existiam. O texto passou a duas casas | Não fingir detent de 0,02% no fader |
 | Pro DJ Link, até 6 leitores, iluminação, Link Info, cópia de ajustes | Manual, PRO DJ LINK. Firmware 2.03 cita o limite de 6. Firmware 3.11 acrescenta Link Info. Firmware 3.22 acrescenta o RMX-IGNITE | 4 | L | fora | Não prometer |
 | CloudDirectPlay, Google Drive, StreamingDirectPlay, Cloud Analysis, rating, Information Jump | Firmware 2.00, 3.00, 3.11 e 3.16 | 4 | L | fora. Exige conta, rede e, no rating, escrita | Não prometer |
@@ -91,7 +91,7 @@ A capa (tabela de artwork e ficheiros em `PIONEER/Artwork`) é leitura de biblio
 | MIDI/HID do leitor a comandar um computador | Manual, Using a DJ application | 4 | — | a DeckBridge é o programa que recebe a DDJ-400. Não se apresenta como esse leitor | Fora |
 | On Air ligado a uma mesa na rede | Manual, ON AIR DISPLAY via PRO DJ LINK | 4 o link; 1 o ON AIR local pelo fader | — | o badge local existe | Manter o local |
 | My Settings gravados no USB | Manual | 4 | — | escrever o USB está fora | Fora |
-| Ajuste de grelha | Manual, Grid Adjust | 2 | M | não feito | Tarefa M |
+| Ajuste de grelha | Manual, Grid Adjust | 2 | M | na 0.12.0 G−, G+, S−, S+ e G0 deslocam ou esticam a grade na memória do app. O USB não é escrito | Ouvir no hardware |
 | Fase em vez da onda | Atalho WAVEFORM / PHASE METER | 2 | M | não feito | Tarefa M, depois do resto |
 
 ## O que não é função deste leitor
@@ -120,15 +120,9 @@ Nada disto foi implementado. São classe 4, salvo o Beat Countdown e o Track Fil
 
 ## Recomendações
 
-Fazer a seguir, se o dono quiser mais ecrã e não rede:
+Os cinco itens acima entraram no ecrã na 0.12.0. A escuta deles continua `BLOCKED_HARDWARE`. O que ainda fica de fora, se o dono quiser mais ecrã e não rede: categoria MATCHING, o resto do slip, e o medidor de fase no lugar da onda.
 
-1. Ordenar a lista ao tocar no título (S).
-2. Active Loop só quando a cabeça chega ao ponto (S/M).
-3. Reverse no ecrã (M).
-4. Ajuste de grelha (M).
-5. Contagem também até ao memory cue (S).
-
-Não fazer nesta linha: Pro DJ Link, CloudDirectPlay, StreamingDirectPlay, Wi-Fi, ecrã dentro do prato, alavanca de slip reverse, gravar loops ou bancos no USB.
+Não fazer nesta linha: Pro DJ Link, CloudDirectPlay, StreamingDirectPlay, Wi-Fi, ecrã dentro do prato, alavanca de slip reverse, gravar loops, grades ou bancos no USB.
 
 ## Fontes
 

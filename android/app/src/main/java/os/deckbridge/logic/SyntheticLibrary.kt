@@ -899,3 +899,122 @@ fun usbVariantReport(): String {
     line("capa ausente", bare != null && bare.artworkPath.isBlank() && simulated.error == null, "Click 100 sem id")
     return lines.joinToString("\n")
 }
+
+data class OurSong(
+    val title: String,
+    val artist: String,
+    val album: String,
+    val keyName: String,
+    val bpm: Double,
+    val seconds: Int,
+    val sampleRate: Int,
+    val fileName: String,
+    val wav: ByteArray,
+    val waves: PcmWaves,
+    val beats: List<AnlzBeat>,
+    val hot: List<CueSpec>,
+    val memory: List<CueSpec>,
+    val loop: Pair<CueSpec, Int>?,
+)
+
+/**
+ * Exportação feita por este app a partir da análise própria.
+ * O layout PDB/ANLZ é o que o leitor daqui já entende. Não é arquivo gerado pelo rekordbox.
+ */
+fun ourMusicVolume(songs: List<OurSong>): MemoryVolume {
+    require(songs.isNotEmpty())
+    val artists = songs.map { it.artist.ifBlank { "—" } }.distinct()
+    val albums = songs.map { it.album.ifBlank { "—" } }.distinct()
+    val keys = songs.map { it.keyName.ifBlank { "—" } }.distinct()
+    val trackRows = songs.mapIndexed { index, song ->
+        val id = index + 1
+        trackRow(
+            id,
+            song.title,
+            song.fileName,
+            "CONTENTS/${song.fileName}",
+            "PIONEER/USBANLZ/ANLZ%04d.DAT".format(id),
+            (song.bpm * 100.0).toInt().coerceAtLeast(1),
+            song.seconds,
+            song.sampleRate,
+            song.wav.size,
+            artists.indexOf(song.artist.ifBlank { "—" }) + 1,
+            albums.indexOf(song.album.ifBlank { "—" }) + 1,
+            1,
+            keys.indexOf(song.keyName.ifBlank { "—" }) + 1,
+        )
+    } + listOf(ByteArray(16) { 0xFF.toByte() })
+    val entries = songs.indices.map { entryRow(it, it + 1, 2) }
+    val pdb = packPdb(
+        PAGE_LEN,
+        listOf(
+            Triple(2, artists.mapIndexed { index, name -> artistRow(index + 1, name) }, List(artists.size) { true }),
+            Triple(3, albums.mapIndexed { index, name -> albumRow(index + 1, 1, name) }, List(albums.size) { true }),
+            Triple(1, listOf(inlineNameRow(1, "Electronic", after = 4)), listOf(true)),
+            Triple(5, keys.mapIndexed { index, name -> inlineNameRow(index + 1, name, after = 8, secondId = index + 1) }, List(keys.size) { true }),
+            Triple(0, trackRows, List(trackRows.size) { it != trackRows.lastIndex }),
+            Triple(
+                7,
+                listOf(
+                    playlistRow(1, 0, "Sets", folder = true, sort = 0),
+                    playlistRow(2, 1, "Real", folder = false, sort = 1),
+                ),
+                listOf(true, true),
+            ),
+            Triple(8, entries, List(entries.size) { true }),
+        ),
+    )
+    val files = linkedMapOf(
+        "PIONEER/rekordbox/export.pdb" to pdb,
+        "PIONEER/DEVSETTING.DAT" to devSettingBytes(0x03, 0x01),
+    )
+    songs.forEachIndexed { index, song ->
+        val id = index + 1
+        val stem = "ANLZ%04d".format(id)
+        files["PIONEER/USBANLZ/$stem.DAT"] = anlzFromBeats(song)
+        files["PIONEER/USBANLZ/$stem.EXT"] = anlzExt(song.hot, song.memory, song.loop, song.waves)
+        files["PIONEER/USBANLZ/$stem.2EX"] = anlz2ex(song.waves)
+        files["CONTENTS/${song.fileName}"] = song.wav
+    }
+    return MemoryVolume(files, "export deste app", true)
+}
+
+private fun anlzFromBeats(song: OurSong): ByteArray {
+    val beats = if (song.beats.isEmpty()) {
+        listOf(AnlzBeat(1, song.bpm, 0))
+    } else {
+        song.beats.take(4000)
+    }
+    val beatBody = BeWriter()
+    beatBody.u32(0)
+    beatBody.u32(0x80000)
+    beatBody.u32(beats.size)
+    beats.forEach { beat ->
+        beatBody.u16(beat.beatInBar.coerceIn(1, 4))
+        beatBody.u16((beat.bpm * 100.0).toInt().coerceIn(1, 50000))
+        beatBody.u32(beat.timeMs.coerceAtLeast(0))
+    }
+    val memory = cueSection(0, song.memory.map { plainCue(0, it.timeMs) })
+    val hots = cueSection(1, song.hot.map { plainCue(it.hot, it.timeMs) })
+    val wave = packMono(song.waves.bluePreview)
+    val waveBody = BeWriter()
+    waveBody.u32(wave.size)
+    waveBody.u32(0x10000)
+    waveBody.bytes(wave)
+    val bands = song.waves.bandPreview
+    val cols = bands.columns.coerceAtMost(4000)
+    val bandBody = BeWriter()
+    bandBody.u32(cols)
+    bandBody.bytes(bands.low.copyOf(cols))
+    bandBody.bytes(bands.mid.copyOf(cols))
+    bandBody.bytes(bands.high.copyOf(cols))
+    return anlzFile(
+        listOf(
+            section("PQTZ", beatBody.toByteArray()),
+            memory,
+            hots,
+            section("PWAV", waveBody.toByteArray(), 0x14),
+            section("PWB3", bandBody.toByteArray()),
+        ),
+    )
+}

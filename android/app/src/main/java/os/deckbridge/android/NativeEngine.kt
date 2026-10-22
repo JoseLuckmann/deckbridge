@@ -112,6 +112,11 @@ object NativeEngine {
         nativeSetLoop(deck, startSec, endSec)
     }
 
+    fun setReverse(deck: Int, reversed: Boolean) {
+        if (!loaded) return
+        nativeSetReverse(deck, reversed)
+    }
+
     fun setBuffer(frames: Int) {
         if (!loaded) return
         nativeSetBuffer(frames)
@@ -201,6 +206,7 @@ object NativeEngine {
     private external fun nativeSetKeyShift(deck: Int, semitones: Int)
     private external fun nativeSetSlip(deck: Int, enabled: Boolean)
     private external fun nativeSetLoop(deck: Int, startSec: Float, endSec: Float)
+    private external fun nativeSetReverse(deck: Int, reversed: Boolean)
     private external fun nativeSetBuffer(frames: Int)
     private external fun nativeSetRmx(values: FloatArray)
     private external fun nativeRecordStart(path: String, side: Boolean): Boolean

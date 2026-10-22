@@ -30,7 +30,13 @@ import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.ReadableVolume
 import os.deckbridge.logic.WaveZoom
+import os.deckbridge.logic.GridEdit
+import os.deckbridge.logic.ListSort
 import os.deckbridge.logic.activeLoop
+import os.deckbridge.logic.applyGrid
+import os.deckbridge.logic.arrivedAtActiveLoop
+import os.deckbridge.logic.gridBpm
+import os.deckbridge.logic.toggleListSort
 import os.deckbridge.logic.backBrowse
 import os.deckbridge.logic.PlayerSettings
 import os.deckbridge.logic.RmxState
@@ -94,6 +100,7 @@ fun DeckPage(
     var pflA by remember { mutableStateOf(false) }
     var pflB by remember { mutableStateOf(false) }
     var faces by remember { mutableStateOf(listOf(DeckFace(), DeckFace())) }
+    var gridEdits by remember { mutableStateOf(mapOf<Int, GridEdit>()) }
     var master by remember { mutableIntStateOf(0) }
     var quantize by remember { mutableStateOf(true) }
     var zoom by remember { mutableStateOf(listOf(WaveZoom.BARS_8, WaveZoom.BARS_8)) }
@@ -170,7 +177,7 @@ fun DeckPage(
         }
         val pcm = decodeTrackAudio(context, track.fileName.ifBlank { track.filePath }, bytes)
         if (pcm == null) {
-            note = "Não decodifiquei ${track.fileName}. Nesta versão o deck aceita WAV e MP3."
+            note = "Não decodifiquei ${track.fileName}. Nesta versão o deck aceita WAV, MP3, FLAC e AAC."
             return
         }
         val analysis = liveCatalog.value?.analyses?.get(track.id)
@@ -187,19 +194,20 @@ fun DeckPage(
             track.bpm.toFloat(),
             (analysis?.mainCueMs ?: 0) / 1000f,
             hot,
-            (loop?.first ?: -1) / 1000f,
-            (loop?.second ?: -1) / 1000f,
+            -1f,
+            -1f,
         )
         onLoaded(deck, track)
         rememberLoaded(track)
         val cueSec = if (settings.autoCue) (analysis?.mainCueMs ?: 0) / 1000f else 0f
         if (cueSec > 0f) NativeEngine.seek(deck, cueSec)
+        val savedGrid = gridEdits[track.id] ?: os.deckbridge.logic.GridEdit()
         edit(deck) {
             it.copy(
                 playing = false,
                 position = cueSec,
-                loopStart = (loop?.first ?: -1) / 1000f,
-                loopEnd = (loop?.second ?: -1) / 1000f,
+                loopStart = -1f,
+                loopEnd = -1f,
                 memoryStart = (loop?.first ?: -1) / 1000f,
                 memoryEnd = (loop?.second ?: -1) / 1000f,
                 keyLock = settings.keyLock,
@@ -207,11 +215,16 @@ fun DeckPage(
                 slip = false,
                 cueBank = 0,
                 emergency = false,
+                reversed = false,
+                activeLoopArmed = loop != null,
+                gridShiftMs = savedGrid.shiftMs,
+                gridStretch = savedGrid.stretch,
             )
         }
         NativeEngine.setKeyShift(deck, 0)
         NativeEngine.setSlip(deck, false)
-        val loopText = if (loop == null) "" else " Loop ${loop.first}–${loop.second} ms."
+        NativeEngine.setReverse(deck, false)
+        val loopText = if (loop == null) "" else " Loop armado em ${loop.first}–${loop.second} ms. Entra quando a cabeça chegar."
         note = "Carregada no deck ${deck + 1}: ${track.title}.$loopText"
         pushMix()
     }
@@ -237,7 +250,17 @@ fun DeckPage(
     fun seekTo(deck: Int, seconds: Float) {
         val clamped = seconds.coerceAtLeast(0f)
         NativeEngine.seek(deck, clamped)
-        edit(deck) { it.copy(position = clamped) }
+        val face = faces.getOrElse(deck) { DeckFace() }
+        val beforeMemory = face.memoryEnd > face.memoryStart && clamped < face.memoryStart
+        if (beforeMemory) NativeEngine.setLoop(deck, -1f, -1f)
+        edit(deck) {
+            it.copy(
+                position = clamped,
+                activeLoopArmed = if (beforeMemory) true else it.activeLoopArmed,
+                loopStart = if (beforeMemory) -1f else it.loopStart,
+                loopEnd = if (beforeMemory) -1f else it.loopEnd,
+            )
+        }
     }
 
     fun hotCue(deck: Int, index: Int) {
@@ -257,7 +280,8 @@ fun DeckPage(
         val analysis = track?.let { liveCatalog.value?.analyses?.get(it.id) }
         val cue = analysis?.hotCues?.firstOrNull { it.index == index }
         if (cue != null && quantize) {
-            val seconds = quantizeSeconds(cue.timeMs / 1000.0, analysis.beats, track.bpm)
+            val edit = GridEdit(faces[deck].gridShiftMs, faces[deck].gridStretch)
+            val seconds = quantizeSeconds(cue.timeMs / 1000.0, applyGrid(analysis.beats, edit), gridBpm(track.bpm, edit))
             seekTo(deck, seconds.toFloat())
         } else {
             NativeEngine.hotCue(deck, index)
@@ -274,6 +298,27 @@ fun DeckPage(
                 edit(deck) { it.copy(keyShift = next, keyLock = true) }
                 NativeEngine.setKeyLock(deck, true)
                 NativeEngine.setKeyShift(deck, next)
+            }
+            "REV" -> {
+                val next = !face.reversed
+                edit(deck) { it.copy(reversed = next) }
+                NativeEngine.setReverse(deck, next)
+            }
+            "G-", "G+" -> {
+                val delta = if (action == "G+") 10.0 else -10.0
+                val next = (face.gridShiftMs + delta).coerceIn(-2000.0, 2000.0)
+                edit(deck) { it.copy(gridShiftMs = next) }
+                track?.let { gridEdits = gridEdits + (it.id to GridEdit(next, face.gridStretch)) }
+            }
+            "S-", "S+" -> {
+                val factor = if (action == "S+") 1.001 else 0.999
+                val next = (face.gridStretch * factor).coerceIn(0.9, 1.1)
+                edit(deck) { it.copy(gridStretch = next) }
+                track?.let { gridEdits = gridEdits + (it.id to GridEdit(face.gridShiftMs, next)) }
+            }
+            "G0" -> {
+                edit(deck) { it.copy(gridShiftMs = 0.0, gridStretch = 1.0) }
+                track?.let { gridEdits = gridEdits + (it.id to GridEdit()) }
             }
             "KEY0" -> {
                 edit(deck) { it.copy(keyShift = 0) }
@@ -360,7 +405,7 @@ fun DeckPage(
         val seconds = jumpSeconds(
             face.position.toDouble(),
             beats,
-            track.bpm,
+            gridBpm(track.bpm, GridEdit(face.gridShiftMs, face.gridStretch)),
             track.sampleRate,
             quantize,
             settings.quantizeBeats,
@@ -624,10 +669,22 @@ fun DeckPage(
                 val face = liveFaces.value.getOrElse(deck) { DeckFace() }
                 val level = if (deck == 0) vols.first else vols.second
                 val pitch = if (deck == 0) livePitch.value.first else livePitch.value.second
-                if (face.playing) {
+                if (face.playing && NativeEngine.running()) {
                     val pos = NativeEngine.position(deck)
-                    if (pos > 0.05f) edit(deck) { it.copy(position = pos) }
                     val current = liveFaces.value.getOrElse(deck) { DeckFace() }
+                    if (current.activeLoopArmed && arrivedAtActiveLoop(current.position, pos, current.memoryStart, current.memoryEnd)) {
+                        NativeEngine.setLoop(deck, current.memoryStart, current.memoryEnd)
+                        edit(deck) {
+                            it.copy(
+                                position = pos,
+                                loopStart = it.memoryStart,
+                                loopEnd = it.memoryEnd,
+                                activeLoopArmed = false,
+                            )
+                        }
+                    } else if (pos > 0.05f || current.reversed) {
+                        edit(deck) { it.copy(position = pos) }
+                    }
                     if (track != null && !current.emergency) {
                         val range = emergencyLoopRange(
                             if (pos > 0.05f) pos.toDouble() else current.position.toDouble(),
@@ -897,6 +954,10 @@ fun DeckPage(
         onMatchKey = { key ->
             val place = browse
             if (place != null) browse = place.copy(matchKey = key, index = 0)
+        },
+        onSort = { sort ->
+            val place = browse
+            if (place != null) browse = toggleListSort(place, sort)
         },
         onBpmWindow = {
             val place = browse

@@ -56,7 +56,10 @@ import os.deckbridge.logic.waveOrigin
 import os.deckbridge.logic.activeLoop
 import os.deckbridge.logic.barsFromSeconds
 import os.deckbridge.logic.beatFxBeats
+import os.deckbridge.logic.GridEdit
 import os.deckbridge.logic.beatsUntilCue
+import os.deckbridge.logic.gridBpm
+import os.deckbridge.logic.nextCueSeconds
 import os.deckbridge.logic.cueBankLetter
 import os.deckbridge.logic.fineTempoText
 import os.deckbridge.logic.phraseBarsRemaining
@@ -148,6 +151,7 @@ fun PlayerScreen(
     onDeckAction: (Int, String) -> Unit = { _, _ -> },
     onMatchKey: (String) -> Unit = {},
     onBpmWindow: () -> Unit = {},
+    onSort: (os.deckbridge.logic.ListSort) -> Unit = {},
 ) {
     var info by remember { mutableStateOf(showInfo) }
     var grid by remember { mutableStateOf(false) }
@@ -299,6 +303,7 @@ fun PlayerScreen(
                 onSimulate = onSimulate,
                 onMatchKey = onMatchKey,
                 onBpmWindow = onBpmWindow,
+                onSort = onSort,
             )
         }
     }
@@ -657,6 +662,13 @@ private fun PerformanceStrip(
             Choice("SYNC", false, compact, Modifier.weight(1f)) { onAction("SYNC") }
             Choice("SLIP", face.slip, compact, Modifier.weight(1f)) { onAction("SLIP") }
             Choice("EMERG", face.emergency, compact, Modifier.weight(1f)) { onAction("EMERG") }
+            Choice("REV", face.reversed, compact, Modifier.weight(1f)) { onAction("REV") }
+            Choice("−10", face.gridShiftMs < 0.0, compact, Modifier.weight(1f)) { onAction("G-") }
+            Choice("+10", face.gridShiftMs > 0.0, compact, Modifier.weight(1f)) { onAction("G+") }
+            Choice("−0,1%", face.gridStretch < 1.0, compact, Modifier.weight(1.1f)) { onAction("S-") }
+            Choice("+0,1%", face.gridStretch > 1.0, compact, Modifier.weight(1.1f)) { onAction("S+") }
+            Choice("G0", false, compact, Modifier.weight(1f)) { onAction("G0") }
+            Choice("ATIVO", face.activeLoopArmed, compact, Modifier.weight(1.1f)) { }
             Choice("BANK ${cueBankLetter(face.cueBank)}", face.cueBank != 0, compact, Modifier.weight(1.4f)) { onAction("BANK") }
         }
     }
@@ -694,7 +706,8 @@ private fun DeckCard(
     }
     val clock = splitClock(shown)
     val percent = (face.pitch - 1f) * 100f
-    val pitched = if (track == null) 0.0 else track.bpm * face.pitch
+    val shownBpm = if (track == null) 0.0 else gridBpm(track.bpm, GridEdit(face.gridShiftMs, face.gridStretch))
+    val pitched = if (track == null) 0.0 else shownBpm * face.pitch
     Column(
         modifier.border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).clickable { onActive(deck) }.padding(if (compact) 4.dp else 8.dp),
     ) {
@@ -746,15 +759,18 @@ private fun DeckCard(
                 }
             }
         }
-        val nextCue = analysis?.hotCues?.filter { it.timeMs / 1000.0 > face.position + 0.04 }?.minByOrNull { it.timeMs }
-        val cueBeats = if (track == null || nextCue == null) null else beatsUntilCue(face.position.toDouble(), nextCue.timeMs / 1000.0, track.bpm)
-        val phraseLeft = if (track == null) 0 else phraseBarsRemaining(face.position.toDouble(), track.bpm)
+        val nextAt = nextCueSeconds(analysis, face.position.toDouble())
+        val cueBeats = if (track == null || nextAt == null) null else beatsUntilCue(face.position.toDouble(), nextAt, shownBpm)
+        val phraseLeft = if (track == null) 0 else phraseBarsRemaining(face.position.toDouble(), shownBpm)
         val status = buildList {
             if (face.keyShift != 0) add(if (face.keyShift > 0) "KEY +${face.keyShift}" else "KEY ${face.keyShift}")
             if (cueBeats != null) add("CUE ${"%.1f".format(cueBeats)}")
             if (phraseLeft > 0) add("FR $phraseLeft")
             if (face.slip) add("SLIP")
             if (face.emergency) add("EMERG")
+            if (face.reversed) add("REV")
+            if (face.activeLoopArmed) add("LOOP ARMADO")
+            if (face.gridShiftMs != 0.0 || face.gridStretch != 1.0) add("GRADE")
         }
         if (status.isNotEmpty()) {
             TextInk(status.joinToString("  "), fontSize = if (compact) 8.sp else 10.sp, color = Color(StagePalette.accentOrange), maxLines = 1, modifier = Modifier.padding(top = 1.dp))

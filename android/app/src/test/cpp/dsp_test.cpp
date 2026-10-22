@@ -299,6 +299,20 @@ int main() {
     }
     expect(wentNegative, "backspin pitch goes backwards");
 
+    expect(std::abs(deckbridge::directedStep(1.0, 1.0, 48000, 48000, false) - 1.0) < 1e-9, "forward step is one sample");
+    expect(std::abs(deckbridge::directedStep(1.0, 1.0, 48000, 48000, true) + 1.0) < 1e-9, "reverse step is minus one sample");
+    const double reversedWrap = deckbridge::wrapReverseLoop(-10.0, 100.0, 200.0, true);
+    expect(reversedWrap > 100.0 && reversedWrap < 200.0, "reverse loop wraps before the start");
+    expect(std::abs(deckbridge::wrapReverseLoop(50.0, 100.0, 200.0, false) - 50.0) < 1e-9,
+           "playing forward before the loop does not jump in");
+    std::vector<float> seam = sine(8000, 440.f, 0.6f, 48000);
+    const double seamStart = 1000.0;
+    const double seamEnd = 5000.0;
+    const float dryJump = seam[4999] - seam[1000];
+    const float wet = deckbridge::readLooped(seam.data(), 8000, seamEnd - 1.0, seamStart, seamEnd, deckbridge::kFadeSamples);
+    const float wetJump = wet - seam[1000];
+    expect(wetJump * wetJump < dryJump * dryJump, "loop crossfade lowers the boundary jump");
+
     if (failures != 0) {
         std::printf("%d FAILED\n", failures);
         return 1;

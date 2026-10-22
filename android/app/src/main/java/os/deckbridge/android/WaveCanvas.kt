@@ -32,7 +32,11 @@ import os.deckbridge.logic.StagePalette
 import os.deckbridge.logic.WaveZoom
 import os.deckbridge.logic.activeLoop
 import os.deckbridge.logic.barsFromSeconds
+import os.deckbridge.logic.GridEdit
+import os.deckbridge.logic.applyGrid
+import os.deckbridge.logic.gridBpm
 import os.deckbridge.logic.gridLines
+import os.deckbridge.logic.nextCueSeconds
 import os.deckbridge.logic.markerFraction
 import os.deckbridge.logic.monoSample
 import os.deckbridge.logic.needleSeconds
@@ -59,7 +63,7 @@ internal fun ZoomedWave(
 ) {
     val measurer = rememberTextMeasurer()
     val duration = (track?.durationSeconds ?: 0).toDouble().coerceAtLeast(0.1)
-    val bpm = track?.bpm ?: 0.0
+    val bpm = if (track == null) 0.0 else gridBpm(track.bpm, GridEdit(face.gridShiftMs, face.gridStretch))
     val position = face.position.toDouble()
     val window = windowSeconds(zoom, if (bpm > 1.0) bpm else 120.0, duration)
     val whole = zoom == WaveZoom.TRACK
@@ -128,7 +132,7 @@ internal fun ZoomedWave(
                 anchor.toFloat() * size.width
             }
             if (bpm > 1.0) {
-                val lines = gridLines(bpm, duration, analysis?.beats.orEmpty())
+                val lines = gridLines(bpm, duration, applyGrid(analysis?.beats.orEmpty(), GridEdit(face.gridShiftMs, face.gridStretch)))
                 val numberStyle = TextStyle(color = Color(StagePalette.ink), fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 lines.forEach { line ->
                     val fraction = markerFraction(line.seconds, position, window, whole, duration, anchor).toFloat()
@@ -203,9 +207,9 @@ internal fun ZoomedWave(
                 drawLine(color.copy(alpha = 0.7f), Offset(x, waveTop + 12f), Offset(x, waveBot), strokeWidth = 1.1f)
             }
             drawLine(Color(StagePalette.ink), Offset(playX, waveTop), Offset(playX, waveBot), strokeWidth = 1.6f)
-            val next = analysis?.hotCues?.filter { it.timeMs / 1000.0 > position + 0.04 }?.minByOrNull { it.timeMs }
-            if (next != null && bpm > 1.0) {
-                val bars = barsFromSeconds(next.timeMs / 1000.0 - position, bpm)
+            val nextAt = nextCueSeconds(analysis, position)
+            if (nextAt != null && bpm > 1.0) {
+                val bars = barsFromSeconds(nextAt - position, bpm)
                 val label = "%.1f Bars".format(bars.coerceAtLeast(0.0))
                 val style = TextStyle(color = Color(StagePalette.accentOrange), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 val laid = measurer.measure(label, style)

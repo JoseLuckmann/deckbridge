@@ -376,3 +376,26 @@ fun decodeWav(bytes: ByteArray): DecodedPcm? {
     }
     return DecodedPcm(left, right, rate)
 }
+
+fun encodeWavMono16(samples: FloatArray, rate: Int): ByteArray {
+    val dataBytes = samples.size * 2
+    val out = ByteArray(44 + dataBytes)
+    "RIFF".toByteArray(Charsets.US_ASCII).copyInto(out, 0)
+    out.putU32le(4, 36 + dataBytes)
+    "WAVE".toByteArray(Charsets.US_ASCII).copyInto(out, 8)
+    "fmt ".toByteArray(Charsets.US_ASCII).copyInto(out, 12)
+    out.putU32le(16, 16)
+    out.putU16le(20, 1)
+    out.putU16le(22, 1)
+    out.putU32le(24, rate)
+    out.putU32le(28, rate * 2)
+    out.putU16le(32, 2)
+    out.putU16le(34, 16)
+    "data".toByteArray(Charsets.US_ASCII).copyInto(out, 36)
+    out.putU32le(40, dataBytes)
+    samples.forEachIndexed { index, sample ->
+        val raw = (sample.coerceIn(-1f, 1f) * 32767f).toInt()
+        out.putU16le(44 + index * 2, raw)
+    }
+    return out
+}

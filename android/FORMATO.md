@@ -58,6 +58,12 @@ A tag desconhecida, com comprimento válido, é ignorada. `.DAT` ausente gera av
 
 O corpus de variantes (páginas, títulos longos e unicode, arte ausente, ANLZ ausente, `.EXT`/`.2EX`, PWV3/PWV5/PWV7, cues com e sem comentário e cor, memory cue e loop, playlists, linha apagada, caminhos com caracteres fora do ASCII, 5.000 faixas e fuzz) é gerado por `usbVariantReport()`. “Estilo rekordbox 5/6/7” aqui significa quais tags estão presentes, não um campo de versão lido de um export daqueles programas. Os caminhos exFAT/FAT32 são cadeias dentro do PDB, não um disco montado.
 
+## Export deste app (0.12.0)
+
+`ourMusicVolume` grava um PDB e ANLZ nossos, com PWV4, PWV5, PWV6, PWV7, PWV3, PWAV, hot cues, memory cues e um loop, a partir da análise deste repositório. A pasta `/opt/cursor/artifacts/real-music-usb` é esse export. Não é uma cópia do rekordbox e não deve ser tratada como uma. O deslocamento e o estica da grade (G−, G+, S−, S+, G0) ficam na memória do app. O volume não recebe esses bytes.
+
+`inspectText` e `tools/inspect_usb.py` leem uma pasta e imprimem faixas, playlists, cues, tags de onda, `DEVSETTING.DAT` e erros. Não criam arquivo dentro dela. O relatório do `--jvm` sai em `/tmp/deckbridge-inspect.txt`.
+
 ## Gravação
 
 O WAV estéreo de 16 bits é escrito por este projeto. O LAME não entra no APK: a licença do repositório é GPL-2.0-or-later provisória, o OD-06 continua aberto, e não se vincula o LGPL do LAME enquanto isso não estiver fechado. O AAC opcional usa o `MediaCodec` do Android (AAC-LC, contentor MPEG-4). A gravação e o histórico ficam na pasta do app ou numa pasta que o utilizador escolhe. O USB do rekordbox não é destino.

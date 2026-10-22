@@ -23,7 +23,10 @@ import os.deckbridge.logic.PlayerSettings
 import os.deckbridge.logic.RmxState
 import os.deckbridge.logic.WaveZoom
 import os.deckbridge.logic.faderFromPitch
+import os.deckbridge.logic.BrowseCategory
+import os.deckbridge.logic.RealCorpus
 import os.deckbridge.logic.loadRekordbox
+import org.junit.Assume.assumeTrue
 import os.deckbridge.logic.readArtworkFile
 import os.deckbridge.logic.RbTrack
 
@@ -337,10 +340,11 @@ private fun player(
     tune: (DeckFace) -> DeckFace = { it },
     showInfo: Boolean = false,
     leftTitle: String = "Night Bus",
+    rightTitle: String = "Glasshouse",
     settings: PlayerSettings = PlayerSettings(),
 ): ComposeView {
     val left = catalog.tracks.first { it.title == leftTitle }
-    val right = catalog.tracks.first { it.title == "Glasshouse" }
+    val right = catalog.tracks.first { it.title == rightTitle }
     val faces = listOf(
         DeckFace(
             playing = true,
@@ -417,6 +421,58 @@ private fun player(
                 historyRows = history,
                 artworkOf = ::previewArt,
                 showInfo = showInfo,
+            )
+        }
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [33], qualifiers = "w2000dp-h1200dp-mdpi")
+class ScreenShotsReal {
+    @Test
+    fun realTracksAtDropAndBreak() {
+        assumeTrue(java.io.File("/opt/cursor/artifacts/real-corpus").isDirectory)
+        val ready = RealCorpus.prepare()
+        assumeTrue(ready != null)
+        val catalog = ready!!.catalog
+        ready.shots.forEach { shot ->
+            capture("$PRINTS/real-${shot.slug}-drop.png") { activity ->
+                activity.setContentView(
+                    player(
+                        activity,
+                        catalog,
+                        WaveZoom.BARS_4,
+                        BeatFxState(),
+                        posA = shot.drop,
+                        posB = shot.breakSec,
+                        leftTitle = shot.title,
+                        rightTitle = shot.title,
+                    ),
+                )
+            }
+            capture("$PRINTS/real-${shot.slug}-break.png") { activity ->
+                activity.setContentView(
+                    player(
+                        activity,
+                        catalog,
+                        WaveZoom.BARS_4,
+                        BeatFxState(),
+                        posA = shot.breakSec,
+                        posB = shot.drop,
+                        leftTitle = shot.title,
+                        rightTitle = shot.title,
+                    ),
+                )
+            }
+        }
+        val playlist = catalog.playlists.first { it.name == "Real" }.id
+        val place = BrowsePlace(category = BrowseCategory.PLAYLIST, inList = true, playlistId = playlist, index = 0)
+        val first = catalog.tracks.first().title
+        val second = catalog.tracks.getOrElse(1) { catalog.tracks.first() }.title
+        capture("$PRINTS/real-browse.png") { activity ->
+            activity.setContentView(
+                player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), place, leftTitle = first, rightTitle = second),
             )
         }
     }

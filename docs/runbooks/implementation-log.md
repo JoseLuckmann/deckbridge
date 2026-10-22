@@ -118,6 +118,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-22 | A052 | parcial | `4d730fc` | tela 0.9.1, BPM/tom do histórico, alvos do menu, RMX e colunas do histórico | escuta `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 0.9.1 |
 | 2026-10-22 | A053–A059 | parcial | `2c4124e` | tela 0.10.0, capa, plano do leitor, key shift, filtro, slip, emergency loop | escuta `BLOCKED_HARDWARE`; A022 aberto; voz e 4 decks `DEFERRED` | dono instala o APK arm64 0.10.0 |
 | 2026-10-22 | A060–A062 | parcial | `f0ebf46` | tela 0.11.0, onda RGB do export, DEVSETTING, faixas longas sintéticas | escuta e pendrive real `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 0.11.0 |
+| 2026-10-22 | A063–A065 | parcial | ver secção 0.12.0 | corpus CC BY 3.0, export deste app, cinco itens de ecrã, inspeção só leitura, APK 0.12.0 | escuta, MediaCodec e pendrive do dono `BLOCKED_HARDWARE`; grade real perto de 100 ms; tom ≠ TKEY | dono ouve o trecho e, quando a pasta chegar, roda `tools/inspect_usb.py` |
 
 ### Proposta Android
 - Estado: proposta, não aceita
@@ -255,7 +256,22 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4230285 bytes, SHA-256 `53eda41caaed465f1f8ec0a3c7fbfa00fb8e77776aa007c16f9d6334ffdf76f4`, versão 0.11.0 (versionCode 11), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
 - APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19496939 bytes, SHA-256 `3d1a288c121e82b2720f52524ecae03c07c4634986e7aac465f9e15c8236649f`.
 - HIL executado? não
-- Próximo, ainda sem código nesta rodada: ordenar a lista ao tocar no título da coluna, Active Loop, reverse na tela, ajuste da grade e contagem até o memory cue.
+
+### Tela 0.12.0
+- Estado: JVM e binário hospedeiro; escuta BLOCKED_HARDWARE
+- Nove faixas CC BY 3.0 em `/opt/cursor/artifacts/real-corpus`. Não entram no git. `tools/fetch_real_corpus.py` confere o SHA-256. Tabela, licença e medidas em `docs/testing/real-music-corpus.md`.
+- O export em `/opt/cursor/artifacts/real-music-usb` é deste app (PWV4, PWV5, PWV6, PWV7, cues de estrutura). Não é rekordbox. Relido: 9 faixas, 27 hot cues, 18 memory cues, 9 loops, DEVSETTING RGB, erro nenhum.
+- Decodificação neste host: ffmpeg MP3 359 ms, FLAC 196 ms, AAC/M4A 302 ms, todos com saída 0. WAV Silver: `decodeWav` 154 ms contra ffmpeg 386 ms, correlação 1,00000 nos primeiros 5 s. O MediaCodec do app não rodou aqui.
+- BPM detectado de 117,90 a 152,23. Nenhuma faixa traz BPM publicado. Tom detectado ≠ TKEY nas três que têm o tag (Am/Bm, Fm/Ebm, Bm/Em). Erro mediano onset–grade: 93,4 a 117,5 ms. No clique sintético o mesmo detector fica em até 30 ms.
+- Ocean não separa drop e break (os dois em 316 s). Análise 122–227 ms. Heap JVM de 74 MB a 426 MB. Não é o tablet.
+- Mix de 120 s, Chromosome Boutique + Ecosystem: pico 0,62856, NaN 0, eco em 20580 amostras contra batida de 20580,11. Energia da emenda seca 0,00020585; com crossfade 0,00058152 (a emenda molhada ficou maior). Trecho de 45 s em `/opt/cursor/artifacts/real-mix-excerpt.wav` e `.mp3`.
+- Ecrã: cabeçalho ordena título, BPM, tom e tempo; Active Loop só ao cruzar o início; REV no motor; G−/G+/S−/S+/G0 na memória do app, sem escrever o USB; contagem até hot cue ou memory cue.
+- `tools/inspect_usb.py` lê uma pasta sem gravar nela. Com `--jvm`, o relatório sai em `/tmp/deckbridge-inspect.txt`. A pasta do dono ainda não chegou.
+- Prints novos em `/opt/cursor/artifacts/prints/`: `real-browse.png` e drop/break de Chromosome Boutique, Ecosystem, Silver e Morning.
+- JVM: 63 testes, 0 falhas. DSP hospedeiro e gravação hospedeira: ALL PASS. Python: 42 passed.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4234741 bytes, SHA-256 `92bce87304dd638a3fe1d3c64baecd24be81b520d9c1bebc85fe8cdf2352d43f`, versão 0.12.0 (versionCode 12), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19529671 bytes, SHA-256 `42e0d015f707c1c589eaf5ec26f72a690865db31a2029a055c243df6763f97a7`.
+- HIL executado? não
 
 ### T020 — configuração
 - Estado: PASS
@@ -277,7 +293,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 ### T078 — roteiro final
 - Estado: documento PASS; execução BLOCKED_HARDWARE
 - Arquivo: `docs/hil/roteiro-validacao-final.md`
-- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Os passos 13 a 20 continuam por executar
+- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Os passos 13 a 21 continuam por executar
 
 ## Template de registro
 

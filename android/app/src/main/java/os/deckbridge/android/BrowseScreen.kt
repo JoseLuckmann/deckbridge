@@ -66,6 +66,7 @@ fun BrowseScreen(
     onSimulate: () -> Unit,
     onMatchKey: (String) -> Unit = {},
     onBpmWindow: () -> Unit = {},
+    onSort: (os.deckbridge.logic.ListSort) -> Unit = {},
 ) {
     val rows = browseRows(catalog, place, historyIds)
     val safeIndex = if (rows.isEmpty()) 0 else place.index.coerceIn(0, rows.lastIndex)
@@ -130,9 +131,9 @@ fun BrowseScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     TextInk("#", Modifier.width(36.dp), fontSize = 10.sp, color = Color(StagePalette.inkMuted), weight = FontWeight.Bold)
-                    TextInk("TITLE", Modifier.weight(1f), fontSize = 10.sp, color = Color(StagePalette.inkMuted), weight = FontWeight.Bold)
-                    TextInk("BPM", Modifier.width(64.dp), fontSize = 10.sp, color = Color(StagePalette.inkMuted), weight = FontWeight.Bold)
-                    TextInk("KEY", Modifier.width(64.dp), fontSize = 10.sp, color = Color(StagePalette.inkMuted), weight = FontWeight.Bold)
+                    SortHeader("TITLE", os.deckbridge.logic.ListSort.TITLE, place, Modifier.weight(1f), onSort)
+                    SortHeader("BPM", os.deckbridge.logic.ListSort.BPM, place, Modifier.width(64.dp), onSort)
+                    SortHeader("KEY", os.deckbridge.logic.ListSort.KEY, place, Modifier.width(64.dp), onSort)
                 }
                 val filterLabel = browseFilterLabel(place)
                 if (filterLabel.isNotEmpty()) {
@@ -249,6 +250,23 @@ private fun BrowseChip(label: String, onClick: () -> Unit) {
     ) {
         TextInk(label, color = Color(StagePalette.accentBlue), fontSize = 10.sp, weight = FontWeight.Bold, maxLines = 1)
     }
+}
+
+@Composable
+private fun SortHeader(
+    label: String,
+    sort: os.deckbridge.logic.ListSort,
+    place: BrowsePlace,
+    modifier: Modifier,
+    onSort: (os.deckbridge.logic.ListSort) -> Unit,
+) {
+    val mark = when {
+        place.sort != sort -> label
+        place.sortDesc -> "$label ↓"
+        else -> "$label ↑"
+    }
+    val color = if (place.sort == sort) Color(StagePalette.accentBlue) else Color(StagePalette.inkMuted)
+    TextInk(mark, modifier.clickable { onSort(sort) }, fontSize = 10.sp, color = color, weight = FontWeight.Bold, maxLines = 1)
 }
 
 private fun browseFilterLabel(place: BrowsePlace): String {

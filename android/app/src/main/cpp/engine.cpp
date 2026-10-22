@@ -66,6 +66,7 @@ struct Deck {
     double slip = -1.0;
     bool keyLock = false;
     int keyShift = 0;
+    bool reversed = false;
     bool userSlip = false;
     double slipAnchor = -1.0;
     deckbridge::PitchShift shiftL;
@@ -76,11 +77,7 @@ struct Deck {
     }
 
     void wrapLoop() {
-        if (!(loopEnd > loopStart) || position < loopEnd) return;
-        const double length = loopEnd - loopStart;
-        double over = std::fmod(position - loopEnd, length);
-        if (over < 0.0) over += length;
-        position = loopStart + over;
+        position = deckbridge::wrapReverseLoop(position, loopStart, loopEnd, reversed);
     }
 
     void read(int outputRate, float &leftOut, float &rightOut) {
@@ -112,7 +109,7 @@ struct Deck {
             leftOut = shiftL.process(leftOut, ratio);
             rightOut = shiftR.process(rightOut, ratio);
         }
-        const double step = (pitch * rateMul * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
+        const double step = deckbridge::directedStep(pitch, rateMul, sampleRate, outputRate, reversed);
         if (slip >= 0.0) slip += (pitch * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
         if (userSlip && slipAnchor >= 0.0) slipAnchor += step;
         position += step;
@@ -121,7 +118,10 @@ struct Deck {
             if (over < 0.0) over += rollLength;
             position = rollOrigin + over;
         }
-        if (position < 0.0) position = 0.0;
+        if (position < 0.0) {
+            position = 0.0;
+            if (reversed && !(loopEnd > loopStart)) playing = false;
+        }
         wrapLoop();
     }
 };
@@ -240,6 +240,7 @@ public:
         target.bpm = bpm;
         target.position = 0.0;
         target.playing = false;
+        target.reversed = false;
         target.cue = std::max(0.0, static_cast<double>(cueSeconds) * target.sampleRate);
         const double start = static_cast<double>(loopStartSec) * target.sampleRate;
         const double end = static_cast<double>(loopEndSec) * target.sampleRate;
@@ -342,6 +343,12 @@ public:
         target.slipAnchor = -1.0;
         target.loopStart = -1.0;
         target.loopEnd = -1.0;
+    }
+
+    void setReverse(int deck, bool reversed) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1) return;
+        decks_[deck].reversed = reversed;
     }
 
     void setLoop(int deck, float startSec, float endSec) {
@@ -672,6 +679,11 @@ Java_os_deckbridge_android_NativeEngine_nativeSetSlip(JNIEnv *, jobject, jint de
 extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeSetLoop(JNIEnv *, jobject, jint deck, jfloat startSec, jfloat endSec) {
     engine().setLoop(deck, startSec, endSec);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetReverse(JNIEnv *, jobject, jint deck, jboolean reversed) {
+    engine().setReverse(deck, reversed == JNI_TRUE);
 }
 
 extern "C" JNIEXPORT void JNICALL

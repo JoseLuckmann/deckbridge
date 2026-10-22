@@ -47,6 +47,25 @@ enum class MarkerKind { BEAT, BAR, PHRASE }
 
 data class GridLine(val seconds: Double, val kind: MarkerKind)
 
+data class GridEdit(val shiftMs: Double = 0.0, val stretch: Double = 1.0)
+
+fun gridBpm(bpm: Double, edit: GridEdit): Double {
+    if (edit.stretch <= 0.0) return bpm
+    return bpm / edit.stretch
+}
+
+/** Desloca e estica a grade na memória do app. Não altera os bytes de origem. */
+fun applyGrid(beats: List<AnlzBeat>, edit: GridEdit): List<AnlzBeat> {
+    if (beats.isEmpty() || (edit.shiftMs == 0.0 && edit.stretch == 1.0)) return beats
+    val anchor = beats.first().timeMs.toDouble()
+    val stretch = edit.stretch.coerceIn(0.5, 1.5)
+    return beats.map { beat ->
+        val moved = anchor + (beat.timeMs - anchor) * stretch + edit.shiftMs
+        val nextBpm = if (stretch > 0.0) beat.bpm / stretch else beat.bpm
+        beat.copy(timeMs = moved.roundToInt().coerceAtLeast(0), bpm = nextBpm)
+    }
+}
+
 fun gridLines(bpm: Double, duration: Double, beats: List<AnlzBeat>): List<GridLine> {
     val end = duration.coerceAtLeast(0.0)
     if (beats.isEmpty()) {
@@ -175,6 +194,8 @@ fun reduceBeatFx(state: BeatFxState, action: PerformanceAction): BeatFxState {
     }
 }
 
+enum class ListSort { TITLE, BPM, KEY, TIME }
+
 enum class BrowseCategory(val label: String) {
     PLAYLIST("Playlist"),
     TRACK("Track"),
@@ -198,6 +219,8 @@ data class BrowsePlace(
     val bpmMax: Int = 999,
     val keyFilter: String = "",
     val matchKey: String = "",
+    val sort: ListSort? = null,
+    val sortDesc: Boolean = false,
 )
 
 data class BrowseRow(
@@ -213,7 +236,33 @@ data class BrowseRow(
 )
 
 fun browseRows(catalog: RbCatalog, place: BrowsePlace, historyIds: List<Int>): List<BrowseRow> {
-    return applyLibraryFilter(rawBrowseRows(catalog, place, historyIds), place)
+    val filtered = applyLibraryFilter(rawBrowseRows(catalog, place, historyIds), place)
+    return sortBrowseRows(filtered, place.sort, place.sortDesc)
+}
+
+fun toggleListSort(place: BrowsePlace, sort: ListSort): BrowsePlace {
+    return if (place.sort == sort) place.copy(sortDesc = !place.sortDesc) else place.copy(sort = sort, sortDesc = false)
+}
+
+fun sortBrowseRows(rows: List<BrowseRow>, sort: ListSort?, desc: Boolean): List<BrowseRow> {
+    if (sort == null) return rows
+    val indexed = rows.withIndex().sortedWith { left, right ->
+        val a = left.value.track
+        val b = right.value.track
+        if (a == null || b == null) {
+            left.index.compareTo(right.index)
+        } else {
+            val cmp = when (sort) {
+                ListSort.TITLE -> a.title.compareTo(b.title, ignoreCase = true)
+                ListSort.BPM -> a.bpm.compareTo(b.bpm)
+                ListSort.KEY -> a.keyName.compareTo(b.keyName, ignoreCase = true)
+                ListSort.TIME -> a.durationSeconds.compareTo(b.durationSeconds)
+            }
+            val signed = if (desc) -cmp else cmp
+            if (signed != 0) signed else left.index.compareTo(right.index)
+        }
+    }
+    return indexed.map { it.value }
 }
 
 fun applyLibraryFilter(rows: List<BrowseRow>, place: BrowsePlace): List<BrowseRow> {
@@ -357,6 +406,10 @@ data class DeckFace(
     val memoryEnd: Float = -1f,
     val jumpScale: Double = 1.0,
     val lastJump: Double = 0.0,
+    val reversed: Boolean = false,
+    val activeLoopArmed: Boolean = false,
+    val gridShiftMs: Double = 0.0,
+    val gridStretch: Double = 1.0,
 )
 
 val LETTER_COLORS = intArrayOf(
@@ -466,6 +519,26 @@ fun keySyncShift(playingKey: String, masterKey: String): Int {
 fun fineTempoText(percent: Float): String {
     val sign = if (percent >= 0f) "+" else ""
     return "$sign${"%.2f".format(percent)}%"
+}
+
+fun nextCueSeconds(analysis: RbAnalysis?, positionSec: Double): Double? {
+    if (analysis == null) return null
+    var nearest = Double.POSITIVE_INFINITY
+    analysis.hotCues.forEach { cue ->
+        val time = cue.timeMs / 1000.0
+        if (time > positionSec + 0.04 && time < nearest) nearest = time
+    }
+    analysis.memoryCues.forEach { cue ->
+        val time = cue.timeMs / 1000.0
+        if (time > positionSec + 0.04 && time < nearest) nearest = time
+    }
+    return if (nearest.isFinite()) nearest else null
+}
+
+/** O loop gravado entra quando a cabeça cruza o início, não no instante da carga. */
+fun arrivedAtActiveLoop(previous: Float, position: Float, memoryStart: Float, memoryEnd: Float): Boolean {
+    if (!(memoryEnd > memoryStart)) return false
+    return previous < memoryStart && position >= memoryStart && position < memoryEnd
 }
 
 fun beatsUntilCue(positionSec: Double, cueSec: Double, bpm: Double): Double? {

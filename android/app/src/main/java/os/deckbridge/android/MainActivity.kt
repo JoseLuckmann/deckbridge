@@ -204,7 +204,7 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
 
     Box(Modifier.fillMaxSize()) {
         when (page) {
-            0 -> DiagnosticPage(midiLines, null, onPage = { page = it }) {
+            0 -> DiagnosticPage(midiLines, null, libraryReport = catalog?.let { os.deckbridge.logic.inspectText(it) }.orEmpty(), onPage = { page = it }) {
                 describe(byteArrayOf(0x90.toByte(), 0x0B, 0x7F), true)
             }
             else -> DeckPage(
@@ -244,7 +244,13 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
 }
 
 @Composable
-internal fun DiagnosticPage(events: List<String>, jvmBanner: String?, onPage: (Int) -> Unit = {}, onSimulate: () -> Unit) {
+internal fun DiagnosticPage(
+    events: List<String>,
+    jvmBanner: String?,
+    libraryReport: String = "",
+    onPage: (Int) -> Unit = {},
+    onSimulate: () -> Unit,
+) {
     val context = LocalContext.current
     var identity by remember { mutableStateOf(readIdentity(context)) }
     var battery by remember { mutableStateOf(readBattery(context)) }
@@ -298,6 +304,7 @@ internal fun DiagnosticPage(events: List<String>, jvmBanner: String?, onPage: (I
         onSimulate = onSimulate,
         onHeard = { heard = it },
         usbReport = usbReport,
+        libraryReport = libraryReport,
         onShare = {
             val send = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
@@ -328,6 +335,7 @@ fun DiagnosticScreen(
     onHeard: (Heard) -> Unit,
     onShare: () -> Unit,
     usbReport: String = "",
+    libraryReport: String = "",
 ) {
     StageScaffold(page = 0, onPage = onPage, simulationNote = simulationNote(jvmBanner, jvmBanner != null)) {
         Row(
@@ -380,6 +388,12 @@ fun DiagnosticScreen(
                     Panel {
                         TextInk("MIDI", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
                         events.forEach { TextInk(it, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)) }
+                    }
+                }
+                if (libraryReport.isNotBlank()) {
+                    Panel {
+                        TextInk("Biblioteca lida", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+                        TextInk(libraryReport, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
                 Panel {

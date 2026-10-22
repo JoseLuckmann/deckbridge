@@ -1,0 +1,53 @@
+package os.deckbridge.logic
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import kotlin.math.PI
+import kotlin.math.sin
+
+class TrackAnalysisTest {
+    @Test
+    fun clickTrackLocksThePublishedBpm() {
+        val rate = 22050
+        val bpm = 120.0
+        val seconds = 16
+        val samples = FloatArray(rate * seconds)
+        val interval = rate * 60.0 / bpm
+        var cursor = 0.0
+        while (cursor < samples.size) {
+            val at = cursor.toInt()
+            val burst = (rate * 0.004).toInt()
+            for (offset in 0 until burst) {
+                if (at + offset < samples.size) samples[at + offset] = 0.9f
+            }
+            cursor += interval
+        }
+        val read = analyzeTrack(samples, rate)
+        assertEquals(120.0, read.bpm, 1.5)
+        assertTrue(read.beats.size > 20)
+        assertTrue("erro ${read.gridErrorMs}", read.gridErrorMs in 0.0..30.0)
+    }
+
+    @Test
+    fun sineAt440IsA() {
+        val rate = 22050
+        val samples = FloatArray(rate * 2) { index ->
+            (0.4 * sin(2.0 * PI * 440.0 * index / rate)).toFloat()
+        }
+        val read = analyzeTrack(samples, rate)
+        assertEquals("A", read.keyName)
+        assertTrue(read.keyConfidence > 0.2)
+    }
+
+    @Test
+    fun structureFollowsBassEnergy() {
+        val low = doubleArrayOf(0.05, 0.08, 0.20, 0.90, 0.95, 0.22, 0.12, 0.40)
+        val high = doubleArrayOf(0.04, 0.10, 0.80, 0.30, 0.28, 0.20, 0.10, 0.08)
+        val points = structurePoints(low, high, 2.0)
+        assertEquals(0.0, points.introSec, 0.01)
+        assertEquals(4.0, points.buildSec, 0.01)
+        assertEquals(8.0, points.dropSec, 0.01)
+        assertEquals(12.0, points.breakSec, 0.01)
+    }
+}

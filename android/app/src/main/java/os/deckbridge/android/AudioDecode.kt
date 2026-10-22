@@ -14,12 +14,18 @@ fun decodeTrackAudio(context: Context, name: String, bytes: ByteArray): DecodedP
     if (lower.endsWith(".wav") || (bytes.size > 12 && bytes.copyOfRange(0, 4).decodeToString() == "RIFF")) {
         return decodeWav(bytes)
     }
-    if (!lower.endsWith(".mp3")) return null
-    return decodeMp3(context, bytes)
+    val suffix = when {
+        lower.endsWith(".mp3") -> ".mp3"
+        lower.endsWith(".flac") -> ".flac"
+        lower.endsWith(".aac") -> ".aac"
+        lower.endsWith(".m4a") || lower.endsWith(".mp4") -> ".m4a"
+        else -> return null
+    }
+    return decodeCompressed(context, bytes, suffix)
 }
 
-private fun decodeMp3(context: Context, bytes: ByteArray): DecodedPcm? {
-    val file = File.createTempFile("deckbridge-", ".mp3", context.cacheDir)
+private fun decodeCompressed(context: Context, bytes: ByteArray, suffix: String): DecodedPcm? {
+    val file = File.createTempFile("deckbridge-", suffix, context.cacheDir)
     return try {
         file.writeBytes(bytes)
         val extractor = MediaExtractor()

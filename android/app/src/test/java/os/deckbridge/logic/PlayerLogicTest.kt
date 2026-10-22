@@ -144,4 +144,53 @@ class PlayerLogicTest {
         assertTrue(filtered.none { it.title == "Glasshouse" })
         assertTrue(filtered.all { it.track == null || keysCompatible("Am", it.keyName) })
     }
+
+    @Test
+    fun columnHeaderSortsTrackRows() {
+        val catalog = loadRekordbox(SyntheticRekordbox.volume())
+        val place = BrowsePlace(category = BrowseCategory.TRACK, inList = true)
+        val original = browseRows(catalog, place, emptyList()).map { it.title }
+        val byTitle = browseRows(catalog, toggleListSort(place, ListSort.TITLE), emptyList()).map { it.title }
+        val flipped = browseRows(catalog, toggleListSort(toggleListSort(place, ListSort.TITLE), ListSort.TITLE), emptyList()).map { it.title }
+        assertEquals(original.sortedBy { it.lowercase() }, byTitle)
+        assertEquals(byTitle.reversed(), flipped)
+        val folders = browseRows(catalog, BrowsePlace(category = BrowseCategory.PLAYLIST, inList = true), emptyList())
+        val sortedFolders = sortBrowseRows(folders, ListSort.TITLE, false)
+        assertEquals(folders.map { it.title }, sortedFolders.map { it.title })
+    }
+
+    @Test
+    fun activeLoopWaitsForThePlayhead() {
+        assertFalse(arrivedAtActiveLoop(0f, 0f, 0f, 4f))
+        assertFalse(arrivedAtActiveLoop(12f, 13f, 11f, 20f))
+        assertTrue(arrivedAtActiveLoop(10f, 12f, 11f, 20f))
+        assertFalse(arrivedAtActiveLoop(10f, 21f, 11f, 20f))
+    }
+
+    @Test
+    fun countdownIncludesTheMemoryCue() {
+        val analysis = RbAnalysis(
+            beats = emptyList(),
+            hotCues = listOf(RbHotCue(0, 10_000, "Drop", null)),
+            memoryCues = listOf(RbMemoryCue(4_000, 8_000, "Loop")),
+            mainCueMs = 0,
+            waveform = ByteArray(0),
+        )
+        assertEquals(4.0, nextCueSeconds(analysis, 1.0)!!, 0.001)
+        assertEquals(10.0, nextCueSeconds(analysis, 5.0)!!, 0.001)
+        assertNull(nextCueSeconds(analysis, 11.0))
+    }
+
+    @Test
+    fun gridEditStaysOffTheVolume() {
+        val volume = SyntheticRekordbox.volume()
+        val before = volume.files.mapValues { it.value.copyOf() }
+        val beats = listOf(AnlzBeat(1, 120.0, 0), AnlzBeat(2, 120.0, 500), AnlzBeat(3, 120.0, 1000))
+        val edited = applyGrid(beats, GridEdit(shiftMs = 10.0, stretch = 1.001))
+        assertEquals(0, beats[0].timeMs)
+        assertEquals(10, edited[0].timeMs)
+        assertTrue(edited[2].timeMs > 1000)
+        assertEquals(120.0 / 1.001, gridBpm(120.0, GridEdit(stretch = 1.001)), 1e-9)
+        before.forEach { (path, bytes) -> assertTrue(volume.read(path)!!.contentEquals(bytes)) }
+    }
 }

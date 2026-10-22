@@ -412,7 +412,7 @@ private fun DiagnosticPane(wide: Boolean, onDiagnostics: () -> Unit) {
 @Composable
 private fun AboutPane(wide: Boolean) {
     GroupCard("Versão", Modifier.fillMaxWidth()) {
-        TextInk("DeckBridge 0.11.0", fontSize = 20.sp, weight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+        TextInk("DeckBridge 0.12.0", fontSize = 20.sp, weight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
         TextInk("Beat FX e REMIX FX são DSP original. Não é firmware comercial.", fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
     }
 }
