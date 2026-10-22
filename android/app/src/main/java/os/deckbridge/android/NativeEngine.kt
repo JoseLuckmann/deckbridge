@@ -97,6 +97,16 @@ object NativeEngine {
         nativeSetKeyLock(deck, enabled)
     }
 
+    fun setKeyShift(deck: Int, semitones: Int) {
+        if (!loaded) return
+        nativeSetKeyShift(deck, semitones)
+    }
+
+    fun setSlip(deck: Int, enabled: Boolean) {
+        if (!loaded) return
+        nativeSetSlip(deck, enabled)
+    }
+
     fun setLoop(deck: Int, startSec: Float, endSec: Float) {
         if (!loaded) return
         nativeSetLoop(deck, startSec, endSec)
@@ -188,6 +198,8 @@ object NativeEngine {
     private external fun nativeSetBeatFx(effect: Int, on: Boolean, level: Int, channel: Int, bpm: Float, beats: Float)
     private external fun nativeSetFilter(deck: Int, norm: Float)
     private external fun nativeSetKeyLock(deck: Int, enabled: Boolean)
+    private external fun nativeSetKeyShift(deck: Int, semitones: Int)
+    private external fun nativeSetSlip(deck: Int, enabled: Boolean)
     private external fun nativeSetLoop(deck: Int, startSec: Float, endSec: Float)
     private external fun nativeSetBuffer(frames: Int)
     private external fun nativeSetRmx(values: FloatArray)

@@ -171,6 +171,13 @@ OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Ras
 - [x] **A050** Corpus sintético de variantes de export, parser que não derruba, fuzz de PDB/ANLZ, e preferência PWV7/PWV5/PWV3 sobre PWB3. **Estado:** `PASS` na JVM, com as 5.000 faixas abaixo de 2 s neste processo. Não é um export real nem o tablet. A leitura de PWV é a deste projeto.
 - [x] **A051** Prints 0.9.0 e APK arm64 0.9.0. Itens novos no roteiro de validação final, ainda `BLOCKED_HARDWARE`. **Estado:** artefato gerado nesta rodada. Não instalado no tablet. A022 continua aberto.
 - [x] **A052** 0.9.1: histórico lê BPM e tom da faixa carregada (BPM da biblioteca e BPM no ar), MENU com alvos de 48 dp e grelha de cartões, RMX sem o vão entre o dial e os pads, rótulos de cena distintos, isolador com dB e kill a vermelho, histórico com cabeçalho de sessão. **Estado:** `PASS` do teste JVM da biblioteca e da renderização. Escuta `BLOCKED_HARDWARE`. A022 aberto.
+- [ ] **A053** Busca por voz. **Estado:** `DEFERRED` em 2026-10-22, a pedido do dono. Não implementar nesta linha.
+- [ ] **A054** Quatro decks. **Estado:** `DEFERRED` em 2026-10-22, a pedido do dono. O alvo continua dois decks. Não implementar nesta linha.
+- [x] **A055** Capa do export: tabela artwork (tipo 13), JPEG/PNG em `PIONEER/Artwork`, miniatura em cache do app, fallback ♪. USB só leitura. **Estado:** `PASS` do teste JVM. Pendrive real `BLOCKED_HARDWARE`.
+- [x] **A056** Plano de cobertura do leitor de dois decks em `docs/research/cdj3000-coverage.md`. **Estado:** documento. Não é implementação de rede.
+- [x] **A057** Key Shift, Key Sync aproximado, filtro de biblioteca, contagem até o próximo cue, frase de 16 compassos simulada, agulha na visão geral, slip com retorno, emergency loop de 4 batidas, tempo com duas casas, realce de tom compatível e banco de hot cue A–H na memória do app. **Estado:** `PASS` dos testes JVM. Escuta `BLOCKED_HARDWARE`.
+- [ ] **A058** O que o plano deixa de fora: Pro DJ Link, nuvem, Wi-Fi, ecrã do prato, PSSI real, bancos gravados no export, pré-escuta por mesa, ordenação de colunas, reverse, grelha editável, toque de pré-escuta. **Estado:** `TODO`.
+- [x] **A059** Prints 0.10.0 e APK arm64 0.10.0. **Estado:** artefato gerado nesta rodada. Não instalado no tablet. A022 aberto.
 
 ## Traçabilidade requisito -> tarefas -> testes/gates
 

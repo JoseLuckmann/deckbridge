@@ -13,6 +13,7 @@ data class RbTrack(
     val filePath: String,
     val fileName: String,
     val analyzePath: String,
+    val artworkPath: String = "",
 )
 
 data class RbPlaylist(
@@ -80,6 +81,23 @@ data class MemoryVolume(
     }
 }
 
+fun artworkCandidates(path: String): List<String> {
+    val norm = normalizeRekordboxPath(path)
+    if (norm.isBlank()) return emptyList()
+    val dot = norm.lastIndexOf('.')
+    val hi = if (dot > 0) norm.substring(0, dot) + "_m" + norm.substring(dot) else "${norm}_m"
+    return listOf(hi, norm)
+}
+
+/** Lê a capa. Prefere o irmão `_m` quando o ficheiro existe. Não escreve no volume. */
+fun readArtworkFile(volume: ReadableVolume, path: String): ByteArray? {
+    for (candidate in artworkCandidates(path)) {
+        val bytes = volume.read(candidate)
+        if (bytes != null && bytes.isNotEmpty()) return bytes
+    }
+    return null
+}
+
 fun normalizeRekordboxPath(raw: String): String {
     var path = raw.replace('\\', '/').trim()
     val drive = path.indexOf(":/")
@@ -135,7 +153,14 @@ fun loadRekordbox(volume: ReadableVolume, oneLibrary: OneLibraryOpener? = null):
     val albums = db.albums.associate { it.id to it.name }
     val genres = db.genres.associate { it.id to it.name }
     val keys = db.keys.associate { it.id to it.name }
+    val artPaths = db.artworks.associate { it.id to normalizeRekordboxPath(it.path) }
+    var missingArt = 0
     val tracks = db.tracks.map { row ->
+        val art = if (row.artworkId == 0) "" else artPaths[row.artworkId].orEmpty()
+        if (row.artworkId != 0 && art.isBlank() && missingArt < 8) {
+            missingArt += 1
+            warnings += "capa id ${row.artworkId} sem linha na tabela de artwork"
+        }
         RbTrack(
             id = row.id,
             title = row.title.ifBlank { row.fileName },
@@ -149,6 +174,7 @@ fun loadRekordbox(volume: ReadableVolume, oneLibrary: OneLibraryOpener? = null):
             filePath = normalizeRekordboxPath(row.filePath),
             fileName = row.fileName,
             analyzePath = normalizeRekordboxPath(row.analyzePath),
+            artworkPath = art,
         )
     }
     val byPlaylist = db.entries.groupBy { it.playlistId }

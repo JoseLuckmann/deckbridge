@@ -50,7 +50,10 @@ import os.deckbridge.logic.stepJumpScale
 import os.deckbridge.logic.toggleBeatLoop
 import os.deckbridge.logic.zoomFromBars
 import os.deckbridge.logic.browseRows
+import os.deckbridge.logic.emergencyLoopRange
 import os.deckbridge.logic.enterBrowse
+import os.deckbridge.logic.keySyncShift
+import os.deckbridge.logic.nextCueBank
 import os.deckbridge.logic.faderFromPitch
 import os.deckbridge.logic.jogSeconds
 import os.deckbridge.logic.moveBrowse
@@ -137,6 +140,7 @@ fun DeckPage(
     var tagTrack by remember { mutableStateOf<Int?>(null) }
     var fxList by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val cueBanks = remember { Array(2) { Array(8) { FloatArray(8) { -1f } } } }
     val liveRmx = rememberUpdatedState(rmx)
     val tree = rememberLauncherForActivityResult(OpenTreeReadOnly()) { uri -> onAuthorize(uri) }
 
@@ -198,8 +202,14 @@ fun DeckPage(
                 memoryStart = (loop?.first ?: -1) / 1000f,
                 memoryEnd = (loop?.second ?: -1) / 1000f,
                 keyLock = settings.keyLock,
+                keyShift = 0,
+                slip = false,
+                cueBank = 0,
+                emergency = false,
             )
         }
+        NativeEngine.setKeyShift(deck, 0)
+        NativeEngine.setSlip(deck, false)
         val loopText = if (loop == null) "" else " Loop ${loop.first}–${loop.second} ms."
         note = "Carregada no deck ${deck + 1}: ${track.title}.$loopText"
         pushMix()
@@ -230,6 +240,18 @@ fun DeckPage(
     }
 
     fun hotCue(deck: Int, index: Int) {
+        val bank = faces[deck].cueBank
+        if (bank != 0) {
+            val stored = cueBanks[deck][bank][index]
+            if (stored >= 0f) {
+                seekTo(deck, stored)
+            } else {
+                val at = faces[deck].position
+                cueBanks[deck][bank][index] = at
+                seekTo(deck, at)
+            }
+            return
+        }
         val track = liveLoaded.value.getOrNull(deck)
         val analysis = track?.let { liveCatalog.value?.analyses?.get(it.id) }
         val cue = analysis?.hotCues?.firstOrNull { it.index == index }
@@ -239,6 +261,45 @@ fun DeckPage(
         } else {
             NativeEngine.hotCue(deck, index)
             if (cue != null) edit(deck) { it.copy(position = cue.timeMs / 1000f) }
+        }
+    }
+
+    fun deckAction(deck: Int, action: String) {
+        val face = faces.getOrElse(deck) { DeckFace() }
+        val track = loaded.getOrNull(deck)
+        when (action) {
+            "KEY-", "KEY+" -> {
+                val next = (face.keyShift + if (action == "KEY+") 1 else -1).coerceIn(-12, 12)
+                edit(deck) { it.copy(keyShift = next, keyLock = true) }
+                NativeEngine.setKeyLock(deck, true)
+                NativeEngine.setKeyShift(deck, next)
+            }
+            "KEY0" -> {
+                edit(deck) { it.copy(keyShift = 0) }
+                NativeEngine.setKeyShift(deck, 0)
+            }
+            "SYNC" -> {
+                val masterKey = loaded.getOrNull(master)?.keyName.orEmpty()
+                val shift = keySyncShift(track?.keyName.orEmpty(), masterKey)
+                edit(deck) { it.copy(keyShift = shift, keyLock = true) }
+                NativeEngine.setKeyLock(deck, true)
+                NativeEngine.setKeyShift(deck, shift)
+            }
+            "SLIP" -> {
+                val next = !face.slip
+                NativeEngine.setSlip(deck, next)
+                edit(deck) { current ->
+                    if (next) current.copy(slip = true) else current.copy(slip = false, loopStart = -1f, loopEnd = -1f)
+                }
+            }
+            "EMERG" -> {
+                if (track == null || track.bpm <= 1.0) return
+                val near = emergencyLoopRange(face.position.toDouble(), track.durationSeconds.toDouble(), track.bpm, false)
+                val range = near ?: (face.position to face.position + (4.0 * 60.0 / track.bpm).toFloat())
+                NativeEngine.setLoop(deck, range.first, range.second)
+                edit(deck) { it.copy(loopStart = range.first, loopEnd = range.second, emergency = true) }
+            }
+            "BANK" -> edit(deck) { it.copy(cueBank = nextCueBank(it.cueBank)) }
         }
     }
 
@@ -557,6 +618,23 @@ fun DeckPage(
                 val face = liveFaces.value.getOrElse(deck) { DeckFace() }
                 val level = if (deck == 0) vols.first else vols.second
                 val pitch = if (deck == 0) livePitch.value.first else livePitch.value.second
+                if (face.playing) {
+                    val pos = NativeEngine.position(deck)
+                    if (pos > 0.05f) edit(deck) { it.copy(position = pos) }
+                    val current = liveFaces.value.getOrElse(deck) { DeckFace() }
+                    if (track != null && !current.emergency) {
+                        val range = emergencyLoopRange(
+                            if (pos > 0.05f) pos.toDouble() else current.position.toDouble(),
+                            track.durationSeconds.toDouble(),
+                            track.bpm,
+                            current.loopEnd > current.loopStart,
+                        )
+                        if (range != null) {
+                            NativeEngine.setLoop(deck, range.first, range.second)
+                            edit(deck) { it.copy(loopStart = range.first, loopEnd = range.second, emergency = true, position = if (pos > 0.05f) pos else it.position) }
+                        }
+                    }
+                }
                 val sample = track?.let { onAirSample(it, pitch.toDouble()) }
                 val row = onAir.tick(deck, face.playing, level > 0.2f, now, sample)
                 if (row != null) {
@@ -803,6 +881,26 @@ fun DeckPage(
                 loadTrack(deck, track, source)
                 browse?.let { stored = it }
                 browse = null
+            }
+        },
+        artworkOf = { track ->
+            val source = volume
+            if (track == null || source == null) null else ArtworkStore.thumb(context.cacheDir, source, track)
+        },
+        onDeckAction = ::deckAction,
+        onMatchKey = { key ->
+            val place = browse
+            if (place != null) browse = place.copy(matchKey = key, index = 0)
+        },
+        onBpmWindow = {
+            val place = browse
+            if (place != null) {
+                val bpm = loaded.getOrNull(master)?.bpm?.toInt() ?: 0
+                browse = if (place.bpmMin == 0 && place.bpmMax >= 999 && bpm > 0) {
+                    place.copy(bpmMin = (bpm - 6).coerceAtLeast(0), bpmMax = bpm + 6, index = 0)
+                } else {
+                    place.copy(bpmMin = 0, bpmMax = 999, index = 0)
+                }
             }
         },
     )

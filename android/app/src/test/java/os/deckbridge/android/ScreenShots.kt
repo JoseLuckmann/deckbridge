@@ -24,11 +24,18 @@ import os.deckbridge.logic.RmxState
 import os.deckbridge.logic.WaveZoom
 import os.deckbridge.logic.faderFromPitch
 import os.deckbridge.logic.loadRekordbox
+import os.deckbridge.logic.readArtworkFile
+import os.deckbridge.logic.RbTrack
 
 private const val BANNER = "Renderização em JVM. Não é o tablet nem a DDJ-400."
 private const val PRINTS = "/opt/cursor/artifacts/prints"
 
 private fun simulatedCatalog(): RbCatalog = loadRekordbox(SyntheticRekordbox.volume())
+
+private fun previewArt(track: RbTrack?): ByteArray? {
+    if (track == null || track.artworkPath.isBlank()) return null
+    return readArtworkFile(SyntheticRekordbox.volume(), track.artworkPath)
+}
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -200,6 +207,65 @@ class ScreenShotsTablet {
             activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), rmx = rmx))
         }
     }
+
+    @Test
+    fun keyShift() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/key-shift.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), tune = { it.copy(keyShift = 2, keyLock = true) }))
+        }
+    }
+
+    @Test
+    fun slipMode() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/slip.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), tune = { it.copy(slip = true) }))
+        }
+    }
+
+    @Test
+    fun emergencyLoop() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/emergency-loop.png") { activity ->
+            activity.setContentView(
+                player(
+                    activity,
+                    catalog,
+                    WaveZoom.BARS_4,
+                    BeatFxState(),
+                    posA = 30.2f,
+                    tune = { it.copy(emergency = true, loopStart = 30f, loopEnd = 32f) },
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun cueBank() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/cue-bank.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), tune = { it.copy(cueBank = 1) }))
+        }
+    }
+
+    @Test
+    fun infoArt() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/info-art.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), showInfo = true))
+        }
+    }
+
+    @Test
+    fun trackFilter() {
+        val catalog = simulatedCatalog()
+        val playlist = catalog.playlists.first { it.name == "Todas" }.id
+        val place = BrowsePlace(inList = true, playlistId = playlist, index = 0, matchKey = "Am", bpmMin = 118, bpmMax = 130)
+        capture("$PRINTS/track-filter.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), place))
+        }
+    }
 }
 
 private fun capture(path: String, fill: (ScreenshotActivity) -> Unit) {
@@ -228,6 +294,8 @@ private fun player(
     recClock: String = "00:00",
     recLevel: Float = 0f,
     history: List<HistoryRow> = emptyList(),
+    tune: (DeckFace) -> DeckFace = { it },
+    showInfo: Boolean = false,
 ): ComposeView {
     val left = catalog.tracks.first { it.title == "Night Bus" }
     val right = catalog.tracks.first { it.title == "Glasshouse" }
@@ -242,13 +310,13 @@ private fun player(
             loopStart = loop?.first ?: -1f,
             loopEnd = loop?.second ?: -1f,
             lastJump = jump,
-        ),
+        ).let(tune),
         DeckFace(
             playing = true,
             position = posB,
-            pitch = 1.04f,
+            pitch = 1.0402f,
             range = 0.16,
-            fader = faderFromPitch(1.04, 0.16).toFloat(),
+            fader = faderFromPitch(1.0402, 0.16).toFloat(),
             remain = true,
             sync = true,
             onAir = false,
@@ -305,6 +373,8 @@ private fun player(
                 recClock = recClock,
                 recLevel = recLevel,
                 historyRows = history,
+                artworkOf = ::previewArt,
+                showInfo = showInfo,
             )
         }
     }

@@ -36,6 +36,13 @@ A DDJ-400 é dependente de host para o software de mixagem. O rekordbox Android 
 
 P0 e P1 são obrigatórios. P2 antes de considerar apresentações públicas. P3–P5 são roadmap, não pré-requisitos para concluir P1.
 
+### 1.4 Backlog adiado pelo dono em 2026-10-22
+
+Estes itens ficam `DEFERRED`. Não entram na 0.10.0 e não devem ser implementados até o dono reabrir.
+
+- Busca por voz.
+- Suporte a quatro decks.
+
 ## 2. Personas e casos de uso
 
 - **DJ portátil:** quer ligar e tocar, sem notebook, usando a DDJ-400 que já conhece.

@@ -33,6 +33,7 @@ import os.deckbridge.logic.activeLoop
 import os.deckbridge.logic.barsFromSeconds
 import os.deckbridge.logic.gridLines
 import os.deckbridge.logic.markerFraction
+import os.deckbridge.logic.needleSeconds
 import os.deckbridge.logic.phraseColor
 import os.deckbridge.logic.windowSeconds
 import kotlin.math.roundToInt
@@ -204,10 +205,17 @@ internal fun OverviewWave(
     analysis: RbAnalysis?,
     position: Double,
     modifier: Modifier = Modifier,
+    onSeek: (Float) -> Unit = {},
 ) {
     val measurer = rememberTextMeasurer()
     val duration = (track?.durationSeconds ?: 0).toDouble()
-    Canvas(modifier.background(Color(StagePalette.waveBg))) {
+    Canvas(
+        modifier.pointerInput(duration) {
+            detectTapGestures { offset ->
+                onSeek(needleSeconds(offset.x, size.width.toFloat(), duration))
+            }
+        }.background(Color(StagePalette.waveBg)),
+    ) {
         val gutter = 11f
         val waveTop = gutter
         val waveBot = size.height - 1f

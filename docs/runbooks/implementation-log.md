@@ -116,6 +116,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-22 | A039–A046 | parcial | `b3ef63e` | tela 0.8.0, menu, salto, loop, Beat FX, RMX, APK arm64 | escuta, pendrive e mapeamento RMX `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 e confirma o item 8 do checklist |
 | 2026-10-22 | A047–A051 | parcial | `dbe9b3d` | tela 0.9.0, menu, RMX, histórico, gravação, variantes USB, APK arm64 | escuta, pendrive real, RMX na controladora e FX de ouvido `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 e segue os passos 13 a 16 do roteiro |
 | 2026-10-22 | A052 | parcial | `4d730fc` | tela 0.9.1, BPM/tom do histórico, alvos do menu, RMX e colunas do histórico | escuta `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 0.9.1 |
+| 2026-10-22 | A053–A059 | parcial | a preencher | tela 0.10.0, capa, plano do leitor, key shift, filtro, slip, emergency loop | escuta `BLOCKED_HARDWARE`; A022 aberto; voz e 4 decks `DEFERRED` | dono instala o APK arm64 0.10.0 |
 
 ### Proposta Android
 - Estado: proposta, não aceita
@@ -224,8 +225,19 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - MENU: linhas de 60 dp, segmentos de 48 dp por pelo menos 64 dp, navegação de 64 dp com ícones, cartões em duas colunas em 2000×1200.
 - RMX: o dial deixa de esticar a linha; os pads trazem Echo UP, Noise UP, Spiral UP, Reverb UP, Reverb DOWN, Echo DOWN, Tape STOP e Dub ECHO. O isolador mostra o dB, a linha de 0 dB e o kill a vermelho.
 - HISTÓRICO: cabeçalho da sessão, colunas HORA / DECK / FAIXA / BPM / TOM, linhas alternadas.
-- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4205025 bytes, SHA-256 `02c7fd0cb34e37dd54d4a91fdfbf38076fd6d0961cd1cf5c9c4c204e2f9752f0`, versão 0.9.1 (versionCode 9), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
-- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19439031 bytes, SHA-256 `2ea2aa7f34fddb2e97bed21ebdaa37c709dfef09f64eb3628bb14c5057e1a7de`.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4205025 bytes, SHA-256 `02c7fd0cb34e37dd54d4a91fdfbf38076fd6d0961cd1cf5c9c4c204e2f9752f0`, versão 0.9.1 (versionCode 9), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`. O ficheiro no disco foi substituído pela 0.10.0; estes números são os da 0.9.1.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19439031 bytes, SHA-256 `2ea2aa7f34fddb2e97bed21ebdaa37c709dfef09f64eb3628bb14c5057e1a7de`. Também substituído no disco pela 0.10.0.
+- HIL executado? não
+
+### Tela 0.10.0
+- Estado: JVM e binário hospedeiro; escuta BLOCKED_HARDWARE
+- Capa lida da tabela de artwork e de `PIONEER/Artwork`. A miniatura fica no cache do app. Aparece no cartão do deck, na linha do browser e no painel INFO. Sem imagem, o lugar mostra ♪. O USB não é escrito. A biblioteca sintética usa PNG gerado aqui.
+- Plano em `docs/research/cdj3000-coverage.md`. Busca por voz e quatro decks ficam `DEFERRED` (2026-10-22).
+- No ecrã: Key Shift, Key Sync aproximado, filtro BPM/tom, contagem até o cue, bloco de 16 compassos, agulha na visão geral, slip com regresso, emergency loop, tempo com duas casas, banco de hot cue na memória do app.
+- O Key Sync não é o algoritmo comercial. O slip não cobre pausa, scratch nem a alavanca. A frase não é PSSI. O fader não tem passo de 0,02%.
+- Prints novos em `/opt/cursor/artifacts/prints/`: `key-shift.png`, `slip.png`, `emergency-loop.png`, `cue-bank.png`, `info-art.png`, `track-filter.png`, além de `player-2000x1200.png` e `browse-list.png`.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4218565 bytes, SHA-256 `3f434fd7a00f6f2319d2b20c2e4e8937d23c08c970244ffd70fd1f8e3f5263ab`, versão 0.10.0 (versionCode 10), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19470523 bytes, SHA-256 `3938a07ce3fef58ad71d1ab6c309df86adae8f86167e65357c1a8f3fb824803e`.
 - HIL executado? não
 
 ### T020 — configuração
@@ -248,7 +260,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 ### T078 — roteiro final
 - Estado: documento PASS; execução BLOCKED_HARDWARE
 - Arquivo: `docs/hil/roteiro-validacao-final.md`
-- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0; os passos 13 a 16 continuam por executar
+- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Os passos 13 a 19 continuam por executar
 
 ## Template de registro
 

@@ -2,6 +2,8 @@ package os.deckbridge.logic
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -34,6 +36,7 @@ class PlayerLogicTest {
         assertEquals(14, beatFxAudioKind(14))
         assertTrue(keysCompatible("Am", "Em"))
         assertTrue(keysCompatible("Am", "Am"))
+        assertTrue(keysCompatible("Am", "8A"))
         assertFalse(keysCompatible("Am", "Ebm"))
         assertEquals(MarkerKind.PHRASE, markerKind(0, 1))
         assertEquals(MarkerKind.BAR, markerKind(4, 1))
@@ -104,5 +107,41 @@ class PlayerLogicTest {
         assertEquals(1.0 / 16.0, stepJumpScale(1.0, false), 0.0)
         val back = backBrowse(opened)
         assertEquals(null, back.playlistId)
+    }
+
+    @Test
+    fun keySyncTempoNeedleEmergencyAndArtworkStayOffTheUsb() {
+        assertEquals(0, keySyncShift("Am", "Am"))
+        assertEquals(0, keySyncShift("C", "Am"))
+        assertEquals(-1, keySyncShift("Ebm", "Am"))
+        assertEquals("+4.02%", fineTempoText(4.02f))
+        assertEquals("-0.02%", fineTempoText(-0.02f))
+        assertEquals(16f, needleSeconds(50f, 100f, 32.0), 0.001f)
+        assertEquals(0f, needleSeconds(0f, 0f, 32.0), 0f)
+        assertNull(emergencyLoopRange(1.0, 32.0, 120.0, false))
+        val near = emergencyLoopRange(30.0, 32.0, 120.0, false)
+        assertNotNull(near)
+        assertNull(emergencyLoopRange(30.0, 32.0, 120.0, true))
+        assertEquals(12, phraseBarsRemaining(9.2, 124.0))
+        assertNotNull(beatsUntilCue(9.2, 11.6, 124.0))
+        assertEquals("B", cueBankLetter(1))
+        assertEquals("A", cueBankLetter(8))
+        assertEquals(0, nextCueBank(7))
+        assertEquals(3.0, slipAnchorAfter(1.0, 2.0, 1.0), 0.0)
+        val volume = SyntheticRekordbox.volume()
+        val keys = volume.files.keys.toSet()
+        val catalog = loadRekordbox(volume)
+        val night = catalog.tracks.first { it.title == "Night Bus" }
+        assertEquals(96, pngWidth(readArtworkFile(volume, night.artworkPath) ?: ByteArray(0)))
+        val bare = catalog.tracks.first { it.title == "Click 100" }
+        assertEquals("", bare.artworkPath)
+        assertNull(readArtworkFile(volume, bare.artworkPath))
+        val click = catalog.tracks.first { it.title == "Click 120" }
+        assertEquals(48, pngWidth(readArtworkFile(volume, click.artworkPath) ?: ByteArray(0)))
+        assertEquals(keys, volume.files.keys.toSet())
+        val filtered = browseRows(catalog, BrowsePlace(category = BrowseCategory.TRACK, inList = true, matchKey = "Am", bpmMin = 118, bpmMax = 130), emptyList())
+        assertTrue(filtered.any { it.title == "Night Bus" })
+        assertTrue(filtered.none { it.title == "Glasshouse" })
+        assertTrue(filtered.all { it.track == null || keysCompatible("Am", it.keyName) })
     }
 }

@@ -26,8 +26,18 @@ object SyntheticRekordbox {
             val bands = analyzeBands(pcm, 22050, columns)
             RenderedSong(song, wavMono16(pcm, 22050), bands, song.title.lowercase().replace(" ", "-"))
         }
+        val covers = linkedMapOf<String, ByteArray>()
+        val artwork = ArrayList<Pair<Int, String>>()
+        fun addCover(id: Int, high: Boolean) {
+            val path = "PIONEER/Artwork/%04d.png".format(id)
+            artwork += id to path
+            covers[path] = syntheticCover(id, large = false)
+            if (high) covers["PIONEER/Artwork/%04d_m.png".format(id)] = syntheticCover(id, large = true)
+        }
+        addCover(1, high = false)
+        rendered.forEachIndexed { index, _ -> addCover(index + 3, high = true) }
         val files = linkedMapOf(
-            "PIONEER/rekordbox/export.pdb" to pdb(wav120.size, wav100.size, rendered),
+            "PIONEER/rekordbox/export.pdb" to pdb(wav120.size, wav100.size, rendered, artwork),
             "PIONEER/rekordbox/exportLibrary.db" to "NOTASQLITE".toByteArray(Charsets.US_ASCII),
             "PIONEER/rekordbox/exportExt.pdb" to extPdb(),
             "PIONEER/USBANLZ/ANLZ0001.DAT" to anlzDat(
@@ -80,10 +90,11 @@ object SyntheticRekordbox {
             )
             files["CONTENTS/${song.slug}.wav"] = song.wav
         }
+        files.putAll(covers)
         return MemoryVolume(files, "pendrive simulado", true)
     }
 
-    private fun pdb(sizeA: Int, sizeB: Int, music: List<RenderedSong>): ByteArray {
+    private fun pdb(sizeA: Int, sizeB: Int, music: List<RenderedSong>, artwork: List<Pair<Int, String>>): ByteArray {
         val pages = mutableListOf(ByteArray(PAGE_LEN))
         data class Chain(val first: Int, val last: Int)
         fun addChain(type: Int, rows: List<ByteArray>, present: List<Boolean>): Chain {
@@ -153,8 +164,8 @@ object SyntheticRekordbox {
         table(1, listOf(inlineNameRow(1, "House", after = 4)))
         table(5, keyNames.mapIndexed { index, name -> inlineNameRow(index + 1, name, after = 8, secondId = index + 1) })
         val trackRows = mutableListOf(
-            trackRow(1, "Click 120", "faixa-120.wav", "CONTENTS/faixa-120.wav", "PIONEER/USBANLZ/ANLZ0001.DAT", 12000, 8, 48000, sizeA, 1, 1, 1, 1),
-            trackRow(2, "Click 100", "faixa-100.wav", "CONTENTS/faixa-100.wav", "PIONEER/USBANLZ/ANLZ0002.DAT", 10000, 8, 48000, sizeB, 2, 1, 1, 2),
+            trackRow(1, "Click 120", "faixa-120.wav", "CONTENTS/faixa-120.wav", "PIONEER/USBANLZ/ANLZ0001.DAT", 12000, 8, 48000, sizeA, 1, 1, 1, 1, artworkId = 1),
+            trackRow(2, "Click 100", "faixa-100.wav", "CONTENTS/faixa-100.wav", "PIONEER/USBANLZ/ANLZ0002.DAT", 10000, 8, 48000, sizeB, 2, 1, 1, 2, artworkId = 0),
         )
         music.forEachIndexed { index, song ->
             val id = index + 3
@@ -175,6 +186,7 @@ object SyntheticRekordbox {
                 albumId,
                 1,
                 keyId,
+                artworkId = id,
             )
         }
         trackRows += ByteArray(16) { 0xFF.toByte() }
@@ -210,6 +222,7 @@ object SyntheticRekordbox {
             entries += entryRow(position, index + 3, playlist)
         }
         table(8, entries)
+        if (artwork.isNotEmpty()) table(0x0d, artwork.map { artworkRow(it.first, it.second) })
         val file = ByteArray(pages.size * PAGE_LEN)
         pages.forEachIndexed { index, page -> page.copyInto(file, index * PAGE_LEN) }
         file.putU32le(4, PAGE_LEN)
@@ -400,6 +413,14 @@ private fun playlistRow(id: Int, parent: Int, name: String, folder: Boolean, sor
     return row
 }
 
+private fun artworkRow(id: Int, path: String): ByteArray {
+    val text = deviceString(path)
+    val row = ByteArray(4 + text.size)
+    row.putU32le(0, id)
+    text.copyInto(row, 4)
+    return row
+}
+
 private fun entryRow(position: Int, trackId: Int, playlistId: Int): ByteArray {
     val row = ByteArray(12)
     row.putU32le(0, position)
@@ -422,6 +443,7 @@ private fun trackRow(
     albumId: Int,
     genreId: Int,
     keyId: Int,
+    artworkId: Int = 0,
 ): ByteArray {
     val strings = MutableList(21) { deviceString("") }
     strings[14] = deviceString(analyzePath)
@@ -440,6 +462,7 @@ private fun trackRow(
     row.putU32le(16, fileSize)
     row.putU16le(24, 19048)
     row.putU16le(26, 30967)
+    row.putU32le(28, artworkId)
     row.putU32le(32, keyId)
     row.putU32le(48, sampleRate * 16)
     row.putU32le(56, tempo)
@@ -864,5 +887,11 @@ fun usbVariantReport(): String {
     )
     val catalog = loadRekordbox(missing, null)
     line("ANLZ ausente", catalog.warnings.any { it.contains("ANLZ ausente") } && catalog.error == null, catalog.warnings.firstOrNull() ?: "sem aviso")
+    val simulated = loadRekordbox(SyntheticRekordbox.volume())
+    val night = simulated.tracks.firstOrNull { it.title == "Night Bus" }
+    val nightBytes = night?.let { readArtworkFile(SyntheticRekordbox.volume(), it.artworkPath) }
+    line("capa da faixa", night != null && night.artworkPath.contains("Artwork") && pngWidth(nightBytes ?: ByteArray(0)) == 96, night?.artworkPath ?: "sem faixa")
+    val bare = simulated.tracks.firstOrNull { it.title == "Click 100" }
+    line("capa ausente", bare != null && bare.artworkPath.isBlank() && simulated.error == null, "Click 100 sem id")
     return lines.joinToString("\n")
 }

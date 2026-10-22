@@ -24,7 +24,10 @@ data class PdbTrack(
     val filePath: String,
     val fileName: String,
     val analyzePath: String,
+    val artworkId: Int = 0,
 )
+
+data class PdbArtwork(val id: Int, val path: String)
 
 data class PdbName(val id: Int, val name: String, val artistId: Int = 0)
 
@@ -46,6 +49,7 @@ data class PdbDatabase(
     val keys: List<PdbName>,
     val playlists: List<PdbPlaylist>,
     val entries: List<PdbPlaylistEntry>,
+    val artworks: List<PdbArtwork> = emptyList(),
 )
 
 data class PdbParse(val database: PdbDatabase?, val error: String?)
@@ -89,6 +93,7 @@ private fun parseExportPdbBody(bytes: ByteArray): PdbParse {
     val keys = mutableListOf<PdbName>()
     val playlists = mutableListOf<PdbPlaylist>()
     val entries = mutableListOf<PdbPlaylistEntry>()
+    val artworks = mutableListOf<PdbArtwork>()
     for (table in 0 until numTables) {
         val base = 28 + table * 16
         val type = bytes.u32le(base).toInt()
@@ -103,11 +108,12 @@ private fun parseExportPdbBody(bytes: ByteArray): PdbParse {
                 5 -> readNamed(bytes, rowAt, 8, pageEnd)?.let(keys::add)
                 7 -> readPlaylist(bytes, rowAt, pageEnd)?.let(playlists::add)
                 8 -> readEntry(bytes, rowAt)?.let(entries::add)
+                0x0d -> readArtwork(bytes, rowAt, pageEnd)?.let(artworks::add)
             }
         }
     }
     return PdbParse(
-        PdbDatabase(tracks, artists, albums, genres, keys, playlists, entries),
+        PdbDatabase(tracks, artists, albums, genres, keys, playlists, entries, artworks),
         null,
     )
 }
@@ -215,7 +221,17 @@ private fun readTrack(bytes: ByteArray, at: Int, pageEnd: Int): PdbTrack? {
         filePath = str(20),
         fileName = str(19),
         analyzePath = str(14),
+        artworkId = bytes.u32le(at + 28).toInt(),
     )
+}
+
+private fun readArtwork(bytes: ByteArray, at: Int, pageEnd: Int): PdbArtwork? {
+    if (at + 5 > bytes.size) return null
+    val id = bytes.u32le(at).toInt()
+    if (id == 0) return null
+    val path = deviceString(bytes, at + 4, pageEnd)
+    if (path.isBlank()) return null
+    return PdbArtwork(id, path)
 }
 
 private fun readArtist(bytes: ByteArray, at: Int, pageEnd: Int): PdbName? {

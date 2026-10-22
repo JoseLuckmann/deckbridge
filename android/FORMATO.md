@@ -18,6 +18,16 @@ A fixture `export.pdb` e os ANLZ são sintéticos, gerados pelo próprio app em 
 
 OD-04 (versão do rekordbox do dono) continua aberta. Um pendrive real ainda não foi lido. Isso fica `BLOCKED_HARDWARE`.
 
+## Capa (0.10.0)
+
+A leitura segue a descrição pública em <https://djl-analysis.deepsymmetry.org/rekordbox-export-analysis/exports.html>. Não foi copiado código nem o esquema Kaitai.
+
+- A tabela de tipo `0x0d` guarda a capa. Cada linha começa com o id (`u32` little-endian) e, logo a seguir, a string DeviceSQL com o caminho. Não é um offset para o heap.
+- Na faixa, `artwork_id` está nos bytes `0x1c`–`0x1f`. Zero significa sem capa.
+- O caminho aponta para a imagem de 80×80. Um irmão com `_m` antes da extensão é a de 240×240, quando existe. O leitor prefere o `_m` se o ficheiro estiver no volume.
+- A exportação real costuma ser JPEG. A biblioteca sintética deste repositório grava PNG gerado aqui, no caminho `PIONEER/Artwork/`. Não há arte de terceiros.
+- A miniatura (80 px) fica no cache do app. O volume só é lido. Sem bytes, ou se a imagem não abrir, o ecrã mostra o ♪ que já era o desenho de fallback.
+
 ## Onda colorida (0.9.0)
 
 A leitura de PWV5, PWV3 e PWV7 é deste projeto, a partir da descrição pública. Não foi copiado código de parser. Só foi exercida nas fixtures geradas aqui. Um export real ainda não passou por este leitor.

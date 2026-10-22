@@ -65,6 +65,9 @@ struct Deck {
     double rollLength = -1.0;
     double slip = -1.0;
     bool keyLock = false;
+    int keyShift = 0;
+    bool userSlip = false;
+    double slipAnchor = -1.0;
     deckbridge::PitchShift shiftL;
     deckbridge::PitchShift shiftR;
 
@@ -95,13 +98,23 @@ struct Deck {
         }
         leftOut = deckbridge::readLooped(left.data(), frames, position, loopStart, loopEnd, deckbridge::kFadeSamples);
         rightOut = deckbridge::readLooped(right.data(), frames, position, loopStart, loopEnd, deckbridge::kFadeSamples);
+        float ratio = 1.f;
+        bool shift = false;
         if (keyLock && pitch > 0.05 && std::abs(pitch - 1.0) > 0.01) {
-            const float ratio = static_cast<float>(1.0 / pitch);
+            ratio = static_cast<float>(1.0 / pitch);
+            shift = true;
+        }
+        if (keyShift != 0) {
+            ratio *= std::pow(2.f, static_cast<float>(keyShift) / 12.f);
+            shift = true;
+        }
+        if (shift && std::abs(ratio - 1.f) > 0.0008f) {
             leftOut = shiftL.process(leftOut, ratio);
             rightOut = shiftR.process(rightOut, ratio);
         }
         const double step = (pitch * rateMul * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
         if (slip >= 0.0) slip += (pitch * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
+        if (userSlip && slipAnchor >= 0.0) slipAnchor += step;
         position += step;
         if (rollLength > 1.0 && rollOrigin >= 0.0 && position >= rollOrigin + rollLength) {
             double over = std::fmod(position - rollOrigin, rollLength);
@@ -303,6 +316,32 @@ public:
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
         decks_[deck].keyLock = enabled;
+    }
+
+    void setKeyShift(int deck, int semitones) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1) return;
+        decks_[deck].keyShift = std::clamp(semitones, -12, 12);
+    }
+
+    void setUserSlip(int deck, bool on) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1) return;
+        Deck &target = decks_[deck];
+        if (on) {
+            target.userSlip = true;
+            target.slipAnchor = target.position;
+            return;
+        }
+        if (target.userSlip && target.slipAnchor >= 0.0) {
+            const double frames = static_cast<double>(target.left.size());
+            const double limit = frames > 1.0 ? frames - 1.0 : 0.0;
+            target.position = std::min(std::max(0.0, target.slipAnchor), limit);
+        }
+        target.userSlip = false;
+        target.slipAnchor = -1.0;
+        target.loopStart = -1.0;
+        target.loopEnd = -1.0;
     }
 
     void setLoop(int deck, float startSec, float endSec) {
@@ -618,6 +657,16 @@ Java_os_deckbridge_android_NativeEngine_nativeSetFilter(JNIEnv *, jobject, jint 
 extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeSetKeyLock(JNIEnv *, jobject, jint deck, jboolean enabled) {
     engine().setKeyLock(deck, enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetKeyShift(JNIEnv *, jobject, jint deck, jint semitones) {
+    engine().setKeyShift(deck, semitones);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetSlip(JNIEnv *, jobject, jint deck, jboolean enabled) {
+    engine().setUserSlip(deck, enabled == JNI_TRUE);
 }
 
 extern "C" JNIEXPORT void JNICALL

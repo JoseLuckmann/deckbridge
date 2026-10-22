@@ -197,6 +197,7 @@ data class BrowsePlace(
     val bpmMin: Int = 0,
     val bpmMax: Int = 999,
     val keyFilter: String = "",
+    val matchKey: String = "",
 )
 
 data class BrowseRow(
@@ -212,6 +213,21 @@ data class BrowseRow(
 )
 
 fun browseRows(catalog: RbCatalog, place: BrowsePlace, historyIds: List<Int>): List<BrowseRow> {
+    return applyLibraryFilter(rawBrowseRows(catalog, place, historyIds), place)
+}
+
+fun applyLibraryFilter(rows: List<BrowseRow>, place: BrowsePlace): List<BrowseRow> {
+    val narrow = place.bpmMin > 0 || place.bpmMax < 999
+    if (place.matchKey.isBlank() && !narrow) return rows
+    return rows.filter { row ->
+        val track = row.track ?: return@filter true
+        val bpmOk = !narrow || track.bpm <= 0.0 || (track.bpm >= place.bpmMin && track.bpm <= place.bpmMax)
+        val keyOk = place.matchKey.isBlank() || keysCompatible(place.matchKey, track.keyName)
+        bpmOk && keyOk
+    }
+}
+
+private fun rawBrowseRows(catalog: RbCatalog, place: BrowsePlace, historyIds: List<Int>): List<BrowseRow> {
     if (!place.inList) {
         return BrowseCategory.entries.map { category ->
             BrowseRow(category.label, "", "", "", "", null, null, category.name, false)
@@ -329,6 +345,10 @@ data class DeckFace(
     val remain: Boolean = true,
     val sync: Boolean = false,
     val keyLock: Boolean = false,
+    val keyShift: Int = 0,
+    val slip: Boolean = false,
+    val cueBank: Int = 0,
+    val emergency: Boolean = false,
     val filter: Int = 64,
     val onAir: Boolean = true,
     val loopStart: Float = -1f,
@@ -394,24 +414,107 @@ fun camelotOf(name: String): String? {
     return "$number$letter"
 }
 
-fun keysCompatible(focus: String, other: String): Boolean {
-    if (focus.isBlank() || other.isBlank()) return false
-    if (focus.equals(other, ignoreCase = true)) return true
-    val camelot = Regex("(\\d+)([ABab])")
-    val left = camelot.matchEntire(focus.trim())
-    val right = camelot.matchEntire(other.trim())
-    if (left != null && right != null) {
-        val a = left.groupValues[1].toInt()
-        val b = right.groupValues[1].toInt()
-        val diff = kotlin.math.min(kotlin.math.abs(a - b), 12 - kotlin.math.abs(a - b))
-        return diff <= 1
+private val ROOT_PITCH = intArrayOf(
+    8, 3, 10, 5, 0, 7, 2, 9, 4, 11, 6, 1,
+    4, 11, 6, 1, 8, 3, 10, 5, 0, 7, 2, 9,
+)
+
+fun rootPitch(name: String): Int? {
+    val camelot = camelotOf(name) ?: return null
+    val number = camelot.dropLast(1).toIntOrNull() ?: return null
+    if (number !in 1..12) return null
+    val index = if (camelot.last() == 'A') number - 1 else 12 + (number % 12)
+    if (index !in ROOT_PITCH.indices) return null
+    return ROOT_PITCH[index]
+}
+
+fun signedSemitone(from: Int, to: Int): Int {
+    var delta = (to - from) % 12
+    if (delta > 6) delta -= 12
+    if (delta < -6) delta += 12
+    return delta
+}
+
+fun relatedCamelot(name: String): List<String> {
+    val camelot = camelotOf(name) ?: return emptyList()
+    val number = camelot.dropLast(1).toIntOrNull() ?: return emptyList()
+    if (number !in 1..12) return emptyList()
+    val letter = camelot.last()
+    val other = if (letter == 'A') 'B' else 'A'
+    fun wrap(n: Int): Int {
+        val m = (n - 1) % 12
+        return (if (m < 0) m + 12 else m) + 1
     }
-    val ia = MUSICAL_KEYS.indexOfFirst { it.equals(focus, true) }
-    val ib = MUSICAL_KEYS.indexOfFirst { it.equals(other, true) }
-    if (ia < 0 || ib < 0) return false
-    val da = ia % 12
-    val db = ib % 12
-    val diff = kotlin.math.min(kotlin.math.abs(da - db), 12 - kotlin.math.abs(da - db))
+    return listOf(
+        "$number$letter",
+        "${wrap(number - 1)}$letter",
+        "${wrap(number + 1)}$letter",
+        "$number$other",
+        "${wrap(number - 1)}$other",
+        "${wrap(number + 1)}$other",
+    )
+}
+
+/** Semitons para o tom do master, entre os seis vizinhos descritos no manual do leitor. */
+fun keySyncShift(playingKey: String, masterKey: String): Int {
+    val from = rootPitch(playingKey) ?: return 0
+    val targets = relatedCamelot(masterKey).mapNotNull(::rootPitch)
+    if (targets.isEmpty()) return 0
+    return targets.minBy { kotlin.math.abs(signedSemitone(from, it)) }.let { signedSemitone(from, it) }
+}
+
+fun fineTempoText(percent: Float): String {
+    val sign = if (percent >= 0f) "+" else ""
+    return "$sign${"%.2f".format(percent)}%"
+}
+
+fun beatsUntilCue(positionSec: Double, cueSec: Double, bpm: Double): Double? {
+    if (bpm <= 1.0 || cueSec <= positionSec + 0.04) return null
+    return (cueSec - positionSec) / (60.0 / bpm)
+}
+
+fun phraseBarsRemaining(positionSec: Double, bpm: Double, phraseBars: Int = 16): Int {
+    if (bpm <= 1.0 || phraseBars <= 0) return 0
+    val bar = 240.0 / bpm
+    val index = (positionSec.coerceAtLeast(0.0) / bar).toInt()
+    return phraseBars - (index % phraseBars)
+}
+
+fun emergencyLoopRange(positionSec: Double, durationSec: Double, bpm: Double, loopActive: Boolean): Pair<Float, Float>? {
+    if (loopActive || bpm <= 1.0 || durationSec <= 1.0) return null
+    val beat = 60.0 / bpm
+    val remain = durationSec - positionSec
+    if (remain <= 0.0 || remain > beat * 8.0) return null
+    val start = (durationSec - beat * 4.0).coerceAtLeast(0.0)
+    if (durationSec - start < 0.05) return null
+    return start.toFloat() to durationSec.toFloat()
+}
+
+fun needleSeconds(xPx: Float, widthPx: Float, durationSec: Double): Float {
+    if (widthPx <= 0f || durationSec <= 0.0) return 0f
+    return (xPx / widthPx * durationSec).toFloat().coerceIn(0f, durationSec.toFloat())
+}
+
+fun cueBankLetter(bank: Int): String {
+    val index = ((bank % 8) + 8) % 8
+    return ('A' + index).toString()
+}
+
+fun nextCueBank(bank: Int): Int = ((bank + 1) % 8 + 8) % 8
+
+fun slipAnchorAfter(originSec: Double, elapsedSec: Double, pitch: Double): Double = originSec + elapsedSec * pitch
+
+fun keysCompatible(focus: String, other: String): Boolean {
+    val leftName = camelotOf(focus) ?: return false
+    val rightName = camelotOf(other) ?: return false
+    if (leftName.equals(rightName, ignoreCase = true)) return true
+    val camelot = Regex("(\\d+)([ABab])")
+    val left = camelot.matchEntire(leftName) ?: return false
+    val right = camelot.matchEntire(rightName) ?: return false
+    val a = left.groupValues[1].toInt()
+    val b = right.groupValues[1].toInt()
+    if (a !in 1..12 || b !in 1..12) return false
+    val diff = kotlin.math.min(kotlin.math.abs(a - b), 12 - kotlin.math.abs(a - b))
     return diff <= 1
 }
 

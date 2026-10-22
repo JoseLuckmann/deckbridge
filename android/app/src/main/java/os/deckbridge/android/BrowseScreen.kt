@@ -53,6 +53,7 @@ fun BrowseScreen(
     usbLabel: String,
     jvmBanner: String?,
     focusKey: String = "",
+    artworkOf: (RbTrack?) -> ByteArray? = { null },
     onClose: () -> Unit,
     onMove: (Int) -> Unit,
     onEnter: () -> Unit,
@@ -63,6 +64,8 @@ fun BrowseScreen(
     onLoad: (RbTrack, Int) -> Unit,
     onAuthorize: () -> Unit,
     onSimulate: () -> Unit,
+    onMatchKey: (String) -> Unit = {},
+    onBpmWindow: () -> Unit = {},
 ) {
     val rows = browseRows(catalog, place, historyIds)
     val safeIndex = if (rows.isEmpty()) 0 else place.index.coerceIn(0, rows.lastIndex)
@@ -87,6 +90,8 @@ fun BrowseScreen(
             BrowseChip("▼") { onMove(1) }
             BrowseChip("ABRIR", onEnter)
             BrowseChip("USB") { onSimulate() }
+            BrowseChip(if (place.matchKey.isBlank()) "TOM" else "TOM ON") { onMatchKey(if (place.matchKey.isBlank()) focusKey else "") }
+            BrowseChip(if (place.bpmMin == 0 && place.bpmMax >= 999) "BPM" else "BPM ON") { onBpmWindow() }
             BrowseChip("FECHAR", onClose)
         }
         if (place.category == BrowseCategory.SEARCH && place.inList) {
@@ -129,6 +134,10 @@ fun BrowseScreen(
                     TextInk("BPM", Modifier.width(64.dp), fontSize = 10.sp, color = Color(StagePalette.inkMuted), weight = FontWeight.Bold)
                     TextInk("KEY", Modifier.width(64.dp), fontSize = 10.sp, color = Color(StagePalette.inkMuted), weight = FontWeight.Bold)
                 }
+                val filterLabel = browseFilterLabel(place)
+                if (filterLabel.isNotEmpty()) {
+                    TextInk("FILTRO $filterLabel", fontSize = 11.sp, color = Color(StagePalette.accentOrange), weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                }
                 if (rows.isEmpty()) {
                     TextInk(
                         if (place.category == BrowseCategory.HISTORY) "Sem histórico nesta sessão." else "Lista vazia.",
@@ -138,7 +147,7 @@ fun BrowseScreen(
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     rows.forEachIndexed { index, row ->
-                        BrowseLine(row, index, index == safeIndex, catalog, focusKey) { onPick(index) }
+                        BrowseLine(row, index, index == safeIndex, catalog, focusKey, artworkOf) { onPick(index) }
                     }
                 }
                 Row(Modifier.fillMaxWidth().height(22.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -157,6 +166,7 @@ private fun BrowseLine(
     selected: Boolean,
     catalog: RbCatalog,
     focusKey: String,
+    artworkOf: (RbTrack?) -> ByteArray?,
     onClick: () -> Unit,
 ) {
     val fill = if (selected) selectedRow else Color.Transparent
@@ -164,12 +174,13 @@ private fun BrowseLine(
     val muted = if (selected) Color(0xFFD5DDEA) else Color(StagePalette.inkMuted)
     val compatible = row.track != null && keysCompatible(focusKey, row.keyName)
     Row(
-        Modifier.fillMaxWidth().height(40.dp).background(fill).clickable(onClick = onClick).padding(horizontal = 6.dp),
+        Modifier.fillMaxWidth().height(48.dp).background(fill).clickable(onClick = onClick).padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TextInk((index + 1).toString(), Modifier.width(36.dp), color = muted, fontSize = 12.sp, mono = true, maxLines = 1)
         if (row.track != null) {
-            MiniWave(catalog.analyses[row.track.id], Modifier.width(78.dp).height(28.dp).padding(end = 8.dp))
+            CoverTile(artworkOf(row.track), row.title, Modifier.padding(end = 6.dp).size(32.dp))
+            MiniWave(catalog.analyses[row.track.id], Modifier.width(64.dp).height(28.dp).padding(end = 8.dp))
         } else {
             Box(Modifier.width(78.dp).height(28.dp), contentAlignment = Alignment.Center) {
                 TextInk(if (row.folder) "▸" else "·", color = Color(StagePalette.accentBlue), fontSize = 14.sp)
@@ -237,6 +248,17 @@ private fun BrowseChip(label: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         TextInk(label, color = Color(StagePalette.accentBlue), fontSize = 10.sp, weight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+private fun browseFilterLabel(place: BrowsePlace): String {
+    val narrow = place.bpmMin > 0 || place.bpmMax < 999
+    return buildString {
+        if (narrow) append("${place.bpmMin}–${place.bpmMax} BPM")
+        if (place.matchKey.isNotBlank()) {
+            if (isNotEmpty()) append(" · ")
+            append("TOM ${place.matchKey}")
+        }
     }
 }
 

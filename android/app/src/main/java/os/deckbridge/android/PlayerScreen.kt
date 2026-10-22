@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -54,6 +55,10 @@ import os.deckbridge.logic.waveModeIndex
 import os.deckbridge.logic.activeLoop
 import os.deckbridge.logic.barsFromSeconds
 import os.deckbridge.logic.beatFxBeats
+import os.deckbridge.logic.beatsUntilCue
+import os.deckbridge.logic.cueBankLetter
+import os.deckbridge.logic.fineTempoText
+import os.deckbridge.logic.phraseBarsRemaining
 import os.deckbridge.logic.historyCsv
 import os.deckbridge.logic.historyM3u8
 import os.deckbridge.logic.inkOn
@@ -137,8 +142,13 @@ fun PlayerScreen(
     onRecord: () -> Unit = {},
     historyRows: List<os.deckbridge.logic.HistoryRow> = emptyList(),
     onHistoryExport: (String) -> Unit = {},
+    artworkOf: (RbTrack?) -> ByteArray? = { null },
+    showInfo: Boolean = false,
+    onDeckAction: (Int, String) -> Unit = { _, _ -> },
+    onMatchKey: (String) -> Unit = {},
+    onBpmWindow: () -> Unit = {},
 ) {
-    var info by remember { mutableStateOf(false) }
+    var info by remember { mutableStateOf(showInfo) }
     var grid by remember { mutableStateOf(false) }
     var fxPanel by remember { mutableStateOf(true) }
     var picked by remember { mutableStateOf("") }
@@ -226,26 +236,28 @@ fun PlayerScreen(
                     modifier = Modifier.width(rail).fillMaxHeight(),
                 )
             }
-            HotCueBand(catalog, tracks, compact, onActive, onHot, Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 6.dp))
+            HotCueBand(catalog, tracks, faces, compact, onActive, onHot, Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 6.dp))
             PerformanceStrip(
                 deck = activeDeck,
+                face = faces.getOrElse(activeDeck) { DeckFace() },
                 compact = compact,
                 loopOn = faces.getOrElse(activeDeck) { DeckFace() }.let { it.loopEnd > it.loopStart },
                 modifier = Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 4.dp),
                 onJump = { beats -> onJump(activeDeck, beats) },
                 onLoop = { which -> onLoopButton(activeDeck, which) },
                 onBeatLoop = { beats -> onBeatLoop(activeDeck, beats) },
+                onAction = { onDeckAction(activeDeck, it) },
             )
             Row(
                 Modifier.fillMaxWidth().height(if (compact) 118.dp else 176.dp).padding(top = if (compact) 3.dp else 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0)), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay)
-                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1)), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay)
+                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0)), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek)
+                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1)), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek)
             }
         }
         if (info) {
-            InfoCard(tracks.getOrNull(activeDeck), Modifier.align(Alignment.TopEnd).padding(12.dp)) { info = false }
+            InfoCard(tracks.getOrNull(activeDeck), artworkOf(tracks.getOrNull(activeDeck)), Modifier.align(Alignment.TopEnd).padding(12.dp)) { info = false }
         }
         if (overlay == "menu") {
             MenuScreen(settings, midiLine, onSettings, { onOverlay("") }, onDiagnostics, onTestTone) { onOverlay("history") }
@@ -267,6 +279,7 @@ fun PlayerScreen(
                 usbLabel = usbLabel,
                 jvmBanner = jvmBanner,
                 focusKey = tracks.getOrNull(master)?.keyName.orEmpty(),
+                artworkOf = artworkOf,
                 onClose = onBrowseClose,
                 onMove = onBrowseMove,
                 onEnter = onBrowseEnter,
@@ -277,6 +290,8 @@ fun PlayerScreen(
                 onLoad = onLoad,
                 onAuthorize = onAuthorize,
                 onSimulate = onSimulate,
+                onMatchKey = onMatchKey,
+                onBpmWindow = onBpmWindow,
             )
         }
     }
@@ -542,14 +557,15 @@ private fun FxBody(fx: BeatFxState, bpm: Double, compact: Boolean, list: Boolean
 private fun HotCueBand(
     catalog: RbCatalog?,
     tracks: List<RbTrack?>,
+    faces: List<DeckFace>,
     compact: Boolean,
     onActive: (Int) -> Unit,
     onHot: (Int, Int) -> Unit,
     modifier: Modifier,
 ) {
     Row(modifier.height(if (compact) 78.dp else 108.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        HotGrid(0, analysisOf(catalog, tracks.getOrNull(0)), compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot)
-        HotGrid(1, analysisOf(catalog, tracks.getOrNull(1)), compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot)
+        HotGrid(0, analysisOf(catalog, tracks.getOrNull(0)), faces.getOrElse(0) { DeckFace() }.cueBank, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot)
+        HotGrid(1, analysisOf(catalog, tracks.getOrNull(1)), faces.getOrElse(1) { DeckFace() }.cueBank, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot)
     }
 }
 
@@ -557,18 +573,19 @@ private fun HotCueBand(
 private fun HotGrid(
     deck: Int,
     analysis: RbAnalysis?,
+    bank: Int,
     compact: Boolean,
     modifier: Modifier,
     onActive: (Int) -> Unit,
     onHot: (Int, Int) -> Unit,
 ) {
     Column(modifier) {
-        TextInk("HOT CUE", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+        TextInk("HOT CUE ${cueBankLetter(bank)}", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
         repeat(2) { row ->
             Row(Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 repeat(4) { column ->
                     val index = row * 4 + column
-                    val cue = analysis?.hotCues?.firstOrNull { it.index == index }
+                    val cue = if (bank == 0) analysis?.hotCues?.firstOrNull { it.index == index } else null
                     val letter = ('A' + index).toString()
                     val color = argb(LETTER_COLORS[index])
                     Row(
@@ -596,12 +613,14 @@ private fun HotGrid(
 @Composable
 private fun PerformanceStrip(
     deck: Int,
+    face: DeckFace,
     compact: Boolean,
     loopOn: Boolean,
     modifier: Modifier,
     onJump: (Int) -> Unit,
     onLoop: (String) -> Unit,
     onBeatLoop: (Double) -> Unit,
+    onAction: (String) -> Unit,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(Modifier.fillMaxWidth().height(if (compact) 22.dp else 28.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -621,6 +640,17 @@ private fun PerformanceStrip(
             listOf(0.25 to "1/4", 0.5 to "1/2", 1.0 to "1", 2.0 to "2", 8.0 to "8", 16.0 to "16", 32.0 to "32").forEach { (beats, label) ->
                 Choice(label, false, compact, Modifier.weight(1f)) { onBeatLoop(beats) }
             }
+        }
+        val shiftLabel = if (face.keyShift > 0) "+${face.keyShift}" else face.keyShift.toString()
+        Row(Modifier.fillMaxWidth().height(if (compact) 22.dp else 28.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextInk("KEY", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 28.dp else 36.dp))
+            Choice("−", false, compact, Modifier.weight(1f)) { onAction("KEY-") }
+            Choice(shiftLabel, face.keyShift != 0, compact, Modifier.weight(1f)) { onAction("KEY0") }
+            Choice("+", false, compact, Modifier.weight(1f)) { onAction("KEY+") }
+            Choice("SYNC", false, compact, Modifier.weight(1f)) { onAction("SYNC") }
+            Choice("SLIP", face.slip, compact, Modifier.weight(1f)) { onAction("SLIP") }
+            Choice("EMERG", face.emergency, compact, Modifier.weight(1f)) { onAction("EMERG") }
+            Choice("BANK ${cueBankLetter(face.cueBank)}", face.cueBank != 0, compact, Modifier.weight(1.4f)) { onAction("BANK") }
         }
     }
 }
@@ -643,6 +673,8 @@ private fun DeckCard(
     onMaster: (Int) -> Unit,
     onQuantize: () -> Unit,
     onPlay: (Int) -> Unit,
+    artworkOf: (RbTrack?) -> ByteArray?,
+    onSeek: (Int, Float) -> Unit,
 ) {
     val duration = (track?.durationSeconds ?: 0).toDouble()
     val shown = if (track == null) {
@@ -664,7 +696,7 @@ private fun DeckCard(
             Box(Modifier.clip(RoundedCornerShape(2.dp)).background(badgeFill).padding(horizontal = 5.dp, vertical = 1.dp)) {
                 TextInk("DECK ${deck + 1}", color = badgeInk, fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold)
             }
-            TextInk("♪", color = Color(StagePalette.accentBlue), fontSize = if (compact) 12.sp else 14.sp, modifier = Modifier.padding(start = 6.dp))
+            CoverTile(artworkOf(track), track?.title ?: "", Modifier.padding(start = 6.dp).size(if (compact) 22.dp else 32.dp))
             TextInk(track?.title ?: "Sem faixa", fontSize = if (compact) 12.sp else 15.sp, weight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 4.dp))
             if (face.onAir) {
                 Box(Modifier.clip(RoundedCornerShape(2.dp)).background(Color(StagePalette.onAir)).padding(horizontal = 5.dp, vertical = 1.dp)) {
@@ -682,7 +714,7 @@ private fun DeckCard(
             }
             Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 8.dp).clickable { onRange(deck) }) {
                 TextInk("TEMPO", fontSize = 9.sp, color = Color(StagePalette.inkMuted))
-                TextInk(tempoText(percent), fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.SemiBold, mono = true, maxLines = 1)
+                TextInk(fineTempoText(percent), fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.SemiBold, mono = true, maxLines = 1)
                 Box(Modifier.padding(top = 2.dp).clip(RoundedCornerShape(2.dp)).background(Color(StagePalette.playBg)).padding(horizontal = 4.dp, vertical = 1.dp)) {
                     TextInk(rangeBadge(face.range), color = Color(StagePalette.playInk), fontSize = 10.sp, weight = FontWeight.Bold)
                 }
@@ -706,7 +738,20 @@ private fun DeckCard(
                 }
             }
         }
-        OverviewWave(track, analysis, face.position.toDouble(), Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp))
+        val nextCue = analysis?.hotCues?.filter { it.timeMs / 1000.0 > face.position + 0.04 }?.minByOrNull { it.timeMs }
+        val cueBeats = if (track == null || nextCue == null) null else beatsUntilCue(face.position.toDouble(), nextCue.timeMs / 1000.0, track.bpm)
+        val phraseLeft = if (track == null) 0 else phraseBarsRemaining(face.position.toDouble(), track.bpm)
+        val status = buildList {
+            if (face.keyShift != 0) add(if (face.keyShift > 0) "KEY +${face.keyShift}" else "KEY ${face.keyShift}")
+            if (cueBeats != null) add("CUE ${"%.1f".format(cueBeats)}")
+            if (phraseLeft > 0) add("FR $phraseLeft")
+            if (face.slip) add("SLIP")
+            if (face.emergency) add("EMERG")
+        }
+        if (status.isNotEmpty()) {
+            TextInk(status.joinToString("  "), fontSize = if (compact) 8.sp else 10.sp, color = Color(StagePalette.accentOrange), maxLines = 1, modifier = Modifier.padding(top = 1.dp))
+        }
+        OverviewWave(track, analysis, face.position.toDouble(), Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp)) { seconds -> onSeek(deck, seconds) }
         PhraseBar(track, Modifier.fillMaxWidth().height(if (compact) 4.dp else 7.dp))
         Row(Modifier.padding(top = if (compact) 2.dp else 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.clickable { onPlay(deck) }) { Lamp(if (face.playing) "PLAY" else "PAUSE", face.playing, compact) }
@@ -720,12 +765,13 @@ private fun DeckCard(
 }
 
 @Composable
-private fun InfoCard(track: RbTrack?, modifier: Modifier, onClose: () -> Unit) {
+private fun InfoCard(track: RbTrack?, art: ByteArray?, modifier: Modifier, onClose: () -> Unit) {
     Column(modifier.width(260.dp).background(Color(StagePalette.panel)).border(1.dp, Color(StagePalette.line)).padding(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
             TextInk("INFO", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentBlue), modifier = Modifier.weight(1f))
-            NavButton("FECHAR", compact = true, onClick = onClose)
+            NavButton("FECHAR", compact = true, modifier = Modifier.width(88.dp), expand = false, onClick = onClose)
         }
+        CoverTile(art, track?.title ?: "", Modifier.padding(top = 8.dp).size(72.dp))
         TextInk(track?.title ?: "Sem faixa", fontSize = 16.sp, weight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp), maxLines = 2)
         TextInk(track?.artist ?: "", fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
         TextInk(track?.album ?: "", fontSize = 13.sp, maxLines = 1)
@@ -734,14 +780,15 @@ private fun InfoCard(track: RbTrack?, modifier: Modifier, onClose: () -> Unit) {
 }
 
 @Composable
-private fun NavButton(label: String, compact: Boolean, selected: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun NavButton(label: String, compact: Boolean, selected: Boolean = false, modifier: Modifier = Modifier, expand: Boolean = true, onClick: () -> Unit) {
     val fill = if (selected) {
         Brush.verticalGradient(listOf(Color(0xFF315A93), Color(0xFF1A3A68)))
     } else {
         Brush.verticalGradient(listOf(Color(0xFF2A2E36), Color(0xFF121418)))
     }
+    val sized = if (expand) modifier.fillMaxHeight() else modifier
     Box(
-        modifier.fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(fill).border(if (selected) 2.dp else 1.dp, Color(if (selected) StagePalette.accentBlue else StagePalette.line), RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp),
+        sized.clip(RoundedCornerShape(8.dp)).background(fill).border(if (selected) 2.dp else 1.dp, Color(if (selected) StagePalette.accentBlue else StagePalette.line), RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
         TextInk(label, color = Color(if (selected) StagePalette.ink else StagePalette.accentBlue), fontSize = if (compact) 11.sp else 15.sp, weight = FontWeight.Bold, maxLines = 1)
@@ -784,11 +831,6 @@ private fun splitClock(seconds: Double): Pair<String, String> {
     val millis = (seconds.coerceAtLeast(0.0) * 1000.0).roundToInt()
     val whole = millis / 1000
     return "%02d:%02d".format(whole / 60, whole % 60) to ".%03d".format(millis % 1000)
-}
-
-private fun tempoText(percent: Float): String {
-    val sign = if (percent >= 0f) "+" else ""
-    return "$sign${"%.1f".format(percent)}%"
 }
 
 private fun rangeBadge(range: Double): String = when {
