@@ -63,6 +63,14 @@ data class PdbTagTrack(val trackId: Int, val tagId: Int)
 data class PdbExt(val tags: List<PdbTag>, val tagTracks: List<PdbTagTrack>)
 
 fun parseExportPdb(bytes: ByteArray): PdbParse {
+    return try {
+        parseExportPdbBody(bytes)
+    } catch (_: RuntimeException) {
+        PdbParse(null, "E_RB_PARSE")
+    }
+}
+
+private fun parseExportPdbBody(bytes: ByteArray): PdbParse {
     if (bytes.size < 28 || bytes.size > MAX_PDB_BYTES) {
         return PdbParse(null, "E_RB_UNSUPPORTED_VARIANT")
     }

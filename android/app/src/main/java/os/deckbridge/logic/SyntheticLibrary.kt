@@ -326,7 +326,7 @@ private fun writePageHeader(page: ByteArray, index: Int, type: Int, next: Int, n
     page.putU32le(16, 1)
     val packed = numOffsets or (numRows shl 13) or (0x24 shl 24)
     page.putU32le(24, packed)
-    page.putU16le(28, PAGE_LEN - PAGE_HEADER_END)
+    page.putU16le(28, page.size - PAGE_HEADER_END)
     page.putU16le(30, 0)
 }
 
@@ -641,4 +641,228 @@ internal fun wavMono16(samples: FloatArray, rate: Int): ByteArray {
         out.putU16le(44 + index * 2, raw)
     }
     return out
+}
+
+data class VariantCase(val name: String, val detail: String, val ok: Boolean)
+
+private fun packPdb(pageLen: Int, tables: List<Triple<Int, List<ByteArray>, List<Boolean>>>): ByteArray {
+    val pages = mutableListOf(ByteArray(pageLen))
+    val specs = mutableListOf<IntArray>()
+    for ((type, rows, present) in tables) {
+        val chunks = ArrayList<MutableList<Int>>()
+        var bucket = mutableListOf<Int>()
+        var used = 0
+        fun cap(count: Int): Int {
+            val groups = if (count <= 0) 1 else (count - 1) / 16 + 1
+            return pageLen - PAGE_HEADER_END - groups * 0x24 - 8
+        }
+        rows.forEachIndexed { index, row ->
+            val pad = if (row.size % 2 == 0) 0 else 1
+            if (row.size + pad > cap(1)) return ByteArray(0)
+            if (bucket.isNotEmpty() && used + row.size + pad > cap(bucket.size + 1)) {
+                chunks += bucket
+                bucket = mutableListOf()
+                used = 0
+            }
+            bucket += index
+            used += row.size + pad
+        }
+        if (bucket.isNotEmpty() || chunks.isEmpty()) chunks += bucket
+        val emptyIndex = pages.size
+        pages += ByteArray(pageLen)
+        val dataIndexes = chunks.map {
+            val index = pages.size
+            pages += ByteArray(pageLen)
+            index
+        }
+        writePageHeader(pages[emptyIndex], emptyIndex, type, dataIndexes.first(), 0, 0)
+        chunks.forEachIndexed { chunkIndex, indexes ->
+            val dataIndex = dataIndexes[chunkIndex]
+            val next = if (chunkIndex == chunks.lastIndex) 0x00FFFFFF else dataIndexes[chunkIndex + 1]
+            val data = pages[dataIndex]
+            var cursor = PAGE_HEADER_END
+            val offsets = IntArray(indexes.size)
+            indexes.forEachIndexed { local, rowIndex ->
+                val row = rows[rowIndex]
+                row.copyInto(data, cursor)
+                offsets[local] = cursor - PAGE_HEADER_END
+                cursor += row.size
+                if (cursor % 2 != 0) cursor += 1
+            }
+            writeIndex(data, indexes.map { present[it] }, offsets)
+            writePageHeader(data, dataIndex, type, next, indexes.size, indexes.count { present[it] })
+        }
+        specs += intArrayOf(type, emptyIndex, dataIndexes.last())
+    }
+    val file = ByteArray(pages.size * pageLen)
+    pages.forEachIndexed { index, page -> page.copyInto(file, index * pageLen) }
+    file.putU32le(4, pageLen)
+    file.putU32le(8, specs.size)
+    file.putU32le(12, pages.size)
+    file.putU32le(20, 1)
+    specs.forEachIndexed { index, spec ->
+        val at = 28 + index * 16
+        file.putU32le(at, spec[0])
+        file.putU32le(at + 4, 0)
+        file.putU32le(at + 8, spec[1])
+        file.putU32le(at + 12, spec[2])
+    }
+    return file
+}
+
+fun largeLibraryPdb(count: Int, pageLen: Int = 4096): ByteArray {
+    val artists = listOf(artistRow(1, "Casa"))
+    val tracks = ArrayList<ByteArray>(count + 1)
+    val present = ArrayList<Boolean>(count + 1)
+    for (id in 1..count) {
+        val title = if (id == 7) "Faixa café — São Paulo #$id" else "Faixa $id"
+        tracks += trackRow(
+            id,
+            title,
+            "faixa-$id.wav",
+            "CONTENTS/odd café [$id].wav",
+            "PIONEER/USBANLZ/ANLZ%04d.DAT".format(id),
+            12000,
+            18,
+            44100,
+            1000 + id,
+            1,
+            1,
+            1,
+            1,
+        )
+        present += true
+    }
+    tracks += ByteArray(8) { 0xFF.toByte() }
+    present += false
+    return packPdb(
+        pageLen,
+        listOf(
+            Triple(2, artists, List(artists.size) { true }),
+            Triple(0, tracks, present),
+        ),
+    )
+}
+
+private fun colorSection(tag: String, columns: Int, color: Int): ByteArray {
+    val body = BeWriter()
+    body.u32(columns * 2)
+    body.u32(0x10000)
+    repeat(columns) { index ->
+        val height = (8 + index * 3) and 0x1F
+        val word = height or ((color and 7) shl 5)
+        body.u16(word)
+    }
+    return section(tag, body.toByteArray())
+}
+
+private fun pwv7Section(columns: Int, low: Int, mid: Int, high: Int): ByteArray {
+    val body = BeWriter()
+    body.u32(columns * 3)
+    body.u32(0x10000)
+    repeat(columns) {
+        body.u8(low)
+        body.u8(mid)
+        body.u8(high)
+    }
+    return section("PWV7", body.toByteArray())
+}
+
+fun waveformFixture(kind: String): ByteArray {
+    val beats = BeWriter()
+    beats.u32(0)
+    beats.u32(0x80000)
+    beats.u32(4)
+    repeat(4) { index ->
+        beats.u16(index + 1)
+        beats.u16(12000)
+        beats.u32(index * 500)
+    }
+    val sections = mutableListOf(section("PQTZ", beats.toByteArray()))
+    when (kind) {
+        "PWV7" -> {
+            sections += pwv7Section(8, 200, 10, 20)
+            sections += run {
+                val body = BeWriter()
+                body.u32(8)
+                body.bytes(ByteArray(24) { 1 })
+                section("PWB3", body.toByteArray())
+            }
+        }
+        "PWV5" -> sections += colorSection("PWV5", 8, 7)
+        "PWV3" -> sections += colorSection("PWV3", 8, 1)
+        "PCO2" -> sections += anlzExt(
+            hot = listOf(CueSpec(1, 100, "Comentário", 10, 20, 30)),
+            memory = listOf(CueSpec(0, 50, "", 0, 0, 0)),
+            loop = CueSpec(0, 400, "Loop", 1, 2, 3) to 900,
+        ).let { ByteArray(0) }
+        else -> sections += section("ZZZZ", byteArrayOf(1, 2, 3, 4))
+    }
+    return if (kind == "PCO2") {
+        anlzExt(
+            hot = listOf(CueSpec(1, 100, "Comentário", 10, 20, 30)),
+            memory = listOf(CueSpec(0, 50, "", 0, 0, 0)),
+            loop = CueSpec(0, 400, "Loop", 1, 2, 3) to 900,
+        )
+    } else {
+        anlzFile(sections)
+    }
+}
+
+fun usbVariantReport(): String {
+    val lines = mutableListOf<String>()
+    fun line(name: String, ok: Boolean, detail: String) {
+        lines += "${if (ok) "ok" else "falha"}  $name  $detail"
+    }
+    for (page in listOf(2048, 4096, 8192)) {
+        val parsed = parseExportPdb(largeLibraryPdb(3, page))
+        val titles = parsed.database?.tracks?.map { it.title }.orEmpty()
+        line("página $page", titles.size == 3 && titles.contains("Faixa 1"), "faixas ${titles.size}")
+    }
+    val bigStarted = System.nanoTime()
+    val big = parseExportPdb(largeLibraryPdb(5000))
+    val millis = (System.nanoTime() - bigStarted) / 1_000_000
+    val odd = big.database?.tracks?.firstOrNull { it.id == 7 }
+    line("5000 faixas", (big.database?.tracks?.size ?: 0) == 5000 && millis < 2000 && odd?.filePath?.contains("café") == true, "${millis} ms na JVM")
+    val seven = parseAnlz(waveformFixture("PWV7"))
+    line("PWV7 acima de PWB3", seven.waveSource == "PWV7" && (seven.bands?.low?.first()?.toInt() ?: 0) and 0xFF == 200, seven.waveSource)
+    val five = parseAnlz(waveformFixture("PWV5"))
+    line("PWV5 cor", five.waveSource == "PWV5" && (five.bands?.low?.first()?.toInt() ?: 0) and 0xFF > 0, five.waveSource)
+    val three = parseAnlz(waveformFixture("PWV3"))
+    line("PWV3 cor", three.waveSource == "PWV3", three.waveSource)
+    val cues = parseAnlz(waveformFixture("PCO2"))
+    line("PCO2 comentário e loop", cues.cues.any { it.comment.contains("Coment") } && cues.cues.any { it.loopEndMs != null }, "cues ${cues.cues.size}")
+    val junk = parseAnlz(waveformFixture("lixo"))
+    line("tag desconhecida", junk.issues.isEmpty(), "segue")
+    var thrown = false
+    val random = kotlin.random.Random(9)
+    repeat(80) {
+        val size = random.nextInt(0, 3000)
+        val bytes = ByteArray(size) { random.nextInt(256).toByte() }
+        try {
+            parseExportPdb(bytes)
+            parseAnlz(bytes)
+            parseExportExt(bytes)
+        } catch (_: RuntimeException) {
+            thrown = true
+        }
+    }
+    val valid = largeLibraryPdb(4)
+    repeat(40) { index ->
+        valid[index * 17 % valid.size] = random.nextInt(256).toByte()
+        try {
+            parseExportPdb(valid)
+        } catch (_: RuntimeException) {
+            thrown = true
+        }
+    }
+    line("fuzz PDB/ANLZ", !thrown, if (thrown) "exceção" else "sem exceção")
+    val missing = MemoryVolume(
+        mapOf("PIONEER/rekordbox/export.pdb" to largeLibraryPdb(2)),
+        "variante",
+        true,
+    )
+    val catalog = loadRekordbox(missing, null)
+    line("ANLZ ausente", catalog.warnings.any { it.contains("ANLZ ausente") } && catalog.error == null, catalog.warnings.firstOrNull() ?: "sem aviso")
+    return lines.joinToString("\n")
 }

@@ -1,4 +1,5 @@
 #include "dsp.h"
+#include "record.h"
 
 #include <oboe/Oboe.h>
 
@@ -182,10 +183,22 @@ public:
     }
 
     void stop() {
+        recorder_.stop();
         std::lock_guard<std::mutex> lock(mutex_);
         route_.store(0);
         closeLocked();
     }
+
+    bool startRecord(const std::string &path, bool side) {
+        recorder_.setSide(side);
+        return recorder_.start(path, liveRate_.load());
+    }
+
+    void stopRecord() { recorder_.stop(); }
+
+    std::string pollRecord() { return recorder_.poll(); }
+
+    int pullRecord(float *dst, int max) { return recorder_.pullSide(dst, max); }
 
     std::string stats() {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -353,6 +366,8 @@ public:
                 float masterL = al * (1.f - cross_) * decks_[0].volume + bl * cross_ * decks_[1].volume;
                 float masterR = ar * (1.f - cross_) * decks_[0].volume + br * cross_ * decks_[1].volume;
                 mixFx_.processMaster(masterL, masterR);
+                liveRate_.store(rate);
+                recorder_.push(masterL, masterR);
                 float phoneL = 0.f;
                 float phoneR = 0.f;
                 if (phonesOpen) {
@@ -494,6 +509,8 @@ private:
     std::atomic<bool> phonesAudible_{false};
     Deck decks_[2];
     deckbridge::MixerFx mixFx_;
+    deckbridge::MasterRecorder recorder_;
+    std::atomic<int> liveRate_{48000};
     int bufferFrames_ = 256;
     float cross_ = 0.5f;
     double phase_[4]{};
@@ -620,4 +637,35 @@ Java_os_deckbridge_android_NativeEngine_nativeSetRmx(JNIEnv *env, jobject, jfloa
     jfloat *data = env->GetFloatArrayElements(values, nullptr);
     engine().setRmx(data, count);
     env->ReleaseFloatArrayElements(values, data, JNI_ABORT);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeRecordStart(JNIEnv *env, jobject, jstring path, jboolean side) {
+    if (path == nullptr) return JNI_FALSE;
+    const char *chars = env->GetStringUTFChars(path, nullptr);
+    const bool ok = engine().startRecord(chars == nullptr ? "" : chars, side == JNI_TRUE);
+    if (chars != nullptr) env->ReleaseStringUTFChars(path, chars);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeRecordStop(JNIEnv *, jobject) {
+    engine().stopRecord();
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeRecordPoll(JNIEnv *env, jobject) {
+    const std::string line = engine().pollRecord();
+    return env->NewStringUTF(line.c_str());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeRecordPull(JNIEnv *env, jobject, jfloatArray dest) {
+    if (dest == nullptr) return 0;
+    const jsize count = env->GetArrayLength(dest);
+    if (count < 2) return 0;
+    jfloat *data = env->GetFloatArrayElements(dest, nullptr);
+    const int frames = engine().pullRecord(data, count / 2);
+    env->ReleaseFloatArrayElements(dest, data, 0);
+    return frames;
 }

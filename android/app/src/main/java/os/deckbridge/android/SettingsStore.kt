@@ -28,6 +28,8 @@ object SettingsStore {
     private val buffer = intPreferencesKey("buffer_frames")
     private val encoder = booleanPreferencesKey("encoder_flip")
     private val jog = floatPreferencesKey("jog_sensitivity")
+    private val historySeconds = intPreferencesKey("history_seconds")
+    private val recordAac = booleanPreferencesKey("record_aac")
 
     fun flow(context: Context): Flow<PlayerSettings> = context.playerStore.data.map { prefs ->
         PlayerSettings(
@@ -44,6 +46,8 @@ object SettingsStore {
             bufferFrames = prefs[buffer] ?: 256,
             encoderFlip = prefs[encoder] ?: false,
             jogSensitivity = prefs[jog] ?: 1f,
+            historySeconds = prefs[historySeconds] ?: 10,
+            recordAac = prefs[recordAac] ?: false,
         )
     }
 
@@ -62,6 +66,8 @@ object SettingsStore {
             prefs[buffer] = settings.bufferFrames
             prefs[encoder] = settings.encoderFlip
             prefs[jog] = settings.jogSensitivity
+            prefs[historySeconds] = settings.historySeconds
+            prefs[recordAac] = settings.recordAac
         }
     }
 }

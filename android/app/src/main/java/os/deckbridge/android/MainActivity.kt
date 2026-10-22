@@ -52,6 +52,7 @@ import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.ReadableVolume
 import os.deckbridge.logic.SyntheticRekordbox
+import os.deckbridge.logic.usbVariantReport
 import os.deckbridge.logic.buildDiagnosticReport
 import os.deckbridge.logic.loadRekordbox
 import os.deckbridge.logic.TempoAssembler
@@ -253,6 +254,10 @@ internal fun DiagnosticPage(events: List<String>, jvmBanner: String?, onPage: (I
     var engine by remember { mutableStateOf<EngineStats?>(null) }
     var heard by remember { mutableStateOf(Heard.NAO_TESTEI) }
     var deviceId by remember { mutableIntStateOf(usbAudioDeviceId(context) ?: 0) }
+    var usbReport by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        usbReport = withContext(Dispatchers.Default) { usbVariantReport() }
+    }
 
     fun refresh() {
         identity = readIdentity(context)
@@ -292,6 +297,7 @@ internal fun DiagnosticPage(events: List<String>, jvmBanner: String?, onPage: (I
         onStop = { NativeEngine.stop(); engine = engine?.copy(route = 0, phonesSent = false) },
         onSimulate = onSimulate,
         onHeard = { heard = it },
+        usbReport = usbReport,
         onShare = {
             val send = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
@@ -321,6 +327,7 @@ fun DiagnosticScreen(
     onSimulate: () -> Unit,
     onHeard: (Heard) -> Unit,
     onShare: () -> Unit,
+    usbReport: String = "",
 ) {
     StageScaffold(page = 0, onPage = onPage, simulationNote = simulationNote(jvmBanner, jvmBanner != null)) {
         Row(
@@ -374,6 +381,10 @@ fun DiagnosticScreen(
                         TextInk("MIDI", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
                         events.forEach { TextInk(it, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)) }
                     }
+                }
+                Panel {
+                    TextInk("Variantes USB", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+                    TextInk(usbReport.ifBlank { "Sem relatório de variantes nesta sessão." }, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
                 Panel {
                     TextInk("Relatório", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))

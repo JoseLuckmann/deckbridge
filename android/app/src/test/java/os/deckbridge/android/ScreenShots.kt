@@ -13,6 +13,8 @@ import os.deckbridge.logic.BeatFxState
 import os.deckbridge.logic.BrowsePlace
 import os.deckbridge.logic.DeckFace
 import os.deckbridge.logic.Heard
+import os.deckbridge.logic.HistoryRow
+import os.deckbridge.logic.usbVariantReport
 import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.SyntheticRekordbox
 import os.deckbridge.logic.PlayerSettings
@@ -51,6 +53,7 @@ class ScreenShotsWide {
                         onSimulate = {},
                         onHeard = {},
                         onShare = {},
+                        usbReport = usbVariantReport(),
                     )
                 }
             })
@@ -153,6 +156,26 @@ class ScreenShotsTablet {
     }
 
     @Test
+    fun history() {
+        val catalog = simulatedCatalog()
+        val rows = listOf(
+            HistoryRow(1_700_000_000_000, 0, "Night Bus", "Nara Vale", 120.0, "8A", 42),
+            HistoryRow(1_700_000_120_000, 1, "Glasshouse", "Lumen K", 126.0, "4A", 18),
+        )
+        capture("$PRINTS/history.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), overlay = "history", nav = "MENU", history = rows))
+        }
+    }
+
+    @Test
+    fun recActive() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/rec-active.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), recording = true, recClock = "01:14", recLevel = 0.62f))
+        }
+    }
+
+    @Test
     fun rmxFull() {
         val catalog = simulatedCatalog()
         val rmx = RmxState(panel = true, full = true, scene = 0, holding = true, intensity = 0.66f, bars = 4, xOn = true, xMode = 0, xBeat = 2)
@@ -184,6 +207,10 @@ private fun player(
     rmx: RmxState = RmxState(),
     loop: Pair<Float, Float>? = null,
     jump: Double = 0.0,
+    recording: Boolean = false,
+    recClock: String = "00:00",
+    recLevel: Float = 0f,
+    history: List<HistoryRow> = emptyList(),
 ): ComposeView {
     val left = catalog.tracks.first { it.title == "Night Bus" }
     val right = catalog.tracks.first { it.title == "Glasshouse" }
@@ -257,6 +284,10 @@ private fun player(
                 settings = PlayerSettings(),
                 tagNames = mapOf(left.id to listOf("Abertura")),
                 tagTrack = left.id,
+                recording = recording,
+                recClock = recClock,
+                recLevel = recLevel,
+                historyRows = history,
             )
         }
     }

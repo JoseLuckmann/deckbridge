@@ -39,6 +39,7 @@ data class RbAnalysis(
     val mainCueMs: Int,
     val waveform: ByteArray,
     val bands: WaveBands? = null,
+    val waveSource: String = "",
 )
 
 data class RbTag(val name: String, val category: String)
@@ -156,7 +157,7 @@ fun loadRekordbox(volume: ReadableVolume, oneLibrary: OneLibraryOpener? = null):
         RbPlaylist(row.id, row.parentId, row.name, row.folder, row.sortOrder, ids)
     }
     val analyses = tracks.associate { track ->
-        track.id to analysisFor(volume, track.analyzePath)
+        track.id to analysisFor(volume, track.analyzePath, warnings)
     }
     return RbCatalog(
         tracks = tracks,
@@ -192,16 +193,17 @@ private fun tagsByTrack(ext: PdbExt?): Map<Int, List<RbTag>> {
     return grouped
 }
 
-private fun analysisFor(volume: ReadableVolume, path: String): RbAnalysis {
+private fun analysisFor(volume: ReadableVolume, path: String, warnings: MutableList<String>): RbAnalysis {
     if (path.isBlank()) return RbAnalysis(emptyList(), emptyList(), emptyList(), 0, ByteArray(0))
     val datPath = path
-    val extPath = when {
-        path.endsWith(".DAT", ignoreCase = true) -> path.dropLast(4) + ".EXT"
-        else -> "$path.EXT"
-    }
-    val dat = volume.read(datPath)?.let(::parseAnlz)
-    val ext = volume.read(extPath)?.let(::parseAnlz)
+    val stem = if (path.endsWith(".DAT", ignoreCase = true)) path.dropLast(4) else path
+    val datBytes = volume.read(datPath)
+    if (datBytes == null && warnings.size < 40) warnings += "ANLZ ausente: $datPath"
+    val extBytes = volume.read("$stem.EXT") ?: volume.read("$stem.2EX")
+    val dat = datBytes?.let(::parseAnlz)
+    val ext = extBytes?.let(::parseAnlz)
     val merged = mergeAnalysis(dat, ext)
+    if (merged.issues.isNotEmpty() && warnings.size < 40) warnings += merged.issues.first()
     val hot = merged.cues.filter { it.hotIndex != null }.map {
         RbHotCue(it.hotIndex!!, it.timeMs, it.comment, it.colorRgb)
     }.sortedBy { it.index }
@@ -209,7 +211,7 @@ private fun analysisFor(volume: ReadableVolume, path: String): RbAnalysis {
         RbMemoryCue(it.timeMs, it.loopEndMs, it.comment)
     }
     val main = memory.firstOrNull { it.loopEndMs == null }?.timeMs ?: 0
-    return RbAnalysis(merged.beats, hot, memory, main, merged.waveform, merged.bands)
+    return RbAnalysis(merged.beats, hot, memory, main, merged.waveform, merged.bands, merged.waveSource)
 }
 
 private fun sibling(pdbPath: String, name: String): String {

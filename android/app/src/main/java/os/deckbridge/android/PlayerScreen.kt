@@ -54,6 +54,8 @@ import os.deckbridge.logic.waveModeIndex
 import os.deckbridge.logic.activeLoop
 import os.deckbridge.logic.barsFromSeconds
 import os.deckbridge.logic.beatFxBeats
+import os.deckbridge.logic.historyCsv
+import os.deckbridge.logic.historyM3u8
 import os.deckbridge.logic.inkOn
 import os.deckbridge.logic.loopLengthLabel
 import kotlin.math.abs
@@ -128,6 +130,13 @@ fun PlayerScreen(
     queryText: String = "",
     tagTrack: Int? = null,
     onTagTrack: (Int) -> Unit = {},
+    recording: Boolean = false,
+    recClock: String = "00:00",
+    recLevel: Float = 0f,
+    recWarn: String? = null,
+    onRecord: () -> Unit = {},
+    historyRows: List<os.deckbridge.logic.HistoryRow> = emptyList(),
+    onHistoryExport: (String) -> Unit = {},
 ) {
     var info by remember { mutableStateOf(false) }
     var grid by remember { mutableStateOf(false) }
@@ -180,6 +189,11 @@ fun PlayerScreen(
                     }
                 },
                 onInfo = { info = !info },
+                recording = recording,
+                recClock = recClock,
+                recLevel = recLevel,
+                recWarn = recWarn,
+                onRecord = onRecord,
             )
             Row(
                 Modifier.fillMaxWidth().weight(1f).padding(top = if (compact) 3.dp else 6.dp),
@@ -234,9 +248,11 @@ fun PlayerScreen(
             InfoCard(tracks.getOrNull(activeDeck), Modifier.align(Alignment.TopEnd).padding(12.dp)) { info = false }
         }
         if (overlay == "menu") {
-            MenuScreen(settings, midiLine, onSettings, { onOverlay("") }, onDiagnostics, onTestTone)
+            MenuScreen(settings, midiLine, onSettings, { onOverlay("") }, onDiagnostics, onTestTone) { onOverlay("history") }
         } else if (overlay == "search" && catalog != null) {
             SearchScreen(catalog.tracks, queryText, searchBpm.first, searchBpm.second, searchKey, onQuery, onSearchBpm, onSearchKey, onLoad) { onOverlay("") }
+        } else if (overlay == "history") {
+            HistoryScreen(historyRows, { onOverlay("") }, { onHistoryExport(historyCsv(historyRows)) }, { onHistoryExport(historyM3u8(historyRows)) })
         } else if (overlay == "tags") {
             val pool = tracks.filterNotNull().ifEmpty { catalog?.tracks.orEmpty() }
             TagScreen(pool, tagNames, tagTrack, onTagTrack, onTag) { onOverlay("") }
@@ -275,14 +291,32 @@ private fun TopBar(
     nav: String,
     onNav: (String) -> Unit,
     onInfo: () -> Unit,
+    recording: Boolean,
+    recClock: String,
+    recLevel: Float,
+    recWarn: String?,
+    onRecord: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().height(if (compact) 16.dp else 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(if (compact) 22.dp else 26.dp), verticalAlignment = Alignment.CenterVertically) {
             if (note != null) {
-                TextInk(note, color = Color(StagePalette.simInk), fontSize = if (compact) 9.sp else 11.sp, maxLines = 1, modifier = Modifier.widthIn(max = if (compact) 180.dp else 280.dp))
+                TextInk(note, color = Color(StagePalette.simInk), fontSize = if (compact) 9.sp else 11.sp, maxLines = 1, modifier = Modifier.widthIn(max = if (compact) 150.dp else 240.dp))
             }
             Spacer(Modifier.weight(1f))
-            TextInk(clock, fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.Medium, mono = true)
+            if (recWarn != null) {
+                TextInk(recWarn, color = Color(StagePalette.accentOrange), fontSize = 10.sp, maxLines = 1, modifier = Modifier.widthIn(max = 180.dp).padding(end = 6.dp))
+            }
+            Box(
+                Modifier.height(18.dp).width(72.dp).border(1.dp, Color(if (recording) StagePalette.onAir else StagePalette.line)).clickable(onClick = onRecord).padding(horizontal = 4.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val h = size.height * recLevel.coerceIn(0f, 1f)
+                    drawRect(Color(if (recording) StagePalette.onAir else StagePalette.accentBlue), Offset(0f, size.height - h), Size(size.width * recLevel.coerceIn(0f, 1f), h))
+                }
+                TextInk(if (recording) "REC $recClock" else "REC", color = Color.White, fontSize = 10.sp, weight = FontWeight.Bold, maxLines = 1)
+            }
+            TextInk(clock, fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.Medium, mono = true, modifier = Modifier.padding(start = 8.dp))
             TextInk("REMAIN", fontSize = 9.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 8.dp))
             TextInk(remain, fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.Medium, mono = true)
             Box(Modifier.padding(start = 8.dp).clickable(onClick = onInfo)) {

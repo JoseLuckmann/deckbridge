@@ -31,6 +31,8 @@ Autores no cabeçalho desses dois arquivos: Warker, nschloe, dj3730, jusko, ties
 
 ASIO e o runtime da Microsoft aparecem no `LICENSE` do Mixxx como peças de Windows. Não entram numa build Linux.
 
+O LAME (LGPL) não é empacotado. A gravação WAV é código deste repositório. O AAC opcional, na versão 0.9.0, pede o codificador AAC do Android (`MediaCodec`), que não é distribuído dentro do APK. OD-06 continua aberta; por isso o LGPL do LAME não foi combinado com a licença provisória.
+
 Fixtures em `fixtures/audio/` são tom senoidal gerado aqui, dedicado a CC0-1.0. Não são músicas de terceiros.
 
 Pioneer, DDJ, rekordbox e AlphaTheta são marcas de terceiros. O nome DeckBridge não pede endosso delas.

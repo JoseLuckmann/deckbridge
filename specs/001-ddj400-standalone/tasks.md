@@ -165,6 +165,11 @@ OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Ras
 - [x] **A044** RMX: Scene FX, X-Pad, isolador e release no motor; painel e vista cheia; pads de SAMPLER reutilizados só com o painel ligado. **Estado:** `PASS` do render offline. Mapeamento MIDI provisório, item 8 do checklist físico, `BLOCKED_HARDWARE`.
 - [x] **A045** Testes offline de salto, loop, Beat FX, Scene FX, X-Pad, isolador e release. **Estado:** `PASS` do binário hospedeiro e dos 27 testes JVM. Não é escuta.
 - [x] **A046** Prints 0.8.0 e APK arm64 0.8.0. **Estado:** artefato gerado nesta rodada. Não instalado no tablet. A022 continua aberto. Escuta `BLOCKED_HARDWARE`.
+- [x] **A047** MENU e vista cheia de RMX no mesmo acabamento da tela principal: navegação à esquerda, linhas compactas, seleção azul-escura, dial de Scene FX, células escuras, isolador com gradiente e fila de release. **Estado:** `PASS` de renderização JVM em 2000×1200. A conferência de 1024×600 é a tela principal. Não é o tablet.
+- [x] **A048** Histórico do que esteve no ar (fader acima e a tocar pelo menos N segundos) com hora, deck, BPM e tom, em SQLite local. Lista e exportação CSV/M3U8 para um documento escolhido. **Estado:** `PASS` do teste JVM. O USB do rekordbox não é destino. Não é o tablet.
+- [x] **A049** Gravação do master em WAV, com REC, cronómetro e medidor. Anel sem alocação na thread de áudio. AAC opcional pelo MediaCodec. LAME fora do APK. Aviso abaixo de 64 MB. **Estado:** `PASS` do teste C++ hospedeiro (o `push` não aloca). O WAV não foi ouvido. AAC não foi exercido num aparelho. `BLOCKED_HARDWARE` para a escuta.
+- [x] **A050** Corpus sintético de variantes de export, parser que não derruba, fuzz de PDB/ANLZ, e preferência PWV7/PWV5/PWV3 sobre PWB3. **Estado:** `PASS` na JVM, com as 5.000 faixas abaixo de 2 s neste processo. Não é um export real nem o tablet. A leitura de PWV é a deste projeto.
+- [x] **A051** Prints 0.9.0 e APK arm64 0.9.0. Itens novos no roteiro de validação final, ainda `BLOCKED_HARDWARE`. **Estado:** artefato gerado nesta rodada. Não instalado no tablet. A022 continua aberto.
 
 ## Traçabilidade requisito -> tarefas -> testes/gates
 

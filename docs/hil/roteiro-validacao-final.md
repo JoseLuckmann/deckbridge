@@ -16,3 +16,7 @@
 10. Tirar o pendrive no meio do uso. Não pode surgir arquivo novo nele. Se ainda der para ler, hash de novo.
 11. Desligar pelo procedimento seguro. Nada volta a tocar sozinho depois de uma falha.
 12. Esta lista é a prova no hardware. Resultado de simulação não fecha G0 nem G1.
+13. Gravação: com REC ligado, o ficheiro WAV na pasta do app é o master (a mistura, com os efeitos). Conferir o cronómetro e o medidor de entrada. Se o espaço livre estiver abaixo de 64 MB, a gravação não começa e a faixa avisa. O AAC, se estiver ligado no menu, é o codificador do sistema (MediaCodec), não o LAME. Abrir o ficheiro depois. Não pode aparecer ficheiro novo no USB do rekordbox.
+14. Histórico: uma faixa no ar (fader do canal acima e a tocar pelo tempo escolhido no menu) entra em HISTORY com hora, deck, BPM e tom. Exportar CSV e M3U8 para uma pasta escolhida pelo utilizador. O USB do rekordbox não é gravado. O caminho no M3U8 é `deckbridge://set/…`, nunca `CONTENTS/` nem `PIONEER/`.
+15. RMX na controladora: o item 8 de `docs/hil/checklist-fase1.md` e `docs/compatibility/ddj400-rmx.md`. Confirmar os pads, o isolador na tela e o release. Se o byte divergir do mapa provisório, anotar o byte lido. Não inventar nome de controlo.
+16. Ouvir, um a um, os Beat FX da lista e cada Scene FX, o X-Pad, o isolador e o release (brake, echo out, backspin). Anotar o que não soa como o esperado. Spiral, Helix, Mobius, Pitch, o reverb e o RMX são aproximações originais. Não marcar este passo a partir da JVM, do binário hospedeiro nem do APK.

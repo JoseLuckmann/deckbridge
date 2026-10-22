@@ -112,6 +112,26 @@ object NativeEngine {
         nativeSetRmx(values)
     }
 
+    fun recordStart(path: String, aac: Boolean): Boolean {
+        if (!ensureQuiet()) return false
+        return nativeRecordStart(path, aac)
+    }
+
+    fun recordStop() {
+        if (!loaded) return
+        nativeRecordStop()
+    }
+
+    fun recordPoll(): String {
+        if (!loaded) return "0,0,0,48000"
+        return nativeRecordPoll()
+    }
+
+    fun recordPull(dest: FloatArray): Int {
+        if (!loaded) return 0
+        return nativeRecordPull(dest)
+    }
+
     private fun ensure() {
         if (!loaded) {
             System.loadLibrary("deckbridge-engine")
@@ -171,4 +191,8 @@ object NativeEngine {
     private external fun nativeSetLoop(deck: Int, startSec: Float, endSec: Float)
     private external fun nativeSetBuffer(frames: Int)
     private external fun nativeSetRmx(values: FloatArray)
+    private external fun nativeRecordStart(path: String, side: Boolean): Boolean
+    private external fun nativeRecordStop()
+    private external fun nativeRecordPoll(): String
+    private external fun nativeRecordPull(dest: FloatArray): Int
 }

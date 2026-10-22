@@ -2,12 +2,14 @@ package os.deckbridge.android
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -35,7 +37,10 @@ import os.deckbridge.logic.RmxState
 import os.deckbridge.logic.beatFxAudioKind
 import os.deckbridge.logic.beatFxBeats
 import os.deckbridge.logic.beatJumpPadBeats
+import os.deckbridge.logic.HistoryRow
+import os.deckbridge.logic.OnAirLog
 import os.deckbridge.logic.jumpSeconds
+import os.deckbridge.logic.storageWarning
 import os.deckbridge.logic.mergedTagNames
 import os.deckbridge.logic.reduceRmxPad
 import os.deckbridge.logic.rmxPayload
@@ -98,6 +103,27 @@ fun DeckPage(
     var consumed by remember { mutableStateOf(mapOf<Int, Int>()) }
     var started by remember { mutableStateOf(false) }
     var settings by remember { mutableStateOf(PlayerSettings()) }
+    var historyRows by remember { mutableStateOf(listOf<HistoryRow>()) }
+    var sessionId by remember { mutableLongStateOf(-1L) }
+    var recording by remember { mutableStateOf(false) }
+    var recClock by remember { mutableStateOf("00:00") }
+    var recLevel by remember { mutableFloatStateOf(0f) }
+    var recWarn by remember { mutableStateOf<String?>(null) }
+    var aacWriter by remember { mutableStateOf<AacWriter?>(null) }
+    var pendingExport by remember { mutableStateOf<String?>(null) }
+    val historyDb = remember { HistoryDb(context) }
+    val onAir = remember { OnAirLog() }
+    val liveFaces = rememberUpdatedState(faces)
+    val liveVols = rememberUpdatedState(volA to volB)
+    val liveRecording = rememberUpdatedState(recording)
+    val liveAac = rememberUpdatedState(aacWriter)
+    val liveSettings = rememberUpdatedState(settings)
+    val exportDoc = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        val text = pendingExport
+        if (uri != null && text != null) {
+            context.contentResolver.openOutputStream(uri)?.use { stream -> stream.write(text.toByteArray(Charsets.UTF_8)) }
+        }
+    }
     var rmx by remember { mutableStateOf(RmxState()) }
     var overlay by remember { mutableStateOf("") }
     var nav by remember { mutableStateOf("") }
@@ -219,6 +245,41 @@ fun DeckPage(
         val pitch = pitchFromFader(fader.toDouble(), range).toFloat()
         setPitch(deck, pitch)
         edit(deck) { it.copy(range = range, fader = fader, pitch = pitch, sync = false) }
+    }
+
+    fun toggleRecord() {
+        if (recording) {
+            aacWriter?.stop()
+            aacWriter = null
+            NativeEngine.recordStop()
+            recording = false
+            recLevel = 0f
+            return
+        }
+        val dir = java.io.File(context.filesDir, "recordings").apply { mkdirs() }
+        val warn = storageWarning(dir.usableSpace)
+        if (warn != null) {
+            recWarn = warn
+            return
+        }
+        recWarn = null
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
+        val wav = java.io.File(dir, "set-$stamp.wav")
+        if (!NativeEngine.recordStart(wav.absolutePath, settings.recordAac)) {
+            recWarn = "Motor ausente nesta sessão."
+            return
+        }
+        recording = true
+        recClock = "00:00"
+        if (settings.recordAac) {
+            val writer = AacWriter(java.io.File(dir, "set-$stamp.m4a"), 48000) {
+                val buffer = FloatArray(1024)
+                val frames = NativeEngine.recordPull(buffer)
+                if (frames <= 0) FloatArray(0) else buffer.copyOf(frames * 2)
+            }
+            aacWriter = writer
+            writer.start()
+        }
     }
 
     fun persist(next: PlayerSettings) {
@@ -416,6 +477,8 @@ fun DeckPage(
         PerformanceHub.onAction = { action -> onPerformance(action) }
         onDispose {
             PerformanceHub.onAction = null
+            liveAac.value?.stop()
+            NativeEngine.recordStop()
             NativeEngine.transport(0, false)
             NativeEngine.transport(1, false)
         }
@@ -477,6 +540,45 @@ fun DeckPage(
         while (true) {
             clock = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
             delay(15_000)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        historyRows = historyDb.rows()
+        while (true) {
+            delay(250)
+            onAir.minSeconds = liveSettings.value.historySeconds
+            val now = System.currentTimeMillis()
+            val vols = liveVols.value
+            for (deck in 0..1) {
+                val track = liveLoaded.value.getOrNull(deck)
+                val face = liveFaces.value.getOrElse(deck) { DeckFace() }
+                val level = if (deck == 0) vols.first else vols.second
+                val row = onAir.tick(
+                    deck,
+                    face.playing,
+                    level > 0.2f,
+                    now,
+                    track?.title.orEmpty(),
+                    track?.artist.orEmpty(),
+                    track?.bpm ?: 0.0,
+                    track?.keyName.orEmpty(),
+                )
+                if (row != null) {
+                    val id = if (sessionId > 0) sessionId else historyDb.session(now).also { sessionId = it }
+                    historyDb.insert(id, row)
+                    historyRows = historyDb.rows()
+                }
+            }
+            if (liveRecording.value) {
+                val parts = NativeEngine.recordPoll().split(",")
+                val frames = parts.getOrNull(0)?.toLongOrNull() ?: 0L
+                val rate = parts.getOrNull(3)?.toIntOrNull()?.takeIf { it > 0 } ?: 48000
+                val peak = parts.getOrNull(2)?.toIntOrNull() ?: 0
+                val seconds = frames / rate
+                recClock = "%02d:%02d".format(seconds / 60, seconds % 60)
+                recLevel = (peak / 1000f).coerceIn(0f, 1f)
+            }
         }
     }
 
@@ -643,7 +745,12 @@ fun DeckPage(
             }
         },
         onBrowseCategory = { category: BrowseCategory ->
-            browse = openCategory(browse ?: stored, category)
+            if (category == BrowseCategory.HISTORY) {
+                browse = null
+                overlay = "history"
+            } else {
+                browse = openCategory(browse ?: stored, category)
+            }
         },
         onQuery = { text ->
             queryText = text
@@ -685,6 +792,16 @@ fun DeckPage(
         onSearchKey = { searchKey = it },
         tagTrack = tagTrack ?: loaded.firstOrNull { it != null }?.id,
         onTagTrack = { tagTrack = it },
+        recording = recording,
+        recClock = recClock,
+        recLevel = recLevel,
+        recWarn = recWarn,
+        onRecord = { toggleRecord() },
+        historyRows = historyRows,
+        onHistoryExport = { text ->
+            pendingExport = text
+            exportDoc.launch(if (text.startsWith("#EXTM3U")) "deckbridge-set.m3u8" else "deckbridge-set.csv")
+        },
         onLoad = { track, deck ->
             val source = volume
             if (source != null) {

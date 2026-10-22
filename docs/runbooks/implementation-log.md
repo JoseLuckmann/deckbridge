@@ -114,6 +114,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-22 | A032–A034 | parcial | `cafec07` | player CDJ, browser por cima, zoom, grade, Beat FX, APK 0.6.0 | escuta e pendrive real `BLOCKED_HARDWARE`; efeito de áudio não existe; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
 | 2026-10-22 | A035–A038 | parcial | `28e5466` | tela 0.7.0, browser denso, 24 faixas, PWB3, echo/delay/flanger, APK arm64 | escuta e pendrive real `BLOCKED_HARDWARE`; frase simulada; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
 | 2026-10-22 | A039–A046 | parcial | `b3ef63e` | tela 0.8.0, menu, salto, loop, Beat FX, RMX, APK arm64 | escuta, pendrive e mapeamento RMX `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 e confirma o item 8 do checklist |
+| 2026-10-22 | A047–A051 | parcial | a preencher | tela 0.9.0, menu, RMX, histórico, gravação, variantes USB, APK arm64 | escuta, pendrive real, RMX na controladora e FX de ouvido `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 e segue os passos 13 a 16 do roteiro |
 
 ### Proposta Android
 - Estado: proposta, não aceita
@@ -203,6 +204,19 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19327975 bytes, SHA-256 `63cb27d7c4cc9c1bac2a5dbadc763aa7873dbedb08688b2d68a3662fd469db40`.
 - HIL executado? não
 
+### Tela 0.9.0 e APK
+- Estado: interface, histórico, gravação e parser na JVM e no binário hospedeiro; escuta, pendrive real, RMX na controladora e FX de ouvido BLOCKED_HARDWARE
+- MENU: coluna com Player, Áudio, Controladora, Biblioteca, Gravação, Histórico, Diagnóstico e Sobre. Linha com rótulo à esquerda e valor à direita. Seleção em azul-escuro com texto branco.
+- RMX em vista cheia: dial circular (laranja em build-up, azul em break-down), células escuras, X-Pad, isolador com gradiente e RELEASE. O mapeamento MIDI continua o da 0.8.0, provisório.
+- Histórico: a faixa no ar (a tocar, fader acima de 0,2, pelo tempo do menu, padrão 10 s) entra numa base SQLite do app, com hora, deck, BPM e tom. CSV e M3U8 pedem um documento ao utilizador. O M3U8 usa `deckbridge://set/…`. O USB do rekordbox não é escrito.
+- Gravação: REC na faixa fina, cronómetro e medidor. WAV estéreo 16 bits do master, depois dos efeitos, na pasta do app. Anel sem mutex e sem alocação no `push` da thread de áudio, no teste hospedeiro. AAC opcional pelo MediaCodec. LAME não entra no APK. Abaixo de 64 MB livres a gravação não começa.
+- Parser: páginas 2048/4096/8192, título unicode, linha apagada, ANLZ ausente, `.EXT`/`.2EX`, PWV7 acima de PWV5/PWV3 acima de PWB3, cues PCO2, tag desconhecida e fuzz sem exceção. As 5.000 faixas desta JVM ficaram abaixo de 2 s (o print do diagnóstico desta rodada mostrou 35 ms, já com a geração da fixture no mesmo trecho medido do parse). Não é um export rekordbox real. “5/6/7” é o conjunto de tags, não um campo de versão. Caminhos ímpares são texto no PDB, não um volume exFAT montado.
+- As faixas sintéticas duram 18 s ou 32 s. A barra de frase continua simulada. O jog, o encoder e o RMX MIDI continuam provisórios.
+- Prints em `/opt/cursor/artifacts/prints/`: `menu.png`, `rmx-full.png`, `history.png`, `rec-active.png`, `diagnostico.png`, `player-2000x1200.png`, `player-1024x600.png`.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4196629 bytes, SHA-256 `0ce64ac72e209cd2ac514df9b3f936e154cc2cf93d8d49435f8c167fd3e7b40e`, versão 0.9.0 (versionCode 8), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19421083 bytes, SHA-256 `5ac9369c23dc3de8317ab402d0647ce5cded246fb29e8b8f279e0b8af0f10b5b`.
+- HIL executado? não
+
 ### T020 — configuração
 - Estado: PASS
 - Perfil `runtime`, tela de referência 1024x600, `allow_write` recusado
@@ -223,7 +237,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 ### T078 — roteiro final
 - Estado: documento PASS; execução BLOCKED_HARDWARE
 - Arquivo: `docs/hil/roteiro-validacao-final.md`
-- Simulação não conta como estes 12 passos
+- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0; os passos 13 a 16 continuam por executar
 
 ## Template de registro
 

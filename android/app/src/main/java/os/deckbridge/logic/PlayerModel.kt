@@ -499,6 +499,8 @@ data class PlayerSettings(
     val bufferFrames: Int = 256,
     val encoderFlip: Boolean = false,
     val jogSensitivity: Float = 1f,
+    val historySeconds: Int = 10,
+    val recordAac: Boolean = false,
 )
 
 fun zoomFromBars(bars: Int): WaveZoom = WaveZoom.entries.firstOrNull { it.bars == bars } ?: WaveZoom.BARS_8
