@@ -52,6 +52,7 @@ import os.deckbridge.logic.RmxState
 import os.deckbridge.logic.StagePalette
 import os.deckbridge.logic.WaveZoom
 import os.deckbridge.logic.waveModeIndex
+import os.deckbridge.logic.waveOrigin
 import os.deckbridge.logic.activeLoop
 import os.deckbridge.logic.barsFromSeconds
 import os.deckbridge.logic.beatFxBeats
@@ -252,15 +253,21 @@ fun PlayerScreen(
                 Modifier.fillMaxWidth().height(if (compact) 118.dp else 176.dp).padding(top = if (compact) 3.dp else 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0)), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek)
-                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1)), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek)
+                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0)), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor))
+                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1)), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor))
             }
         }
         if (info) {
-            InfoCard(tracks.getOrNull(activeDeck), artworkOf(tracks.getOrNull(activeDeck)), Modifier.align(Alignment.TopEnd).padding(12.dp)) { info = false }
+            InfoCard(
+                tracks.getOrNull(activeDeck),
+                artworkOf(tracks.getOrNull(activeDeck)),
+                analysisOf(catalog, tracks.getOrNull(activeDeck)),
+                settings.waveColor,
+                Modifier.align(Alignment.TopEnd).padding(12.dp),
+            ) { info = false }
         }
         if (overlay == "menu") {
-            MenuScreen(settings, midiLine, onSettings, { onOverlay("") }, onDiagnostics, onTestTone) { onOverlay("history") }
+            MenuScreen(settings, midiLine, onSettings, { onOverlay("") }, onDiagnostics, onTestTone, catalog?.usbWaveNote.orEmpty()) { onOverlay("history") }
         } else if (overlay == "search" && catalog != null) {
             SearchScreen(catalog.tracks, queryText, searchBpm.first, searchBpm.second, searchKey, onQuery, onSearchBpm, onSearchKey, onLoad) { onOverlay("") }
         } else if (overlay == "history") {
@@ -675,6 +682,7 @@ private fun DeckCard(
     onPlay: (Int) -> Unit,
     artworkOf: (RbTrack?) -> ByteArray?,
     onSeek: (Int, Float) -> Unit,
+    waveMode: Int = 0,
 ) {
     val duration = (track?.durationSeconds ?: 0).toDouble()
     val shown = if (track == null) {
@@ -751,7 +759,7 @@ private fun DeckCard(
         if (status.isNotEmpty()) {
             TextInk(status.joinToString("  "), fontSize = if (compact) 8.sp else 10.sp, color = Color(StagePalette.accentOrange), maxLines = 1, modifier = Modifier.padding(top = 1.dp))
         }
-        OverviewWave(track, analysis, face.position.toDouble(), Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp)) { seconds -> onSeek(deck, seconds) }
+        OverviewWave(track, analysis, face.position.toDouble(), Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), waveMode) { seconds -> onSeek(deck, seconds) }
         PhraseBar(track, Modifier.fillMaxWidth().height(if (compact) 4.dp else 7.dp))
         Row(Modifier.padding(top = if (compact) 2.dp else 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.clickable { onPlay(deck) }) { Lamp(if (face.playing) "PLAY" else "PAUSE", face.playing, compact) }
@@ -765,7 +773,7 @@ private fun DeckCard(
 }
 
 @Composable
-private fun InfoCard(track: RbTrack?, art: ByteArray?, modifier: Modifier, onClose: () -> Unit) {
+private fun InfoCard(track: RbTrack?, art: ByteArray?, analysis: RbAnalysis?, waveColor: String, modifier: Modifier, onClose: () -> Unit) {
     Column(modifier.width(260.dp).background(Color(StagePalette.panel)).border(1.dp, Color(StagePalette.line)).padding(10.dp)) {
         Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
             TextInk("INFO", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentBlue), modifier = Modifier.weight(1f))
@@ -776,6 +784,10 @@ private fun InfoCard(track: RbTrack?, art: ByteArray?, modifier: Modifier, onClo
         TextInk(track?.artist ?: "", fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
         TextInk(track?.album ?: "", fontSize = 13.sp, maxLines = 1)
         TextInk(listOfNotNull(track?.keyName?.takeIf { it.isNotBlank() }, track?.let { "%.1f BPM".format(it.bpm) }).joinToString("  ·  "), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+        val origin = waveOrigin(analysis, waveColor)
+        if (origin.isNotBlank()) {
+            TextInk(origin, fontSize = 12.sp, color = Color(if (origin == "analisado no app") StagePalette.accentOrange else StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp))
+        }
     }
 }
 

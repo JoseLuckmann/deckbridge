@@ -178,6 +178,9 @@ OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Ras
 - [x] **A057** Key Shift, Key Sync aproximado, filtro de biblioteca, contagem até o próximo cue, frase de 16 compassos simulada, agulha na visão geral, slip com retorno, emergency loop de 4 batidas, tempo com duas casas, realce de tom compatível e banco de hot cue A–H na memória do app. **Estado:** `PASS` dos testes JVM. Escuta `BLOCKED_HARDWARE`.
 - [ ] **A058** O que o plano deixa de fora: Pro DJ Link, nuvem, Wi-Fi, ecrã do prato, PSSI real, bancos gravados no export, pré-escuta por mesa, ordenação de colunas, reverse, grelha editável, toque de pré-escuta. **Estado:** `TODO`.
 - [x] **A059** Prints 0.10.0 e APK arm64 0.10.0. **Estado:** artefato gerado nesta rodada. Não instalado no tablet. A022 aberto.
+- [x] **A060** Onda RGB a partir de PWV5/PWV4, 3 BANDAS a partir de PWV7/PWV6, AZUL a partir de PWV3/PWAV. Sem a tag, análise própria do WAV e o rótulo “analisado no app”. USB só leitura. **Estado:** `PASS` na JVM, nas fixtures deste repositório. Pendrive real `BLOCKED_HARDWARE`.
+- [x] **A061** `DEVSETTING.DAT` como padrão de cor e de playhead quando o byte está documentado. `MYSETTING*.DAT` e `DJMMYSETTING.DAT` não entram. Menu: RGB / 3 BANDAS / AZUL e “Usar configuração do pendrive”. **Estado:** `PASS` do teste JVM. Export real `BLOCKED_HARDWARE`.
+- [x] **A062** Prints 0.11.0 (RGB, 3 BANDAS, AZUL, 1024×600 e visão geral no cartão) e APK arm64 0.11.0. **Estado:** artefato gerado nesta rodada. Não instalado no tablet. A022 aberto.
 
 ## Traçabilidade requisito -> tarefas -> testes/gates
 

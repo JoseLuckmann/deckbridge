@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
@@ -33,7 +34,9 @@ import os.deckbridge.logic.activeLoop
 import os.deckbridge.logic.barsFromSeconds
 import os.deckbridge.logic.gridLines
 import os.deckbridge.logic.markerFraction
+import os.deckbridge.logic.monoSample
 import os.deckbridge.logic.needleSeconds
+import os.deckbridge.logic.rgbSample
 import os.deckbridge.logic.phraseColor
 import os.deckbridge.logic.windowSeconds
 import kotlin.math.roundToInt
@@ -87,14 +90,32 @@ internal fun ZoomedWave(
             val low = FloatArray(count)
             val mid = FloatArray(count)
             val high = FloatArray(count)
+            val rgbHeights = FloatArray(count)
+            val rgbColors = IntArray(count)
+            var rgbColumns = 0
             for (index in 0 until count) {
-                val time = if (whole) duration * index / (count - 1) else start + window * index / (count - 1)
-                val sample = bandAt(analysis, duration, time)
-                low[index] = sample.first
-                mid[index] = sample.second
-                high[index] = sample.third
+                val time = if (whole) duration * index / (count - 1).coerceAtLeast(1) else start + window * index / (count - 1).coerceAtLeast(1)
+                if (waveMode == 0) {
+                    val packed = rgbSample(analysis, "RGB", false, time, duration)
+                    if (packed >= 0) {
+                        rgbHeights[index] = ((packed ushr 32).toInt() and 0xFF) / 255f
+                        rgbColors[index] = (packed and 0xFFFFFF).toInt()
+                        rgbColumns += 1
+                    }
+                } else if (waveMode == 2) {
+                    low[index] = monoSample(analysis, false, time, duration)
+                } else {
+                    val sample = bandAt(analysis, duration, time, overview = false)
+                    low[index] = sample.first
+                    mid[index] = sample.second
+                    high[index] = sample.third
+                }
             }
-            drawMirroredBands(smooth(low), smooth(mid), smooth(high), waveTop, waveBot, lowGain = 0.98f, midGain = 0.58f, highGain = 0.32f, waveMode = waveMode)
+            if (waveMode == 0 && rgbColumns > 0) {
+                drawRgbColumns(smooth(rgbHeights), smoothRgb(rgbColors), waveTop, waveBot)
+            } else {
+                drawMirroredBands(smooth(low), smooth(mid), smooth(high), waveTop, waveBot, lowGain = 0.98f, midGain = 0.58f, highGain = 0.32f, waveMode = waveMode)
+            }
             drawLine(
                 Color.Black.copy(alpha = 0.55f),
                 Offset(0f, (waveTop + waveBot) / 2f),
@@ -205,6 +226,7 @@ internal fun OverviewWave(
     analysis: RbAnalysis?,
     position: Double,
     modifier: Modifier = Modifier,
+    waveMode: Int = 0,
     onSeek: (Float) -> Unit = {},
 ) {
     val measurer = rememberTextMeasurer()
@@ -219,8 +241,12 @@ internal fun OverviewWave(
         val gutter = 11f
         val waveTop = gutter
         val waveBot = size.height - 1f
-        val columns = columnsOf(analysis)
-        drawMirroredBands(columns.first, columns.second, columns.third, waveTop, waveBot, lowGain = 0.9f, midGain = 0.7f, highGain = 0.45f)
+        val mode = when (waveMode) {
+            2 -> "BLUE"
+            1 -> "THREE_BAND"
+            else -> "RGB"
+        }
+        drawOverview(analysis, mode, duration.coerceAtLeast(0.1), waveTop, waveBot)
         if (duration > 0.0) {
             analysis?.hotCues?.forEach { cue ->
                 val x = (cue.timeMs / 1000.0 / duration).coerceIn(0.0, 1.0).toFloat() * size.width
@@ -267,14 +293,51 @@ internal fun PhraseBar(track: RbTrack?, modifier: Modifier = Modifier) {
 @Composable
 internal fun MiniWave(analysis: RbAnalysis?, modifier: Modifier = Modifier) {
     Canvas(modifier.background(Color(StagePalette.waveBg))) {
-        val columns = columnsOf(analysis)
-        drawMirroredBands(columns.first, columns.second, columns.third, 1f, size.height - 1f, lowGain = 0.95f, midGain = 0.75f, highGain = 0.5f)
+        drawOverview(analysis, "RGB", 1.0, 1f, size.height - 1f)
     }
 }
 
-internal fun bandAt(analysis: RbAnalysis?, duration: Double, time: Double): Triple<Float, Float, Float> {
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawOverview(
+    analysis: RbAnalysis?,
+    mode: String,
+    duration: Double,
+    top: Float,
+    bottom: Float,
+) {
+    val count = (size.width / 2f).toInt().coerceIn(24, 360)
+    if (mode == "RGB") {
+        val heights = FloatArray(count)
+        val colors = IntArray(count)
+        var found = 0
+        for (index in 0 until count) {
+            val time = duration * index / (count - 1).coerceAtLeast(1)
+            val packed = rgbSample(analysis, "RGB", true, time, duration)
+            if (packed >= 0) {
+                heights[index] = ((packed ushr 32).toInt() and 0xFF) / 255f
+                colors[index] = (packed and 0xFFFFFF).toInt()
+                found += 1
+            }
+        }
+        if (found > 0) {
+            drawRgbColumns(heights, colors, top, bottom)
+            return
+        }
+    }
+    if (mode == "BLUE") {
+        val mono = FloatArray(count) { index ->
+            val time = duration * index / (count - 1).coerceAtLeast(1)
+            monoSample(analysis, true, time, duration)
+        }
+        drawMirroredBands(mono, FloatArray(count), FloatArray(count), top, bottom, waveMode = 2)
+        return
+    }
+    val columns = columnsOf(analysis, overview = true)
+    drawMirroredBands(columns.first, columns.second, columns.third, top, bottom, lowGain = 0.9f, midGain = 0.7f, highGain = 0.45f, waveMode = 1)
+}
+
+internal fun bandAt(analysis: RbAnalysis?, duration: Double, time: Double, overview: Boolean = false): Triple<Float, Float, Float> {
     if (duration <= 0.0 || time < 0.0 || time > duration) return Triple(0f, 0f, 0f)
-    val bands = analysis?.bands
+    val bands = if (overview) analysis?.bandPreview ?: analysis?.bands else analysis?.bandDetail ?: analysis?.bands
     if (bands != null && bands.columns > 1) {
         val pos = (time / duration).coerceIn(0.0, 1.0)
         val scaled = pos * (bands.columns - 1)
@@ -295,8 +358,8 @@ internal fun bandAt(analysis: RbAnalysis?, duration: Double, time: Double): Trip
     return Triple(amp, amp * 0.62f, amp * 0.28f)
 }
 
-internal fun columnsOf(analysis: RbAnalysis?): Triple<FloatArray, FloatArray, FloatArray> {
-    val bands = analysis?.bands
+internal fun columnsOf(analysis: RbAnalysis?, overview: Boolean = false): Triple<FloatArray, FloatArray, FloatArray> {
+    val bands = if (overview) analysis?.bandPreview ?: analysis?.bands else analysis?.bandDetail ?: analysis?.bands
     if (bands != null && bands.columns > 1) {
         fun lift(src: ByteArray) = FloatArray(bands.columns) { (src[it].toInt() and 0xFF) / 255f }
         return Triple(lift(bands.low), lift(bands.mid), lift(bands.high))
@@ -357,6 +420,60 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBand(
     }
     path.close()
     drawPath(path, color)
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRgbColumns(
+    heights: FloatArray,
+    colors: IntArray,
+    top: Float,
+    bottom: Float,
+) {
+    if (heights.size < 2 || bottom <= top) return
+    val mid = (top + bottom) / 2f
+    val amp = (bottom - top) / 2f
+    val slot = size.width / heights.size
+    for (index in heights.indices) {
+        val height = heights[index].coerceIn(0f, 1f)
+        if (height <= 0.01f) continue
+        val color = colors.getOrElse(index) { 0x888888 }
+        val red = ((color shr 16) and 0xFF) / 255f
+        val green = ((color shr 8) and 0xFF) / 255f
+        val blue = (color and 0xFF) / 255f
+        val bright = Color(red, green, blue)
+        val shade = Color(red * 0.42f, green * 0.42f, blue * 0.42f)
+        val reach = height * amp
+        val x = index * slot
+        drawRect(
+            brush = Brush.verticalGradient(listOf(bright, shade), startY = mid - reach, endY = mid),
+            topLeft = Offset(x, mid - reach),
+            size = Size(slot + 0.6f, reach),
+        )
+        val lower = reach * 0.92f
+        drawRect(
+            brush = Brush.verticalGradient(listOf(shade, bright.copy(alpha = 0.72f)), startY = mid, endY = mid + lower),
+            topLeft = Offset(x, mid),
+            size = Size(slot + 0.6f, lower),
+        )
+    }
+}
+
+private fun smoothRgb(colors: IntArray): IntArray {
+    if (colors.size < 5) return colors
+    val kernel = floatArrayOf(0.08f, 0.18f, 0.48f, 0.18f, 0.08f)
+    return IntArray(colors.size) { index ->
+        var red = 0f
+        var green = 0f
+        var blue = 0f
+        for (offset in -2..2) {
+            val at = (index + offset).coerceIn(0, colors.lastIndex)
+            val color = colors[at]
+            val weight = kernel[offset + 2]
+            red += ((color shr 16) and 0xFF) * weight
+            green += ((color shr 8) and 0xFF) * weight
+            blue += (color and 0xFF) * weight
+        }
+        (red.toInt().coerceIn(0, 255) shl 16) or (green.toInt().coerceIn(0, 255) shl 8) or blue.toInt().coerceIn(0, 255)
+    }
 }
 
 private fun smooth(samples: FloatArray): FloatArray {

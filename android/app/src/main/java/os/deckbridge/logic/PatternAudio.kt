@@ -15,7 +15,11 @@ data class PatternSong(
     val bpm: Int,
     val seconds: Int,
     val rootHz: Double,
+    val arranged: Boolean = false,
 )
+
+/** Frações da faixa longa: intro, build, drop, break, outro. */
+val ARRANGEMENT = doubleArrayOf(0.0, 0.18, 0.40, 0.68, 0.84, 1.0)
 
 fun patternSongs(): List<PatternSong> {
     val titles = listOf(
@@ -29,7 +33,7 @@ fun patternSongs(): List<PatternSong> {
     val keys = listOf("Am", "Ebm", "F#m", "Dm", "Gm", "Cm", "Bb", "F", "Em", "Bm", "C", "Abm")
     val bpms = listOf(124, 122, 128, 118, 110, 126, 132, 100, 96, 138, 104, 116, 140, 108, 112, 99, 90, 121, 130, 102, 136, 94)
     val roots = listOf(110.0, 155.6, 92.5, 146.8, 98.0, 130.8, 116.5, 87.3, 82.4, 123.5, 138.6, 103.8, 116.5, 130.8, 123.5, 110.0, 73.4, 138.6, 146.8, 87.3, 155.6, 103.8)
-    return titles.mapIndexed { index, title ->
+    val songs = titles.mapIndexed { index, title ->
         PatternSong(
             title = title,
             artist = artists[index % artists.size],
@@ -40,9 +44,14 @@ fun patternSongs(): List<PatternSong> {
             rootHz = roots[index],
         )
     }
+    return songs + listOf(
+        PatternSong("Quarto Escuro", "Nara Vale", "North Line", "Am", 124, 200, 110.0, arranged = true),
+        PatternSong("Linha Alta", "Lumen K", "Second Shift", "F#m", 128, 210, 92.5, arranged = true),
+    )
 }
 
 fun renderPattern(song: PatternSong, rate: Int = 22050): FloatArray {
+    if (song.arranged) return renderArrangement(song, rate)
     val total = song.seconds * rate
     val out = FloatArray(total)
     val beat = 60.0 / song.bpm
@@ -156,7 +165,56 @@ fun overviewFromBands(bands: WaveBands): ByteArray {
     }
 }
 
+fun arrangementPlace(seconds: Int, timeSeconds: Double): Int {
+    if (seconds <= 0) return 0
+    val fraction = (timeSeconds / seconds).coerceIn(0.0, 0.999)
+    return ARRANGEMENT.indexOfLast { it <= fraction }.coerceIn(0, 4)
+}
+
+private fun renderArrangement(song: PatternSong, rate: Int): FloatArray {
+    val total = song.seconds * rate
+    val out = FloatArray(total)
+    for (index in 0 until total) {
+        val t = index.toDouble() / rate
+        val part = arrangementPlace(song.seconds, t)
+        val sample = when (part) {
+            0 -> kotlin.math.sin(2.0 * PI * 700.0 * t) * 0.62
+            1 -> {
+                val rise = ((t / song.seconds) - ARRANGEMENT[1]) / (ARRANGEMENT[2] - ARRANGEMENT[1])
+                val fade = (1.0 - rise).coerceIn(0.0, 1.0)
+                kotlin.math.sin(2.0 * PI * 700.0 * t) * (0.16 * fade) +
+                    kotlin.math.sin(2.0 * PI * 8800.0 * t) * (0.38 + 0.42 * rise)
+            }
+            2 -> {
+                val beat = 60.0 / song.bpm
+                val into = t % beat
+                val kick = if (into < 0.16) {
+                    kotlin.math.exp(-into * 10.0) * kotlin.math.sin(2.0 * PI * 48.0 * t)
+                } else {
+                    0.0
+                }
+                kick * 0.28 + kotlin.math.sin(2.0 * PI * 62.0 * t) * 0.72
+            }
+            3 -> kotlin.math.sin(2.0 * PI * 520.0 * t) * 0.48 + kotlin.math.sin(2.0 * PI * 1040.0 * t) * 0.22
+            else -> {
+                val left = 1.0 - ((t / song.seconds) - ARRANGEMENT[4]) / (1.0 - ARRANGEMENT[4])
+                kotlin.math.sin(2.0 * PI * 8600.0 * t) * 0.58 * left.coerceIn(0.0, 1.0)
+            }
+        }
+        out[index] = sample.toFloat().coerceIn(-1f, 1f)
+    }
+    return out
+}
+
 fun patternCues(song: PatternSong): List<CueSpec> {
+    if (song.arranged) {
+        val names = listOf("Intro", "Build", "Drop", "Break", "Outro")
+        return names.mapIndexed { index, name ->
+            val time = (ARRANGEMENT[index] * song.seconds * 1000.0).toInt()
+            val rgb = LETTER[index]
+            CueSpec(index + 1, time, name, (rgb shr 16) and 0xFF, (rgb shr 8) and 0xFF, rgb and 0xFF)
+        }
+    }
     val beatMs = (60000.0 / song.bpm)
     val barMs = (beatMs * 4).toInt()
     val names = listOf("Intro", "Phase A 1", "Break1", "Build", "Drop", "Groove", "Fill", "Outro")

@@ -78,7 +78,9 @@ class ScreenShotsSevenInch {
     fun player() {
         val catalog = simulatedCatalog()
         capture("$PRINTS/player-1024x600.png") { activity ->
-            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState()))
+            activity.setContentView(
+                player(activity, catalog, WaveZoom.TRACK, BeatFxState(), leftTitle = "Quarto Escuro", posA = 100f),
+            )
         }
     }
 }
@@ -91,7 +93,9 @@ class ScreenShotsTablet {
     fun player() {
         val catalog = simulatedCatalog()
         capture("$PRINTS/player-2000x1200.png") { activity ->
-            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState()))
+            activity.setContentView(
+                player(activity, catalog, WaveZoom.TRACK, BeatFxState(), leftTitle = "Quarto Escuro", posA = 100f),
+            )
         }
     }
 
@@ -258,6 +262,42 @@ class ScreenShotsTablet {
     }
 
     @Test
+    fun waveThreeBand() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/wave-3band.png") { activity ->
+            activity.setContentView(
+                player(
+                    activity,
+                    catalog,
+                    WaveZoom.TRACK,
+                    BeatFxState(),
+                    leftTitle = "Quarto Escuro",
+                    posA = 100f,
+                    settings = PlayerSettings(waveColor = "THREE_BAND", followUsb = false),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun waveBlue() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/wave-blue.png") { activity ->
+            activity.setContentView(
+                player(
+                    activity,
+                    catalog,
+                    WaveZoom.TRACK,
+                    BeatFxState(),
+                    leftTitle = "Quarto Escuro",
+                    posA = 100f,
+                    settings = PlayerSettings(waveColor = "BLUE", followUsb = false),
+                ),
+            )
+        }
+    }
+
+    @Test
     fun trackFilter() {
         val catalog = simulatedCatalog()
         val playlist = catalog.playlists.first { it.name == "Todas" }.id
@@ -296,8 +336,10 @@ private fun player(
     history: List<HistoryRow> = emptyList(),
     tune: (DeckFace) -> DeckFace = { it },
     showInfo: Boolean = false,
+    leftTitle: String = "Night Bus",
+    settings: PlayerSettings = PlayerSettings(),
 ): ComposeView {
-    val left = catalog.tracks.first { it.title == "Night Bus" }
+    val left = catalog.tracks.first { it.title == leftTitle }
     val right = catalog.tracks.first { it.title == "Glasshouse" }
     val faces = listOf(
         DeckFace(
@@ -366,7 +408,7 @@ private fun player(
                 queryText = query,
                 fxList = fxList,
                 rmx = rmx,
-                settings = PlayerSettings(),
+                settings = settings,
                 tagNames = mapOf(left.id to listOf("Abertura")),
                 tagTrack = left.id,
                 recording = recording,

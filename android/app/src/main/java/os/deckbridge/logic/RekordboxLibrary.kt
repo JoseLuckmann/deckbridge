@@ -41,6 +41,15 @@ data class RbAnalysis(
     val waveform: ByteArray,
     val bands: WaveBands? = null,
     val waveSource: String = "",
+    val rgbDetail: ColorWave? = null,
+    val rgbPreview: ColorWave? = null,
+    val bandDetail: WaveBands? = null,
+    val bandPreview: WaveBands? = null,
+    val blueDetail: ByteArray = ByteArray(0),
+    val bluePreview: ByteArray = ByteArray(0),
+    val rgbApp: Boolean = false,
+    val bandApp: Boolean = false,
+    val blueApp: Boolean = false,
 )
 
 data class RbTag(val name: String, val category: String)
@@ -58,6 +67,9 @@ data class RbCatalog(
     val trackTags: Map<Int, List<RbTag>>,
     val warnings: List<String>,
     val error: String?,
+    val usbWaveColor: String? = null,
+    val usbPlayhead: Float? = null,
+    val usbWaveNote: String = "",
 )
 
 interface ReadableVolume {
@@ -183,8 +195,9 @@ fun loadRekordbox(volume: ReadableVolume, oneLibrary: OneLibraryOpener? = null):
         RbPlaylist(row.id, row.parentId, row.name, row.folder, row.sortOrder, ids)
     }
     val analyses = tracks.associate { track ->
-        track.id to analysisFor(volume, track.analyzePath, warnings)
+        track.id to analysisFor(volume, track, warnings)
     }
+    val usbWave = readUsbWavePrefs(volume)
     return RbCatalog(
         tracks = tracks,
         playlists = playlists,
@@ -198,6 +211,9 @@ fun loadRekordbox(volume: ReadableVolume, oneLibrary: OneLibraryOpener? = null):
         trackTags = trackTags,
         warnings = warnings,
         error = null,
+        usbWaveColor = usbWave.waveColor,
+        usbPlayhead = usbWave.playhead,
+        usbWaveNote = usbWave.note,
     )
 }
 
@@ -219,25 +235,71 @@ private fun tagsByTrack(ext: PdbExt?): Map<Int, List<RbTag>> {
     return grouped
 }
 
-private fun analysisFor(volume: ReadableVolume, path: String, warnings: MutableList<String>): RbAnalysis {
+private fun analysisFor(volume: ReadableVolume, track: RbTrack, warnings: MutableList<String>): RbAnalysis {
+    val path = track.analyzePath
     if (path.isBlank()) return RbAnalysis(emptyList(), emptyList(), emptyList(), 0, ByteArray(0))
-    val datPath = path
     val stem = if (path.endsWith(".DAT", ignoreCase = true)) path.dropLast(4) else path
-    val datBytes = volume.read(datPath)
-    if (datBytes == null && warnings.size < 40) warnings += "ANLZ ausente: $datPath"
-    val extBytes = volume.read("$stem.EXT") ?: volume.read("$stem.2EX")
+    val datBytes = volume.read(path)
+    if (datBytes == null && warnings.size < 40) warnings += "ANLZ ausente: $path"
     val dat = datBytes?.let(::parseAnlz)
-    val ext = extBytes?.let(::parseAnlz)
-    val merged = mergeAnalysis(dat, ext)
+    val ext = volume.read("$stem.EXT")?.let(::parseAnlz)
+    val ex2 = volume.read("$stem.2EX")?.let(::parseAnlz)
+    val merged = mergeAnalysis(dat, ext, ex2)
     if (merged.issues.isNotEmpty() && warnings.size < 40) warnings += merged.issues.first()
-    val hot = merged.cues.filter { it.hotIndex != null }.map {
+    val filled = fillMissingWave(volume, track, merged)
+    val hot = filled.merged.cues.filter { it.hotIndex != null }.map {
         RbHotCue(it.hotIndex!!, it.timeMs, it.comment, it.colorRgb)
     }.sortedBy { it.index }
-    val memory = merged.cues.filter { it.hotIndex == null }.sortedBy { it.timeMs }.map {
+    val memory = filled.merged.cues.filter { it.hotIndex == null }.sortedBy { it.timeMs }.map {
         RbMemoryCue(it.timeMs, it.loopEndMs, it.comment)
     }
     val main = memory.firstOrNull { it.loopEndMs == null }?.timeMs ?: 0
-    return RbAnalysis(merged.beats, hot, memory, main, merged.waveform, merged.bands, merged.waveSource)
+    val file = filled.merged
+    return RbAnalysis(
+        file.beats,
+        hot,
+        memory,
+        main,
+        file.waveform,
+        file.bands,
+        file.waveSource,
+        file.rgbDetail,
+        file.rgbPreview,
+        file.bandDetail,
+        file.bandPreview,
+        file.blueDetail,
+        file.bluePreview,
+        rgbApp = filled.rgbApp,
+        bandApp = filled.bandApp,
+        blueApp = filled.blueApp,
+    )
+}
+
+private data class FilledWave(val merged: AnlzFile, val rgbApp: Boolean, val bandApp: Boolean, val blueApp: Boolean)
+
+private fun fillMissingWave(volume: ReadableVolume, track: RbTrack, merged: AnlzFile): FilledWave {
+    val needRgb = merged.rgbDetail == null && merged.rgbPreview == null
+    val needBand = merged.bandDetail == null && merged.bandPreview == null && merged.bands == null
+    val needBlue = merged.blueDetail.isEmpty() && merged.bluePreview.isEmpty() && merged.waveform.isEmpty()
+    if (!needRgb && !needBand && !needBlue) return FilledWave(merged, false, false, false)
+    val pcm = volume.read(track.filePath)?.let(::decodeWavMono) ?: return FilledWave(merged, false, false, false)
+    val built = wavesFromPcm(pcm.samples, pcm.rate)
+    return FilledWave(
+        merged.copy(
+            rgbDetail = merged.rgbDetail ?: built.rgbDetail,
+            rgbPreview = merged.rgbPreview ?: built.rgbPreview,
+            bandDetail = merged.bandDetail ?: if (needBand) built.bandDetail else merged.bandDetail,
+            bandPreview = merged.bandPreview ?: if (needBand) built.bandPreview else merged.bandPreview,
+            bands = merged.bands ?: if (needBand) built.bandDetail else merged.bands,
+            blueDetail = if (merged.blueDetail.isEmpty() && needBlue) built.blueDetail else merged.blueDetail,
+            bluePreview = if (merged.bluePreview.isEmpty() && needBlue) built.bluePreview else merged.bluePreview,
+            waveform = if (merged.waveform.isEmpty() && needBlue) built.bluePreview else merged.waveform,
+            waveSource = if (merged.waveSource.isEmpty()) "APP" else merged.waveSource,
+        ),
+        rgbApp = needRgb,
+        bandApp = needBand,
+        blueApp = needBlue,
+    )
 }
 
 private fun sibling(pdbPath: String, name: String): String {

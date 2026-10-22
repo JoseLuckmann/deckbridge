@@ -23,3 +23,4 @@
 17. Capa: numa exportação real, a arte aparece no cartão, na lista e no painel de info. Sem ficheiro, fica o ♪. O hash do USB antes e depois continua igual. A miniatura fica na pasta de cache do app.
 18. Key Shift, Key Sync, SLIP, EMERG e o toque na visão geral. O tom muda de semitom com o master tempo aproximado. O SLIP volta ao ponto em que estava. O EMERG perto do fim faz um loop de 4 batidas. Não marcar pela JVM.
 19. Filtro de BPM e tom na lista, contagem até o próximo cue, e o banco de hot cue na memória do app. O banco não é gravado no USB.
+20. Cor da onda no pendrive real: RGB, 3 BANDAS e AZUL, com a tag que o export trouxer (PWV5/PWV4, PWV7/PWV6, PWV3/PWAV). Se “Usar configuração do pendrive” estiver ligado e existir `DEVSETTING.DAT` com um byte da lista documentada, a tela abre nesse modo. O hash do USB antes e depois continua igual. Não marcar pela JVM nem pelo pendrive simulado.

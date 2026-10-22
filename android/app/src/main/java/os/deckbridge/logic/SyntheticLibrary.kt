@@ -22,10 +22,13 @@ object SyntheticRekordbox {
         val wav100 = wavMono16(click100, 48000)
         val rendered = patternSongs().map { song ->
             val pcm = renderPattern(song)
-            val columns = (song.seconds * song.bpm / 60.0 * 16).toInt().coerceIn(480, 1600)
+            val columns = (song.seconds * song.bpm / 60.0 * 16).toInt().coerceIn(48, 480)
             val bands = analyzeBands(pcm, 22050, columns)
-            RenderedSong(song, wavMono16(pcm, 22050), bands, song.title.lowercase().replace(" ", "-"))
+            val waves = wavesFromPcm(pcm, 22050)
+            RenderedSong(song, wavMono16(pcm, 22050), bands, waves, song.title.lowercase().replace(" ", "-"))
         }
+        val clickWavesA = wavesFromPcm(click120, 48000)
+        val clickWavesB = wavesFromPcm(click100, 48000)
         val covers = linkedMapOf<String, ByteArray>()
         val artwork = ArrayList<Pair<Int, String>>()
         fun addCover(id: Int, high: Boolean) {
@@ -50,7 +53,9 @@ object SyntheticRekordbox {
             "PIONEER/USBANLZ/ANLZ0001.EXT" to anlzExt(
                 hot = listOf(CueSpec(1, 0, "Intro", 255, 40, 40), CueSpec(2, 2000, "Meio", 40, 180, 255)),
                 memory = listOf(CueSpec(0, 500, "Memoria", 0, 0, 0)),
+                waves = clickWavesA,
             ),
+            "PIONEER/USBANLZ/ANLZ0001.2EX" to anlz2ex(clickWavesA),
             "PIONEER/USBANLZ/ANLZ0002.DAT" to anlzDat(
                 bpm = 100,
                 beats = 13,
@@ -62,7 +67,10 @@ object SyntheticRekordbox {
                 hot = listOf(CueSpec(1, 0, "A", 255, 200, 0), CueSpec(3, 3000, "C", 0, 200, 80)),
                 memory = listOf(CueSpec(0, 600, "Entrada", 0, 0, 0)),
                 loop = CueSpec(0, 1200, "Loop", 0, 0, 0) to 2400,
+                waves = clickWavesB,
             ),
+            "PIONEER/USBANLZ/ANLZ0002.2EX" to anlz2ex(clickWavesB),
+            "PIONEER/DEVSETTING.DAT" to devSettingBytes(0x03, 0x01),
             "CONTENTS/faixa-120.wav" to wav120,
             "CONTENTS/faixa-100.wav" to wav100,
         )
@@ -82,12 +90,15 @@ object SyntheticRekordbox {
                 hot = cues.map { it.timeMs to it.hot },
                 memoryMs = 200,
                 bands = song.bands,
+                mono = song.waves.bluePreview,
             )
             files["PIONEER/USBANLZ/$stem.EXT"] = anlzExt(
                 hot = cues,
                 memory = listOf(CueSpec(0, 200, "Memoria", 220, 40, 40)),
                 loop = loop,
+                waves = song.waves,
             )
+            files["PIONEER/USBANLZ/$stem.2EX"] = anlz2ex(song.waves)
             files["CONTENTS/${song.slug}.wav"] = song.wav
         }
         files.putAll(covers)
@@ -485,9 +496,9 @@ private fun trackRow(
     return row
 }
 
-private data class RenderedSong(val song: PatternSong, val wav: ByteArray, val bands: WaveBands, val slug: String)
+private data class RenderedSong(val song: PatternSong, val wav: ByteArray, val bands: WaveBands, val waves: PcmWaves, val slug: String)
 
-private fun anlzDat(bpm: Int, beats: Int, hot: List<Pair<Int, Int>>, memoryMs: Int, bands: WaveBands? = null): ByteArray {
+private fun anlzDat(bpm: Int, beats: Int, hot: List<Pair<Int, Int>>, memoryMs: Int, bands: WaveBands? = null, mono: ByteArray? = null): ByteArray {
     val beatBody = BeWriter()
     beatBody.u32(0)
     beatBody.u32(0x80000)
@@ -500,10 +511,10 @@ private fun anlzDat(bpm: Int, beats: Int, hot: List<Pair<Int, Int>>, memoryMs: I
     }
     val memory = cueSection(0, listOf(plainCue(0, memoryMs)))
     val hots = cueSection(1, hot.map { plainCue(it.second, it.first) })
-    val wave = if (bands == null) {
-        ByteArray(64) { index -> (80 + (index * 17) % 140).toByte() }
-    } else {
-        overviewFromBands(bands)
+    val wave = when {
+        mono != null -> packMono(mono)
+        bands == null -> packMono(ByteArray(64) { index -> (80 + (index * 17) % 140).toByte() })
+        else -> packMono(overviewFromBands(bands))
     }
     val waveBody = BeWriter()
     waveBody.u32(wave.size)
@@ -513,7 +524,7 @@ private fun anlzDat(bpm: Int, beats: Int, hot: List<Pair<Int, Int>>, memoryMs: I
         section("PQTZ", beatBody.toByteArray()),
         memory,
         hots,
-        section("PWAV", waveBody.toByteArray()),
+        section("PWAV", waveBody.toByteArray(), 0x14),
     )
     if (bands != null) {
         val body = BeWriter()
@@ -530,13 +541,28 @@ private fun anlzExt(
     hot: List<CueSpec>,
     memory: List<CueSpec>,
     loop: Pair<CueSpec, Int>? = null,
+    waves: PcmWaves? = null,
 ): ByteArray {
     val memoryEntries = memory.map { extendedCue(it, loopEnd = null) }.toMutableList()
     if (loop != null) memoryEntries += extendedCue(loop.first, loop.second)
+    val sections = mutableListOf(
+        cue2Section(0, memoryEntries),
+        cue2Section(1, hot.map { extendedCue(it, null) }),
+    )
+    if (waves != null) {
+        sections += section("PWV4", pwv4Body(packPwv4(waves.bandPreview.low, waves.bandPreview.mid, waves.bandPreview.high)), 0x18)
+        sections += section("PWV5", pwv5Body(pwv5Words(waves.rgbDetail)), 0x18)
+        sections += section("PWV3", pwv3Body(packMono(waves.blueDetail)), 0x18)
+    }
+    return anlzFile(sections)
+}
+
+private fun anlz2ex(waves: PcmWaves): ByteArray {
     return anlzFile(
         listOf(
-            cue2Section(0, memoryEntries),
-            cue2Section(1, hot.map { extendedCue(it, null) }),
+            section("PWV6", pwv6Body(packPwv7(waves.bandPreview)), 0x14),
+            section("PWV7", pwv7Body(packPwv7(waves.bandDetail)), 0x18),
+            section("PWVC", byteArrayOf(0, 0, 0, 90, 0, 100, 0, 120)),
         ),
     )
 }
@@ -551,10 +577,10 @@ private fun anlzFile(sections: List<ByteArray>): ByteArray {
     return header.toByteArray() + body
 }
 
-private fun section(tag: String, body: ByteArray): ByteArray {
+private fun section(tag: String, body: ByteArray, lenHeader: Int = 12): ByteArray {
     val head = BeWriter()
     head.ascii(tag)
-    head.u32(12)
+    head.u32(lenHeader)
     head.u32(12 + body.size)
     return head.toByteArray() + body
 }
@@ -767,30 +793,6 @@ fun largeLibraryPdb(count: Int, pageLen: Int = 4096): ByteArray {
     )
 }
 
-private fun colorSection(tag: String, columns: Int, color: Int): ByteArray {
-    val body = BeWriter()
-    body.u32(columns * 2)
-    body.u32(0x10000)
-    repeat(columns) { index ->
-        val height = (8 + index * 3) and 0x1F
-        val word = height or ((color and 7) shl 5)
-        body.u16(word)
-    }
-    return section(tag, body.toByteArray())
-}
-
-private fun pwv7Section(columns: Int, low: Int, mid: Int, high: Int): ByteArray {
-    val body = BeWriter()
-    body.u32(columns * 3)
-    body.u32(0x10000)
-    repeat(columns) {
-        body.u8(low)
-        body.u8(mid)
-        body.u8(high)
-    }
-    return section("PWV7", body.toByteArray())
-}
-
 fun waveformFixture(kind: String): ByteArray {
     val beats = BeWriter()
     beats.u32(0)
@@ -804,7 +806,8 @@ fun waveformFixture(kind: String): ByteArray {
     val sections = mutableListOf(section("PQTZ", beats.toByteArray()))
     when (kind) {
         "PWV7" -> {
-            sections += pwv7Section(8, 200, 10, 20)
+            val bands = WaveBands(ByteArray(8) { 200.toByte() }, ByteArray(8) { 10 }, ByteArray(8) { 20 })
+            sections += section("PWV7", pwv7Body(packPwv7(bands)), 0x18)
             sections += run {
                 val body = BeWriter()
                 body.u32(8)
@@ -812,8 +815,8 @@ fun waveformFixture(kind: String): ByteArray {
                 section("PWB3", body.toByteArray())
             }
         }
-        "PWV5" -> sections += colorSection("PWV5", 8, 7)
-        "PWV3" -> sections += colorSection("PWV3", 8, 1)
+        "PWV5" -> sections += section("PWV5", pwv5Body(IntArray(4) { pwv5Word(7, 0, 1, 20) }), 0x18)
+        "PWV3" -> sections += section("PWV3", pwv3Body(byteArrayOf(20, 8, 4)), 0x18)
         "PCO2" -> sections += anlzExt(
             hot = listOf(CueSpec(1, 100, "Comentário", 10, 20, 30)),
             memory = listOf(CueSpec(0, 50, "", 0, 0, 0)),
@@ -850,9 +853,10 @@ fun usbVariantReport(): String {
     val seven = parseAnlz(waveformFixture("PWV7"))
     line("PWV7 acima de PWB3", seven.waveSource == "PWV7" && (seven.bands?.low?.first()?.toInt() ?: 0) and 0xFF == 200, seven.waveSource)
     val five = parseAnlz(waveformFixture("PWV5"))
-    line("PWV5 cor", five.waveSource == "PWV5" && (five.bands?.low?.first()?.toInt() ?: 0) and 0xFF > 0, five.waveSource)
+    val red = (five.rgbDetail?.rgb?.first() ?: 0) shr 16 and 0xFF
+    line("PWV5 cor", five.waveSource == "PWV5" && red == 255, five.waveSource)
     val three = parseAnlz(waveformFixture("PWV3"))
-    line("PWV3 cor", three.waveSource == "PWV3", three.waveSource)
+    line("PWV3 cor", three.waveSource == "PWV3" && three.blueDetail.isNotEmpty(), three.waveSource)
     val cues = parseAnlz(waveformFixture("PCO2"))
     line("PCO2 comentário e loop", cues.cues.any { it.comment.contains("Coment") } && cues.cues.any { it.loopEndMs != null }, "cues ${cues.cues.size}")
     val junk = parseAnlz(waveformFixture("lixo"))

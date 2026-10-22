@@ -56,6 +56,7 @@ fun MenuScreen(
     onClose: () -> Unit,
     onDiagnostics: () -> Unit,
     onTestTone: (Int) -> Unit,
+    usbWaveNote: String = "",
     onHistory: () -> Unit = {},
 ) {
     var section by remember { mutableIntStateOf(0) }
@@ -80,7 +81,7 @@ fun MenuScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     when (section) {
-                        0 -> PlayerPane(settings, wide, onSettings)
+                        0 -> PlayerPane(settings, wide, usbWaveNote, onSettings)
                         1 -> AudioPane(settings, wide, onSettings, onTestTone)
                         2 -> ControllerPane(settings, wide, midiLine, onSettings)
                         3 -> LibraryPane(wide)
@@ -227,7 +228,7 @@ private fun PairRow(left: @Composable (Modifier) -> Unit, right: (@Composable (M
 }
 
 @Composable
-private fun PlayerPane(settings: PlayerSettings, wide: Boolean, onSettings: (PlayerSettings) -> Unit) {
+private fun PlayerPane(settings: PlayerSettings, wide: Boolean, usbWaveNote: String, onSettings: (PlayerSettings) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         PairRow(
             { modifier ->
@@ -286,14 +287,29 @@ private fun PlayerPane(settings: PlayerSettings, wide: Boolean, onSettings: (Pla
         GroupCard("Onda") {
             Line("Cor da onda") {
                 val modes = listOf("RGB" to "RGB", "THREE_BAND" to "3 BANDAS", "BLUE" to "AZUL")
-                Chips(modes.map { it.second to (settings.waveColor == it.first) }) { onSettings(settings.copy(waveColor = modes[it].first)) }
+                Chips(modes.map { it.second to (settings.waveColor == it.first) }) {
+                    onSettings(settings.copy(waveColor = modes[it].first, followUsb = false))
+                }
             }
+            Line("Usar configuração do pendrive") {
+                Chips(listOf("OFF" to !settings.followUsb, "ON" to settings.followUsb)) {
+                    onSettings(settings.copy(followUsb = it == 1))
+                }
+            }
+            TextInk(
+                if (usbWaveNote.isBlank()) "Usar configuração do pendrive liga o DEVSETTING.DAT quando ele existe." else usbWaveNote,
+                fontSize = 13.sp,
+                color = Color(StagePalette.inkMuted),
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
             Line("Zoom") {
                 Chips(listOf(2, 4, 8, 16).map { "$it" to (settings.zoomBars == it) }) { onSettings(settings.copy(zoomBars = listOf(2, 4, 8, 16)[it])) }
             }
             Line("Playhead") {
                 val spots = listOf(0.20f to "20%", 0.30f to "30%", 0.50f to "50%")
-                Chips(spots.map { it.second to (settings.playhead == it.first) }) { onSettings(settings.copy(playhead = spots[it].first)) }
+                Chips(spots.map { it.second to (settings.playhead == it.first) }) {
+                    onSettings(settings.copy(playhead = spots[it].first, followUsb = false))
+                }
             }
         }
     }
@@ -354,7 +370,7 @@ private fun LibraryPane(wide: Boolean) {
     GroupCard("USB", Modifier.fillMaxWidth()) {
         TextInk("USB só de leitura. Nada desta tela grava no pendrive.", fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
         TextInk("Re-scan pede a pasta de novo. OneLibrary real ainda não foi aberto.", fontSize = 14.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp))
-        TextInk("PWV7 e PWV5, quando existem, desenham a onda. PWB3 é o fallback deste projeto.", fontSize = 14.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
+        TextInk("RGB lê PWV5 e PWV4. 3 BANDAS lê PWV7 e PWV6. AZUL lê PWV3 e PWAV. Sem a tag, a onda é analisada no app e o USB não é escrito.", fontSize = 14.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
     }
 }
 
@@ -396,7 +412,7 @@ private fun DiagnosticPane(wide: Boolean, onDiagnostics: () -> Unit) {
 @Composable
 private fun AboutPane(wide: Boolean) {
     GroupCard("Versão", Modifier.fillMaxWidth()) {
-        TextInk("DeckBridge 0.10.0", fontSize = 20.sp, weight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+        TextInk("DeckBridge 0.11.0", fontSize = 20.sp, weight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
         TextInk("Beat FX e REMIX FX são DSP original. Não é firmware comercial.", fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
     }
 }

@@ -74,9 +74,9 @@ A capa (tabela de artwork e ficheiros em `PIONEER/Artwork`) é leitura de biblio
 | Tom no ecrã e realce de vizinhos | Manual, indicador Key; realce nosso a partir da roda | 1 | — | feito. `Am` e `8A` contam como o mesmo tom | Manter |
 | Beat countdown | Manual, ecrã de onda: compassos e batidas até ao cue gravado mais próximo | 2 | S | batidas até ao próximo hot cue. Não inclui o memory cue | Alargar ao memory cue se for preciso |
 | Frase / PSSI | A análise pública do ANLZ descreve frases. O manual deste leitor descreve o beat countdown, não um ecrã PSSI. O anúncio de 2020 fala de dados de frase para iluminação | 2 | L | a barra colorida e o “FR” são o índice do compasso, de 16 em 16 | Não tratar isto como PSSI. Parse real fica em tarefa L |
-| Cor da onda BLUE / RGB / 3BAND | Manual, atalho WAVEFORM COLOR. BLUE é o valor de fábrica | 1 | — | as três estão no menu | Manter |
+| Cor da onda BLUE / RGB / 3BAND | Manual, atalho WAVEFORM COLOR. BLUE é o valor de fábrica | 1 | — | as três estão no menu. Na 0.11.0 a cor lida o export (PWV5/PWV4, PWV7/PWV6, PWV3/PWAV). Sem a tag, o app analisa o WAV | Manter |
 | Zoom | Manual, modo Zoom | 1 | — | feito | Manter |
-| Playhead à esquerda ou ao centro | Atalho WAVEFORM CURRENT POSITION | 1 | — | o menu move o playhead | Manter |
+| Playhead à esquerda ou ao centro | Atalho WAVEFORM CURRENT POSITION | 1 | — | o menu move o playhead. Se `DEVSETTING.DAT` trouxer o byte documentado, pode ser o padrão | Manter |
 | Touch Preview | Manual: ouvir antes de carregar, com mesa compatível e Pro DJ Link | 4 | L | não feito | Não simular a mesa |
 | Toque na onda geral (agulha) | Manual: durante a pausa, ou com o topo do prato premido em vinyl | 2 | S | feito, também durante a reprodução | Dizer a diferença no roteiro |
 | Ecrã do prato (arte, slip, sync, ponto, vinyl, cue, master) | Manual, Jog display | 4 | — | o prato físico não existe. A arte foi para o cartão do deck | Não desenhar um prato falso como se fosse o LCD |

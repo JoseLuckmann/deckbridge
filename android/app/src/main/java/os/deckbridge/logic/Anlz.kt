@@ -17,6 +17,12 @@ data class AnlzFile(
     val bands: WaveBands? = null,
     val waveSource: String = "",
     val issues: List<String> = emptyList(),
+    val rgbDetail: ColorWave? = null,
+    val rgbPreview: ColorWave? = null,
+    val bandDetail: WaveBands? = null,
+    val bandPreview: WaveBands? = null,
+    val blueDetail: ByteArray = ByteArray(0),
+    val bluePreview: ByteArray = ByteArray(0),
 )
 
 fun parseAnlz(bytes: ByteArray): AnlzFile {
@@ -40,8 +46,10 @@ private fun parseAnlzBody(bytes: ByteArray): AnlzFile {
     val issues = mutableListOf<String>()
     var waveform = ByteArray(0)
     var pwv7: WaveBands? = null
-    var pwv5: WaveBands? = null
-    var pwv3: WaveBands? = null
+    var pwv6: WaveBands? = null
+    var pwv5: ColorWave? = null
+    var pwv4: ColorWave? = null
+    var pwv3 = ByteArray(0)
     var pwb3: WaveBands? = null
     var cursor = header
     while (cursor + 12 <= bytes.size) {
@@ -57,24 +65,28 @@ private fun parseAnlzBody(bytes: ByteArray): AnlzFile {
             "PQTZ" -> beats += readBeats(bytes, body, bodyEnd)
             "PCOB" -> cues += readCues(bytes, body, bodyEnd)
             "PCO2" -> cues += readCues2(bytes, body, bodyEnd)
-            "PWAV", "PWV2" -> waveform = readWave(bytes, body, bodyEnd)
-            "PWV5" -> pwv5 = readColorWave(bytes, body, bodyEnd)
-            "PWV3" -> pwv3 = readColorWave(bytes, body, bodyEnd)
-            "PWV7" -> pwv7 = readPwv7(bytes, body, bodyEnd)
+            "PWAV", "PWV2" -> if (waveform.isEmpty()) waveform = readWave(bytes, body, bodyEnd)
+            "PWV5" -> pwv5 = readPwv5(bytes, cursor, bodyEnd)
+            "PWV4" -> pwv4 = readPwv4(bytes, cursor, bodyEnd)
+            "PWV3" -> pwv3 = readPwv3(bytes, cursor, bodyEnd)
+            "PWV7" -> pwv7 = readPwv7(bytes, cursor, bodyEnd)
+            "PWV6" -> pwv6 = readPwv6(bytes, cursor, bodyEnd)
+            "PWVC" -> Unit
             "PWB3" -> pwb3 = readBands(bytes, body, bodyEnd)
         }
         cursor += lenTag
     }
-    val bands = pwv7 ?: pwv5 ?: pwv3 ?: pwb3
+    val bands = pwv7 ?: pwb3
     val source = when {
         pwv7 != null -> "PWV7"
         pwv5 != null -> "PWV5"
-        pwv3 != null -> "PWV3"
+        pwv3.isNotEmpty() -> "PWV3"
         pwb3 != null -> "PWB3"
         waveform.isNotEmpty() -> "PWAV"
         else -> ""
     }
-    return AnlzFile(beats, cues, waveform, bands, source, issues)
+    val bluePreview = decodePreviewHeights(waveform)
+    return AnlzFile(beats, cues, waveform, bands, source, issues, pwv5, pwv4, pwv7, pwv6, pwv3, bluePreview)
 }
 
 private fun readBeats(bytes: ByteArray, at: Int, end: Int): List<AnlzBeat> {
@@ -173,47 +185,92 @@ private fun readBands(bytes: ByteArray, at: Int, end: Int): WaveBands? {
     return WaveBands(low, mid, high)
 }
 
-private fun readColorWave(bytes: ByteArray, at: Int, end: Int): WaveBands? {
-    if (at + 8 > end) return null
-    val len = bytes.u32be(at).toInt()
-    val start = at + 8
-    if (len < 2 || len % 2 != 0 || start + len > end || len > 400000) return null
-    val low = ByteArray(len / 2)
-    val mid = ByteArray(len / 2)
-    val high = ByteArray(len / 2)
-    for (index in low.indices) {
+private fun readPwv5(bytes: ByteArray, at: Int, end: Int): ColorWave? {
+    if (at + 24 > end) return null
+    val entryBytes = bytes.u32be(at + 12).toInt()
+    val count = bytes.u32be(at + 16).toInt()
+    if (entryBytes != 2 || count <= 0 || count > 500_000) return null
+    val start = at + 24
+    if (start + count * 2 > end) return null
+    val height = ByteArray(count)
+    val rgb = IntArray(count)
+    for (index in 0 until count) {
         val word = bytes.u16be(start + index * 2)
         if (word < 0) return null
-        val height = ((word and 0x1F) * 255 / 31).toByte()
-        when ((word shr 5) and 7) {
-            0, 1 -> high[index] = height
-            2, 3 -> mid[index] = height
-            4, 5 -> {
-                low[index] = height
-                mid[index] = ((height.toInt() and 0xFF) / 2).toByte()
-            }
-            else -> low[index] = height
-        }
+        val decoded = decodePwv5Word(word)
+        height[index] = decoded[0].toByte()
+        rgb[index] = (decoded[1] shl 16) or (decoded[2] shl 8) or decoded[3]
     }
-    return WaveBands(low, mid, high)
+    return ColorWave(height, rgb, 150.0, "PWV5")
+}
+
+private fun readPwv4(bytes: ByteArray, at: Int, end: Int): ColorWave? {
+    if (at + 24 > end) return null
+    val entryBytes = bytes.u32be(at + 12).toInt()
+    val count = bytes.u32be(at + 16).toInt()
+    if (entryBytes != 6 || count <= 0 || count > 4000) return null
+    val start = at + 24
+    if (start + count * 6 > end) return null
+    val height = ByteArray(count)
+    val rgb = IntArray(count)
+    for (index in 0 until count) {
+        val column = start + index * 6
+        val low = bytes.u8(column + 3)
+        val mid = bytes.u8(column + 4)
+        val high = bytes.u8(column + 5)
+        if (low < 0 || mid < 0 || high < 0) return null
+        height[index] = maxOf(low, mid, high).toByte()
+        rgb[index] = blendRgb(low, mid, high)
+    }
+    return ColorWave(height, rgb, 0.0, "PWV4")
+}
+
+private fun readPwv3(bytes: ByteArray, at: Int, end: Int): ByteArray {
+    if (at + 24 > end) return ByteArray(0)
+    val entryBytes = bytes.u32be(at + 12).toInt()
+    val count = bytes.u32be(at + 16).toInt()
+    if (entryBytes != 1 || count <= 0 || count > 500_000) return ByteArray(0)
+    val start = at + 24
+    if (start + count > end) return ByteArray(0)
+    return ByteArray(count) { index -> decodeMonoByte(bytes.u8(start + index)).toByte() }
+}
+
+private fun readPwv6(bytes: ByteArray, at: Int, end: Int): WaveBands? {
+    if (at + 20 > end) return null
+    val entryBytes = bytes.u32be(at + 12).toInt()
+    val count = bytes.u32be(at + 16).toInt()
+    if (entryBytes != 3 || count <= 0 || count > 4000) return null
+    val start = at + 20
+    if (start + count * 3 > end) return null
+    return bandsMidHighLow(bytes, start, count)
 }
 
 private fun readPwv7(bytes: ByteArray, at: Int, end: Int): WaveBands? {
-    if (at + 8 > end) return null
-    val len = bytes.u32be(at).toInt()
-    val start = at + 8
-    if (len < 3 || len % 3 != 0 || start + len > end || len > 600000) return null
-    val count = len / 3
+    if (at + 24 > end) return null
+    val entryBytes = bytes.u32be(at + 12).toInt()
+    val count = bytes.u32be(at + 16).toInt()
+    if (entryBytes != 3 || count <= 0 || count > 500_000) return null
+    val start = at + 24
+    if (start + count * 3 > end) return null
+    return bandsMidHighLow(bytes, start, count)
+}
+
+private fun bandsMidHighLow(bytes: ByteArray, start: Int, count: Int): WaveBands {
     val low = ByteArray(count)
     val mid = ByteArray(count)
     val high = ByteArray(count)
     for (index in 0 until count) {
         val atByte = start + index * 3
-        low[index] = bytes[atByte]
-        mid[index] = bytes[atByte + 1]
-        high[index] = bytes[atByte + 2]
+        mid[index] = bytes[atByte]
+        high[index] = bytes[atByte + 1]
+        low[index] = bytes[atByte + 2]
     }
     return WaveBands(low, mid, high)
+}
+
+private fun decodePreviewHeights(raw: ByteArray): ByteArray {
+    if (raw.isEmpty()) return ByteArray(0)
+    return ByteArray(raw.size) { index -> decodeMonoByte(raw[index].toInt()).toByte() }
 }
 
 private fun readWave(bytes: ByteArray, at: Int, end: Int): ByteArray {
@@ -224,30 +281,26 @@ private fun readWave(bytes: ByteArray, at: Int, end: Int): ByteArray {
     return bytes.copyOfRange(start, start + len)
 }
 
-fun mergeAnalysis(dat: AnlzFile?, ext: AnlzFile?): AnlzFile {
-    val beats = dat?.beats?.ifEmpty { null } ?: ext?.beats.orEmpty()
+fun mergeAnalysis(dat: AnlzFile?, ext: AnlzFile?, ex2: AnlzFile? = null): AnlzFile {
+    val beats = dat?.beats?.ifEmpty { null } ?: ext?.beats?.ifEmpty { null } ?: ex2?.beats.orEmpty()
     val extCues = ext?.cues.orEmpty()
     val cues = if (extCues.isNotEmpty()) extCues else dat?.cues.orEmpty()
-    val wave = dat?.waveform?.takeIf { it.isNotEmpty() } ?: ext?.waveform ?: ByteArray(0)
-    val left = dat?.bands
-    val right = ext?.bands
-    val bands = when {
-        waveRank(dat?.waveSource) >= waveRank(ext?.waveSource) -> left ?: right
-        else -> right ?: left
+    val wave = dat?.waveform?.takeIf { it.isNotEmpty() } ?: ext?.waveform ?: ex2?.waveform ?: ByteArray(0)
+    val rgbDetail = ext?.rgbDetail ?: dat?.rgbDetail ?: ex2?.rgbDetail
+    val rgbPreview = ext?.rgbPreview ?: dat?.rgbPreview ?: ex2?.rgbPreview
+    val bandDetail = ex2?.bandDetail ?: ext?.bandDetail ?: dat?.bandDetail
+    val bandPreview = ex2?.bandPreview ?: ext?.bandPreview ?: dat?.bandPreview
+    val blueDetail = listOf(ext?.blueDetail, dat?.blueDetail, ex2?.blueDetail).firstOrNull { it?.isNotEmpty() == true } ?: ByteArray(0)
+    val bluePreview = decodePreviewHeights(wave)
+    val bands = bandDetail ?: dat?.bands ?: ext?.bands ?: ex2?.bands
+    val source = when {
+        bandDetail != null -> "PWV7"
+        rgbDetail != null -> "PWV5"
+        blueDetail.isNotEmpty() -> "PWV3"
+        bands != null -> "PWB3"
+        wave.isNotEmpty() -> "PWAV"
+        else -> ""
     }
-    val source = when (bands) {
-        left -> dat?.waveSource.orEmpty()
-        right -> ext?.waveSource.orEmpty()
-        else -> if (wave.isNotEmpty()) "PWAV" else ""
-    }
-    val issues = dat?.issues.orEmpty() + ext?.issues.orEmpty()
-    return AnlzFile(beats, cues, wave, bands, source, issues)
-}
-
-private fun waveRank(source: String?): Int = when (source) {
-    "PWV7" -> 4
-    "PWV5" -> 3
-    "PWV3" -> 2
-    "PWB3" -> 1
-    else -> 0
+    val issues = dat?.issues.orEmpty() + ext?.issues.orEmpty() + ex2?.issues.orEmpty()
+    return AnlzFile(beats, cues, wave, bands, source, issues, rgbDetail, rgbPreview, bandDetail, bandPreview, blueDetail, bluePreview)
 }

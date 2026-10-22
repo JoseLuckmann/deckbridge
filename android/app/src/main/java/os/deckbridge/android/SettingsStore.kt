@@ -30,6 +30,7 @@ object SettingsStore {
     private val jog = floatPreferencesKey("jog_sensitivity")
     private val historySeconds = intPreferencesKey("history_seconds")
     private val recordAac = booleanPreferencesKey("record_aac")
+    private val followUsb = booleanPreferencesKey("follow_usb_wave")
 
     fun flow(context: Context): Flow<PlayerSettings> = context.playerStore.data.map { prefs ->
         PlayerSettings(
@@ -40,7 +41,8 @@ object SettingsStore {
             autoCue = prefs[autoCue] ?: true,
             hotCueAutoLoad = prefs[hotCue] ?: true,
             jogVinyl = prefs[jogVinyl] ?: true,
-            waveColor = prefs[wave] ?: "THREE_BAND",
+            waveColor = prefs[wave] ?: "RGB",
+            followUsb = prefs[followUsb] ?: true,
             zoomBars = prefs[zoom] ?: 8,
             playhead = prefs[playhead] ?: 0.30f,
             bufferFrames = prefs[buffer] ?: 256,
@@ -68,6 +70,7 @@ object SettingsStore {
             prefs[jog] = settings.jogSensitivity
             prefs[historySeconds] = settings.historySeconds
             prefs[recordAac] = settings.recordAac
+            prefs[followUsb] = settings.followUsb
         }
     }
 }

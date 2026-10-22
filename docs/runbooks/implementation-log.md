@@ -117,6 +117,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-22 | A047–A051 | parcial | `dbe9b3d` | tela 0.9.0, menu, RMX, histórico, gravação, variantes USB, APK arm64 | escuta, pendrive real, RMX na controladora e FX de ouvido `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 e segue os passos 13 a 16 do roteiro |
 | 2026-10-22 | A052 | parcial | `4d730fc` | tela 0.9.1, BPM/tom do histórico, alvos do menu, RMX e colunas do histórico | escuta `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 0.9.1 |
 | 2026-10-22 | A053–A059 | parcial | `2c4124e` | tela 0.10.0, capa, plano do leitor, key shift, filtro, slip, emergency loop | escuta `BLOCKED_HARDWARE`; A022 aberto; voz e 4 decks `DEFERRED` | dono instala o APK arm64 0.10.0 |
+| 2026-10-22 | A060–A062 | parcial | `a preencher` | tela 0.11.0, onda RGB do export, DEVSETTING, faixas longas sintéticas | escuta e pendrive real `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 0.11.0 |
 
 ### Proposta Android
 - Estado: proposta, não aceita
@@ -237,8 +238,24 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - O Key Sync não é o algoritmo comercial. O slip não cobre pausa, scratch nem a alavanca. A frase não é PSSI. O fader não tem passo de 0,02%.
 - Prints novos em `/opt/cursor/artifacts/prints/`: `key-shift.png`, `slip.png`, `emergency-loop.png`, `cue-bank.png`, `info-art.png`, `track-filter.png`, além de `player-2000x1200.png` e `browse-list.png`.
 - APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4218565 bytes, SHA-256 `3f434fd7a00f6f2319d2b20c2e4e8937d23c08c970244ffd70fd1f8e3f5263ab`, versão 0.10.0 (versionCode 10), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
-- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19470523 bytes, SHA-256 `3938a07ce3fef58ad71d1ab6c309df86adae8f86167e65357c1a8f3fb824803e`.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19470523 bytes, SHA-256 `3938a07ce3fef58ad71d1ab6c309df86adae8f86167e65357c1a8f3fb824803e`. O arquivo no disco foi substituído pela 0.11.0; estes números são os da 0.10.0.
 - HIL executado? não
+
+### Tela 0.11.0
+- Estado: JVM e binário hospedeiro; escuta BLOCKED_HARDWARE
+- A onda grande em RGB lê PWV5 (cerca de 150 colunas por segundo). O cartão lê PWV4 (em geral 1200 colunas). 3 BANDAS lê PWV7 na onda grande e PWV6 no cartão. AZUL lê PWV3 e, se faltar, PWAV. A leitura é deste projeto, a partir do texto público, sem copiar parser. Um pendrive real ainda não foi lido.
+- PWV5 é um u16 big-endian: 3 bits de vermelho, 3 de verde, 3 de azul, 5 de altura, 2 bits baixos sem uso. A escala é `n * 255 / 7` e `n * 255 / 31`. O desenho mistura a coluna, espelha e clareia a crista. Uma medição posterior troca o que chama de médio e agudo; este app segue o texto citado e o pedido (R, G, B), não essa troca.
+- PWV4 usa os bytes 3, 4 e 5 da coluna como grave, médio e agudo. A altura é o máximo. A cor é uma mistura nossa (grave laranja, médio verde, agudo branco-azul), não o desenho de um parser de terceiros.
+- `MYSETTING.DAT`, `MYSETTING2.DAT` e `DJMMYSETTING.DAT` não documentam a cor da onda. A fonte usada é só `PIONEER/DEVSETTING.DAT` ou `PIONEER/rekordbox/DEVSETTING.DAT`: byte 104+10 vale `0x01` azul, `0x03` RGB, `0x04` 3 bandas; byte 104+13 vale `0x01` centro (50% nesta tela) ou `0x02` esquerda (20%). Outro byte não vira modo. O menu tem RGB, 3 BANDAS, AZUL e “Usar configuração do pendrive”. Escolher a cor ou o playhead desliga o pendrive. Fontes no `FORMATO.md`.
+- Sem a tag daquele modo, o WAV mono vira três bandas aqui (passa-baixas em 180 Hz e 4000 Hz, ida e volta) e o INFO mostra “analisado no app”. O USB não é escrito.
+- A biblioteca sintética grava PWV4, PWV5 e PWV3 no `.EXT`, e PWV6, PWV7 e PWVC no `.2EX`, a partir do áudio gerado aqui. Entraram “Quarto Escuro” (200 s) e “Linha Alta” (210 s), com intro, build, drop, break e outro. O `DEVSETTING.DAT` sintético pede RGB e playhead ao centro.
+- A escala desenhada das 3 bandas não é uma cópia medida do programa comercial. A frase debaixo do cartão continua sendo o número do compasso, não PSSI. Spiral, Helix, Mobius, Pitch, o reverb, o key lock e o RMX continuam aproximações. O knob FILTER é o único Sound Color FX deste mapa.
+- Prints em `/opt/cursor/artifacts/prints/`: `player-2000x1200.png` e `player-1024x600.png` em RGB com a faixa inteira (intro verde, build branco-azul, drop laranja, break verde, outro branco; o cartão repete essa ordem), `wave-3band.png` e `wave-blue.png`. O playhead desses prints fica em 30%: a captura não passa pela tela que aplica o DEVSETTING.
+- JVM: 51 testes, 0 falhas. DSP hospedeiro e gravação hospedeira: ALL PASS. Python: 42 passed.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4230285 bytes, SHA-256 `53eda41caaed465f1f8ec0a3c7fbfa00fb8e77776aa007c16f9d6334ffdf76f4`, versão 0.11.0 (versionCode 11), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19496939 bytes, SHA-256 `3d1a288c121e82b2720f52524ecae03c07c4634986e7aac465f9e15c8236649f`.
+- HIL executado? não
+- Próximo, ainda sem código nesta rodada: ordenar a lista ao tocar no título da coluna, Active Loop, reverse na tela, ajuste da grade e contagem até o memory cue.
 
 ### T020 — configuração
 - Estado: PASS
@@ -260,7 +277,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 ### T078 — roteiro final
 - Estado: documento PASS; execução BLOCKED_HARDWARE
 - Arquivo: `docs/hil/roteiro-validacao-final.md`
-- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Os passos 13 a 19 continuam por executar
+- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Os passos 13 a 20 continuam por executar
 
 ## Template de registro
 

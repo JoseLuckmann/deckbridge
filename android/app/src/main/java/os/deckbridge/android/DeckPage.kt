@@ -48,6 +48,7 @@ import os.deckbridge.logic.rmxPayload
 import os.deckbridge.logic.scaleLoop
 import os.deckbridge.logic.stepJumpScale
 import os.deckbridge.logic.toggleBeatLoop
+import os.deckbridge.logic.resolveUsbSettings
 import os.deckbridge.logic.zoomFromBars
 import os.deckbridge.logic.browseRows
 import os.deckbridge.logic.emergencyLoopRange
@@ -570,6 +571,11 @@ fun DeckPage(
             }
             if (!liveRmx.value.holding) rmx = liveRmx.value.copy(intensity = 0f, holding = false)
         }
+    }
+
+    LaunchedEffect(catalog?.usbWaveColor, catalog?.usbPlayhead, settings.followUsb, settings.waveColor, settings.playhead) {
+        val next = resolveUsbSettings(settings, catalog?.usbWaveColor, catalog?.usbPlayhead)
+        if (next != settings) persist(next)
     }
 
     LaunchedEffect(Unit) {
