@@ -183,19 +183,19 @@ fun RmxScreen(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit) {
                 TextInk(rmx.sceneName(), fontSize = if (compact) 14.sp else 18.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 12.dp), maxLines = 1)
                 UtilityButton("FECHAR", onClose)
             }
-            Row(Modifier.weight(1.15f).fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                SceneDial(rmx.intensity, rmx.sceneName(), accent, Modifier.width(if (compact) 132.dp else 220.dp).height(if (compact) 132.dp else 220.dp))
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                SceneDial(rmx.intensity, rmx.sceneName(), accent, Modifier.width(if (compact) 148.dp else 196.dp).height(if (compact) 148.dp else 196.dp))
                 Column(Modifier.weight(1f)) {
-                    TextInk(if (build) "BUILD-UP" else "BREAK-DOWN", fontSize = 11.sp, color = accent, weight = FontWeight.Bold)
-                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextInk(if (build) "BUILD-UP" else "BREAK-DOWN", fontSize = 14.sp, color = accent, weight = FontWeight.Bold)
+                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         SCENE_BARS.forEach { bars ->
-                            MiniChoice("$bars", rmx.bars == bars, Modifier.weight(1f)) { onRmx(rmx.copy(bars = bars)) }
+                            MiniChoice("$bars", rmx.bars == bars, Modifier.weight(1f).height(48.dp)) { onRmx(rmx.copy(bars = bars)) }
                         }
                     }
-                    TextInk("${rmx.bars} compassos · ${(rmx.intensity * 100).toInt()}%", fontSize = if (compact) 12.sp else 15.sp, modifier = Modifier.padding(top = 6.dp))
+                    TextInk("${rmx.bars} compassos · ${(rmx.intensity * 100).toInt()}%", fontSize = if (compact) 14.sp else 18.sp, modifier = Modifier.padding(top = 8.dp))
                 }
             }
-            Row(Modifier.padding(top = 4.dp).height(if (compact) 64.dp else 88.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.padding(top = 8.dp).height(if (compact) 108.dp else 132.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 SCENE_NAMES.forEachIndexed { index, name ->
                     val hot = rmx.scene == index && rmx.holding
                     val tone = Color(if (index < 4) StagePalette.accentOrange else StagePalette.accentBlue)
@@ -225,7 +225,7 @@ fun RmxScreen(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit) {
                     onRmx(rmx.copy(low = rmx.low.setAt(1, if (band == 0) value else rmx.low[1]), mid = rmx.mid.setAt(1, if (band == 1) value else rmx.mid[1]), high = rmx.high.setAt(1, if (band == 2) value else rmx.high[1])))
                 }
             }
-            Row(Modifier.padding(top = 6.dp).height(if (compact) 28.dp else 36.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(top = 8.dp).height(48.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextInk("RELEASE", fontSize = 11.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 58.dp else 72.dp))
                 MiniChoice("BRAKE", rmx.release == 0, Modifier.weight(1f).fillMaxHeight()) { onRmx(rmx.copy(release = if (rmx.release == 0) -1 else 0, panel = true)) }
                 MiniChoice("ECHO OUT", rmx.release == 1, Modifier.weight(1f).fillMaxHeight()) { onRmx(rmx.copy(release = if (rmx.release == 1) -1 else 1, panel = true)) }
@@ -251,11 +251,19 @@ private fun IsolatorColumn(title: String, low: Float, mid: Float, high: Float, m
     }
 }
 
+private fun isoDbLabel(gain: Float): String {
+    if (gain <= 0.02f) return "KILL"
+    val db = 20.0 * kotlin.math.ln(gain.toDouble()) / kotlin.math.ln(10.0)
+    return "%+.0f dB".format(db)
+}
+
 @Composable
 private fun IsoBar(label: String, gain: Float, modifier: Modifier, onChange: (Float) -> Unit) {
+    val kill = gain <= 0.02f
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        TextInk(isoDbLabel(gain), fontSize = 13.sp, weight = FontWeight.Bold, mono = true, color = Color(if (kill) StagePalette.onAir else StagePalette.ink))
         Box(
-            Modifier.weight(1f).fillMaxWidth().border(1.dp, Color(StagePalette.line)).pointerInput(Unit) {
+            Modifier.weight(1f).fillMaxWidth().border(1.5.dp, Color(if (kill) StagePalette.onAir else StagePalette.line)).pointerInput(Unit) {
                 detectVerticalDragGestures { change, _ ->
                     val fraction = 1f - (change.position.y / size.height.toFloat()).coerceIn(0f, 1f)
                     onChange((fraction * 2f).coerceIn(0f, 2f))
@@ -264,17 +272,19 @@ private fun IsoBar(label: String, gain: Float, modifier: Modifier, onChange: (Fl
         ) {
             Canvas(Modifier.fillMaxSize().padding(3.dp)) {
                 val h = size.height * (gain / 2f).coerceIn(0f, 1f)
-                drawRect(Color(StagePalette.bg), Offset(0f, 0f), size)
-                drawRect(
-                    brush = Brush.verticalGradient(listOf(Color(0xFFF4F7FB), Color(0xFF8EBEFF), Color(0xFF1A3A68))),
-                    topLeft = Offset(0f, size.height - h),
-                    size = Size(size.width, h),
-                )
+                drawRect(if (kill) Color(0xFF3A1014) else Color(StagePalette.bg), Offset(0f, 0f), size)
+                if (!kill && h > 0f) {
+                    drawRect(
+                        brush = Brush.verticalGradient(listOf(Color(0xFFF4F7FB), Color(0xFF8EBEFF), Color(0xFF1A3A68))),
+                        topLeft = Offset(0f, size.height - h),
+                        size = Size(size.width, h),
+                    )
+                }
                 val unity = size.height * 0.5f
-                drawLine(Color(StagePalette.accentOrange), Offset(0f, unity), Offset(size.width, unity), 1.5f)
+                drawLine(Color(StagePalette.ink), Offset(0f, unity), Offset(size.width, unity), 2f)
             }
         }
-        TextInk(label, fontSize = 11.sp, weight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
+        TextInk(label, fontSize = 13.sp, weight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
@@ -290,7 +300,7 @@ private fun SceneDial(intensity: Float, name: String, accent: Color, modifier: M
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             TextInk("${(intensity * 100).toInt()}", fontSize = 28.sp, weight = FontWeight.Bold, mono = true)
-            TextInk(name, fontSize = 10.sp, color = Color(StagePalette.inkMuted), maxLines = 2)
+            TextInk(name, fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 2)
         }
     }
 }
@@ -308,25 +318,47 @@ private fun ScenePad(name: String, index: Int, active: Boolean, accent: Color, m
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Canvas(Modifier.width(18.dp).height(18.dp)) {
+        Canvas(Modifier.width(36.dp).height(36.dp)) {
             val ink = accent
+            val stroke = Stroke(2.4f)
             when (index) {
-                0 -> drawCircle(ink, radius = size.minDimension * 0.28f)
-                1 -> drawLine(ink, Offset(2f, size.height), Offset(size.width, 2f), 2f)
-                2 -> drawArc(ink, 20f, 300f, false, style = Stroke(2f))
-                3 -> drawRect(ink, Offset(2f, size.height * 0.35f), Size(size.width - 4f, size.height * 0.3f))
-                4 -> drawLine(ink, Offset(2f, 2f), Offset(size.width, size.height), 2f)
-                5 -> drawLine(ink, Offset(2f, size.height * 0.3f), Offset(size.width, size.height * 0.7f), 2f)
-                6 -> drawPath(Path().apply {
-                    moveTo(size.width * 0.5f, 2f)
-                    lineTo(size.width - 2f, size.height - 2f)
-                    lineTo(2f, size.height - 2f)
-                    close()
-                }, ink)
-                else -> drawCircle(ink, radius = size.minDimension * 0.18f, center = Offset(size.width * 0.5f, size.height * 0.55f))
+                0 -> {
+                    drawLine(ink, Offset(size.width * 0.5f, size.height * 0.82f), Offset(size.width * 0.5f, size.height * 0.22f), 2.6f)
+                    drawLine(ink, Offset(size.width * 0.28f, size.height * 0.42f), Offset(size.width * 0.5f, size.height * 0.18f), 2.6f)
+                    drawLine(ink, Offset(size.width * 0.72f, size.height * 0.42f), Offset(size.width * 0.5f, size.height * 0.18f), 2.6f)
+                }
+                1 -> {
+                    drawLine(ink, Offset(size.width * 0.18f, size.height * 0.78f), Offset(size.width * 0.82f, size.height * 0.22f), 2.6f)
+                    drawCircle(ink, radius = 2.4f, center = Offset(size.width * 0.28f, size.height * 0.32f))
+                    drawCircle(ink, radius = 2.4f, center = Offset(size.width * 0.55f, size.height * 0.48f))
+                    drawCircle(ink, radius = 2.4f, center = Offset(size.width * 0.74f, size.height * 0.68f))
+                }
+                2 -> drawArc(ink, 30f, 300f, false, topLeft = Offset(4f, 4f), size = Size(size.width - 8f, size.height - 8f), style = stroke)
+                3 -> {
+                    drawRect(ink, Offset(size.width * 0.22f, size.height * 0.42f), Size(size.width * 0.56f, size.height * 0.28f), style = stroke)
+                    drawLine(ink, Offset(size.width * 0.5f, size.height * 0.36f), Offset(size.width * 0.5f, size.height * 0.16f), 2.4f)
+                }
+                4 -> {
+                    drawRect(ink, Offset(size.width * 0.22f, size.height * 0.22f), Size(size.width * 0.56f, size.height * 0.28f), style = stroke)
+                    drawLine(ink, Offset(size.width * 0.5f, size.height * 0.58f), Offset(size.width * 0.5f, size.height * 0.84f), 2.4f)
+                }
+                5 -> {
+                    drawLine(ink, Offset(size.width * 0.5f, size.height * 0.18f), Offset(size.width * 0.5f, size.height * 0.78f), 2.6f)
+                    drawLine(ink, Offset(size.width * 0.28f, size.height * 0.56f), Offset(size.width * 0.5f, size.height * 0.82f), 2.6f)
+                    drawLine(ink, Offset(size.width * 0.72f, size.height * 0.56f), Offset(size.width * 0.5f, size.height * 0.82f), 2.6f)
+                }
+                6 -> drawRect(ink, Offset(size.width * 0.22f, size.width * 0.22f), Size(size.width * 0.56f, size.height * 0.56f))
+                else -> {
+                    drawCircle(ink, radius = size.minDimension * 0.16f, center = Offset(size.width * 0.38f, size.height * 0.5f), style = stroke)
+                    drawCircle(ink, radius = size.minDimension * 0.16f, center = Offset(size.width * 0.62f, size.height * 0.5f), style = stroke)
+                }
             }
         }
-        TextInk(name.substringBefore(' '), fontSize = 10.sp, weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+        val words = name.split(' ')
+        TextInk(words.first(), fontSize = 13.sp, weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+        if (words.size > 1) {
+            TextInk(words.drop(1).joinToString(" "), fontSize = 12.sp, weight = FontWeight.Bold, color = accent, maxLines = 1)
+        }
     }
 }
 

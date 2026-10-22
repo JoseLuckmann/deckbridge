@@ -14,6 +14,8 @@ import os.deckbridge.logic.BrowsePlace
 import os.deckbridge.logic.DeckFace
 import os.deckbridge.logic.Heard
 import os.deckbridge.logic.HistoryRow
+import os.deckbridge.logic.historyRow
+import os.deckbridge.logic.onAirSample
 import os.deckbridge.logic.usbVariantReport
 import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.SyntheticRekordbox
@@ -158,9 +160,11 @@ class ScreenShotsTablet {
     @Test
     fun history() {
         val catalog = simulatedCatalog()
+        val night = catalog.tracks.first { it.title == "Night Bus" }
+        val glass = catalog.tracks.first { it.title == "Glasshouse" }
         val rows = listOf(
-            HistoryRow(1_700_000_000_000, 0, "Night Bus", "Nara Vale", 120.0, "8A", 42),
-            HistoryRow(1_700_000_120_000, 1, "Glasshouse", "Lumen K", 126.0, "4A", 18),
+            historyRow(onAirSample(night, 1.0), 1_700_000_000_000, 0, 42),
+            historyRow(onAirSample(glass, 1.04), 1_700_000_120_000, 1, 18),
         )
         capture("$PRINTS/history.png") { activity ->
             activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), overlay = "history", nav = "MENU", history = rows))
@@ -178,7 +182,20 @@ class ScreenShotsTablet {
     @Test
     fun rmxFull() {
         val catalog = simulatedCatalog()
-        val rmx = RmxState(panel = true, full = true, scene = 0, holding = true, intensity = 0.66f, bars = 4, xOn = true, xMode = 0, xBeat = 2)
+        val rmx = RmxState(
+            panel = true,
+            full = true,
+            scene = 0,
+            holding = true,
+            intensity = 0.66f,
+            bars = 4,
+            xOn = true,
+            xMode = 0,
+            xBeat = 2,
+            low = listOf(0f, 1f),
+            mid = listOf(1.4f, 0.5f),
+            high = listOf(1f, 1.6f),
+        )
         capture("$PRINTS/rmx-full.png") { activity ->
             activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), rmx = rmx))
         }

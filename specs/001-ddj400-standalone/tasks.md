@@ -170,6 +170,7 @@ OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Ras
 - [x] **A049** Gravação do master em WAV, com REC, cronómetro e medidor. Anel sem alocação na thread de áudio. AAC opcional pelo MediaCodec. LAME fora do APK. Aviso abaixo de 64 MB. **Estado:** `PASS` do teste C++ hospedeiro (o `push` não aloca). O WAV não foi ouvido. AAC não foi exercido num aparelho. `BLOCKED_HARDWARE` para a escuta.
 - [x] **A050** Corpus sintético de variantes de export, parser que não derruba, fuzz de PDB/ANLZ, e preferência PWV7/PWV5/PWV3 sobre PWB3. **Estado:** `PASS` na JVM, com as 5.000 faixas abaixo de 2 s neste processo. Não é um export real nem o tablet. A leitura de PWV é a deste projeto.
 - [x] **A051** Prints 0.9.0 e APK arm64 0.9.0. Itens novos no roteiro de validação final, ainda `BLOCKED_HARDWARE`. **Estado:** artefato gerado nesta rodada. Não instalado no tablet. A022 continua aberto.
+- [x] **A052** 0.9.1: histórico lê BPM e tom da faixa carregada (BPM da biblioteca e BPM no ar), MENU com alvos de 48 dp e grelha de cartões, RMX sem o vão entre o dial e os pads, rótulos de cena distintos, isolador com dB e kill a vermelho, histórico com cabeçalho de sessão. **Estado:** `PASS` do teste JVM da biblioteca e da renderização. Escuta `BLOCKED_HARDWARE`. A022 aberto.
 
 ## Traçabilidade requisito -> tarefas -> testes/gates
 

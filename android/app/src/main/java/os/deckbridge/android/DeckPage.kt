@@ -39,6 +39,7 @@ import os.deckbridge.logic.beatFxBeats
 import os.deckbridge.logic.beatJumpPadBeats
 import os.deckbridge.logic.HistoryRow
 import os.deckbridge.logic.OnAirLog
+import os.deckbridge.logic.onAirSample
 import os.deckbridge.logic.jumpSeconds
 import os.deckbridge.logic.storageWarning
 import os.deckbridge.logic.mergedTagNames
@@ -115,6 +116,7 @@ fun DeckPage(
     val onAir = remember { OnAirLog() }
     val liveFaces = rememberUpdatedState(faces)
     val liveVols = rememberUpdatedState(volA to volB)
+    val livePitch = rememberUpdatedState(pitchA to pitchB)
     val liveRecording = rememberUpdatedState(recording)
     val liveAac = rememberUpdatedState(aacWriter)
     val liveSettings = rememberUpdatedState(settings)
@@ -554,16 +556,9 @@ fun DeckPage(
                 val track = liveLoaded.value.getOrNull(deck)
                 val face = liveFaces.value.getOrElse(deck) { DeckFace() }
                 val level = if (deck == 0) vols.first else vols.second
-                val row = onAir.tick(
-                    deck,
-                    face.playing,
-                    level > 0.2f,
-                    now,
-                    track?.title.orEmpty(),
-                    track?.artist.orEmpty(),
-                    track?.bpm ?: 0.0,
-                    track?.keyName.orEmpty(),
-                )
+                val pitch = if (deck == 0) livePitch.value.first else livePitch.value.second
+                val sample = track?.let { onAirSample(it, pitch.toDouble()) }
+                val row = onAir.tick(deck, face.playing, level > 0.2f, now, sample)
                 if (row != null) {
                     val id = if (sessionId > 0) sessionId else historyDb.session(now).also { sessionId = it }
                     historyDb.insert(id, row)

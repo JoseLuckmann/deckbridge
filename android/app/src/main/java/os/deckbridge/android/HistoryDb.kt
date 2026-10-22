@@ -5,15 +5,20 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import os.deckbridge.logic.HistoryRow
 
-class HistoryDb(context: Context) : SQLiteOpenHelper(context.applicationContext, "deckbridge-history.db", null, 1) {
+class HistoryDb(context: Context) : SQLiteOpenHelper(context.applicationContext, "deckbridge-history.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE session (id INTEGER PRIMARY KEY AUTOINCREMENT, started INTEGER NOT NULL)")
         db.execSQL(
-            "CREATE TABLE entry (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER NOT NULL, at INTEGER NOT NULL, deck INTEGER NOT NULL, title TEXT, artist TEXT, bpm REAL, key_name TEXT, seconds INTEGER)",
+            "CREATE TABLE entry (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER NOT NULL, at INTEGER NOT NULL, deck INTEGER NOT NULL, title TEXT, artist TEXT, bpm REAL, played_bpm REAL, key_name TEXT, seconds INTEGER, track_id INTEGER)",
         )
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE entry ADD COLUMN played_bpm REAL")
+            db.execSQL("ALTER TABLE entry ADD COLUMN track_id INTEGER")
+        }
+    }
 
     fun session(now: Long): Long {
         val db = writableDatabase
@@ -30,26 +35,29 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
 
     fun insert(sessionId: Long, row: HistoryRow) {
         writableDatabase.execSQL(
-            "INSERT INTO entry (session_id, at, deck, title, artist, bpm, key_name, seconds) VALUES (?,?,?,?,?,?,?,?)",
-            arrayOf(sessionId, row.atMillis, row.deck, row.title, row.artist, row.bpm, row.keyName, row.seconds),
+            "INSERT INTO entry (session_id, at, deck, title, artist, bpm, played_bpm, key_name, seconds, track_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            arrayOf(sessionId, row.atMillis, row.deck, row.title, row.artist, row.bpm, row.playedBpm, row.keyName, row.seconds, row.trackId),
         )
     }
 
     fun rows(): List<HistoryRow> {
         val out = mutableListOf<HistoryRow>()
         readableDatabase.rawQuery(
-            "SELECT at, deck, title, artist, bpm, key_name, seconds FROM entry ORDER BY at DESC",
+            "SELECT at, deck, title, artist, bpm, played_bpm, key_name, seconds, track_id FROM entry ORDER BY at DESC",
             null,
         ).use { cursor ->
             while (cursor.moveToNext()) {
+                val bpm = cursor.getDouble(4)
                 out += HistoryRow(
                     atMillis = cursor.getLong(0),
                     deck = cursor.getInt(1),
                     title = cursor.getString(2).orEmpty(),
                     artist = cursor.getString(3).orEmpty(),
-                    bpm = cursor.getDouble(4),
-                    keyName = cursor.getString(5).orEmpty(),
-                    seconds = cursor.getInt(6),
+                    bpm = bpm,
+                    playedBpm = if (cursor.isNull(5)) bpm else cursor.getDouble(5),
+                    keyName = cursor.getString(6).orEmpty(),
+                    seconds = cursor.getInt(7),
+                    trackId = if (cursor.isNull(8)) -1 else cursor.getInt(8),
                 )
             }
         }

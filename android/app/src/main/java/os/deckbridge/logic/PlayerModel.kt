@@ -381,6 +381,19 @@ fun beatFxBeats(fractionLabel: String): Double = when (fractionLabel) {
 
 private val MUSICAL_KEYS = listOf("Abm", "Ebm", "Bbm", "Fm", "Cm", "Gm", "Dm", "Am", "Em", "Bm", "F#m", "C#m", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F", "C", "G", "D", "A")
 
+/** Camelot da notação musical. Uma chave que já é Camelot volta igual. */
+fun camelotOf(name: String): String? {
+    val trimmed = name.trim()
+    if (trimmed.isEmpty()) return null
+    val camelot = Regex("(\\d{1,2})([ABab])").matchEntire(trimmed)
+    if (camelot != null) return camelot.groupValues[1] + camelot.groupValues[2].uppercase()
+    val index = MUSICAL_KEYS.indexOfFirst { it.equals(trimmed, ignoreCase = true) }
+    if (index < 0) return null
+    val number = if (index < 12) index + 1 else if (index == 12) 12 else index - 12
+    val letter = if (index < 12) "A" else "B"
+    return "$number$letter"
+}
+
 fun keysCompatible(focus: String, other: String): Boolean {
     if (focus.isBlank() || other.isBlank()) return false
     if (focus.equals(other, ignoreCase = true)) return true
@@ -512,14 +525,14 @@ fun waveModeIndex(name: String): Int = when (name) {
 }
 
 val SCENE_NAMES = listOf(
-    "Echo build-up",
-    "Noise sweep up",
-    "Spiral up",
-    "Reverb up",
-    "Reverb down",
-    "Echo LPF down",
-    "Tape stop",
-    "Dub echo",
+    "Echo UP",
+    "Noise UP",
+    "Spiral UP",
+    "Reverb UP",
+    "Reverb DOWN",
+    "Echo DOWN",
+    "Tape STOP",
+    "Dub ECHO",
 )
 
 val XPAD_NAMES = listOf("Roll", "Trans", "Drum", "Hi-pass")
