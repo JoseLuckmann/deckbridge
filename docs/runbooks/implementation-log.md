@@ -282,8 +282,23 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - RGB: soma por coluna. Grave vermelho, médio verde, agudo azul, cortes 200 Hz e 2,2 kHz, percentil da faixa (p58 / p94 / p55), peso depois do percentil, gama 1,25, altura pelo RMS. PWV5 em 3 bits. Drops de Chromosome, Ecosystem e Silver ficam rosa. O build de Silver fica azul. O drop de Morning fica laranja (grave e melodia, pouco agudo nessa janela). A legenda no INFO e em Sobre é desenho deste app.
 - Loop: crossfade de potência igual. Na última amostra o valor é o que entra. 81 emendas reais, 0 piores que o seco. No mix, energia seca 0,00125770 e molhada 0,00000000. Pico 0,66616. NaN 0.
 - JVM: 67 testes, 0 falhas. DSP hospedeiro e gravação hospedeira: ALL PASS. Python: 42 passed.
-- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4236217 bytes, SHA-256 `e4a160ec8e19da4b1f8f0196ec34c4c77df9272d6c07ce71bc2ba1348cbefad5`, versão 0.12.1 (versionCode 13), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
-- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19539107 bytes, SHA-256 `ce08efa653ddbe62b18e9e1d87f5bd7f383665ff4aee9837e32a8b975026f424`.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4236217 bytes, SHA-256 `e4a160ec8e19da4b1f8f0196ec34c4c77df9272d6c07ce71bc2ba1348cbefad5`, versão 0.12.1 (versionCode 13), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`. O ficheiro no disco foi substituído pela 0.12.2; estes números são os da 0.12.1.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19539107 bytes, SHA-256 `ce08efa653ddbe62b18e9e1d87f5bd7f383665ff4aee9837e32a8b975026f424`. Também substituído no disco pela 0.12.2.
+- HIL executado? não
+
+### Tela 0.12.2
+- Estado: JVM deste host; escuta BLOCKED_HARDWARE. Não é o tablet e não é a DDJ-400.
+- Corpus: 86 prévias GiantSteps em `/opt/cursor/artifacts/ground-truth`, fora do git. 58 com BPM publicado, 58 com tom publicado. Script `tools/fetch_ground_truth.py`. Notas em `docs/testing/ground-truth-corpus.md`.
+- Tempo, antes (cobertura do kick, 90–180): Acc1 0,603, Acc2 0,672, erro de oitava 0,069. Depois (pente × autocorrelação × prior largo em volta de 124, faixa 70–180): Acc1 0,655, Acc2 0,724, erro de oitava 0,069. House, techno e trance ficam em 1,000. O alvo 0,85 / 0,95 não foi atingido.
+- Alargar a busca para 60–200 foi medido e descartado: Acc1 caiu para 0,517.
+- Tom: MIREX 0,457 para 0,476. Exato 0,379 para 0,397. Camelot 0,517 para 0,552. O alvo 0,70 não foi atingido. No mesmo corte, librosa CQT + EDMA fica em 0,593 e a Essentia (perfil EDMA) em 0,581.
+- Referência de tempo, fora do APK: librosa `beat_track` Acc1 0,448; Essentia `RhythmExtractor2013` Acc1 0,569 e Acc2 0,810 (oitava 0,241).
+- Chromosome Boutique: sem BPM de artista. Essentia no Internet Archive publica 80,7; a Essentia 2.1b6 neste wav diz 81,0. O app 0.12.0 lia 139,9, o 0.12.1 lia 162, o 0.12.2 lê 154,2 e o tom Am (o TKEY é Bm; o 0.12.1 acertava Bm).
+- Caught In The Beat: sem BPM de artista. O 0.12.1 lia 120, que é 3/4 de 160. O 0.12.2 lê 160,0. A Essentia 2.1b6 no mesmo wav lê 161,6.
+- Pasta sem export: progresso, cache e miniatura RGB. Prints `plain-browse-progress.png` e `plain-browse.png`.
+- JVM: 72 testes, 0 falhas. DSP hospedeiro e gravação hospedeira: ALL PASS. Python: 42 passed.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4248441 bytes, SHA-256 `d456087ad701eff4595a305098cc65fcef01e315eb9fabb3699869fb75da42e6`, versão 0.12.2 (versionCode 14), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19551643 bytes, SHA-256 `bd84c4e2b766fb52a8790795b8ebcb527a4ca73a5cb3b1d0fcbedb97027732c4`.
 - HIL executado? não
 
 ### T020 — configuração
@@ -306,7 +321,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 ### T078 — roteiro final
 - Estado: documento PASS; execução BLOCKED_HARDWARE
 - Arquivo: `docs/hil/roteiro-validacao-final.md`
-- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Em 0.12.1 os passos continuam os mesmos: a grade, o tom, a cor e a emenda do loop não são um gesto novo na controladora. Os passos 13 a 21 continuam por executar
+- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Em 0.12.1 os passos continuam os mesmos: a grade, o tom, a cor e a emenda do loop não são um gesto novo na controladora. Em 0.12.2 a análise de uma pasta sem export também não é um gesto na controladora. Os passos 13 a 21 continuam por executar
 
 ## Template de registro
 

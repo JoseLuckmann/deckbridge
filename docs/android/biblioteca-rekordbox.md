@@ -15,7 +15,7 @@ Isto continua a prova A0. O app agora também lê uma exportação rekordbox em 
 
 ## Instalar
 
-1. No tablet, copie `deckbridge-arm64.apk` (só arm64, versão 0.12.1). O `deckbridge-debug.apk` traz as três ABIs e serve ao emulador.
+1. No tablet, copie `deckbridge-arm64.apk` (só arm64, versão 0.12.2). O `deckbridge-debug.apk` traz as três ABIs e serve ao emulador.
 2. Permita instalar de origem desconhecida.
 3. Abra DeckBridge. A primeira tela é o diagnóstico. ESTADO no player volta para ela.
 4. No player, toque em BROWSE. AUTORIZAR pede a raiz do USB exportado pelo rekordbox, só leitura.

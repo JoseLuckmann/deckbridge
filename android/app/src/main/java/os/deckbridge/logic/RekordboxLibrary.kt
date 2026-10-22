@@ -75,6 +75,7 @@ data class RbCatalog(
     val usbWaveColor: String? = null,
     val usbPlayhead: Float? = null,
     val usbWaveNote: String = "",
+    val scanNote: String = "",
 )
 
 interface ReadableVolume {
@@ -82,6 +83,7 @@ interface ReadableVolume {
     val simulated: Boolean
     fun exists(path: String): Boolean
     fun read(path: String): ByteArray?
+    fun listAudio(): List<String> = emptyList()
 }
 
 data class MemoryVolume(
@@ -96,6 +98,8 @@ data class MemoryVolume(
         val key = files.keys.firstOrNull { it.equals(path, ignoreCase = true) } ?: return null
         return files[key]
     }
+
+    override fun listAudio(): List<String> = files.keys.filter { isPlainAudioName(it.substringAfterLast('/')) }.sorted()
 }
 
 fun artworkCandidates(path: String): List<String> {

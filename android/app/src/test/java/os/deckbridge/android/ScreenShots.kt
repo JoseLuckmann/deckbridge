@@ -29,6 +29,10 @@ import os.deckbridge.logic.loadRekordbox
 import org.junit.Assume.assumeTrue
 import os.deckbridge.logic.readArtworkFile
 import os.deckbridge.logic.RbTrack
+import os.deckbridge.logic.FolderVolume
+import os.deckbridge.logic.decodeWavMono
+import os.deckbridge.logic.loadPlainFolder
+import java.io.File
 
 private const val BANNER = "Renderização em JVM. Não é o tablet nem a DDJ-400."
 private const val PRINTS = "/opt/cursor/artifacts/prints"
@@ -342,6 +346,7 @@ private fun player(
     leftTitle: String = "Night Bus",
     rightTitle: String = "Glasshouse",
     settings: PlayerSettings = PlayerSettings(),
+    usbLabel: String = "USB simulado",
 ): ComposeView {
     val left = catalog.tracks.first { it.title == leftTitle }
     val right = catalog.tracks.first { it.title == rightTitle }
@@ -382,7 +387,7 @@ private fun player(
                 fx = fx,
                 jvmBanner = BANNER,
                 browse = browse,
-                usbLabel = "USB simulado",
+                usbLabel = usbLabel,
                 onPage = {},
                 onBrowse = {},
                 onBrowseClose = {},
@@ -489,5 +494,51 @@ class ScreenShotsReal {
                 player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), place, leftTitle = first, rightTitle = second),
             )
         }
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [33], qualifiers = "w2000dp-h1200dp-mdpi")
+class ScreenShotsPlainFolder {
+    @Test
+    fun plainFolderBrowseShowsBpmKeyAndWave() {
+        val source = File("/opt/cursor/artifacts/ground-truth/mono")
+        val picks = listOf(
+            "3317417.wav" to "House.wav",
+            "4014747.wav" to "Techno.wav",
+            "1234750.wav" to "Trance.wav",
+            "1234668.wav" to "Drum And Bass.wav",
+        )
+        assumeTrue(picks.all { File(source, it.first).isFile })
+        val folder = File("/tmp/plain-browse").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        picks.forEach { (from, to) -> File(source, from).copyTo(File(folder, to), overwrite = true) }
+        val cache = File("/tmp/plain-browse-cache").apply { deleteRecursively(); mkdirs() }
+        var progress: os.deckbridge.logic.RbCatalog? = null
+        val done = loadPlainFolder(FolderVolume(folder, "pasta solta"), cache, { _, bytes ->
+            val pcm = decodeWavMono(bytes) ?: return@loadPlainFolder null
+            pcm.samples to pcm.rate
+        }) { step ->
+            if (progress == null) progress = step
+        }
+        val place = BrowsePlace(category = BrowseCategory.PLAYLIST, inList = true, playlistId = done.playlists.first().id, index = 0)
+        val left = done.tracks.first().title
+        val right = done.tracks[1].title
+        capture("$PRINTS/plain-browse-progress.png") { activity ->
+            activity.setContentView(
+                player(activity, progress!!, WaveZoom.BARS_8, BeatFxState(), place, leftTitle = left, rightTitle = right, usbLabel = "pasta solta"),
+            )
+        }
+        capture("$PRINTS/plain-browse.png") { activity ->
+            activity.setContentView(
+                player(activity, done, WaveZoom.BARS_8, BeatFxState(), place, leftTitle = left, rightTitle = right, usbLabel = "pasta solta"),
+            )
+        }
+        assert(done.tracks.all { it.bpm > 0.0 && it.keyName.isNotBlank() })
+        assert(done.analyses.values.all { it.rgbPreview != null && it.rgbApp })
+        assert(done.scanNote.contains("sem export"))
     }
 }

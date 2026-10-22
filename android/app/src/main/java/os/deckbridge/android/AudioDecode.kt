@@ -9,6 +9,14 @@ import os.deckbridge.logic.decodeWav
 import java.io.File
 import java.nio.ByteOrder
 
+fun decodeTrackPcm(context: Context, name: String, bytes: ByteArray): Pair<FloatArray, Int>? {
+    val pcm = decodeTrackAudio(context, name, bytes) ?: return null
+    val frames = pcm.frameCount
+    if (frames <= 0) return null
+    val mono = FloatArray(frames) { index -> (pcm.left[index] + pcm.right[index]) * 0.5f }
+    return mono to pcm.sampleRate
+}
+
 fun decodeTrackAudio(context: Context, name: String, bytes: ByteArray): DecodedPcm? {
     val lower = name.lowercase()
     if (lower.endsWith(".wav") || (bytes.size > 12 && bytes.copyOfRange(0, 4).decodeToString() == "RIFF")) {

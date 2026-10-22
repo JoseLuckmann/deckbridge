@@ -26,6 +26,10 @@ class FolderVolume(
         if (target.path != rootPath.path && !target.path.startsWith(prefix)) return null
         return target
     }
+
+    override fun listAudio(): List<String> = plainAudioFiles(root).map { file ->
+        root.canonicalFile.toPath().relativize(file.canonicalFile.toPath()).toString().replace('\\', '/')
+    }
 }
 
 /** Relatório de uma biblioteca já lida. Não escreve no volume. */

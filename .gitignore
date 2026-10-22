@@ -33,3 +33,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 target/
+
+# Áudio de corpus. Anotações podem entrar; prévias e faixas, não.
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.ogg

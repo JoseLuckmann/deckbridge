@@ -9,6 +9,7 @@ import android.os.storage.StorageManager
 import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import os.deckbridge.logic.ReadableVolume
+import os.deckbridge.logic.isPlainAudioName
 
 class DocumentVolume(
     private val context: Context,
@@ -35,6 +36,23 @@ class DocumentVolume(
             current = child
         }
         return null
+    }
+
+    override fun listAudio(): List<String> {
+        val start = root ?: return emptyList()
+        val out = ArrayList<String>()
+        fun walk(dir: DocumentFile, prefix: String, depth: Int) {
+            if (out.size >= 300 || depth > 2) return
+            dir.listFiles().forEach { child ->
+                val name = child.name ?: return@forEach
+                if (name.startsWith(".")) return@forEach
+                val path = if (prefix.isEmpty()) name else "$prefix/$name"
+                if (child.isDirectory) walk(child, path, depth + 1)
+                else if (isPlainAudioName(name)) out += path
+            }
+        }
+        walk(start, "", 0)
+        return out.sorted()
     }
 }
 

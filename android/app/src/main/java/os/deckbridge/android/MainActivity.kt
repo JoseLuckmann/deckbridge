@@ -54,6 +54,7 @@ import os.deckbridge.logic.ReadableVolume
 import os.deckbridge.logic.SyntheticRekordbox
 import os.deckbridge.logic.usbVariantReport
 import os.deckbridge.logic.buildDiagnosticReport
+import os.deckbridge.logic.loadPlainFolder
 import os.deckbridge.logic.loadRekordbox
 import os.deckbridge.logic.TempoAssembler
 import os.deckbridge.logic.StagePalette
@@ -117,16 +118,28 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
         notice = "Lendo ${next.label}…"
         Thread {
             val loaded = loadRekordbox(next, oneLibrary)
-            handler.post {
-                volume = next
-                catalog = loaded
-                loading = false
-                notice = if (loaded.error != null) {
-                    "Falha ${loaded.error}. O app não gravou no volume."
-                } else if (next.simulated) {
-                    "Pendrive simulado aberto. Não é USB nem rekordbox real."
-                } else {
-                    "Biblioteca lida. Somente leitura."
+            if (loaded.error != "E_RB_EXPORT_NOT_FOUND") {
+                handler.post {
+                    volume = next
+                    catalog = loaded
+                    loading = false
+                    notice = if (loaded.error != null) {
+                        "Falha ${loaded.error}. O app não gravou no volume."
+                    } else if (next.simulated) {
+                        "Pendrive simulado aberto. Não é USB nem rekordbox real."
+                    } else {
+                        "Biblioteca lida. Somente leitura."
+                    }
+                }
+                return@Thread
+            }
+            val cache = java.io.File(context.cacheDir, "plain-analysis")
+            loadPlainFolder(next, cache, { name, bytes -> decodeTrackPcm(context, name, bytes) }) { step ->
+                handler.post {
+                    volume = next
+                    catalog = step
+                    loading = step.scanNote.startsWith("A analisar")
+                    notice = step.scanNote.ifBlank { step.error ?: "Pasta de áudio lida. Somente leitura." }
                 }
             }
         }.start()

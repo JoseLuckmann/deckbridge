@@ -64,6 +64,8 @@ O corpus de variantes (páginas, títulos longos e unicode, arte ausente, ANLZ a
 
 `inspectText` e `tools/inspect_usb.py` leem uma pasta e imprimem faixas, playlists, cues, tags de onda, `DEVSETTING.DAT` e erros. Não criam arquivo dentro dela. O relatório do `--jvm` sai em `/tmp/deckbridge-inspect.txt`.
 
+Na 0.12.2, uma pasta sem `export.pdb` e com MP3, WAV, FLAC, AIFF, M4A ou AAC não ganha PDB. O app analisa cada ficheiro, mostra o progresso e guarda BPM, tom, batidas e a miniatura RGB no cache do app. O volume continua só de leitura.
+
 ## Gravação
 
 O WAV estéreo de 16 bits é escrito por este projeto. O LAME não entra no APK: a licença do repositório é GPL-2.0-or-later provisória, o OD-06 continua aberto, e não se vincula o LGPL do LAME enquanto isso não estiver fechado. O AAC opcional usa o `MediaCodec` do Android (AAC-LC, contentor MPEG-4). A gravação e o histórico ficam na pasta do app ou numa pasta que o utilizador escolhe. O USB do rekordbox não é destino.

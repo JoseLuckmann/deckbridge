@@ -95,6 +95,9 @@ fun BrowseScreen(
             BrowseChip(if (place.bpmMin == 0 && place.bpmMax >= 999) "BPM" else "BPM ON") { onBpmWindow() }
             BrowseChip("FECHAR", onClose)
         }
+        if (catalog.scanNote.isNotBlank()) {
+            TextInk(catalog.scanNote, fontSize = 12.sp, color = Color(StagePalette.accentOrange), maxLines = 2, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp))
+        }
         if (place.category == BrowseCategory.SEARCH && place.inList) {
             BasicTextField(
                 value = place.query,

@@ -36,6 +36,8 @@ private val MINOR = doubleArrayOf(6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75
 // Perfil EDMA (Faraldo e outros, música eletrônica). Não é o detector da Essentia.
 private val EDMA_MAJOR = doubleArrayOf(1.00, 0.00, 0.22, 0.00, 0.39, 0.16, 0.00, 0.44, 0.00, 0.24, 0.00, 0.18)
 private val EDMA_MINOR = doubleArrayOf(1.00, 0.00, 0.21, 0.32, 0.00, 0.22, 0.00, 0.43, 0.18, 0.00, 0.14, 0.20)
+private val TEMPERLEY_MAJOR = doubleArrayOf(5.0, 2.0, 3.5, 2.0, 4.5, 4.0, 2.0, 4.5, 2.0, 3.5, 1.5, 4.0)
+private val TEMPERLEY_MINOR = doubleArrayOf(5.0, 2.0, 3.5, 4.5, 2.0, 4.0, 2.0, 4.5, 3.5, 2.0, 1.5, 4.0)
 private val MAJOR_NAMES = listOf("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
 private val MINOR_NAMES = listOf("Cm", "Dbm", "Dm", "Ebm", "Em", "Fm", "F#m", "Gm", "Abm", "Am", "Bbm", "Bm")
 private val PITCH_CLASS = listOf("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
@@ -303,22 +305,54 @@ private fun pickBpm(env: FloatArray, envRate: Double, peaks: DoubleArray): BpmPi
     lags.sortByDescending { scores[it] }
     if (lags.isEmpty()) lags += minLag
     val duration = env.size / envRate
+    // A cobertura dos picos sozinha prefere 3/4 e 3/2 quando há picos entre as batidas.
+    // O pente no envelope e a autocorrelação têm de concordar. O prior é largo (cerca de uma oitava)
+    // à volta de 124, para house e drum and bass caberem os dois.
     var chosen = 120.0
-    var chosenPhase = 0.0
-    var chosenHits = -1.0
-    var bpm = 90.0
+    var best = -1.0
+    var bpm = 70.0
     while (bpm <= 180.0) {
-        val (phase, hits) = coverage(peaks, bpm, duration, 36)
-        if (hits > chosenHits) {
-            chosenHits = hits
+        val comb = combScore(env, envRate, bpm)
+        val periodic = interpolatedScore(scores, envRate, bpm).coerceAtLeast(0.0)
+        val score = comb * (periodic + 1e-9) * meterPrior(bpm)
+        if (score > best) {
+            best = score
             chosen = bpm
-            chosenPhase = phase
         }
         bpm += 1.0
     }
-    val refined = refineTempo(peaks, chosen, chosenPhase, duration)
+    var local = chosen
+    var localBest = best
+    var delta = -0.8
+    while (delta <= 0.8) {
+        val candidate = chosen + delta
+        if (candidate in 70.0..180.0) {
+            val score = combScore(env, envRate, candidate) * (interpolatedScore(scores, envRate, candidate).coerceAtLeast(0.0) + 1e-9) * meterPrior(candidate)
+            if (score > localBest) {
+                localBest = score
+                local = candidate
+            }
+        }
+        delta += 0.2
+    }
+    val (phase, _) = coverage(peaks, local, duration, 72)
+    val refined = refineTempo(peaks, local, phase, duration)
     val confidence = if (mean <= 1e-12) 0.0 else (scores[lags.first()] / mean).coerceIn(0.0, 99.0)
     return BpmPick(refined.first, confidence, refined.second)
+}
+
+private fun interpolatedScore(scores: DoubleArray, envRate: Double, bpm: Double): Double {
+    if (bpm < 40.0 || scores.size < 3) return 0.0
+    val lag = envRate * 60.0 / bpm
+    val at = lag.toInt()
+    if (at < 1 || at >= scores.lastIndex) return 0.0
+    val frac = lag - at
+    return scores[at] * (1.0 - frac) + scores[at + 1] * frac
+}
+
+private fun meterPrior(bpm: Double): Double {
+    val octaves = kotlin.math.ln(bpm / 124.0) / kotlin.math.ln(2.0)
+    return kotlin.math.exp(-0.5 * octaves * octaves / (1.2 * 1.2))
 }
 
 /** Corrige o período pela inclinação dos kicks que já caem perto da grade. Um BPM 0,3 acima desloca o fim da faixa em dezenas de ms. */
@@ -351,7 +385,7 @@ private fun refineTempo(peaks: DoubleArray, bpm: Double, phase: Double, duration
     val slope = (count * sumXY - sumX * sumY) / denom
     val newBeat = beat + slope
     val newBpm = 60.0 / newBeat
-    if (newBpm < 85.0 || newBpm > 185.0) return coverage(peaks, bpm, duration, 120).let { bpm to it.first }
+    if (newBpm < 70.0 || newBpm > 185.0 || abs(newBpm - bpm) > 3.0) return coverage(peaks, bpm, duration, 120).let { bpm to it.first }
     val (newPhase, _) = coverage(peaks, newBpm, duration, 120)
     return newBpm to newPhase
 }
@@ -564,27 +598,58 @@ private fun detectKey(samples: FloatArray, rate: Int): Pair<String, Double> {
     val sorted = rms.copyOf()
     sorted.sort()
     val gate = sorted[sorted.size / 2]
+    val loud = ArrayList<Int>()
+    for (index in 0 until count) {
+        if (rms[index] >= gate) loud += index
+    }
+    val step = max(1, loud.size / 220)
+    // Um seno puro não tem terça. O perfil menor ganha no cosseno porque a tónica pesa mais.
+    // Sem terça maior nem menor, o nome é o maior dessa nota.
+    run {
+        val chroma = DoubleArray(12)
+        var used = 0
+        var cursor = 0
+        while (cursor < loud.size && used < 40) {
+            addChroma(samples, loud[cursor] * hop, frame, rate, chroma, 0.0)
+            used += 1
+            cursor += step
+        }
+        val energy = chroma.sum()
+        if (energy > 1e-6) {
+            val peak = chroma.max()
+            if (peak / energy >= 0.5) {
+                val name = MAJOR_NAMES[chroma.indices.maxBy { chroma[it] }]
+                return name to (peak / energy).coerceIn(0.0, 1.0)
+            }
+        }
+    }
     var bestName = "C"
     var bestMargin = -1.0
     var bestScore = 0.0
-    for (cents in intArrayOf(-20, 0, 20)) {
+    var cents = -30
+    while (cents <= 30) {
         val chroma = DoubleArray(12)
         var used = 0
-        for (index in 0 until count) {
-            if (rms[index] < gate) continue
-            addChroma(samples, index * hop, frame, rate, chroma, cents / 100.0)
+        var cursor = 0
+        while (cursor < loud.size) {
+            addChroma(samples, loud[cursor] * hop, frame, rate, chroma, cents / 100.0)
             used += 1
-            if (used >= 80) break
+            cursor += step
         }
-        if (used < 4) continue
-        val edma = matchProfiles(chroma, EDMA_MAJOR, EDMA_MINOR)
-        val classic = matchProfiles(chroma, MAJOR, MINOR)
-        val pick = if (edma.third >= classic.third) edma else classic
-        if (pick.third > bestMargin) {
-            bestMargin = pick.third
-            bestName = pick.first
-            bestScore = pick.second
+        if (used >= 4) {
+            val profiles = listOf(
+                matchProfiles(chroma, EDMA_MAJOR, EDMA_MINOR),
+                matchProfiles(chroma, MAJOR, MINOR),
+                matchProfiles(chroma, TEMPERLEY_MAJOR, TEMPERLEY_MINOR),
+            )
+            val pick = profiles.maxBy { it.third }
+            if (pick.third > bestMargin) {
+                bestMargin = pick.third
+                bestName = pick.first
+                bestScore = pick.second
+            }
         }
+        cents += 10
     }
     return bestName to bestScore.coerceIn(0.0, 1.0)
 }
@@ -657,7 +722,13 @@ private fun correlate(chroma: DoubleArray, profile: DoubleArray, shift: Int): Do
 }
 
 fun normalizeKeyName(raw: String): String {
-    val trimmed = raw.trim().replace(" ", "").replace("maj", "").replace("min", "m")
+    var text = raw.trim()
+    text = text.replace(Regex("(?i)\\s+minor$"), "m")
+    text = text.replace(Regex("(?i)\\s+major$"), "")
+    text = text.replace(" ", "")
+    text = text.replace(Regex("(?i)minor$"), "m")
+    text = text.replace(Regex("(?i)major$"), "")
+    val trimmed = text.replace("maj", "").replace("min", "m")
     if (trimmed.isEmpty()) return ""
     return trimmed
         .replace("D#m", "Ebm")
@@ -668,4 +739,8 @@ fun normalizeKeyName(raw: String): String {
         .replace("G#", "Ab")
         .replace("C#m", "Dbm")
         .replace("C#", "Db")
+        .replace("Gbm", "F#m")
+        .replace("Gb", "F#")
+        .replace("Cbm", "Bm")
+        .replace("Cb", "B")
 }
