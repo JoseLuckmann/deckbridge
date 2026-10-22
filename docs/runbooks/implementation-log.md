@@ -115,7 +115,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-22 | A035–A038 | parcial | `28e5466` | tela 0.7.0, browser denso, 24 faixas, PWB3, echo/delay/flanger, APK arm64 | escuta e pendrive real `BLOCKED_HARDWARE`; frase simulada; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
 | 2026-10-22 | A039–A046 | parcial | `b3ef63e` | tela 0.8.0, menu, salto, loop, Beat FX, RMX, APK arm64 | escuta, pendrive e mapeamento RMX `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 e confirma o item 8 do checklist |
 | 2026-10-22 | A047–A051 | parcial | `dbe9b3d` | tela 0.9.0, menu, RMX, histórico, gravação, variantes USB, APK arm64 | escuta, pendrive real, RMX na controladora e FX de ouvido `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 e segue os passos 13 a 16 do roteiro |
-| 2026-10-22 | A052 | parcial | a preencher | tela 0.9.1, BPM/tom do histórico, alvos do menu, RMX e colunas do histórico | escuta `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 0.9.1 |
+| 2026-10-22 | A052 | parcial | `4d730fc` | tela 0.9.1, BPM/tom do histórico, alvos do menu, RMX e colunas do histórico | escuta `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 0.9.1 |
 
 ### Proposta Android
 - Estado: proposta, não aceita
@@ -215,7 +215,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - As faixas sintéticas duram 18 s ou 32 s. A barra de frase continua simulada. O jog, o encoder e o RMX MIDI continuam provisórios.
 - Prints em `/opt/cursor/artifacts/prints/`: `menu.png`, `rmx-full.png`, `history.png`, `rec-active.png`, `diagnostico.png`, `player-2000x1200.png`, `player-1024x600.png`.
 - APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4196629 bytes, SHA-256 `0ce64ac72e209cd2ac514df9b3f936e154cc2cf93d8d49435f8c167fd3e7b40e`, versão 0.9.0 (versionCode 8), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`. O artefato foi substituído pela 0.9.1; estes números são os da 0.9.0.
-- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19421083 bytes, SHA-256 `5ac9369c23dc3de8317ab402d0647ce5cded246fb29e8b8f279e0b8af0f10b5b`.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19421083 bytes, SHA-256 `5ac9369c23dc3de8317ab402d0647ce5cded246fb29e8b8f279e0b8af0f10b5b`. Também substituído no disco pela 0.9.1.
 - HIL executado? não
 
 ### Tela 0.9.1
