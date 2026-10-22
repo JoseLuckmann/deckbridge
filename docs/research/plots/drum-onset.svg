@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="280" viewBox="0 0 760 280">
+<rect width="760" height="280" fill="#10141c"/>
+<text x="20" y="28" fill="#f4f7fb" font-family="sans-serif" font-size="16">Erro de onset do drum build (ms)</text>
+<text x="20" y="48" fill="#9aa6b8" font-family="sans-serif" font-size="12">pior caso 0 ms · limite 1 ms · 120, 128, 140 e 174 BPM · pitch 0%, -8% e +8% · blocos de 1 e 256</text>
+<line x1="48" y1="91.6667" x2="740" y2="91.6667" stroke="#e35d6a" stroke-dasharray="4 4"/>
+<text x="620" y="85.6667" fill="#e35d6a" font-family="sans-serif" font-size="11">1 ms</text>
+<rect x="56" y="248" width="18" height="2" fill="#9ddea8"/>
+<rect x="84" y="248" width="18" height="2" fill="#7eb6ff"/>
+<rect x="112" y="248" width="18" height="2" fill="#f0c674"/>
+<rect x="168" y="248" width="18" height="2" fill="#9ddea8"/>
+<rect x="196" y="248" width="18" height="2" fill="#7eb6ff"/>
+<rect x="224" y="248" width="18" height="2" fill="#f0c674"/>
+<rect x="280" y="248" width="18" height="2" fill="#9ddea8"/>
+<rect x="308" y="248" width="18" height="2" fill="#7eb6ff"/>
+<rect x="336" y="248" width="18" height="2" fill="#f0c674"/>
+<rect x="392" y="248" width="18" height="2" fill="#9ddea8"/>
+<rect x="420" y="248" width="18" height="2" fill="#7eb6ff"/>
+<rect x="448" y="248" width="18" height="2" fill="#f0c674"/>
+<text x="56" y="270" fill="#9aa6b8" font-family="sans-serif" font-size="11">120</text>
+<text x="250" y="270" fill="#9aa6b8" font-family="sans-serif" font-size="11">128</text>
+<text x="444" y="270" fill="#9aa6b8" font-family="sans-serif" font-size="11">140</text>
+<text x="638" y="270" fill="#9aa6b8" font-family="sans-serif" font-size="11">174</text>
+</svg>

@@ -41,7 +41,8 @@ import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.RmxState
 import os.deckbridge.logic.SCENE_BARS
 import os.deckbridge.logic.SCENE_NAMES
-import os.deckbridge.logic.drumBuildDivision
+import os.deckbridge.logic.DRUM_VOICES
+import os.deckbridge.logic.drumPatternLabel
 import os.deckbridge.logic.StagePalette
 import os.deckbridge.logic.XBEAT_LABELS
 import os.deckbridge.logic.XPAD_NAMES
@@ -169,7 +170,7 @@ fun RmxRail(
         }
     }
     TextInk(
-        if (rmx.xOn && rmx.xMode == 2) "DRUM ${drumBuildDivision(rmx.drumBuild)}" else if (rmx.xOn) XPAD_NAMES[rmx.xMode] else "X-PAD",
+        if (rmx.xOn && rmx.xMode == 2) drumPatternLabel(rmx) else if (rmx.xOn) XPAD_NAMES[rmx.xMode] else "X-PAD",
         fontSize = 11.sp,
         color = Color(StagePalette.inkMuted),
         modifier = Modifier.padding(top = 6.dp),
@@ -211,12 +212,28 @@ fun RmxScreen(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit) {
                 }
             }
             TextInk(
-                if (rmx.xOn && rmx.xMode == 2) "X-PAD  DRUM BUILD  ${drumBuildDivision(rmx.drumBuild)}  ·  ${(rmx.drumBuild * 100).toInt()}%"
+                if (rmx.xOn && rmx.xMode == 2) "DRUM  ${drumPatternLabel(rmx)}  ·  ${(rmx.drumBuild * 100).toInt()}%"
                 else "X-PAD",
                 fontSize = 11.sp,
                 color = Color(if (rmx.xOn && rmx.xMode == 2) StagePalette.accentOrange else StagePalette.inkMuted),
                 modifier = Modifier.padding(top = 6.dp),
             )
+            if (rmx.xOn && rmx.xMode == 2) {
+                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    DRUM_VOICES.forEachIndexed { index, name ->
+                        MiniChoice(name, rmx.drumVoice == index, Modifier.weight(1f)) {
+                            onRmx(rmx.copy(drumVoice = index, xMode = 2, xOn = true, panel = true))
+                        }
+                    }
+                }
+                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf(4, 8, 16).forEach { bars ->
+                        MiniChoice("${bars}c", rmx.drumBars == bars, Modifier.weight(1f)) { onRmx(rmx.copy(drumBars = bars)) }
+                    }
+                    MiniChoice(if (rmx.drumGap) "GAP" else "SEM GAP", rmx.drumGap, Modifier.weight(1.2f)) { onRmx(rmx.copy(drumGap = !rmx.drumGap)) }
+                    MiniChoice(if (rmx.drumPitch) "PITCH" else "TOM", rmx.drumPitch, Modifier.weight(1f)) { onRmx(rmx.copy(drumPitch = !rmx.drumPitch)) }
+                }
+            }
             Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 XBEAT_LABELS.forEachIndexed { index, label ->
                     MiniChoice(label, rmx.xBeat == index, Modifier.weight(1f)) { onRmx(rmx.copy(xBeat = index)) }

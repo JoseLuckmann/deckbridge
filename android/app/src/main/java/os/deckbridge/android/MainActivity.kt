@@ -75,6 +75,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
     val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            listOf("kick.flac", "clap.flac", "snare.flac", "hat-closed.flac", "hat-open.flac").forEachIndexed { index, name ->
+                val bytes = context.assets.open("drums/$name").use { it.readBytes() }
+                NativeEngine.loadDrum(index, bytes)
+            }
+        }
+    }
     var page by remember {
         mutableIntStateOf(if (play || screen == "decks" || screen == "biblioteca") 2 else 0)
     }

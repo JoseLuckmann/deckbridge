@@ -1,4 +1,5 @@
 #include "dsp.h"
+#include "drum_load.h"
 #include "record.h"
 
 #include <oboe/Oboe.h>
@@ -58,6 +59,9 @@ struct Deck {
     double cue = 0.0;
     double hot[kMaxHot]{};
     float bpm = 0.f;
+    double gridOriginSec = 0.0;
+    double gridBpm = 0.0;
+    double lastEmitted = 0.0;
     double loopStart = -1.0;
     double loopEnd = -1.0;
     double rateMul = 1.0;
@@ -94,6 +98,7 @@ struct Deck {
             position = 0.0;
             return;
         }
+        lastEmitted = position;
         leftOut = deckbridge::readPerformance(left.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
                                              deckbridge::kFadeSamples);
         rightOut = deckbridge::readPerformance(right.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
@@ -404,10 +409,29 @@ public:
         std::lock_guard<std::mutex> lock(mixMutex_);
         mixFx_.setSampleRate(48000);
         const float drumBuild = count >= 19 ? values[18] : 0.f;
+        const int drumVoice = count >= 20 ? static_cast<int>(values[19]) : 0;
+        const int drumBars = count >= 21 ? static_cast<int>(values[20]) : 8;
+        const bool drumGap = count < 22 || values[21] > 0.5f;
+        const bool drumPitch = count >= 23 && values[22] > 0.5f;
+        const int gridDeck = count >= 24 ? static_cast<int>(values[23]) : -1;
         mixFx_.setRmx(values[0] > 0.5f, static_cast<int>(values[1]), values[2] > 0.5f, values[3], values[4],
                       static_cast<int>(values[5]), values[6], values[7] > 0.5f, static_cast<int>(values[8]), values[9],
                       values[10], values[11], values[12], values[13], values[14], values[15] > 0.5f,
-                      static_cast<int>(values[16]), values[17], drumBuild);
+                      static_cast<int>(values[16]), values[17], drumBuild, drumVoice, drumBars, drumGap, drumPitch,
+                      gridDeck);
+    }
+
+    void setGrid(int deck, float originSec, float bpm) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1) return;
+        decks_[deck].gridOriginSec = static_cast<double>(originSec);
+        decks_[deck].gridBpm = bpm > 1.f ? static_cast<double>(bpm) : 0.0;
+    }
+
+    void loadDrum(int voice, const uint8_t *data, int size) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (data == nullptr || size <= 0) return;
+        deckbridge::loadDrumFlac(data, static_cast<size_t>(size), voice);
     }
 
     float positionSeconds(int deck) {
@@ -443,6 +467,12 @@ public:
                 tickSlip(1, rate);
                 decks_[0].read(rate, al, ar);
                 decks_[1].read(rate, bl, br);
+                const int gridDeck = std::clamp(mixFx_.drumDeck, 0, 1);
+                const Deck &grid = decks_[gridDeck];
+                const double gridBpm = grid.gridBpm > 1.0 ? grid.gridBpm : static_cast<double>(grid.bpm);
+                const bool gridLive = grid.playing && grid.sampleRate > 0 && gridBpm > 1.0;
+                mixFx_.setDrumPhase(deckbridge::musicalBeat(grid.lastEmitted, grid.sampleRate, gridBpm, grid.gridOriginSec),
+                                    gridLive, true);
                 mixFx_.processDeck(0, al, ar);
                 mixFx_.processDeck(1, bl, br);
                 al *= trim_[0];
@@ -756,6 +786,21 @@ Java_os_deckbridge_android_NativeEngine_nativeSetReverse(JNIEnv *, jobject, jint
 extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeSetBuffer(JNIEnv *, jobject, jint frames) {
     engine().setBufferFrames(frames);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetGrid(JNIEnv *, jobject, jint deck, jfloat originSec, jfloat bpm) {
+    engine().setGrid(deck, originSec, bpm);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeLoadDrum(JNIEnv *env, jobject, jint voice, jbyteArray bytes) {
+    if (bytes == nullptr) return;
+    const jsize count = env->GetArrayLength(bytes);
+    if (count <= 0) return;
+    jbyte *data = env->GetByteArrayElements(bytes, nullptr);
+    if (data != nullptr) engine().loadDrum(voice, reinterpret_cast<const uint8_t *>(data), count);
+    env->ReleaseByteArrayElements(bytes, data, JNI_ABORT);
 }
 
 extern "C" JNIEXPORT void JNICALL

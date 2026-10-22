@@ -1,4 +1,4 @@
-# De/para dos efeitos — 0.14.0
+# De/para dos efeitos — 0.14.0, drum build 0.14.1
 
 Fontes públicas, citadas pelo que o texto diz. Não há amostra, código nem áudio da Pioneer neste repositório. Onde o manual não publica um número, a célula diz isso e entra a medida deste motor.
 
@@ -85,7 +85,13 @@ O manual: ROLL grava o que entra quando se toca o pad e repete na fração que a
 
 O nosso X-PAD não é uma superfície. São quatro modos (Roll, Trans, Drum, Hi-pass) e a fração 1/16–1/1.
 
-Drum build, mapeado na DDJ-400: com o painel RMX aberto, o pad Drum (modo 2) liga o gesto; o knob BEAT FX LEVEL/DEPTH deixa de mandar na intensidade da cena e passa a mandar na densidade e no pitch. No ecrã aparece `DRUM BUILD` e a fração 1/4, 1/8, 1/16 ou 1/32. Isso é leitura nossa do roll a acelerar, não uma tabela do manual (o manual mostra 1/1, 1/2, 1/4 e 1/8 no roll do isolador, e one-shots no X-PAD). Os ataques são sintetizados aqui.
+Drum build na 0.14.0, mapeado na DDJ-400: com o painel RMX aberto, o pad Drum (modo 2) liga o gesto; o knob BEAT FX LEVEL/DEPTH deixa de mandar na intensidade da cena e passa a mandar na densidade e no pitch. No ecrã aparece a fração. Isso é leitura nossa do roll a acelerar, não uma tabela do manual (o manual mostra 1/1, 1/2, 1/4 e 1/8 no roll do isolador, e one-shots no X-PAD). Os ataques dessa versão eram sintetizados aqui.
+
+Na 0.14.1 o Drum segue a fase do deck, não um relógio que começa em zero. A conta está em `docs/research/drum-grid.md`. O teste de onset (`tools/drum_grid_test.cpp`) mediu 0 ms de erro a 120, 128, 140 e 174 BPM, com pitch 0,92, 1,00 e 1,08, em blocos de 1 e de 256 samples. O gráfico é `docs/research/plots/drum-onset.svg`.
+
+O gesto musical: 4, 8 ou 16 compassos. Em 8, são dois de semínima, dois de colcheia, três de semicolcheia e um de fusa. O 1/32 é o último compasso. A troca de subdivisão só na fronteira do compasso. O começo quantiza para a próxima semínima. O último ataque fica antes do downbeat do drop. Há opção de calar o último meio tempo e de subir a afinação cerca de 10% no fim. Volume sobe com o gesto. O passa-altas vai de 40 Hz a cerca de 180 Hz, misturado até 40%, para o sample continuar a soar como bateria.
+
+Os hits são gravações CC0 em `android/app/src/main/assets/drums/` (bumbo, palma, caixa, chimbal fechado e aberto). Licenças e URLs em `docs/licenses/drum-samples.md`. Não há sample da Pioneer. Se um arquivo não abrir, o motor cai na modelagem física (bumbo 150→50 Hz com clique e saturação, palma de quatro rajadas, caixa de tom mais ruído). A tela e o Shift+SAMPLER escolhem kick, clap, snare ou kick+clap. Nos dois últimos trechos a palma ou a caixa entra por cima, e o chimbal marca o contratempo. O caminho sintetizado da 0.14.0 continua só quando o build está em zero, para os testes antigos.
 
 ### Isolate
 
@@ -96,5 +102,6 @@ O manual: LOW/MID/HI no centro não fazem efeito. Além do isolador há CUT/ADD,
 - `docs/research/plots/filtro-resposta.svg` — knob em 0, 0,18, 0,35, 0,50, 0,66, 0,84 e 1.
 - `docs/research/plots/reverb-rt60.svg` — envelope depois dos primeiros 50 ms. RT60 0,65 s a nível 0,72.
 - `docs/research/plots/eco-queda.svg` — RMS de cada repetição a nível 0,70.
+- `docs/research/plots/drum-onset.svg` — erro de cada caso do teste de grade. O pior caso nesta máquina foi 0 ms. A linha de 1 ms é o limite pedido.
 
 Estes gráficos são do binário hospedeiro. Não foram medidos no tablet nem numa mesa Pioneer.

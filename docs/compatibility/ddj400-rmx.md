@@ -11,11 +11,17 @@ Enquanto o painel RMX está ligado na tela, as notas já listadas de SAMPLER (`P
 | 1–4 | 0x30–0x33 | segurar escolhe a Scene FX e sobe a intensidade; soltar deixa a cauda |
 | 5–8 | 0x34–0x37 | liga ou desliga o X-Pad: Roll, Trans, Drum, Hi-pass |
 
-`PioneerDDJ400.samplerPadShiftPressed` (status 0x98 / 0x9A, as mesmas notas) continua sem função de RMX, para não tomar o eject/stop do mapa.
+Com o painel RMX aberto, `PioneerDDJ400.samplerPadShiftPressed` (status 0x98 / 0x9A, as mesmas notas) escolhe o drum build. Neste app essas notas não ejetam faixa.
+
+| Shift+pad | Nota | Gesto |
+|---|---|---|
+| 1–4 | 0x30–0x33 | som: kick, clap, snare, kick+clap. Liga o Drum |
+| 5–7 | 0x34–0x36 | comprimento: 4, 8 ou 16 compassos |
+| 8 | 0x37 | liga ou desliga o silêncio do último meio tempo |
 
 Com o painel ligado, controles que já existem no XML mudam de papel:
 
-- BEAT FX LEVEL/DEPTH (status 0xB4, nota 0x02) define a intensidade da cena, de 0 a 1.
+- BEAT FX LEVEL/DEPTH (status 0xB4, nota 0x02) define a intensidade da cena, de 0 a 1. Com o X-Pad Drum ligado, o mesmo knob é o quanto o roll sobe de volume, filtro e, se a tela pedir, de afinação.
 - Beat esquerda e Beat direita escolhem o comprimento: 1, 2, 4, 8 ou 16 compassos.
 - CH SELECT (notas 0x10, 0x11 e 0x14 no status 0x94) escolhe canal 1, 2 ou master.
 

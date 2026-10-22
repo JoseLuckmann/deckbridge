@@ -1076,6 +1076,124 @@ private:
     }
 };
 
+struct DrumBank {
+    std::vector<float> voice[5];
+
+    void set(int id, const float *data, int frames) {
+        if (id < 0 || id > 4 || data == nullptr || frames < 8) return;
+        voice[id].assign(data, data + frames);
+        const int fade = std::min(64, frames / 2);
+        for (int index = 0; index < fade; ++index) {
+            voice[id][static_cast<size_t>(frames - 1 - index)] *= static_cast<float>(index) / static_cast<float>(fade);
+        }
+    }
+
+    bool empty(int id) const { return id < 0 || id > 4 || voice[id].size() < 8; }
+
+    void ensureModel(int sampleRate) {
+        const int rate = sampleRate > 0 ? sampleRate : 48000;
+        if (empty(0)) voice[0] = modelKick(rate);
+        if (empty(1)) voice[1] = modelClap(rate);
+        if (empty(2)) voice[2] = modelSnare(rate);
+        if (empty(3)) voice[3] = modelHat(rate, 0.045f);
+        if (empty(4)) voice[4] = modelHat(rate, 0.42f);
+    }
+
+    static std::vector<float> finish(std::vector<float> data) {
+        if (data.size() < 16) return data;
+        const int fadeIn = std::min(16, static_cast<int>(data.size()) / 4);
+        for (int index = 0; index < fadeIn; ++index) data[static_cast<size_t>(index)] *= static_cast<float>(index) / fadeIn;
+        const int fade = std::min(64, static_cast<int>(data.size()) / 3);
+        for (int index = 0; index < fade; ++index) {
+            data[data.size() - 1 - static_cast<size_t>(index)] *= static_cast<float>(index) / fade;
+        }
+        return data;
+    }
+
+    static std::vector<float> modelKick(int rate) {
+        const int n = static_cast<int>(0.38f * rate);
+        std::vector<float> out(static_cast<size_t>(n));
+        uint32_t noise = 0x4B1u;
+        float phase = 0.f;
+        for (int index = 0; index < n; ++index) {
+            const float t = static_cast<float>(index) / static_cast<float>(rate);
+            const float freq = 50.f + (150.f - 50.f) * std::exp(-t * 28.f);
+            phase += static_cast<float>(kTwoPi) * freq / static_cast<float>(rate);
+            const float body = std::sin(phase) * std::exp(-t * 7.5f);
+            const float click = (t < 0.004f) ? noiseSample(noise) * (1.f - t / 0.004f) : 0.f;
+            out[static_cast<size_t>(index)] = std::tanh(1.35f * body + 0.55f * click);
+        }
+        return finish(out);
+    }
+
+    static std::vector<float> modelClap(int rate) {
+        const int n = static_cast<int>(0.28f * rate);
+        std::vector<float> out(static_cast<size_t>(n));
+        uint32_t noise = 0xC1A0u;
+        float band = 0.f;
+        const float bursts[4] = {0.f, 0.010f, 0.021f, 0.033f};
+        const float g = 1.f - std::exp(-static_cast<float>(kTwoPi) * 1400.f / static_cast<float>(rate));
+        for (int index = 0; index < n; ++index) {
+            const float t = static_cast<float>(index) / static_cast<float>(rate);
+            float env = std::exp(-t * 10.f) * 0.22f;
+            for (float burst : bursts) {
+                const float d = t - burst;
+                if (d >= 0.f && d < 0.012f) env += (1.f - d / 0.012f) * std::exp(-d * 40.f);
+            }
+            const float sample = noiseSample(noise);
+            band += (sample - band) * g;
+            out[static_cast<size_t>(index)] = std::tanh((sample - band) * env * 1.4f);
+        }
+        return finish(out);
+    }
+
+    static std::vector<float> modelSnare(int rate) {
+        const int n = static_cast<int>(0.32f * rate);
+        std::vector<float> out(static_cast<size_t>(n));
+        uint32_t noise = 0x51A6u;
+        float phase = 0.f;
+        float hp = 0.f;
+        const float g = 1.f - std::exp(-static_cast<float>(kTwoPi) * 1800.f / static_cast<float>(rate));
+        for (int index = 0; index < n; ++index) {
+            const float t = static_cast<float>(index) / static_cast<float>(rate);
+            phase += static_cast<float>(kTwoPi) * 190.f / static_cast<float>(rate);
+            const float tone = std::sin(phase) * std::exp(-t * 18.f);
+            const float sample = noiseSample(noise);
+            hp += (sample - hp) * g;
+            const float noise = (sample - hp) * std::exp(-t * 12.f);
+            out[static_cast<size_t>(index)] = std::tanh(tone * 0.55f + noise * 0.85f);
+        }
+        return finish(out);
+    }
+
+    static std::vector<float> modelHat(int rate, float seconds) {
+        const int n = std::max(32, static_cast<int>(seconds * rate));
+        std::vector<float> out(static_cast<size_t>(n));
+        uint32_t noise = seconds < 0.1f ? 0x11u : 0x90u;
+        float hp = 0.f;
+        const float g = 1.f - std::exp(-static_cast<float>(kTwoPi) * 6500.f / static_cast<float>(rate));
+        for (int index = 0; index < n; ++index) {
+            const float t = static_cast<float>(index) / static_cast<float>(rate);
+            const float sample = noiseSample(noise);
+            hp += (sample - hp) * g;
+            out[static_cast<size_t>(index)] = (sample - hp) * std::exp(-t * (seconds < 0.1f ? 48.f : 8.f)) * 0.7f;
+        }
+        return finish(out);
+    }
+};
+
+inline DrumBank &drumBank() {
+    static DrumBank bank;
+    return bank;
+}
+
+inline double musicalBeat(double emittedSourcePos, int sourceRate, double bpm, double originSec) {
+    if (sourceRate <= 0) return 0.0;
+    const double use = bpm > 1.0 ? bpm : 120.0;
+    const double seconds = emittedSourcePos / static_cast<double>(sourceRate);
+    return (seconds - originSec) * use / 60.0;
+}
+
 struct XPad {
     int mode = 0;
     float beats = 0.25f;
@@ -1092,19 +1210,90 @@ struct XPad {
     float hatState = 0.f;
     Biquad hp;
     uint32_t noise = 0x51u;
+    int drumVoice = 0;
+    int drumBars = 8;
+    bool drumGap = true;
+    bool drumPitch = false;
+    bool hats = true;
+    bool layerHits = true;
+    bool followGrid = false;
+    bool phaseValid = false;
+    double phaseBeat = 0.0;
+    bool live = false;
+    bool finished = false;
+    bool prevValid = false;
+    double prevBeat = 0.0;
+    double originBeat = 0.0;
+    double endBeat = 0.0;
+    double nextHit = 1.0e300;
+    double edges[5] = {};
+    int latchedBars = 8;
+    bool wasRequested = false;
+    Svf drumHp;
+    struct Shot {
+        int id = 0;
+        double cursor = 0.0;
+        float vel = 0.f;
+        float rate = 1.f;
+        bool on = false;
+    };
+    Shot shots[24];
 
-    void set(int nextMode, float nextBeats, bool on, float nextBpm, int rate, float nextBuild = 0.f) {
+    void set(int nextMode, float nextBeats, bool on, float nextBpm, int rate, float nextBuild = 0.f, int nextVoice = 0,
+             int nextBars = 8, bool nextGap = true, bool nextPitch = false) {
         mode = nextMode;
         beats = nextBeats > 0.f ? nextBeats : 0.25f;
         build = std::clamp(nextBuild, 0.f, 1.f);
+        const bool edge = on && !requested;
         requested = on;
         bpm = nextBpm > 1.f ? nextBpm : 120.f;
         sampleRate = rate > 0 ? rate : 48000;
+        drumVoice = std::clamp(nextVoice, 0, 3);
+        drumBars = snapBars(nextBars);
+        drumGap = nextGap;
+        drumPitch = nextPitch;
         if (!on && !engaged) env = 0;
+        if (edge) {
+            live = false;
+            finished = false;
+            prevValid = false;
+            nextHit = 1.0e300;
+        }
+        if (!on) finished = false;
+    }
+
+    static int snapBars(int bars) {
+        if (bars >= 16) return 16;
+        if (bars >= 8) return 8;
+        return 4;
+    }
+
+    static void sectionBars(int bars, int out[4]) {
+        if (bars >= 16) {
+            out[0] = 4;
+            out[1] = 4;
+            out[2] = 7;
+            out[3] = 1;
+        } else if (bars >= 8) {
+            out[0] = 2;
+            out[1] = 2;
+            out[2] = 3;
+            out[3] = 1;
+        } else {
+            out[0] = 1;
+            out[1] = 1;
+            out[2] = 1;
+            out[3] = 1;
+        }
+    }
+
+    void setPhase(double beat, bool valid) {
+        phaseBeat = beat;
+        phaseValid = valid;
     }
 
     int sliceSamples() const {
-        if (mode == 2 && build > 0.04f) {
+        if (mode == 2 && build > 0.04f && !followGrid) {
             const float divs[4] = {0.25f, 0.125f, 0.0625f, 0.03125f};
             const int stage = std::min(3, static_cast<int>(build * 4.f));
             return std::max(1, static_cast<int>(samplesPerBeat(bpm, sampleRate) * divs[stage]));
@@ -1115,6 +1304,10 @@ struct XPad {
     bool rollEngaged() const { return engaged && mode == 0; }
 
     void process(float &inL, float &inR) {
+        if (mode == 2 && build > 0.04f && followGrid) {
+            renderGrid(inL, inR);
+            return;
+        }
         const int beatN = std::max(1, static_cast<int>(samplesPerBeat(bpm, sampleRate)));
         const int slice = sliceSamples();
         if (requested && !engaged && (clock % slice) == 0) engaged = true;
@@ -1156,6 +1349,213 @@ struct XPad {
         }
         clock += 1;
         if (env > 0) env -= 1;
+    }
+
+    void renderGrid(float &inL, float &inR) {
+        const double beat = phaseBeat;
+        if (!phaseValid) {
+            if (!requested) {
+                live = false;
+                finished = false;
+            }
+            mixShots(inL, inR, 0.f);
+            prevValid = false;
+            return;
+        }
+        if (requested && !wasRequested) {
+            live = false;
+            finished = false;
+            prevValid = false;
+        }
+        if (!requested) finished = false;
+        wasRequested = requested;
+        if (prevValid && beat + 1e-7 < prevBeat) {
+            prevBeat = beat;
+            if (live) nextHit = hitOnOrAfter(beat);
+            mixShots(inL, inR, 0.f);
+            return;
+        }
+        if (!prevValid) {
+            prevBeat = beat;
+            prevValid = true;
+            if (requested && !live && !finished && std::abs(beat - std::round(beat)) < 1e-5) begin(std::round(beat));
+            if (live) {
+                nextHit = hitOnOrAfter(originBeat - 1e-12);
+                if (nextHit <= beat + 1e-7) {
+                    fire(nextHit);
+                    nextHit = hitOnOrAfter(nextHit + 1e-9);
+                }
+            }
+            mixShots(inL, inR, live ? progress(beat) : 0.f);
+            return;
+        }
+        if (live && drumBars != latchedBars) {
+            const double line = originBeat + (std::floor((prevBeat - originBeat) / 4.0) + 1.0) * 4.0;
+            if (beat >= line) {
+                latchedBars = drumBars;
+                endBeat = originBeat + static_cast<double>(latchedBars) * 4.0;
+                rebuildEdges();
+                nextHit = hitOnOrAfter(prevBeat + 1e-12);
+                if (beat >= endBeat) {
+                    live = false;
+                    finished = true;
+                }
+            }
+        }
+        if (!live && requested && !finished) {
+            const double nextQuarter = std::floor(prevBeat) + 1.0;
+            if (beat >= nextQuarter) begin(nextQuarter);
+        }
+        if (live && !requested) {
+            const double nextQuarter = std::floor(prevBeat) + 1.0;
+            if (beat >= nextQuarter) live = false;
+        }
+        if (live && beat >= endBeat) {
+            live = false;
+            finished = true;
+        }
+        if (live && prevBeat < nextHit && beat >= nextHit) {
+            fire(nextHit);
+            nextHit = hitOnOrAfter(nextHit + 1e-9);
+        }
+        const float prog = live ? progress(beat) : 0.f;
+        mixShots(inL, inR, prog);
+        prevBeat = beat;
+    }
+
+    float progress(double beat) const {
+        const double span = std::max(1e-6, endBeat - originBeat);
+        return std::clamp(static_cast<float>((beat - originBeat) / span), 0.f, 1.f);
+    }
+
+    void begin(double at) {
+        live = true;
+        finished = false;
+        originBeat = at;
+        latchedBars = drumBars;
+        endBeat = originBeat + static_cast<double>(latchedBars) * 4.0;
+        rebuildEdges();
+        nextHit = hitOnOrAfter(originBeat - 1e-12);
+    }
+
+    void rebuildEdges() {
+        int bars[4];
+        sectionBars(latchedBars, bars);
+        edges[0] = originBeat;
+        for (int section = 0; section < 4; ++section) edges[section + 1] = edges[section] + static_cast<double>(bars[section]) * 4.0;
+    }
+
+    int sectionOf(double beat) const {
+        for (int section = 0; section < 4; ++section) {
+            if (beat < edges[section + 1] - 1e-9) return section;
+        }
+        return 3;
+    }
+
+    static double spacingOf(int section) {
+        const double spacing[4] = {1.0, 0.5, 0.25, 0.125};
+        return spacing[std::clamp(section, 0, 3)];
+    }
+
+    double hitOnOrAfter(double beat) const {
+        const double limit = endBeat - (drumGap ? 0.5 : 0.0);
+        double best = 1.0e300;
+        for (int section = 0; section < 4; ++section) {
+            const double start = edges[section];
+            const double stop = std::min(edges[section + 1], limit);
+            if (!(stop > start)) continue;
+            const double spacing = spacingOf(section);
+            double hit = start;
+            if (beat > hit) {
+                const double steps = std::ceil((beat - hit) / spacing - 1e-12);
+                hit = start + steps * spacing;
+            }
+            if (hit < stop - 1e-9 && hit < best) best = hit;
+        }
+        return best;
+    }
+
+    void fire(double hitBeat) {
+        drumBank().ensureModel(sampleRate > 0 ? sampleRate : 48000);
+        const int section = sectionOf(hitBeat);
+        const float prog = progress(hitBeat);
+        const float vel = (0.45f + 0.55f * prog) * (0.62f + 0.38f * build);
+        const float rate = drumPitch ? (1.f + 0.10f * prog * build) : 1.f;
+        if (drumVoice == 3) {
+            trigger(0, vel, rate);
+            trigger(1, vel * 0.92f, rate);
+        } else {
+            trigger(drumVoice, vel, rate);
+        }
+        if (layerHits && section >= 2) {
+            const int layer = (drumVoice == 1 || drumVoice == 3) ? 2 : 1;
+            if (layer != drumVoice) trigger(layer, vel * 0.8f, rate);
+        }
+        if (hats && section >= 2) {
+            const double frac = hitBeat - std::floor(hitBeat + 1e-9);
+            if (std::abs(frac - 0.5) < 0.02) trigger(3, vel * 0.22f, 1.f);
+            if (section == 3 && std::abs(hitBeat - edges[3]) < 1e-6) trigger(4, vel * 0.32f, 1.f);
+        }
+    }
+
+    void trigger(int id, float vel, float rate) {
+        if (id < 0 || id > 4 || vel <= 0.f) return;
+        int slot = -1;
+        int steal = 0;
+        double oldest = -1.0;
+        for (int index = 0; index < 24; ++index) {
+            if (!shots[index].on) {
+                slot = index;
+                break;
+            }
+            if (shots[index].cursor > oldest) {
+                oldest = shots[index].cursor;
+                steal = index;
+            }
+        }
+        if (slot < 0) slot = steal;
+        shots[slot].id = id;
+        shots[slot].cursor = 0.0;
+        shots[slot].vel = vel;
+        shots[slot].rate = std::max(0.25f, rate);
+        shots[slot].on = true;
+    }
+
+    float readVoice(int id, double cursor) const {
+        if (drumBank().empty(id)) return 0.f;
+        const auto &pcm = drumBank().voice[id];
+        if (cursor < 0.0) return 0.f;
+        const int index = static_cast<int>(cursor);
+        if (index >= static_cast<int>(pcm.size()) - 1) return 0.f;
+        const float frac = static_cast<float>(cursor - index);
+        float sample = pcm[static_cast<size_t>(index)] * (1.f - frac) + pcm[static_cast<size_t>(index + 1)] * frac;
+        const int left = static_cast<int>(pcm.size()) - index;
+        if (left < 64) sample *= static_cast<float>(left) / 64.f;
+        return sample;
+    }
+
+    void mixShots(float &inL, float &inR, float prog) {
+        const double step = (sampleRate > 0 ? 48000.0 / static_cast<double>(sampleRate) : 1.0);
+        float drum = 0.f;
+        for (Shot &shot : shots) {
+            if (!shot.on) continue;
+            drum += readVoice(shot.id, shot.cursor) * shot.vel;
+            shot.cursor += step * static_cast<double>(shot.rate);
+            const auto &pcm = drumBank().voice[shot.id];
+            if (drumBank().empty(shot.id) || shot.cursor >= static_cast<double>(pcm.size()) - 1.0) shot.on = false;
+        }
+        if (std::fabs(drum) > 1e-6f) {
+            const float cut = 40.f * std::pow(4.5f, std::clamp(prog, 0.f, 1.f) * build);
+            const float mix = 0.40f * std::clamp(prog, 0.f, 1.f) * build;
+            drumHp.set(cut, static_cast<float>(sampleRate), 0.7f, 1);
+            const float high = drumHp.process(drum);
+            drum = drum * (1.f - mix) + high * mix;
+        } else if (prog < 0.001f) {
+            drumHp.reset();
+        }
+        const float duck = live ? (0.08f + 0.16f * build) : 0.f;
+        inL = sanitize(inL * (1.f - duck) + drum);
+        inR = sanitize(inR * (1.f - duck) + drum);
     }
 
     float drum() {
@@ -1384,11 +1784,18 @@ struct MixerFx {
     bool slipDeck[2]{};
     double rollOrigin[2]{-1.0, -1.0};
     double rollBeats = 0.25;
+    int drumDeck = 0;
 
     void setSampleRate(int rate) {
         sampleRate = rate > 0 ? rate : 48000;
+        xpad.sampleRate = sampleRate;
         iso[0].prepare(sampleRate);
         iso[1].prepare(sampleRate);
+    }
+
+    void setDrumPhase(double beat, bool valid, bool follow) {
+        xpad.followGrid = follow;
+        xpad.setPhase(beat, valid);
     }
 
     void setBeat(int effect, bool on, float level, int nextChannel, float bpm, float beats) {
@@ -1406,7 +1813,8 @@ struct MixerFx {
 
     void setRmx(bool armed, int sceneId, bool holding, float ceiling, float bars, int xMode, float xBeats, bool xOn,
                 int releaseKind, float low0, float mid0, float high0, float low1, float mid1, float high1, bool gate,
-                int nextChannel, float bpm, float drumBuild = 0.f) {
+                int nextChannel, float bpm, float drumBuild = 0.f, int drumVoice = 0, int drumBars = 8, bool drumGap = true,
+                bool drumPitch = false, int gridDeck = -1) {
         const bool was = rmx;
         rmx = armed;
         if (armed) beat.on = false;
@@ -1424,7 +1832,10 @@ struct MixerFx {
             scene.setCeiling(ceiling);
             scene.intensity = ceiling;
         }
-        xpad.set(xMode, xBeats, armed && xOn, bpm, sampleRate, std::clamp(drumBuild, 0.f, 1.f));
+        const int follow = gridDeck >= 0 ? gridDeck : (nextChannel == 1 ? 1 : 0);
+        drumDeck = std::clamp(follow, 0, 1);
+        xpad.set(xMode, xBeats, armed && xOn, bpm, sampleRate, std::clamp(drumBuild, 0.f, 1.f), drumVoice, drumBars,
+                 drumGap, drumPitch);
         iso[0].set(low0, mid0, high0, gate);
         iso[1].set(low1, mid1, high1, gate);
         if (releaseKind < 0) release.kind = -1;

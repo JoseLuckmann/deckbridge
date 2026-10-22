@@ -1,6 +1,7 @@
 // Mistura offline pelo mesmo caminho do APK: dsp.h e a ordem de
 // ToneEngine::onAudioReady / Deck::read em engine.cpp. Não é o tablet.
 #include "dsp.h"
+#include "drum_load.h"
 
 #include <algorithm>
 #include <cmath>
@@ -28,6 +29,10 @@ struct Deck {
     double pitch = 1.0;
     float volume = 1.f;
     bool playing = false;
+    float bpm = 120.f;
+    double gridOriginSec = 0.0;
+    double gridBpm = 0.0;
+    double lastEmitted = 0.0;
     double rateMul = 1.0;
     double rollOrigin = -1.0;
     double rollLength = -1.0;
@@ -57,6 +62,7 @@ struct Deck {
             position = 0.0;
             return;
         }
+        lastEmitted = position;
         leftOut = deckbridge::readPerformance(left.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
                                              deckbridge::kFadeSamples);
         rightOut = deckbridge::readPerformance(right.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
@@ -189,6 +195,10 @@ struct Host {
     deckbridge::Biquad legacyLpL;
     deckbridge::Biquad legacyLpR;
     bool legacyOn = false;
+    bool lockDrums = true;
+    bool solo = false;
+    int shotVoice = -1;
+    int shotPos = 0;
 
     void legacy(float &left, float &right) {
         if (!legacyOn) return;
@@ -287,6 +297,25 @@ struct Host {
         mix.setBeat(effect, on, std::clamp(level / 127.f, 0.f, 1.f), channel, kBpm, beats);
     }
 
+    void bed(double pitch, bool drumsSolo) {
+        lockDrums = true;
+        solo = drumsSolo;
+        shotVoice = -1;
+        legacyOn = false;
+        mix.setFilter(0, 0.5f);
+        mix.setFilter(1, 0.5f);
+        decks[0].pitch = pitch;
+        decks[1].pitch = pitch;
+        cross = 1.f;
+        decks[0].volume = 0.f;
+        decks[1].volume = 1.f;
+    }
+
+    void armDrums(bool on, int voice, int bars, bool gap, bool pitchRise, float build) {
+        mix.setRmx(true, 0, false, 0.f, static_cast<float>(bars), 2, 0.25f, on, -1, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, false, 1,
+                   kBpm, build, voice, bars, gap, pitchRise, 1);
+    }
+
     void iso(float aL, float aM, float aH, float bL, float bM, float bH) {
         mix.setRmx(false, 0, false, 0.f, 1.f, 0, 0.25f, false, -1, aL, aM, aH, bL, bM, bH, false, 1, kBpm);
     }
@@ -337,6 +366,15 @@ struct Host {
                 float al = 0.f, ar = 0.f, bl = 0.f, br = 0.f;
                 decks[0].read(kRate, al, ar);
                 decks[1].read(kRate, bl, br);
+                if (solo) {
+                    al = ar = bl = br = 0.f;
+                }
+                const int follow = std::clamp(mix.drumDeck, 0, 1);
+                const Deck &grid = decks[follow];
+                const double gridBpm = grid.gridBpm > 1.0 ? grid.gridBpm : static_cast<double>(grid.bpm);
+                const bool gridLive = grid.playing && gridBpm > 1.0;
+                mix.setDrumPhase(deckbridge::musicalBeat(grid.lastEmitted, grid.sampleRate, gridBpm, grid.gridOriginSec),
+                                 gridLive, lockDrums);
                 mix.processDeck(0, al, ar);
                 mix.processDeck(1, bl, br);
                 al *= trim[0];
@@ -346,6 +384,14 @@ struct Host {
                 float masterL = al * (1.f - cross) * decks[0].volume + bl * cross * decks[1].volume;
                 float masterR = ar * (1.f - cross) * decks[0].volume + br * cross * decks[1].volume;
                 mix.processMaster(masterL, masterR);
+                if (shotVoice >= 0) {
+                    const auto &pcm = deckbridge::drumBank().voice[shotVoice];
+                    if (shotPos >= 0 && shotPos < static_cast<int>(pcm.size())) {
+                        masterL += pcm[static_cast<size_t>(shotPos)] * 0.95f;
+                        masterR += pcm[static_cast<size_t>(shotPos)] * 0.95f;
+                    }
+                    shotPos += 1;
+                }
                 if (seg.tap) seg.tap(masterL, masterR);
                 if (voice >= 0 && voices[voice].active()) {
                     const float spoken = voices[voice].next();
@@ -562,6 +608,73 @@ void buildV2(Host &host) {
     });
 }
 
+void buildDrums(Host &host) {
+    const double fast = 128.0 / 120.0;
+    auto samplesFor = [&](int bars, double pitch) {
+        return std::max(1, static_cast<int>(std::llround(static_cast<double>(bars) * static_cast<double>(kBar) / pitch)));
+    };
+    auto add = [&](int samples, const std::string &cue, std::function<void(double)> apply) {
+        Seg seg;
+        seg.samples = samples;
+        seg.cue = cue;
+        seg.apply = std::move(apply);
+        host.segs.push_back(std::move(seg));
+    };
+    add(2 * kBar, "Sintese antiga, dois compassos, fora da grade", [&](double) {
+        host.bed(1.0, true);
+        host.lockDrums = false;
+        host.armDrums(false, 0, 4, false, false, 0.f);
+        host.armDrums(true, 0, 4, false, false, 0.9f);
+    });
+    const char *hits[] = {"Bumbo gravado", "Palma com cauda curta", "Caixa", "Chimbal fechado", "Chimbal aberto"};
+    for (int voice = 0; voice < 5; ++voice) {
+        add(32000, hits[voice], [&, voice](double) {
+            host.bed(1.0, true);
+            host.armDrums(false, 0, 4, true, false, 0.f);
+            host.shotVoice = voice;
+            host.shotPos = 0;
+        });
+    }
+    add(4 * kBar, "Roll sozinho, quatro compassos, 120, bumbo e palma", [&](double) {
+        host.bed(1.0, true);
+        host.armDrums(false, 3, 4, true, false, 1.f);
+        host.armDrums(true, 3, 4, true, false, 1.f);
+    });
+    add(2 * kBar, "So a palma, dois compassos, 120", [&](double) {
+        host.bed(1.0, true);
+        host.armDrums(false, 1, 4, true, false, 1.f);
+        host.armDrums(true, 1, 4, true, false, 1.f);
+    });
+    add(2 * kBar, "So a caixa, dois compassos, 120", [&](double) {
+        host.bed(1.0, true);
+        host.armDrums(false, 2, 4, true, false, 1.f);
+        host.armDrums(true, 2, 4, true, false, 1.f);
+    });
+    add(8 * kBar, "Na faixa, oito compassos, 120, sobe, palma por cima, meio tempo de silencio", [&](double) {
+        host.bed(1.0, false);
+        host.armDrums(false, 3, 8, true, true, 1.f);
+        host.armDrums(true, 3, 8, true, true, 1.f);
+    });
+    add(4 * kBar, "Drop a 120", [&](double) {
+        host.bed(1.0, false);
+        host.armDrums(false, 3, 8, true, false, 1.f);
+    });
+    add(samplesFor(4, fast), "Roll sozinho, quatro compassos, 128", [&](double) {
+        host.bed(fast, true);
+        host.armDrums(false, 3, 4, true, false, 1.f);
+        host.armDrums(true, 3, 4, true, false, 1.f);
+    });
+    add(samplesFor(8, fast), "Na faixa, oito compassos, 128, bumbo, sobe e cala meio tempo", [&](double) {
+        host.bed(fast, false);
+        host.armDrums(false, 0, 8, true, true, 1.f);
+        host.armDrums(true, 0, 8, true, true, 1.f);
+    });
+    add(samplesFor(10, fast), "Drop a 128", [&](double) {
+        host.bed(fast, false);
+        host.armDrums(false, 0, 8, true, false, 1.f);
+    });
+}
+
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -580,6 +693,10 @@ int main(int argc, char **argv) {
     const double toodazeDownbeat = 0.0300;
     host.decks[0].position = wristDownbeat * kRate;
     host.decks[1].position = toodazeDownbeat * kRate;
+    host.decks[0].bpm = kBpm;
+    host.decks[1].bpm = kBpm;
+    host.decks[0].gridOriginSec = wristDownbeat;
+    host.decks[1].gridOriginSec = toodazeDownbeat;
     host.decks[0].pitch = 1.0;
     host.decks[1].pitch = 1.0;
     host.decks[0].playing = true;
@@ -603,7 +720,29 @@ int main(int argc, char **argv) {
     }
 
     const bool v2 = argc >= 7 && std::strcmp(argv[6], "v2") == 0;
-    if (v2) {
+    const bool drums = argc >= 7 && std::strcmp(argv[6], "drums") == 0;
+    if (drums) {
+        const char *names[] = {"kick.flac", "clap.flac", "snare.flac", "hat-closed.flac", "hat-open.flac"};
+        for (int voice = 0; voice < 5; ++voice) {
+            const std::string path = std::string("android/app/src/main/assets/drums/") + names[voice];
+            FILE *file = std::fopen(path.c_str(), "rb");
+            if (file == nullptr) {
+                std::fprintf(stderr, "sample ausente %s\n", path.c_str());
+                continue;
+            }
+            std::fseek(file, 0, SEEK_END);
+            const long bytes = std::ftell(file);
+            std::fseek(file, 0, SEEK_SET);
+            std::vector<uint8_t> data(static_cast<size_t>(std::max(0L, bytes)));
+            if (!data.empty() && std::fread(data.data(), 1, data.size(), file) != data.size()) {
+                std::fprintf(stderr, "leitura curta %s\n", names[voice]);
+            }
+            std::fclose(file);
+            const bool ok = deckbridge::loadDrumFlac(data.data(), data.size(), voice);
+            std::fprintf(stderr, "drum %s %s\n", names[voice], ok ? "ok" : "falhou");
+        }
+        buildDrums(host);
+    } else if (v2) {
         buildV2(host);
     } else {
     auto add = [&](int bars, const std::string &cue, int voice, bool each, std::function<void(double)> apply) {

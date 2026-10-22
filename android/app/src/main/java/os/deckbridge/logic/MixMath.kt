@@ -193,6 +193,11 @@ fun surfaceAction(hit: ControlHit, value: Int): PerformanceAction? {
             val side = if (hit.status == 153 || hit.status == 154 || hit.description.contains("RIGHT")) 1 else 0
             PerformanceAction(side, PerformanceAction.Kind.RMX, hotIndex = pad, slider = if (value > 0) 1.0 else 0.0)
         }
+        "PioneerDDJ400.samplerPadShiftPressed" -> {
+            val pad = (hit.midino - 48).coerceIn(0, 7)
+            val side = if (hit.status == 154 || hit.description.contains("RIGHT")) 1 else 0
+            PerformanceAction(side, PerformanceAction.Kind.RMX, hotIndex = 8 + pad, slider = 1.0)
+        }
         else -> beatLoopAction(hit.key, deck)
     }
 }

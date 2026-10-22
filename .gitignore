@@ -38,5 +38,7 @@ target/
 *.mp3
 *.wav
 *.flac
+# One-shots CC0 do drum build entram no APK. O resto do áudio continua fora.
+!android/app/src/main/assets/drums/*.flac
 *.m4a
 *.ogg

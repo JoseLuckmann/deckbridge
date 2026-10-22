@@ -664,10 +664,28 @@ fun DeckPage(
         val bpm = ((loaded.getOrNull(deck)?.bpm ?: 120.0) * (if (deck == 0) pitchA else pitchB)).toFloat()
         if (rmx.panel) {
             NativeEngine.setBeatFx(beatFxAudioKind(fx.effect), false, fx.level, fx.channel, bpm, beatFxBeats(fx.fractionLabel()).toFloat())
-            NativeEngine.setRmx(rmxPayload(rmx, bpm))
+            NativeEngine.setRmx(rmxPayload(rmx, bpm, deck))
         } else {
-            NativeEngine.setRmx(rmxPayload(rmx, bpm))
+            NativeEngine.setRmx(rmxPayload(rmx, bpm, deck))
             NativeEngine.setBeatFx(beatFxAudioKind(fx.effect), fx.on, fx.level, fx.channel, bpm, beatFxBeats(fx.fractionLabel()).toFloat())
+        }
+    }
+
+    LaunchedEffect(loaded, gridEdits, faces, catalog) {
+        for (deck in 0..1) {
+            val track = loaded.getOrNull(deck) ?: continue
+            val face = faces[deck]
+            val edit = GridEdit(face.gridShiftMs, face.gridStretch)
+            val beats = applyGrid(catalog?.analyses?.get(track.id)?.beats.orEmpty(), edit)
+            val bpm = gridBpm(track.bpm, edit)
+            val origin = if (beats.isEmpty() || bpm <= 1.0) {
+                0.0
+            } else {
+                val first = beats.first()
+                val period = 60.0 / bpm
+                first.timeMs / 1000.0 - (first.beatInBar.coerceIn(1, 4) - 1) * period
+            }
+            NativeEngine.setGrid(deck, origin.toFloat(), bpm.toFloat())
         }
     }
 

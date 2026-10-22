@@ -778,6 +778,10 @@ data class RmxState(
     val gate: Boolean = false,
     val channel: Int = 0,
     val drumBuild: Float = 0f,
+    val drumVoice: Int = 3,
+    val drumBars: Int = 8,
+    val drumGap: Boolean = true,
+    val drumPitch: Boolean = false,
 ) {
     fun sceneName(): String = SCENE_NAMES[scene.coerceIn(0, SCENE_NAMES.lastIndex)]
 }
@@ -789,12 +793,41 @@ fun reduceRmxPad(state: RmxState, action: PerformanceAction): RmxState {
     return when {
         pad in 0..3 && down -> state.copy(scene = pad, holding = true, panel = true)
         pad in 0..3 && !down -> state.copy(holding = false, intensity = 0f)
-        pad in 4..7 && down -> state.copy(xMode = pad - 4, xOn = !state.xOn, panel = true)
+        pad in 4..7 && down -> {
+            val mode = pad - 4
+            val turningOn = !(state.xOn && state.xMode == mode)
+            state.copy(
+                xMode = mode,
+                xOn = turningOn,
+                panel = true,
+                drumBuild = if (mode == 2 && turningOn && state.drumBuild < 0.2f) 1f else state.drumBuild,
+            )
+        }
+        pad in 8..11 && down -> state.copy(
+            drumVoice = pad - 8,
+            xMode = 2,
+            xOn = true,
+            panel = true,
+            drumBuild = if (state.drumBuild < 0.2f) 1f else state.drumBuild,
+        )
+        pad == 12 && down -> state.copy(drumBars = 4, xMode = 2, xOn = true, panel = true)
+        pad == 13 && down -> state.copy(drumBars = 8, xMode = 2, xOn = true, panel = true)
+        pad == 14 && down -> state.copy(drumBars = 16, xMode = 2, xOn = true, panel = true)
+        pad == 15 && down -> state.copy(drumGap = !state.drumGap, xMode = 2, xOn = true, panel = true)
         else -> state
     }
 }
 
-fun rmxPayload(state: RmxState, bpm: Float): FloatArray = floatArrayOf(
+val DRUM_VOICES = listOf("KICK", "CLAP", "SNARE", "KICK+CLAP")
+
+fun drumPatternLabel(state: RmxState): String {
+    val voice = DRUM_VOICES[state.drumVoice.coerceIn(0, DRUM_VOICES.lastIndex)]
+    val gap = if (state.drumGap) " · GAP" else ""
+    val pitch = if (state.drumPitch) " · PITCH" else ""
+    return "$voice · ${state.drumBars}c 1/4→1/32$gap$pitch"
+}
+
+fun rmxPayload(state: RmxState, bpm: Float, gridDeck: Int = state.channel.coerceIn(0, 1)): FloatArray = floatArrayOf(
     if (state.panel) 1f else 0f,
     state.scene.toFloat(),
     if (state.holding) 1f else 0f,
@@ -813,7 +846,12 @@ fun rmxPayload(state: RmxState, bpm: Float): FloatArray = floatArrayOf(
     if (state.gate) 1f else 0f,
     state.channel.toFloat(),
     bpm,
-    state.drumBuild.coerceIn(0f, 1f),
+    if (state.xOn && state.xMode == 2) state.drumBuild.coerceIn(0.05f, 1f) else state.drumBuild.coerceIn(0f, 1f),
+    state.drumVoice.coerceIn(0, 3).toFloat(),
+    state.drumBars.coerceIn(4, 16).toFloat(),
+    if (state.drumGap) 1f else 0f,
+    if (state.drumPitch) 1f else 0f,
+    gridDeck.coerceIn(0, 1).toFloat(),
 )
 
 fun drumBuildDivision(build: Float): String = when {

@@ -137,6 +137,16 @@ object NativeEngine {
         nativeSetRmx(values)
     }
 
+    fun setGrid(deck: Int, originSec: Float, bpm: Float) {
+        if (!loaded) return
+        nativeSetGrid(deck, originSec, bpm)
+    }
+
+    fun loadDrum(voice: Int, bytes: ByteArray) {
+        if (!ensureQuiet() || bytes.isEmpty()) return
+        nativeLoadDrum(voice, bytes)
+    }
+
     fun recordStart(path: String, aac: Boolean): Boolean {
         if (!ensureQuiet()) return false
         return nativeRecordStart(path, aac)
@@ -221,6 +231,8 @@ object NativeEngine {
     private external fun nativeSetReverse(deck: Int, reversed: Boolean)
     private external fun nativeSetBuffer(frames: Int)
     private external fun nativeSetRmx(values: FloatArray)
+    private external fun nativeSetGrid(deck: Int, originSec: Float, bpm: Float)
+    private external fun nativeLoadDrum(voice: Int, bytes: ByteArray)
     private external fun nativeRecordStart(path: String, side: Boolean): Boolean
     private external fun nativeRecordStop()
     private external fun nativeRecordPoll(): String
