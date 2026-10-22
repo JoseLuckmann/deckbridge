@@ -15,6 +15,8 @@ import os.deckbridge.logic.DeckFace
 import os.deckbridge.logic.Heard
 import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.SyntheticRekordbox
+import os.deckbridge.logic.PlayerSettings
+import os.deckbridge.logic.RmxState
 import os.deckbridge.logic.WaveZoom
 import os.deckbridge.logic.faderFromPitch
 import os.deckbridge.logic.loadRekordbox
@@ -99,6 +101,65 @@ class ScreenShotsTablet {
             activity.setContentView(player(activity, catalog, WaveZoom.BARS_2, fx, posA = 14.1f))
         }
     }
+
+    @Test
+    fun menu() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/menu.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), overlay = "menu", nav = "MENU"))
+        }
+    }
+
+    @Test
+    fun search() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/search.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), overlay = "search", nav = "SEARCH", query = "Night"))
+        }
+    }
+
+    @Test
+    fun tagList() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/tag-list.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), overlay = "tags", nav = "TAG LIST"))
+        }
+    }
+
+    @Test
+    fun beatJumpLoop() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/beat-jump-loop.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), loop = 8f to 10f, jump = 4.0))
+        }
+    }
+
+    @Test
+    fun beatFxList() {
+        val catalog = simulatedCatalog()
+        val fx = BeatFxState(effect = 0, on = true, level = 90)
+        capture("$PRINTS/beatfx-list.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, fx, fxList = true))
+        }
+    }
+
+    @Test
+    fun rmxPanel() {
+        val catalog = simulatedCatalog()
+        val rmx = RmxState(panel = true, scene = 0, intensity = 0.42f, bars = 4, xBeat = 2)
+        capture("$PRINTS/rmx-panel.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), rmx = rmx))
+        }
+    }
+
+    @Test
+    fun rmxFull() {
+        val catalog = simulatedCatalog()
+        val rmx = RmxState(panel = true, full = true, scene = 0, holding = true, intensity = 0.66f, bars = 4, xOn = true, xMode = 0, xBeat = 2)
+        capture("$PRINTS/rmx-full.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), rmx = rmx))
+        }
+    }
 }
 
 private fun capture(path: String, fill: (ScreenshotActivity) -> Unit) {
@@ -116,11 +177,28 @@ private fun player(
     browse: BrowsePlace? = null,
     posA: Float = 9.2f,
     posB: Float = 4.4f,
+    overlay: String = "",
+    nav: String = "",
+    query: String = "",
+    fxList: Boolean = false,
+    rmx: RmxState = RmxState(),
+    loop: Pair<Float, Float>? = null,
+    jump: Double = 0.0,
 ): ComposeView {
     val left = catalog.tracks.first { it.title == "Night Bus" }
     val right = catalog.tracks.first { it.title == "Glasshouse" }
     val faces = listOf(
-        DeckFace(playing = true, position = posA, pitch = 1f, fader = 0.5f, onAir = true, remain = true),
+        DeckFace(
+            playing = true,
+            position = posA,
+            pitch = 1f,
+            fader = 0.5f,
+            onAir = true,
+            remain = true,
+            loopStart = loop?.first ?: -1f,
+            loopEnd = loop?.second ?: -1f,
+            lastJump = jump,
+        ),
         DeckFace(
             playing = true,
             position = posB,
@@ -171,6 +249,14 @@ private fun player(
                 onBrowseBack = {},
                 onQuery = {},
                 onLoad = { _, _ -> },
+                nav = nav,
+                overlay = overlay,
+                queryText = query,
+                fxList = fxList,
+                rmx = rmx,
+                settings = PlayerSettings(),
+                tagNames = mapOf(left.id to listOf("Abertura")),
+                tagTrack = left.id,
             )
         }
     }

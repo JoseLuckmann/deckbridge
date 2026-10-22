@@ -14,8 +14,8 @@ android {
         applicationId = "os.deckbridge.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "0.7.0"
+        versionCode = 7
+        versionName = "0.8.0"
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
@@ -113,6 +113,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("net.zetetic:sqlcipher-android:4.6.1")
     implementation("androidx.sqlite:sqlite:2.2.0")

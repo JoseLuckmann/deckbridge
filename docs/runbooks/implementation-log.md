@@ -113,6 +113,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-21 | A030–A031 | parcial | `edfe33b` | tema de palco, seis prints JVM, APK arm64 | escuta e pendrive real `BLOCKED_HARDWARE`; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
 | 2026-10-22 | A032–A034 | parcial | `cafec07` | player CDJ, browser por cima, zoom, grade, Beat FX, APK 0.6.0 | escuta e pendrive real `BLOCKED_HARDWARE`; efeito de áudio não existe; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
 | 2026-10-22 | A035–A038 | parcial | `28e5466` | tela 0.7.0, browser denso, 24 faixas, PWB3, echo/delay/flanger, APK arm64 | escuta e pendrive real `BLOCKED_HARDWARE`; frase simulada; emulador A022 aberto | dono instala o APK arm64 e manda o relatório |
+| 2026-10-22 | A039–A046 | parcial | `a preencher` | tela 0.8.0, menu, salto, loop, Beat FX, RMX, APK arm64 | escuta, pendrive e mapeamento RMX `BLOCKED_HARDWARE`; A022 aberto | dono instala o APK arm64 e confirma o item 8 do checklist |
 
 ### Proposta Android
 - Estado: proposta, não aceita
@@ -186,6 +187,20 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Prints em `/opt/cursor/artifacts/prints/`: `player-2000x1200.png`, `player-1024x600.png`, `browse-list.png`, `beatfx-zoom.png`, `diagnostico.png`. Faixa pequena: "SIMULAÇÃO · Renderização em JVM".
 - APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4025021 bytes, SHA-256 `946213adb5ef58efd2295fb86c4351334b091da7e12038e0bd855465df273a02`, versão 0.7.0, só arm64-v8a, minify e shrink. Assinatura de debug.
 - APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 18523296 bytes, SHA-256 `d2fc5d98090df20762933af21ebf9df8b81ab6245082c623371c897c487469c6`.
+- HIL executado? não
+
+### Tela 0.8.0 e APK
+- Estado: interface e motor na JVM e no binário hospedeiro; escuta, pendrive real e mapeamento RMX na controladora BLOCKED_HARDWARE
+- Barra alta com seis botões iguais. Faixa fina com simulação, relógio e REMAIN. MENU grava preferências. TAG LIST, PLAYLIST e SEARCH abrem as suas listas.
+- Faixa de toque: salto −32…+32 e loop 4 / IN / OUT / metade / dobro / sair / 1/4…32. O mapa oficial de BEAT JUMP e BEAT LOOP faz o mesmo caminho no motor.
+- Beat FX da lista oficial entra no mixer da rota 3. Spiral, Helix, Mobius, Pitch e o reverb são aproximações originais. O knob FILTER é o único Sound Color FX deste mapa.
+- RMX: Scene FX, X-Pad, isolador na tela e release. Com o painel ligado, os pads SAMPLER (notas 0x30–0x37) disparam a cena e o X-Pad. SHIFT+SAMPLER não é tomado. Provisório até o item 8 de `docs/hil/checklist-fase1.md`.
+- Master Tempo é um deslocador de tom por duas linhas de atraso. Não é o algoritmo comercial.
+- As faixas sintéticas duram 18 s ou 32 s. A barra de frase continua simulada. PWB3 continua a ser a seção deste projeto.
+- O jog e o sentido do encoder continuam provisórios, mesmo com o ajuste no menu.
+- Prints em `/opt/cursor/artifacts/prints/`: `player-2000x1200.png`, `player-1024x600.png`, `browse-list.png`, `beatfx-zoom.png`, `diagnostico.png`, `menu.png`, `search.png`, `tag-list.png`, `beat-jump-loop.png`, `beatfx-list.png`, `rmx-panel.png`, `rmx-full.png`.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4172961 bytes, SHA-256 `2af0ee14fde7b54c5866b6b914c9abaecdab5055f82b1b599a283e824e32d880`, versão 0.8.0 (versionCode 7), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19327975 bytes, SHA-256 `63cb27d7c4cc9c1bac2a5dbadc763aa7873dbedb08688b2d68a3662fd469db40`.
 - HIL executado? não
 
 ### T020 — configuração

@@ -50,6 +50,8 @@ internal fun ZoomedWave(
     onZoom: (Int, WaveZoom) -> Unit,
     onSeek: (Int, Float) -> Unit,
     modifier: Modifier = Modifier,
+    anchor: Double = PLAYHEAD_ANCHOR,
+    waveMode: Int = 1,
 ) {
     val measurer = rememberTextMeasurer()
     val duration = (track?.durationSeconds ?: 0).toDouble().coerceAtLeast(0.1)
@@ -57,7 +59,7 @@ internal fun ZoomedWave(
     val position = face.position.toDouble()
     val window = windowSeconds(zoom, if (bpm > 1.0) bpm else 120.0, duration)
     val whole = zoom == WaveZoom.TRACK
-    val start = if (whole) 0.0 else position - window * PLAYHEAD_ANCHOR
+    val start = if (whole) 0.0 else position - window * anchor
     Box(
         modifier
             .background(Color(StagePalette.bg))
@@ -91,7 +93,7 @@ internal fun ZoomedWave(
                 mid[index] = sample.second
                 high[index] = sample.third
             }
-            drawMirroredBands(smooth(low), smooth(mid), smooth(high), waveTop, waveBot, lowGain = 0.98f, midGain = 0.58f, highGain = 0.32f)
+            drawMirroredBands(smooth(low), smooth(mid), smooth(high), waveTop, waveBot, lowGain = 0.98f, midGain = 0.58f, highGain = 0.32f, waveMode = waveMode)
             drawLine(
                 Color.Black.copy(alpha = 0.55f),
                 Offset(0f, (waveTop + waveBot) / 2f),
@@ -101,13 +103,13 @@ internal fun ZoomedWave(
             val playX = if (whole) {
                 (position / duration).coerceIn(0.0, 1.0).toFloat() * size.width
             } else {
-                PLAYHEAD_ANCHOR.toFloat() * size.width
+                anchor.toFloat() * size.width
             }
             if (bpm > 1.0) {
                 val lines = gridLines(bpm, duration, analysis?.beats.orEmpty())
                 val numberStyle = TextStyle(color = Color(StagePalette.ink), fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 lines.forEach { line ->
-                    val fraction = markerFraction(line.seconds, position, window, whole, duration, PLAYHEAD_ANCHOR).toFloat()
+                    val fraction = markerFraction(line.seconds, position, window, whole, duration, anchor).toFloat()
                     if (fraction < -0.01f || fraction > 1.01f) return@forEach
                     val x = fraction * size.width
                     val downbeat = line.kind != MarkerKind.BEAT
@@ -136,10 +138,14 @@ internal fun ZoomedWave(
                     }
                 }
             }
-            val loop = activeLoop(analysis)
+            val loop = if (face.loopEnd > face.loopStart) {
+                (face.loopStart * 1000).roundToInt() to (face.loopEnd * 1000).roundToInt()
+            } else {
+                activeLoop(analysis)
+            }
             if (loop != null) {
-                val a = markerFraction(loop.first / 1000.0, position, window, whole, duration, PLAYHEAD_ANCHOR).toFloat()
-                val b = markerFraction(loop.second / 1000.0, position, window, whole, duration, PLAYHEAD_ANCHOR).toFloat()
+                val a = markerFraction(loop.first / 1000.0, position, window, whole, duration, anchor).toFloat()
+                val b = markerFraction(loop.second / 1000.0, position, window, whole, duration, anchor).toFloat()
                 if (b > 0f && a < 1f) {
                     val left = a.coerceAtLeast(0f) * size.width
                     val right = b.coerceAtMost(1f) * size.width
@@ -161,7 +167,7 @@ internal fun ZoomedWave(
                 }
             }
             analysis?.hotCues?.forEach { cue ->
-                val fraction = markerFraction(cue.timeMs / 1000.0, position, window, whole, duration, PLAYHEAD_ANCHOR).toFloat()
+                val fraction = markerFraction(cue.timeMs / 1000.0, position, window, whole, duration, anchor).toFloat()
                 if (fraction !in 0f..1f) return@forEach
                 val x = fraction * size.width
                 val color = argb(LETTER_COLORS[cue.index.coerceIn(0, LETTER_COLORS.lastIndex)])
@@ -304,10 +310,21 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawMirroredBands(
     lowGain: Float = 0.94f,
     midGain: Float = 0.72f,
     highGain: Float = 0.46f,
+    waveMode: Int = 1,
 ) {
-    drawBand(low, Color(StagePalette.waveLow), top, bottom, lowGain)
-    drawBand(mid, Color(StagePalette.waveMid), top, bottom, midGain)
-    drawBand(high, Color(StagePalette.waveHigh), top, bottom, highGain)
+    when (waveMode) {
+        0 -> {
+            drawBand(low, Color(0xFFE23B4A), top, bottom, lowGain)
+            drawBand(mid, Color(0xFF3DDC6A), top, bottom, midGain)
+            drawBand(high, Color(StagePalette.waveLow), top, bottom, highGain)
+        }
+        2 -> drawBand(low, Color(StagePalette.waveLow), top, bottom, lowGain)
+        else -> {
+            drawBand(low, Color(StagePalette.waveLow), top, bottom, lowGain)
+            drawBand(mid, Color(StagePalette.waveMid), top, bottom, midGain)
+            drawBand(high, Color(StagePalette.waveHigh), top, bottom, highGain)
+        }
+    }
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBand(

@@ -10,6 +10,7 @@ data class PerformanceAction(
         PLAY, CUE, HOT_CUE, VOLUME, CROSSFADER, PITCH, JOG,
         BROWSE_MOVE, BROWSE_ENTER, BROWSE_BACK, LOAD,
         BEAT_FX, FILTER, QUANTIZE, SYNC, MASTER,
+        BEAT_JUMP, BEAT_JUMP_PAGE, LOOP_IN, LOOP_OUT, RELOOP, LOOP_SCALE, BEAT_LOOP, RMX,
     }
 }
 
@@ -139,7 +140,7 @@ fun surfaceAction(hit: ControlHit, value: Int): PerformanceAction? {
         if (steps == 0) return null
         return PerformanceAction(-1, PerformanceAction.Kind.BROWSE_MOVE, slider = steps.toDouble())
     }
-    if (value <= 0 && hit.key != "PioneerDDJ400.beatFxLevelDepthRotate" && hit.key != "super1") {
+    if (value <= 0 && hit.key != "PioneerDDJ400.beatFxLevelDepthRotate" && hit.key != "super1" && hit.key != "PioneerDDJ400.samplerPadPressed") {
         return null
     }
     val deck = when {
@@ -175,8 +176,41 @@ fun surfaceAction(hit: ControlHit, value: Int): PerformanceAction? {
         "PioneerDDJ400.toggleQuantize" -> PerformanceAction(deck, PerformanceAction.Kind.QUANTIZE)
         "PioneerDDJ400.syncPressed" -> PerformanceAction(deck, PerformanceAction.Kind.SYNC)
         "PioneerDDJ400.syncLongPressed" -> PerformanceAction(deck, PerformanceAction.Kind.MASTER)
-        else -> null
+        "loop_in" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.LOOP_IN) else null
+        "loop_out" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.LOOP_OUT) else null
+        "reloop_toggle" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.RELOOP, hotIndex = 0) else null
+        "reloop_andstop" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.RELOOP, hotIndex = 1) else null
+        "PioneerDDJ400.cueLoopCallLeft" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.LOOP_SCALE, slider = 0.5) else null
+        "PioneerDDJ400.cueLoopCallRight" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.LOOP_SCALE, slider = 2.0) else null
+        "PioneerDDJ400.beatjumpPadPressed" -> {
+            val pad = hit.midino - 32
+            if (deck < 0 || pad !in 0..7) null else PerformanceAction(deck, PerformanceAction.Kind.BEAT_JUMP, hotIndex = pad)
+        }
+        "PioneerDDJ400.decreaseBeatjumpSizes" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.BEAT_JUMP_PAGE, hotIndex = 0) else null
+        "PioneerDDJ400.increaseBeatjumpSizes" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.BEAT_JUMP_PAGE, hotIndex = 1) else null
+        "PioneerDDJ400.samplerPadPressed" -> {
+            val pad = (hit.midino - 48).coerceIn(0, 7)
+            val side = if (hit.status == 153 || hit.status == 154 || hit.description.contains("RIGHT")) 1 else 0
+            PerformanceAction(side, PerformanceAction.Kind.RMX, hotIndex = pad, slider = if (value > 0) 1.0 else 0.0)
+        }
+        else -> beatLoopAction(hit.key, deck)
     }
+}
+
+private fun beatLoopAction(key: String, deck: Int): PerformanceAction? {
+    if (deck < 0) return null
+    val beats = when (key) {
+        "beatloop_0.25_toggle" -> 0.25
+        "beatloop_0.5_toggle" -> 0.5
+        "beatloop_1_toggle" -> 1.0
+        "beatloop_2_toggle" -> 2.0
+        "beatloop_4_toggle" -> 4.0
+        "beatloop_8_toggle" -> 8.0
+        "beatloop_16_toggle" -> 16.0
+        "beatloop_32_toggle" -> 32.0
+        else -> return null
+    }
+    return PerformanceAction(deck, PerformanceAction.Kind.BEAT_LOOP, slider = beats)
 }
 
 /** Posição 0 = −faixa, 0,5 = centro, 1 = +faixa, pela mesma conta de 14 bits do MIDI. */

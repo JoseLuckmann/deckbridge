@@ -87,6 +87,31 @@ object NativeEngine {
         nativeSetBeatFx(effect, on, level, channel, bpm, beats)
     }
 
+    fun setFilter(deck: Int, norm: Float) {
+        if (!loaded) return
+        nativeSetFilter(deck, norm)
+    }
+
+    fun setKeyLock(deck: Int, enabled: Boolean) {
+        if (!loaded) return
+        nativeSetKeyLock(deck, enabled)
+    }
+
+    fun setLoop(deck: Int, startSec: Float, endSec: Float) {
+        if (!loaded) return
+        nativeSetLoop(deck, startSec, endSec)
+    }
+
+    fun setBuffer(frames: Int) {
+        if (!loaded) return
+        nativeSetBuffer(frames)
+    }
+
+    fun setRmx(values: FloatArray) {
+        if (!loaded) return
+        nativeSetRmx(values)
+    }
+
     private fun ensure() {
         if (!loaded) {
             System.loadLibrary("deckbridge-engine")
@@ -141,4 +166,9 @@ object NativeEngine {
     private external fun nativeSeek(deck: Int, seconds: Float)
     private external fun nativeNudge(deck: Int, seconds: Float)
     private external fun nativeSetBeatFx(effect: Int, on: Boolean, level: Int, channel: Int, bpm: Float, beats: Float)
+    private external fun nativeSetFilter(deck: Int, norm: Float)
+    private external fun nativeSetKeyLock(deck: Int, enabled: Boolean)
+    private external fun nativeSetLoop(deck: Int, startSec: Float, endSec: Float)
+    private external fun nativeSetBuffer(frames: Int)
+    private external fun nativeSetRmx(values: FloatArray)
 }

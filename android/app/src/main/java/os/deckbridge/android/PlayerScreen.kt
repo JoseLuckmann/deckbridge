@@ -17,7 +17,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,9 +45,12 @@ import os.deckbridge.logic.DeckFace
 import os.deckbridge.logic.LETTER_COLORS
 import os.deckbridge.logic.RbAnalysis
 import os.deckbridge.logic.RbCatalog
+import os.deckbridge.logic.PlayerSettings
 import os.deckbridge.logic.RbTrack
+import os.deckbridge.logic.RmxState
 import os.deckbridge.logic.StagePalette
 import os.deckbridge.logic.WaveZoom
+import os.deckbridge.logic.waveModeIndex
 import os.deckbridge.logic.activeLoop
 import os.deckbridge.logic.barsFromSeconds
 import os.deckbridge.logic.beatFxBeats
@@ -100,10 +106,42 @@ fun PlayerScreen(
     onOpenCategory: (BrowseCategory) -> Unit = {},
     onSeek: (Int, Float) -> Unit = { _, _ -> },
     status: String = "",
+    nav: String = "",
+    overlay: String = "",
+    onOverlay: (String) -> Unit = {},
+    settings: PlayerSettings = PlayerSettings(),
+    onSettings: (PlayerSettings) -> Unit = {},
+    rmx: RmxState = RmxState(),
+    onRmx: (RmxState) -> Unit = {},
+    fxList: Boolean = false,
+    tagNames: Map<Int, List<String>> = emptyMap(),
+    onTag: (Int, String, Boolean) -> Unit = { _, _, _ -> },
+    midiLine: String = "",
+    onDiagnostics: () -> Unit = {},
+    onTestTone: (Int) -> Unit = {},
+    onBeatLoop: (Int, Double) -> Unit = { _, _ -> },
+    onLoopButton: (Int, String) -> Unit = { _, _ -> },
+    searchBpm: Pair<Int, Int> = 0 to 999,
+    onSearchBpm: (Int, Int) -> Unit = { _, _ -> },
+    searchKey: String = "",
+    onSearchKey: (String) -> Unit = {},
+    queryText: String = "",
+    tagTrack: Int? = null,
+    onTagTrack: (Int) -> Unit = {},
 ) {
     var info by remember { mutableStateOf(false) }
     var grid by remember { mutableStateOf(false) }
     var fxPanel by remember { mutableStateOf(true) }
+    var picked by remember { mutableStateOf("") }
+    val shownNav = nav.ifBlank {
+        when {
+            overlay == "menu" -> "MENU"
+            overlay == "search" -> "SEARCH"
+            overlay == "tags" -> "TAG LIST"
+            browse != null -> picked.ifBlank { "BROWSE" }
+            else -> picked
+        }
+    }
     val note = if (jvmBanner.isNullOrBlank()) null else "SIMULAÇÃO · Renderização em JVM"
     val masterTrack = tracks.getOrNull(master)
     val masterFace = faces.getOrElse(master) { DeckFace() }
@@ -124,9 +162,23 @@ fun PlayerScreen(
                 note = note,
                 clock = clock,
                 remain = setRemain,
-                onBrowse = onBrowse,
-                onOpenCategory = onOpenCategory,
-                onMenu = { onPage(0) },
+                nav = shownNav,
+                onNav = { id ->
+                    picked = id
+                    when (id) {
+                        "SOURCE", "BROWSE" -> {
+                            onOverlay("")
+                            onBrowse()
+                        }
+                        "TAG LIST" -> onOverlay("tags")
+                        "PLAYLIST" -> {
+                            onOverlay("")
+                            onOpenCategory(BrowseCategory.PLAYLIST)
+                        }
+                        "SEARCH" -> onOverlay("search")
+                        "MENU" -> onOverlay("menu")
+                    }
+                },
                 onInfo = { info = !info },
             )
             Row(
@@ -134,12 +186,12 @@ fun PlayerScreen(
                 horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp),
             ) {
                 Column(Modifier.width(side).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    DeckInfo(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, catalog, quantize, compact, Modifier.weight(1f))
-                    DeckInfo(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, catalog, quantize, compact, Modifier.weight(1f))
+                    DeckInfo(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, catalog, quantize, settings.quantizeBeats, compact, Modifier.weight(1f))
+                    DeckInfo(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, catalog, quantize, settings.quantizeBeats, compact, Modifier.weight(1f))
                 }
                 Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    ZoomedWave(0, tracks.getOrNull(0), analysisOf(catalog, tracks.getOrNull(0)), faces.getOrElse(0) { DeckFace() }, zoom.first(), grid, onZoom, onSeek, Modifier.weight(1f).fillMaxWidth())
-                    ZoomedWave(1, tracks.getOrNull(1), analysisOf(catalog, tracks.getOrNull(1)), faces.getOrElse(1) { DeckFace() }, if (zoomLink) zoom.first() else zoom.getOrElse(1) { zoom.first() }, grid, onZoom, onSeek, Modifier.weight(1f).fillMaxWidth())
+                    ZoomedWave(0, tracks.getOrNull(0), analysisOf(catalog, tracks.getOrNull(0)), faces.getOrElse(0) { DeckFace() }, zoom.first(), grid, onZoom, onSeek, Modifier.weight(1f).fillMaxWidth(), settings.playhead.toDouble(), waveModeIndex(settings.waveColor))
+                    ZoomedWave(1, tracks.getOrNull(1), analysisOf(catalog, tracks.getOrNull(1)), faces.getOrElse(1) { DeckFace() }, if (zoomLink) zoom.first() else zoom.getOrElse(1) { zoom.first() }, grid, onZoom, onSeek, Modifier.weight(1f).fillMaxWidth(), settings.playhead.toDouble(), waveModeIndex(settings.waveColor))
                 }
                 FxRail(
                     fx = fx,
@@ -154,22 +206,44 @@ fun PlayerScreen(
                     onGrid = { grid = it },
                     onFxPanel = { fxPanel = it },
                     onZoom = { onZoom(0, it) },
+                    rmx = rmx,
+                    onRmx = onRmx,
+                    fxList = fxList,
                     modifier = Modifier.width(rail).fillMaxHeight(),
                 )
             }
             HotCueBand(catalog, tracks, compact, onActive, onHot, Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 6.dp))
+            PerformanceStrip(
+                deck = activeDeck,
+                compact = compact,
+                loopOn = faces.getOrElse(activeDeck) { DeckFace() }.let { it.loopEnd > it.loopStart },
+                modifier = Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 4.dp),
+                onJump = { beats -> onJump(activeDeck, beats) },
+                onLoop = { which -> onLoopButton(activeDeck, which) },
+                onBeatLoop = { beats -> onBeatLoop(activeDeck, beats) },
+            )
             Row(
-                Modifier.fillMaxWidth().height(if (compact) 132.dp else 196.dp).padding(top = if (compact) 3.dp else 6.dp),
+                Modifier.fillMaxWidth().height(if (compact) 118.dp else 176.dp).padding(top = if (compact) 3.dp else 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0)), master == 0, activeDeck == 0, quantize, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay)
-                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1)), master == 1, activeDeck == 1, quantize, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay)
+                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0)), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay)
+                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1)), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay)
             }
         }
         if (info) {
             InfoCard(tracks.getOrNull(activeDeck), Modifier.align(Alignment.TopEnd).padding(12.dp)) { info = false }
         }
-        if (browse != null && catalog != null) {
+        if (overlay == "menu") {
+            MenuScreen(settings, midiLine, onSettings, { onOverlay("") }, onDiagnostics, onTestTone)
+        } else if (overlay == "search" && catalog != null) {
+            SearchScreen(catalog.tracks, queryText, searchBpm.first, searchBpm.second, searchKey, onQuery, onSearchBpm, onSearchKey, onLoad) { onOverlay("") }
+        } else if (overlay == "tags") {
+            val pool = tracks.filterNotNull().ifEmpty { catalog?.tracks.orEmpty() }
+            TagScreen(pool, tagNames, tagTrack, onTagTrack, onTag) { onOverlay("") }
+        } else if (rmx.full) {
+            RmxScreen(rmx, onRmx) { onRmx(rmx.copy(full = false)) }
+        }
+        if (browse != null && catalog != null && overlay.isEmpty() && !rmx.full) {
             BrowseScreen(
                 catalog = catalog,
                 place = browse,
@@ -198,26 +272,28 @@ private fun TopBar(
     note: String?,
     clock: String,
     remain: String,
-    onBrowse: () -> Unit,
-    onOpenCategory: (BrowseCategory) -> Unit,
-    onMenu: () -> Unit,
+    nav: String,
+    onNav: (String) -> Unit,
     onInfo: () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().height(if (compact) 26.dp else 32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        NavButton("SOURCE", compact, onBrowse)
-        NavButton("BROWSE", compact, onBrowse)
-        NavButton("TAG LIST", compact) { onOpenCategory(BrowseCategory.TAG) }
-        NavButton("PLAYLIST", compact) { onOpenCategory(BrowseCategory.PLAYLIST) }
-        NavButton("SEARCH", compact) { onOpenCategory(BrowseCategory.SEARCH) }
-        NavButton("MENU", compact, onMenu)
-        Spacer(Modifier.weight(1f))
-        if (note != null) {
-            TextInk(note, color = Color(StagePalette.simInk), fontSize = if (compact) 9.sp else 10.sp, maxLines = 1, modifier = Modifier.widthIn(max = if (compact) 148.dp else 240.dp))
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().height(if (compact) 16.dp else 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (note != null) {
+                TextInk(note, color = Color(StagePalette.simInk), fontSize = if (compact) 9.sp else 11.sp, maxLines = 1, modifier = Modifier.widthIn(max = if (compact) 180.dp else 280.dp))
+            }
+            Spacer(Modifier.weight(1f))
+            TextInk(clock, fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.Medium, mono = true)
+            TextInk("REMAIN", fontSize = 9.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 8.dp))
+            TextInk(remain, fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.Medium, mono = true)
+            Box(Modifier.padding(start = 8.dp).clickable(onClick = onInfo)) {
+                TextInk("INFO", color = Color(StagePalette.accentBlue), fontSize = 11.sp, weight = FontWeight.Bold)
+            }
         }
-        TextInk(clock, fontSize = if (compact) 12.sp else 14.sp, weight = FontWeight.Medium, mono = true, modifier = Modifier.padding(start = 8.dp))
-        TextInk("REMAIN", fontSize = 9.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 8.dp))
-        TextInk(remain, fontSize = if (compact) 12.sp else 14.sp, weight = FontWeight.Medium, mono = true)
-        NavButton("INFO", compact, onInfo)
+        Row(Modifier.fillMaxWidth().height(if (compact) 44.dp else 60.dp).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            listOf("SOURCE", "BROWSE", "TAG LIST", "PLAYLIST", "SEARCH", "MENU").forEach { label ->
+                NavButton(label, compact, nav == label, Modifier.weight(1f)) { onNav(label) }
+            }
+        }
     }
 }
 
@@ -228,6 +304,7 @@ private fun DeckInfo(
     face: DeckFace,
     catalog: RbCatalog?,
     quantize: Boolean,
+    quantizeBeats: Double,
     compact: Boolean,
     modifier: Modifier,
 ) {
@@ -254,12 +331,15 @@ private fun DeckInfo(
         } else {
             TextInk("%.1f Bars".format(bars), color = Color(StagePalette.accentOrange), fontSize = if (compact) 12.sp else 16.sp, weight = FontWeight.Bold, maxLines = 1)
         }
-        if (loop != null && track != null) {
+        if (face.loopEnd > face.loopStart && track != null) {
+            MetaLine("LOOP", loopLengthLabel((face.loopStart * 1000).roundToInt(), (face.loopEnd * 1000).roundToInt(), track.bpm), compact)
+        } else if (loop != null && track != null) {
             MetaLine("LOOP", loopLengthLabel(loop.first, loop.second, track.bpm), compact)
         } else {
-            MetaLine("JUMP", "1", compact)
+            MetaLine("LOOP", "—", compact)
         }
-        MetaLine("Q", if (quantize) "1/4" else "OFF", compact)
+        MetaLine("JUMP", if (face.lastJump == 0.0) "1" else "%+.0f".format(face.lastJump), compact)
+        MetaLine("Q", if (quantize) quantizeMark(quantizeBeats) else "OFF", compact)
     }
 }
 
@@ -296,13 +376,26 @@ private fun FxRail(
     onGrid: (Boolean) -> Unit,
     onFxPanel: (Boolean) -> Unit,
     onZoom: (WaveZoom) -> Unit,
+    rmx: RmxState,
+    onRmx: (RmxState) -> Unit,
+    fxList: Boolean,
     modifier: Modifier,
 ) {
+    var listOpen by remember { mutableStateOf(false) }
+    val showList = fxList || listOpen
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Column(Modifier.weight(1f).fillMaxWidth().border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(if (compact) 4.dp else 8.dp)) {
-            TextInk("BEAT FX", fontSize = if (compact) 10.sp else 12.sp, weight = FontWeight.Bold)
-            if (fxPanel) {
-                FxBody(fx, bpm, compact, onFxChange)
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Choice("BEAT FX", fxPanel && !rmx.panel, compact, Modifier.weight(1f)) {
+                    onFxPanel(true)
+                    onRmx(rmx.copy(panel = false, full = false))
+                }
+                Choice("RMX", rmx.panel, compact, Modifier.weight(1f)) { onRmx(rmx.copy(panel = true)) }
+            }
+            if (rmx.panel) {
+                RmxRail(rmx, compact, onRmx) { onRmx(rmx.copy(full = true, panel = true)) }
+            } else if (fxPanel) {
+                FxBody(fx, bpm, compact, showList, onFxChange)
             } else {
                 TextInk("STATUS", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp))
                 TextInk(status.ifBlank { "À espera de uma faixa." }, fontSize = if (compact) 10.sp else 12.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 4)
@@ -322,14 +415,17 @@ private fun FxRail(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Choice("STATUS", !fxPanel, compact, Modifier.weight(1f)) { onFxPanel(false) }
-            Choice("BEAT FX", fxPanel, compact, Modifier.weight(1f)) { onFxPanel(true) }
+            Choice("STATUS", !fxPanel && !rmx.panel, compact, Modifier.weight(1f)) {
+                onRmx(rmx.copy(panel = false))
+                onFxPanel(false)
+            }
+            Choice("LISTA", showList && fxPanel && !rmx.panel, compact, Modifier.weight(1f)) { listOpen = !listOpen }
         }
     }
 }
 
 @Composable
-private fun FxBody(fx: BeatFxState, bpm: Double, compact: Boolean, onFxChange: (BeatFxState) -> Unit) {
+private fun FxBody(fx: BeatFxState, bpm: Double, compact: Boolean, list: Boolean, onFxChange: (BeatFxState) -> Unit) {
     val on = fx.on
     val nameFill = if (on) Color(StagePalette.accentBlue) else Color(StagePalette.panelRaised)
     val nameInk = if (on) Color(inkOn(StagePalette.accentBlue)) else Color(StagePalette.accentBlue)
@@ -340,7 +436,7 @@ private fun FxBody(fx: BeatFxState, bpm: Double, compact: Boolean, onFxChange: (
             },
             contentAlignment = Alignment.Center,
         ) {
-            TextInk(fx.name().uppercase(), color = nameInk, fontSize = if (compact) 14.sp else 20.sp, weight = FontWeight.Bold, maxLines = 1)
+            TextInk(fx.name().uppercase(), color = nameInk, fontSize = if (compact) 12.sp else 16.sp, weight = FontWeight.Bold, maxLines = 1)
         }
         Box(
             Modifier.width(if (compact) 22.dp else 28.dp).height(if (compact) 28.dp else 40.dp).border(1.dp, Color(StagePalette.line)).clickable {
@@ -350,6 +446,22 @@ private fun FxBody(fx: BeatFxState, bpm: Double, compact: Boolean, onFxChange: (
         ) {
             TextInk("›", color = Color(StagePalette.accentBlue), fontSize = 16.sp, weight = FontWeight.Bold)
         }
+    }
+    if (list) {
+        Column(Modifier.fillMaxWidth().height(if (compact) 150.dp else 240.dp).verticalScroll(rememberScrollState()).padding(top = 4.dp)) {
+            BEAT_FX_NAMES.forEachIndexed { index, name ->
+                val selected = fx.effect == index
+                TextInk(
+                    name.uppercase(),
+                    color = Color(if (selected) StagePalette.accentOrange else StagePalette.accentBlue),
+                    fontSize = if (compact) 11.sp else 13.sp,
+                    weight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    modifier = Modifier.fillMaxWidth().clickable { onFxChange(fx.copy(effect = index, on = true)) }.padding(vertical = 2.dp),
+                )
+            }
+        }
+        return
     }
     Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         TextInk(if (bpm > 1.0) "%.2f".format(bpm) else "—", fontSize = if (compact) 14.sp else 18.sp, weight = FontWeight.Medium, mono = true)
@@ -448,6 +560,38 @@ private fun HotGrid(
 }
 
 @Composable
+private fun PerformanceStrip(
+    deck: Int,
+    compact: Boolean,
+    loopOn: Boolean,
+    modifier: Modifier,
+    onJump: (Int) -> Unit,
+    onLoop: (String) -> Unit,
+    onBeatLoop: (Double) -> Unit,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth().height(if (compact) 22.dp else 28.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextInk("D${deck + 1}", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentBlue), modifier = Modifier.width(if (compact) 22.dp else 28.dp))
+            listOf(-32, -16, -8, -4, -2, -1, 1, 2, 4, 8, 16, 32).forEach { beats ->
+                Choice(if (beats > 0) "+$beats" else "$beats", false, compact, Modifier.weight(1f)) { onJump(beats) }
+            }
+        }
+        Row(Modifier.fillMaxWidth().height(if (compact) 22.dp else 28.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextInk("LOOP", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 36.dp else 44.dp))
+            Choice("4", loopOn, compact, Modifier.weight(1f)) { onLoop("4") }
+            Choice("IN", false, compact, Modifier.weight(1f)) { onLoop("IN") }
+            Choice("OUT", false, compact, Modifier.weight(1f)) { onLoop("OUT") }
+            Choice("1/2", false, compact, Modifier.weight(1f)) { onLoop("HALF") }
+            Choice("x2", false, compact, Modifier.weight(1f)) { onLoop("DOUBLE") }
+            Choice("EXIT", loopOn, compact, Modifier.weight(1f)) { onLoop("RELOOP") }
+            listOf(0.25 to "1/4", 0.5 to "1/2", 1.0 to "1", 2.0 to "2", 8.0 to "8", 16.0 to "16", 32.0 to "32").forEach { (beats, label) ->
+                Choice(label, false, compact, Modifier.weight(1f)) { onBeatLoop(beats) }
+            }
+        }
+    }
+}
+
+@Composable
 private fun DeckCard(
     deck: Int,
     track: RbTrack?,
@@ -456,6 +600,7 @@ private fun DeckCard(
     master: Boolean,
     active: Boolean,
     quantize: Boolean,
+    quantizeBeats: Double,
     compact: Boolean,
     modifier: Modifier,
     onActive: (Int) -> Unit,
@@ -534,7 +679,7 @@ private fun DeckCard(
             Lamp("A.HOT CUE", true, compact)
             Lamp("AUTO CUE", analysis?.mainCueMs != null && analysis.mainCueMs >= 0, compact)
             Box(Modifier.clickable(onClick = onQuantize)) {
-                Lamp(if (quantize) "QUANTIZE 1/4" else "QUANTIZE", quantize, compact)
+                Lamp(if (quantize) "QUANTIZE ${quantizeMark(quantizeBeats)}" else "QUANTIZE", quantize, compact)
             }
         }
     }
@@ -555,12 +700,17 @@ private fun InfoCard(track: RbTrack?, modifier: Modifier, onClose: () -> Unit) {
 }
 
 @Composable
-private fun NavButton(label: String, compact: Boolean, onClick: () -> Unit) {
+private fun NavButton(label: String, compact: Boolean, selected: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val fill = if (selected) {
+        Brush.verticalGradient(listOf(Color(0xFF315A93), Color(0xFF1A3A68)))
+    } else {
+        Brush.verticalGradient(listOf(Color(0xFF2A2E36), Color(0xFF121418)))
+    }
     Box(
-        Modifier.height(if (compact) 22.dp else 26.dp).clip(RoundedCornerShape(5.dp)).background(Color(StagePalette.panelRaised)).border(1.dp, Color(StagePalette.line), RoundedCornerShape(5.dp)).clickable(onClick = onClick).padding(horizontal = if (compact) 6.dp else 8.dp),
+        modifier.fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(fill).border(if (selected) 2.dp else 1.dp, Color(if (selected) StagePalette.accentBlue else StagePalette.line), RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        TextInk(label, color = Color(StagePalette.accentBlue), fontSize = if (compact) 10.sp else 12.sp, weight = FontWeight.Bold, maxLines = 1)
+        TextInk(label, color = Color(if (selected) StagePalette.ink else StagePalette.accentBlue), fontSize = if (compact) 11.sp else 15.sp, weight = FontWeight.Bold, maxLines = 1)
     }
 }
 
@@ -613,6 +763,14 @@ private fun rangeBadge(range: Double): String = when {
     abs(range - 0.16) < 1e-6 -> "16%"
     abs(range - 0.25) < 1e-6 -> "WIDE"
     else -> "${(range * 100).roundToInt()}%"
+}
+
+private fun quantizeMark(beats: Double): String = when (beats) {
+    0.25 -> "1/16"
+    0.5 -> "1/8"
+    2.0 -> "1/2"
+    4.0 -> "1"
+    else -> "1/4"
 }
 
 private fun bpmParts(bpm: Double): Pair<String, String> {

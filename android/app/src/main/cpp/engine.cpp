@@ -1,3 +1,5 @@
+#include "dsp.h"
+
 #include <oboe/Oboe.h>
 
 #include <android/log.h>
@@ -57,6 +59,13 @@ struct Deck {
     float bpm = 0.f;
     double loopStart = -1.0;
     double loopEnd = -1.0;
+    double rateMul = 1.0;
+    double rollOrigin = -1.0;
+    double rollLength = -1.0;
+    double slip = -1.0;
+    bool keyLock = false;
+    deckbridge::PitchShift shiftL;
+    deckbridge::PitchShift shiftR;
 
     Deck() {
         for (double &item : hot) item = -1.0;
@@ -83,11 +92,22 @@ struct Deck {
             position = 0.0;
             return;
         }
-        const int next = std::min(index + 1, frames - 1);
-        const float frac = static_cast<float>(position - index);
-        leftOut = left[index] * (1.f - frac) + left[next] * frac;
-        rightOut = right[index] * (1.f - frac) + right[next] * frac;
-        position += (pitch * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
+        leftOut = deckbridge::readLooped(left.data(), frames, position, loopStart, loopEnd, deckbridge::kFadeSamples);
+        rightOut = deckbridge::readLooped(right.data(), frames, position, loopStart, loopEnd, deckbridge::kFadeSamples);
+        if (keyLock && pitch > 0.05 && std::abs(pitch - 1.0) > 0.01) {
+            const float ratio = static_cast<float>(1.0 / pitch);
+            leftOut = shiftL.process(leftOut, ratio);
+            rightOut = shiftR.process(rightOut, ratio);
+        }
+        const double step = (pitch * rateMul * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
+        if (slip >= 0.0) slip += (pitch * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
+        position += step;
+        if (rollLength > 1.0 && rollOrigin >= 0.0 && position >= rollOrigin + rollLength) {
+            double over = std::fmod(position - rollOrigin, rollLength);
+            if (over < 0.0) over += rollLength;
+            position = rollOrigin + over;
+        }
+        if (position < 0.0) position = 0.0;
         wrapLoop();
     }
 };
@@ -110,6 +130,7 @@ public:
         builder.setFormat(oboe::AudioFormat::Float);
         builder.setChannelCount(4);
         builder.setSampleRate(48000);
+        if (bufferFrames_ >= 64) builder.setBufferCapacityInFrames(bufferFrames_);
         builder.setUsage(oboe::Usage::Game);
         builder.setContentType(oboe::ContentType::Music);
         builder.setDataCallback(this);
@@ -255,17 +276,45 @@ public:
 
     void setBeatFx(int effect, bool on, int level, int channel, float bpm, float beats) {
         std::lock_guard<std::mutex> lock(mixMutex_);
-        fxEffect_ = effect;
-        fxOn_ = on;
-        fxChannel_ = channel;
-        fxWet_ = std::clamp(level / 127.f, 0.f, 1.f);
-        const double beatSec = bpm > 1.f ? 60.0 / static_cast<double>(bpm) : 0.5;
-        const double delaySec = beatSec * static_cast<double>(beats <= 0.f ? 1.f : beats);
-        fxDelaySamples_ = std::clamp(static_cast<int>(delaySec * 48000.0), 1, kDelayCap - 1);
-        if (delayL_.empty()) {
-            delayL_.assign(kDelayCap, 0.f);
-            delayR_.assign(kDelayCap, 0.f);
+        mixFx_.setSampleRate(48000);
+        mixFx_.setBeat(effect, on, std::clamp(level / 127.f, 0.f, 1.f), channel, bpm, beats);
+    }
+
+    void setFilter(int deck, float norm) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        mixFx_.setSampleRate(48000);
+        mixFx_.setFilter(deck, norm);
+    }
+
+    void setKeyLock(int deck, bool enabled) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1) return;
+        decks_[deck].keyLock = enabled;
+    }
+
+    void setLoop(int deck, float startSec, float endSec) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
+        Deck &target = decks_[deck];
+        if (endSec > startSec && startSec >= 0.f) {
+            target.loopStart = static_cast<double>(startSec) * target.sampleRate;
+            target.loopEnd = static_cast<double>(endSec) * target.sampleRate;
+        } else {
+            target.loopStart = -1.0;
+            target.loopEnd = -1.0;
         }
+    }
+
+    void setBufferFrames(int frames) { bufferFrames_ = frames; }
+
+    void setRmx(const float *values, int count) {
+        if (values == nullptr || count < 18) return;
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        mixFx_.setSampleRate(48000);
+        mixFx_.setRmx(values[0] > 0.5f, static_cast<int>(values[1]), values[2] > 0.5f, values[3], values[4],
+                      static_cast<int>(values[5]), values[6], values[7] > 0.5f, static_cast<int>(values[8]), values[9],
+                      values[10], values[11], values[12], values[13], values[14], values[15] > 0.5f,
+                      static_cast<int>(values[16]), values[17]);
     }
 
     float positionSeconds(int deck) {
@@ -284,26 +333,26 @@ public:
             std::lock_guard<std::mutex> lock(mixMutex_);
             const bool phonesOpen = channels >= 4;
             phonesAudible_.store(phonesOpen && (decks_[0].pfl || decks_[1].pfl));
+            mixFx_.setSampleRate(rate);
             for (int frame = 0; frame < numFrames; ++frame) {
+                mixFx_.beginSample();
+                if (mixFx_.release.active() && mixFx_.release.kind != 1) {
+                    float ignoredL = 0.f;
+                    float ignoredR = 0.f;
+                    mixFx_.release.process(ignoredL, ignoredR);
+                }
+                armRoll(0);
+                armRoll(1);
                 float al = 0.f, ar = 0.f, bl = 0.f, br = 0.f;
+                decks_[0].rateMul = mixFx_.rateFor(0);
+                decks_[1].rateMul = mixFx_.rateFor(1);
                 decks_[0].read(rate, al, ar);
                 decks_[1].read(rate, bl, br);
-                if (fxOn_) {
-                    if (fxChannel_ == 0) {
-                        al = fxSample(al, delayL_);
-                        ar = fxSample(ar, delayR_);
-                    } else if (fxChannel_ == 1) {
-                        bl = fxSample(bl, delayL_);
-                        br = fxSample(br, delayR_);
-                    }
-                }
+                mixFx_.processDeck(0, al, ar);
+                mixFx_.processDeck(1, bl, br);
                 float masterL = al * (1.f - cross_) * decks_[0].volume + bl * cross_ * decks_[1].volume;
                 float masterR = ar * (1.f - cross_) * decks_[0].volume + br * cross_ * decks_[1].volume;
-                if (fxOn_ && fxChannel_ == 2) {
-                    masterL = fxSample(masterL, delayL_);
-                    masterR = fxSample(masterR, delayR_);
-                }
-                if (fxOn_) advanceFx();
+                mixFx_.processMaster(masterL, masterR);
                 float phoneL = 0.f;
                 float phoneR = 0.f;
                 if (phonesOpen) {
@@ -356,27 +405,23 @@ public:
     }
 
 private:
-    float fxSample(float input, std::vector<float> &buffer) {
-        if (buffer.empty() || fxEffect_ > 2) return input;
-        const int size = static_cast<int>(buffer.size());
-        int delay = fxDelaySamples_;
-        float feedback = fxEffect_ == 0 ? 0.48f : 0.08f;
-        if (fxEffect_ == 2) {
-            delay = 180 + static_cast<int>(140.f * std::sin(flangerPhase_));
-            feedback = 0.35f;
+    void armRoll(int deck) {
+        Deck &target = decks_[deck];
+        const bool want = mixFx_.rollDeck[deck];
+        if (want && target.rollLength < 0.0 && target.sampleRate > 0) {
+            const double bpm = target.bpm > 1.f ? static_cast<double>(target.bpm) * target.pitch : 120.0;
+            const double slice = deckbridge::samplesPerBeat(bpm, target.sampleRate) * std::max(0.0625, mixFx_.rollBeats);
+            const double origin = std::floor(target.position / slice) * slice;
+            target.rollOrigin = origin;
+            target.rollLength = slice;
+            if (mixFx_.slipDeck[deck]) target.slip = target.position;
         }
-        int read = delayWrite_ - delay;
-        while (read < 0) read += size;
-        const float wet = buffer[static_cast<size_t>(read)];
-        buffer[static_cast<size_t>(delayWrite_)] = input + wet * feedback * fxWet_;
-        return input * (1.f - fxWet_) + wet * fxWet_;
-    }
-
-    void advanceFx() {
-        if (delayL_.empty()) return;
-        delayWrite_ = (delayWrite_ + 1) % static_cast<int>(delayL_.size());
-        flangerPhase_ += 0.0012f;
-        if (flangerPhase_ > 6.2831853f) flangerPhase_ -= 6.2831853f;
+        if (!want && target.rollLength > 0.0) {
+            if (target.slip >= 0.0) target.position = target.slip;
+            target.slip = -1.0;
+            target.rollOrigin = -1.0;
+            target.rollLength = -1.0;
+        }
     }
 
     void placeSeconds(int deck, double seconds, bool wrap) {
@@ -447,18 +492,10 @@ private:
     std::atomic<int> openedChannels_{0};
     std::atomic<bool> opened_{false};
     std::atomic<bool> phonesAudible_{false};
-    static constexpr int kDelayCap = 96000;
     Deck decks_[2];
+    deckbridge::MixerFx mixFx_;
+    int bufferFrames_ = 256;
     float cross_ = 0.5f;
-    std::vector<float> delayL_;
-    std::vector<float> delayR_;
-    int delayWrite_ = 0;
-    int fxDelaySamples_ = 12000;
-    int fxEffect_ = 0;
-    int fxChannel_ = 2;
-    float fxWet_ = 0.4f;
-    float flangerPhase_ = 0.f;
-    bool fxOn_ = false;
     double phase_[4]{};
     int sampleRate_ = 0;
     bool phonesSent_ = false;
@@ -554,4 +591,33 @@ extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeSetBeatFx(
         JNIEnv *, jobject, jint effect, jboolean on, jint level, jint channel, jfloat bpm, jfloat beats) {
     engine().setBeatFx(effect, on == JNI_TRUE, level, channel, bpm, beats);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetFilter(JNIEnv *, jobject, jint deck, jfloat norm) {
+    engine().setFilter(deck, norm);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetKeyLock(JNIEnv *, jobject, jint deck, jboolean enabled) {
+    engine().setKeyLock(deck, enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetLoop(JNIEnv *, jobject, jint deck, jfloat startSec, jfloat endSec) {
+    engine().setLoop(deck, startSec, endSec);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetBuffer(JNIEnv *, jobject, jint frames) {
+    engine().setBufferFrames(frames);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetRmx(JNIEnv *env, jobject, jfloatArray values) {
+    if (values == nullptr) return;
+    const jsize count = env->GetArrayLength(values);
+    jfloat *data = env->GetFloatArrayElements(values, nullptr);
+    engine().setRmx(data, count);
+    env->ReleaseFloatArrayElements(values, data, JNI_ABORT);
 }

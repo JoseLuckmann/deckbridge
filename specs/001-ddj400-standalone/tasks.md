@@ -157,6 +157,14 @@ OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Ras
 - [x] **A036** Browser denso: miniatura da onda, número, título, BPM, tom com realce de tom compatível, linha selecionada. **Estado:** `PASS` de renderização JVM. Não é um export real.
 - [x] **A037** Pendrive simulado com 24 faixas (2 cliques + 22 peças sintéticas), cues nomeados e seção PWB3 (graves/médios/agudos por coluna, normalizados pelo pico de cada banda). **Estado:** `PASS` do teste JVM. Não é FFT de um arquivo comercial nem PWV3/PWV4/PWV5.
 - [x] **A038** Echo, Delay e Flanger processam o mixer (rota 3). Os outros nomes ficam secos. APK 0.7.0 arm64. **Estado:** o código está no motor. Escuta `BLOCKED_HARDWARE`. Não instalado no tablet. A022 continua aberto.
+- [x] **A039** Barra alta centrada e MENU com PLAYER, AUDIO, CONTROLADORA, BIBLIOTECA, DIAGNÓSTICO e SOBRE. Preferências em DataStore e aplicadas ao tempo, quantize, jog, cor da onda, zoom, playhead e buffer pedido. **Estado:** `PASS` de renderização JVM. A latência do buffer continua `UNKNOWN`. Não é o tablet.
+- [x] **A040** TAG LIST adiciona e tira etiquetas na sessão. PLAYLIST abre as playlists. SEARCH filtra título, artista, BPM e tom. **Estado:** `PASS` de renderização JVM. A etiqueta não é gravada no USB (ADR-0002).
+- [x] **A041** Beat jump de 1/2/4/8/16/32 para a frente e para trás, na grade, com a faixa a tocar ou em pausa, e dentro do loop. Loop de 4 batidas, IN/OUT, metade, dobro, reloop e beat loop 1/4–32, com crossfade de 48 amostras. Faixa de toque e mapa oficial. **Estado:** `PASS` do teste C++ e do teste JVM dos bytes. Escuta `BLOCKED_HARDWARE`.
+- [x] **A042** Lista de Beat FX da DDJ-400 no motor, com fração, nível, canal e cauda ao desligar. **Estado:** `PASS` do render offline (diferente do seco, finito, eco no tempo da batida). Spiral, Helix, Mobius, Pitch e reverb são aproximações. Escuta `BLOCKED_HARDWARE`.
+- [x] **A043** Filtro do knob FILTER por canal (grave abaixo do centro, agudo acima). **Estado:** `PASS` do render offline. Não há seletor de seis Sound Color FX neste mapa.
+- [x] **A044** RMX: Scene FX, X-Pad, isolador e release no motor; painel e vista cheia; pads de SAMPLER reutilizados só com o painel ligado. **Estado:** `PASS` do render offline. Mapeamento MIDI provisório, item 8 do checklist físico, `BLOCKED_HARDWARE`.
+- [x] **A045** Testes offline de salto, loop, Beat FX, Scene FX, X-Pad, isolador e release. **Estado:** `PASS` do binário hospedeiro e dos 27 testes JVM. Não é escuta.
+- [x] **A046** Prints 0.8.0 e APK arm64 0.8.0. **Estado:** artefato gerado nesta rodada. Não instalado no tablet. A022 continua aberto. Escuta `BLOCKED_HARDWARE`.
 
 ## Traçabilidade requisito -> tarefas -> testes/gates
 

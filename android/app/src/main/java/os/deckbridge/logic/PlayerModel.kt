@@ -121,7 +121,23 @@ fun phaseOffset(positionA: Double, bpmA: Double, positionB: Double, bpmB: Double
     return delta
 }
 
-val BEAT_FX_NAMES = listOf("Echo", "Delay", "Reverb", "Flanger", "Phaser", "Roll", "Trans", "Filter")
+val BEAT_FX_NAMES = listOf(
+    "Low Cut Echo",
+    "Echo",
+    "Ping Pong",
+    "Spiral",
+    "Reverb",
+    "Trans",
+    "Flanger",
+    "Phaser",
+    "Pitch",
+    "Slip Roll",
+    "Roll",
+    "Helix",
+    "Mobius",
+    "Filter",
+    "Vinyl Brake",
+)
 val BEAT_FX_FRACTIONS = listOf("1/16", "1/8", "1/4", "1/2", "3/4", "1/1", "2/1", "4/1", "8/1")
 
 data class BeatFxState(
@@ -178,6 +194,9 @@ data class BrowsePlace(
     val playlistId: Int? = null,
     val groupKey: String? = null,
     val query: String = "",
+    val bpmMin: Int = 0,
+    val bpmMax: Int = 999,
+    val keyFilter: String = "",
 )
 
 data class BrowseRow(
@@ -234,9 +253,7 @@ fun browseRows(catalog: RbCatalog, place: BrowsePlace, historyIds: List<Int>): L
         }
         BrowseCategory.HISTORY -> historyIds.mapNotNull { id -> tracks.firstOrNull { it.id == id } }.map(::row)
         BrowseCategory.SEARCH -> {
-            val q = place.query.trim()
-            if (q.isEmpty()) tracks.map(::row)
-            else tracks.filter { it.title.contains(q, true) || it.artist.contains(q, true) }.map(::row)
+            filterTracks(tracks, place.query, place.bpmMin, place.bpmMax, place.keyFilter).map(::row)
         }
     }
     return base
@@ -314,6 +331,12 @@ data class DeckFace(
     val keyLock: Boolean = false,
     val filter: Int = 64,
     val onAir: Boolean = true,
+    val loopStart: Float = -1f,
+    val loopEnd: Float = -1f,
+    val memoryStart: Float = -1f,
+    val memoryEnd: Float = -1f,
+    val jumpScale: Double = 1.0,
+    val lastJump: Double = 0.0,
 )
 
 val LETTER_COLORS = intArrayOf(
@@ -339,13 +362,8 @@ fun barsFromSeconds(seconds: Double, bpm: Double): Double {
     return seconds / (240.0 / bpm)
 }
 
-/** 0 eco, 1 delay, 2 flanger. Os outros nomes não entram no motor. */
-fun beatFxAudioKind(effect: Int): Int = when (BEAT_FX_NAMES.getOrElse(effect) { "" }) {
-    "Echo" -> 0
-    "Delay" -> 1
-    "Flanger" -> 2
-    else -> 9
-}
+/** O índice é o efeito no motor. Slip Roll, Roll e Vinyl Brake mexem no transporte; o resto é inserção. */
+fun beatFxAudioKind(effect: Int): Int = effect.coerceIn(0, BEAT_FX_NAMES.lastIndex)
 
 /** Fração do Beat FX em batidas. 1/1 é uma batida, não um compasso. */
 fun beatFxBeats(fractionLabel: String): Double = when (fractionLabel) {
@@ -390,4 +408,182 @@ fun loopLengthLabel(startMs: Int, endMs: Int, bpm: Double): String {
     val beats = seconds / (60.0 / bpm)
     val rounded = (beats * 4.0).roundToInt() / 4.0
     return if (abs(rounded - rounded.toInt()) < 0.01) "${rounded.toInt()} beats" else "${"%.2f".format(rounded)} beats"
+}
+
+fun filterTracks(tracks: List<RbTrack>, query: String, bpmMin: Int, bpmMax: Int, keyFilter: String): List<RbTrack> {
+    val q = query.trim()
+    return tracks.filter { track ->
+        val text = q.isEmpty() || track.title.contains(q, true) || track.artist.contains(q, true)
+        val bpm = track.bpm <= 0.0 || (track.bpm >= bpmMin && track.bpm <= bpmMax)
+        val key = keyFilter.isBlank() || track.keyName.equals(keyFilter, true)
+        text && bpm && key
+    }
+}
+
+fun beatJumpPadBeats(pad: Int): Double = when (pad) {
+    0 -> -1.0
+    1 -> 1.0
+    2 -> -2.0
+    3 -> 2.0
+    4 -> -4.0
+    5 -> 4.0
+    6 -> -8.0
+    else -> 8.0
+}
+
+/** Um passo ×16 ou ÷16, com o limite do pad 2 do script oficial. */
+fun stepJumpScale(scale: Double, increase: Boolean): Double {
+    val pad2 = scale
+    return if (increase) {
+        if (pad2 * 16.0 > 16.0) scale else scale * 16.0
+    } else {
+        if (pad2 / 16.0 < 1.0 / 16.0) scale else scale / 16.0
+    }
+}
+
+fun jumpSeconds(
+    positionSec: Double,
+    beats: Double,
+    bpm: Double,
+    sampleRate: Int,
+    quantize: Boolean,
+    quantizeBeats: Double = 1.0,
+    loopStartSec: Double,
+    loopEndSec: Double,
+    durationSec: Double,
+): Double {
+    val rate = sampleRate.coerceAtLeast(1).toDouble()
+    val beat = rate * 60.0 / bpm.coerceAtLeast(1.0)
+    val grid = beat * quantizeBeats.coerceAtLeast(0.0625)
+    var origin = positionSec * rate
+    if (quantize && grid > 0.0) origin = kotlin.math.round(origin / grid) * grid
+    var target = origin + beats * beat
+    if (loopEndSec > loopStartSec) {
+        val start = loopStartSec * rate
+        val length = (loopEndSec - loopStartSec) * rate
+        var over = (target - start) % length
+        if (over < 0) over += length
+        target = start + over
+    }
+    val frames = durationSec * rate
+    if (target < 0.0) target = 0.0
+    if (frames > 1.0 && target > frames - 1.0) target = frames - 1.0
+    return target / rate
+}
+
+fun scaleLoop(start: Float, end: Float, factor: Double): Pair<Float, Float>? {
+    if (end <= start || factor <= 0.0) return null
+    val length = ((end - start) * factor).toFloat().coerceAtLeast(0.001f)
+    return start to start + length
+}
+
+fun toggleBeatLoop(start: Float, end: Float, position: Float, beats: Double, bpm: Double): Pair<Float, Float>? {
+    if (bpm <= 1.0) return null
+    val length = (beats * 60.0 / bpm).toFloat()
+    val active = end > start && abs((end - start) - length) < 0.02f
+    if (active) return null
+    return position.coerceAtLeast(0f) to position + length
+}
+
+data class PlayerSettings(
+    val tempoRange: Double = DEFAULT_TEMPO_RANGE,
+    val keyLock: Boolean = false,
+    val quantize: Boolean = true,
+    val quantizeBeats: Double = 1.0,
+    val autoCue: Boolean = true,
+    val hotCueAutoLoad: Boolean = true,
+    val jogVinyl: Boolean = true,
+    val waveColor: String = "THREE_BAND",
+    val zoomBars: Int = 8,
+    val playhead: Float = 0.30f,
+    val bufferFrames: Int = 256,
+    val encoderFlip: Boolean = false,
+    val jogSensitivity: Float = 1f,
+)
+
+fun zoomFromBars(bars: Int): WaveZoom = WaveZoom.entries.firstOrNull { it.bars == bars } ?: WaveZoom.BARS_8
+
+fun waveModeIndex(name: String): Int = when (name) {
+    "RGB" -> 0
+    "BLUE" -> 2
+    else -> 1
+}
+
+val SCENE_NAMES = listOf(
+    "Echo build-up",
+    "Noise sweep up",
+    "Spiral up",
+    "Reverb up",
+    "Reverb down",
+    "Echo LPF down",
+    "Tape stop",
+    "Dub echo",
+)
+
+val XPAD_NAMES = listOf("Roll", "Trans", "Drum", "Hi-pass")
+val XBEAT_LABELS = listOf("1/16", "1/8", "1/4", "1/2", "1")
+val XBEATS = listOf(0.0625, 0.125, 0.25, 0.5, 1.0)
+val SCENE_BARS = listOf(1, 2, 4, 8, 16)
+
+data class RmxState(
+    val panel: Boolean = false,
+    val full: Boolean = false,
+    val scene: Int = 0,
+    val holding: Boolean = false,
+    val intensity: Float = 0f,
+    val bars: Int = 4,
+    val xMode: Int = 0,
+    val xBeat: Int = 2,
+    val xOn: Boolean = false,
+    val release: Int = -1,
+    val low: List<Float> = listOf(1f, 1f),
+    val mid: List<Float> = listOf(1f, 1f),
+    val high: List<Float> = listOf(1f, 1f),
+    val gate: Boolean = false,
+    val channel: Int = 0,
+) {
+    fun sceneName(): String = SCENE_NAMES[scene.coerceIn(0, SCENE_NAMES.lastIndex)]
+}
+
+fun reduceRmxPad(state: RmxState, action: PerformanceAction): RmxState {
+    if (action.kind != PerformanceAction.Kind.RMX) return state
+    val pad = action.hotIndex
+    val down = (action.slider ?: 0.0) > 0.0
+    return when {
+        pad in 0..3 && down -> state.copy(scene = pad, holding = true, panel = true)
+        pad in 0..3 && !down -> state.copy(holding = false, intensity = 0f)
+        pad in 4..7 && down -> state.copy(xMode = pad - 4, xOn = !state.xOn, panel = true)
+        else -> state
+    }
+}
+
+fun rmxPayload(state: RmxState, bpm: Float): FloatArray = floatArrayOf(
+    if (state.panel) 1f else 0f,
+    state.scene.toFloat(),
+    if (state.holding) 1f else 0f,
+    state.intensity,
+    state.bars.toFloat(),
+    state.xMode.toFloat(),
+    XBEATS[state.xBeat.coerceIn(0, XBEATS.lastIndex)].toFloat(),
+    if (state.xOn) 1f else 0f,
+    state.release.toFloat(),
+    state.low.getOrElse(0) { 1f },
+    state.mid.getOrElse(0) { 1f },
+    state.high.getOrElse(0) { 1f },
+    state.low.getOrElse(1) { 1f },
+    state.mid.getOrElse(1) { 1f },
+    state.high.getOrElse(1) { 1f },
+    if (state.gate) 1f else 0f,
+    state.channel.toFloat(),
+    bpm,
+)
+
+fun mergedTagNames(catalog: Map<Int, List<RbTag>>, added: Map<Int, Set<String>>, removed: Map<Int, Set<String>>): Map<Int, List<String>> {
+    val ids = catalog.keys + added.keys + removed.keys
+    return ids.associateWith { id ->
+        val base = catalog[id].orEmpty().map { it.name }.toMutableSet()
+        base += added[id].orEmpty()
+        base -= removed[id].orEmpty()
+        base.filter { it.isNotBlank() }.sorted()
+    }.filterValues { it.isNotEmpty() }
 }

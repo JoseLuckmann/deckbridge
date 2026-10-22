@@ -9,7 +9,7 @@ Alvo 1, a partir de 21/10/2026: tablet ligado direto na DDJ-400. O Raspberry con
 - Leitor próprio de `export.pdb`, `exportExt.pdb` e ANLZ. Ver `FORMATO.md`. OneLibrary abre uma cópia local com a chave pública documentada; se não abrir, a tela avisa.
 - O APK `multiDebug` inclui `x86_64` para o emulador, além de `arm64-v8a` e `armeabi-v7a`.
 - O APK para o Tab S6 Lite é só `arm64-v8a`, com minify e shrink. Sai menor. A assinatura é a de debug, para instalar direto.
-- A tela 0.7.0 abre no player: duas ondas empilhadas, hot cues e cartões dos decks. SOURCE, BROWSE, TAG LIST, PLAYLIST e SEARCH abrem a lista por cima.
+- A tela 0.8.0 abre no player: barra alta com SOURCE, BROWSE, TAG LIST, PLAYLIST, SEARCH e MENU; duas ondas empilhadas; hot cues; faixa de beat jump e loop; cartões dos decks. O menu grava as preferências. RMX substitui a coluna de Beat FX quando está ligado.
 
 ```bash
 export ANDROID_HOME="$HOME/android-sdk"

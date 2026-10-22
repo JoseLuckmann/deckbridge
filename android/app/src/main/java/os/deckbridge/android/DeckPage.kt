@@ -16,6 +16,9 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.launch
 import os.deckbridge.logic.BeatFxState
 import os.deckbridge.logic.BrowseCategory
 import os.deckbridge.logic.BrowsePlace
@@ -27,8 +30,19 @@ import os.deckbridge.logic.ReadableVolume
 import os.deckbridge.logic.WaveZoom
 import os.deckbridge.logic.activeLoop
 import os.deckbridge.logic.backBrowse
+import os.deckbridge.logic.PlayerSettings
+import os.deckbridge.logic.RmxState
 import os.deckbridge.logic.beatFxAudioKind
 import os.deckbridge.logic.beatFxBeats
+import os.deckbridge.logic.beatJumpPadBeats
+import os.deckbridge.logic.jumpSeconds
+import os.deckbridge.logic.mergedTagNames
+import os.deckbridge.logic.reduceRmxPad
+import os.deckbridge.logic.rmxPayload
+import os.deckbridge.logic.scaleLoop
+import os.deckbridge.logic.stepJumpScale
+import os.deckbridge.logic.toggleBeatLoop
+import os.deckbridge.logic.zoomFromBars
 import os.deckbridge.logic.browseRows
 import os.deckbridge.logic.enterBrowse
 import os.deckbridge.logic.faderFromPitch
@@ -83,6 +97,19 @@ fun DeckPage(
     var clock by remember { mutableStateOf(java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))) }
     var consumed by remember { mutableStateOf(mapOf<Int, Int>()) }
     var started by remember { mutableStateOf(false) }
+    var settings by remember { mutableStateOf(PlayerSettings()) }
+    var rmx by remember { mutableStateOf(RmxState()) }
+    var overlay by remember { mutableStateOf("") }
+    var nav by remember { mutableStateOf("") }
+    var addedTags by remember { mutableStateOf(mapOf<Int, Set<String>>()) }
+    var removedTags by remember { mutableStateOf(mapOf<Int, Set<String>>()) }
+    var searchBpm by remember { mutableStateOf(0 to 999) }
+    var searchKey by remember { mutableStateOf("") }
+    var queryText by remember { mutableStateOf("") }
+    var tagTrack by remember { mutableStateOf<Int?>(null) }
+    var fxList by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val liveRmx = rememberUpdatedState(rmx)
     val tree = rememberLauncherForActivityResult(OpenTreeReadOnly()) { uri -> onAuthorize(uri) }
 
     fun pushMix() {
@@ -115,8 +142,10 @@ fun DeckPage(
         }
         val analysis = liveCatalog.value?.analyses?.get(track.id)
         val hot = FloatArray(8) { -1f }
-        analysis?.hotCues?.forEach { cue ->
-            if (cue.index in hot.indices) hot[cue.index] = cue.timeMs / 1000f
+        if (settings.hotCueAutoLoad) {
+            analysis?.hotCues?.forEach { cue ->
+                if (cue.index in hot.indices) hot[cue.index] = cue.timeMs / 1000f
+            }
         }
         val loop = activeLoop(analysis)
         NativeEngine.loadDeck(
@@ -130,7 +159,19 @@ fun DeckPage(
         )
         onLoaded(deck, track)
         rememberLoaded(track)
-        edit(deck) { it.copy(playing = false, position = 0f) }
+        val cueSec = if (settings.autoCue) (analysis?.mainCueMs ?: 0) / 1000f else 0f
+        if (cueSec > 0f) NativeEngine.seek(deck, cueSec)
+        edit(deck) {
+            it.copy(
+                playing = false,
+                position = cueSec,
+                loopStart = (loop?.first ?: -1) / 1000f,
+                loopEnd = (loop?.second ?: -1) / 1000f,
+                memoryStart = (loop?.first ?: -1) / 1000f,
+                memoryEnd = (loop?.second ?: -1) / 1000f,
+                keyLock = settings.keyLock,
+            )
+        }
         val loopText = if (loop == null) "" else " Loop ${loop.first}–${loop.second} ms."
         note = "Carregada no deck ${deck + 1}: ${track.title}.$loopText"
         pushMix()
@@ -180,6 +221,32 @@ fun DeckPage(
         edit(deck) { it.copy(range = range, fader = fader, pitch = pitch, sync = false) }
     }
 
+    fun persist(next: PlayerSettings) {
+        settings = next
+        quantize = next.quantize
+        scope.launch { SettingsStore.save(context, next) }
+        NativeEngine.setBuffer(next.bufferFrames)
+    }
+
+    fun jumpBy(deck: Int, beats: Double) {
+        val track = liveLoaded.value.getOrNull(deck) ?: return
+        val face = faces[deck]
+        val loopOn = face.loopEnd > face.loopStart
+        val seconds = jumpSeconds(
+            face.position.toDouble(),
+            beats,
+            track.bpm,
+            track.sampleRate,
+            quantize,
+            settings.quantizeBeats,
+            if (loopOn) face.loopStart.toDouble() else -1.0,
+            if (loopOn) face.loopEnd.toDouble() else -1.0,
+            track.durationSeconds.toDouble(),
+        )
+        seekTo(deck, seconds.toFloat())
+        edit(deck) { it.copy(lastJump = beats) }
+    }
+
     fun syncDeck(deck: Int) {
         if (deck !in 0..1) return
         val own = liveLoaded.value.getOrNull(deck)?.bpm ?: return
@@ -223,13 +290,21 @@ fun DeckPage(
             }
             PerformanceAction.Kind.JOG -> {
                 if (deck !in 0..1) return
-                val seconds = jogSeconds(action.slider ?: 0.0).toFloat()
-                NativeEngine.nudge(deck, seconds)
-                edit(deck) { it.copy(position = (it.position + seconds).coerceAtLeast(0f)) }
+                val bend = (action.slider ?: 0.0) * settings.jogSensitivity
+                if (!settings.jogVinyl && kotlin.math.abs(bend) < 20.0) {
+                    val pitched = (faces[deck].pitch + bend * 0.002).toFloat().coerceIn(0.5f, 2f)
+                    setPitch(deck, pitched)
+                    edit(deck) { it.copy(pitch = pitched, sync = false) }
+                } else {
+                    val seconds = (jogSeconds(bend)).toFloat()
+                    NativeEngine.nudge(deck, seconds)
+                    edit(deck) { it.copy(position = (it.position + seconds).coerceAtLeast(0f)) }
+                }
             }
             PerformanceAction.Kind.BROWSE_MOVE -> {
                 val place = browse ?: return
-                browse = moveBrowse(place, (action.slider ?: 0.0).roundToInt(), rowsOf(place).size)
+                val sign = if (settings.encoderFlip) -1 else 1
+                browse = moveBrowse(place, (action.slider ?: 0.0).roundToInt() * sign, rowsOf(place).size)
             }
             PerformanceAction.Kind.BROWSE_ENTER -> {
                 val place = browse
@@ -248,15 +323,90 @@ fun DeckPage(
                 if (browse == null) stored = place
             }
             PerformanceAction.Kind.LOAD -> if (deck in 0..1) loadSelected(deck)
-            PerformanceAction.Kind.BEAT_FX -> fx = reduceBeatFx(fx, action)
+            PerformanceAction.Kind.BEAT_FX -> {
+                if (rmx.panel && action.hotIndex == 8) {
+                    rmx = rmx.copy(intensity = ((action.slider ?: 0.0) / 127.0).toFloat().coerceIn(0f, 1f))
+                } else if (rmx.panel && action.hotIndex == 3) {
+                    val index = os.deckbridge.logic.SCENE_BARS.indexOf(rmx.bars).coerceAtLeast(0)
+                    rmx = rmx.copy(bars = os.deckbridge.logic.SCENE_BARS[(index - 1).coerceAtLeast(0)])
+                } else if (rmx.panel && action.hotIndex == 4) {
+                    val index = os.deckbridge.logic.SCENE_BARS.indexOf(rmx.bars).coerceAtLeast(0)
+                    rmx = rmx.copy(bars = os.deckbridge.logic.SCENE_BARS[(index + 1).coerceAtMost(os.deckbridge.logic.SCENE_BARS.lastIndex)])
+                } else {
+                    fx = reduceBeatFx(fx, action)
+                    if (action.hotIndex == 7) rmx = rmx.copy(channel = action.deck.coerceIn(0, 2))
+                }
+            }
             PerformanceAction.Kind.FILTER -> {
                 if (deck !in 0..1) return
                 val value = ((action.slider ?: 0.5) * 127.0).roundToInt().coerceIn(0, 127)
                 edit(deck) { it.copy(filter = value) }
+                NativeEngine.setFilter(deck, value / 127f)
             }
-            PerformanceAction.Kind.QUANTIZE -> quantize = !quantize
+            PerformanceAction.Kind.QUANTIZE -> {
+                quantize = !quantize
+                persist(settings.copy(quantize = !settings.quantize))
+            }
             PerformanceAction.Kind.SYNC -> syncDeck(deck)
             PerformanceAction.Kind.MASTER -> if (deck in 0..1) master = deck
+            PerformanceAction.Kind.BEAT_JUMP -> {
+                if (deck !in 0..1) return
+                val beats = if (action.hotIndex in 0..7) beatJumpPadBeats(action.hotIndex) * faces[deck].jumpScale else action.slider ?: return
+                jumpBy(deck, beats)
+            }
+            PerformanceAction.Kind.BEAT_JUMP_PAGE -> {
+                if (deck !in 0..1) return
+                val next = stepJumpScale(faces[deck].jumpScale, action.hotIndex == 1)
+                edit(deck) { it.copy(jumpScale = next) }
+            }
+            PerformanceAction.Kind.LOOP_IN -> {
+                if (deck !in 0..1) return
+                edit(deck) { it.copy(loopStart = it.position, loopEnd = -1f) }
+                NativeEngine.setLoop(deck, faces[deck].position, -1f)
+            }
+            PerformanceAction.Kind.LOOP_OUT -> {
+                if (deck !in 0..1) return
+                val start = faces[deck].loopStart
+                val end = faces[deck].position
+                if (end > start && start >= 0f) {
+                    edit(deck) { it.copy(loopEnd = end, memoryStart = start, memoryEnd = end) }
+                    NativeEngine.setLoop(deck, start, end)
+                }
+            }
+            PerformanceAction.Kind.RELOOP -> {
+                if (deck !in 0..1) return
+                val face = faces[deck]
+                if (face.loopEnd > face.loopStart) {
+                    edit(deck) { it.copy(memoryStart = it.loopStart, memoryEnd = it.loopEnd, loopStart = -1f, loopEnd = -1f, playing = if (action.hotIndex == 1) false else it.playing) }
+                    NativeEngine.setLoop(deck, -1f, -1f)
+                    if (action.hotIndex == 1) NativeEngine.transport(deck, false)
+                } else if (face.memoryEnd > face.memoryStart) {
+                    edit(deck) { it.copy(loopStart = it.memoryStart, loopEnd = it.memoryEnd, position = it.memoryStart, playing = if (action.hotIndex == 1) false else it.playing) }
+                    NativeEngine.setLoop(deck, face.memoryStart, face.memoryEnd)
+                    NativeEngine.seek(deck, face.memoryStart)
+                    if (action.hotIndex == 1) NativeEngine.transport(deck, false)
+                }
+            }
+            PerformanceAction.Kind.LOOP_SCALE -> {
+                if (deck !in 0..1) return
+                val scaled = scaleLoop(faces[deck].loopStart, faces[deck].loopEnd, action.slider ?: 1.0) ?: return
+                edit(deck) { it.copy(loopStart = scaled.first, loopEnd = scaled.second, memoryStart = scaled.first, memoryEnd = scaled.second) }
+                NativeEngine.setLoop(deck, scaled.first, scaled.second)
+            }
+            PerformanceAction.Kind.BEAT_LOOP -> {
+                if (deck !in 0..1) return
+                val track = liveLoaded.value.getOrNull(deck) ?: return
+                val face = faces[deck]
+                val next = toggleBeatLoop(face.loopStart, face.loopEnd, face.position, action.slider ?: 4.0, track.bpm)
+                if (next == null) {
+                    edit(deck) { it.copy(memoryStart = it.loopStart, memoryEnd = it.loopEnd, loopStart = -1f, loopEnd = -1f) }
+                    NativeEngine.setLoop(deck, -1f, -1f)
+                } else {
+                    edit(deck) { it.copy(loopStart = next.first, loopEnd = next.second, memoryStart = next.first, memoryEnd = next.second) }
+                    NativeEngine.setLoop(deck, next.first, next.second)
+                }
+            }
+            PerformanceAction.Kind.RMX -> if (rmx.panel) rmx = reduceRmxPad(rmx, action)
         }
         if (deck in 0..1) active = deck
         pushMix()
@@ -273,6 +423,56 @@ fun DeckPage(
 
     LaunchedEffect(pitchA, pitchB, volA, volB, cross, pflA, pflB) { pushMix() }
 
+    LaunchedEffect(rmx.holding) {
+        if (rmx.holding) {
+            val from = liveRmx.value.intensity
+            val bpm = (loaded.getOrNull(0)?.bpm ?: 120.0).coerceAtLeast(1.0)
+            val rampMs = (liveRmx.value.bars * 4.0 * 60000.0 / bpm).toLong().coerceAtLeast(300L)
+            val startedAt = System.currentTimeMillis()
+            while (liveRmx.value.holding) {
+                val t = ((System.currentTimeMillis() - startedAt).toFloat() / rampMs.toFloat()).coerceIn(0f, 1f)
+                rmx = liveRmx.value.copy(intensity = from + (1f - from) * t)
+                if (t >= 1f) break
+                delay(40)
+            }
+        } else if (liveRmx.value.intensity > 0.02f) {
+            var level = liveRmx.value.intensity
+            while (level > 0.02f && !liveRmx.value.holding) {
+                level *= 0.8f
+                rmx = liveRmx.value.copy(intensity = level, holding = false)
+                delay(40)
+            }
+            if (!liveRmx.value.holding) rmx = liveRmx.value.copy(intensity = 0f, holding = false)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        SettingsStore.flow(context).collect { incoming ->
+            settings = incoming
+            quantize = incoming.quantize
+            zoom = listOf(zoomFromBars(incoming.zoomBars), zoomFromBars(incoming.zoomBars))
+            NativeEngine.setBuffer(incoming.bufferFrames)
+            NativeEngine.setKeyLock(0, incoming.keyLock)
+            NativeEngine.setKeyLock(1, incoming.keyLock)
+        }
+    }
+
+    LaunchedEffect(rmx, fx, pitchA, pitchB, master, loaded) {
+        val deck = when (rmx.channel) {
+            1 -> 1
+            2 -> master
+            else -> 0
+        }
+        val bpm = ((loaded.getOrNull(deck)?.bpm ?: 120.0) * (if (deck == 0) pitchA else pitchB)).toFloat()
+        if (rmx.panel) {
+            NativeEngine.setBeatFx(beatFxAudioKind(fx.effect), false, fx.level, fx.channel, bpm, beatFxBeats(fx.fractionLabel()).toFloat())
+            NativeEngine.setRmx(rmxPayload(rmx, bpm))
+        } else {
+            NativeEngine.setRmx(rmxPayload(rmx, bpm))
+            NativeEngine.setBeatFx(beatFxAudioKind(fx.effect), fx.on, fx.level, fx.channel, bpm, beatFxBeats(fx.fractionLabel()).toFloat())
+        }
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             clock = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
@@ -280,21 +480,9 @@ fun DeckPage(
         }
     }
 
-    LaunchedEffect(fx, pitchA, pitchB, master, loaded) {
-        val deck = when (fx.channel) {
-            1 -> 1
-            2 -> master
-            else -> 0
-        }
-        val bpm = (loaded.getOrNull(deck)?.bpm ?: 120.0) * (if (deck == 0) pitchA else pitchB)
-        NativeEngine.setBeatFx(
-            beatFxAudioKind(fx.effect),
-            fx.on,
-            fx.level,
-            fx.channel,
-            bpm.toFloat(),
-            beatFxBeats(fx.fractionLabel()).toFloat(),
-        )
+    LaunchedEffect(settings.tempoRange) {
+        applyRange(0, settings.tempoRange, faces[0].fader)
+        applyRange(1, settings.tempoRange, faces[1].fader)
     }
 
     LaunchedEffect(browsePulse) {
@@ -387,7 +575,11 @@ fun DeckPage(
         onHot = ::hotCue,
         onSync = ::syncDeck,
         onMaster = { master = it },
-        onKey = { deck -> edit(deck) { it.copy(keyLock = !it.keyLock) } },
+        onKey = { deck ->
+            val next = !faces[deck].keyLock
+            edit(deck) { it.copy(keyLock = next) }
+            NativeEngine.setKeyLock(deck, next)
+        },
         onRemain = { deck -> edit(deck) { it.copy(remain = !it.remain) } },
         onRange = { deck -> applyRange(deck, nextTempoRange(faces[deck].range), faces[deck].fader) },
         onFader = { deck, position ->
@@ -399,17 +591,25 @@ fun DeckPage(
             NativeEngine.nudge(deck, seconds)
             edit(deck) { it.copy(position = (it.position + seconds).coerceAtLeast(0f)) }
         },
-        onJump = { deck, beats ->
-            val track = loaded.getOrNull(deck)
-            if (track != null) {
-                val beat = if (track.bpm > 1.0) 60.0 / track.bpm else 0.5
-                val raw = faces[deck].position + beats * beat
-                val analysis = catalog?.analyses?.get(track.id)
-                val seconds = if (quantize && analysis != null) quantizeSeconds(raw, analysis.beats, track.bpm) else raw
-                seekTo(deck, seconds.toFloat())
+        onJump = { deck, beats -> jumpBy(deck, beats.toDouble()) },
+        onBeatLoop = { deck, beats ->
+            onPerformance(PerformanceAction(deck, PerformanceAction.Kind.BEAT_LOOP, slider = beats))
+        },
+        onLoopButton = { deck, which ->
+            when (which) {
+                "IN" -> onPerformance(PerformanceAction(deck, PerformanceAction.Kind.LOOP_IN))
+                "OUT" -> onPerformance(PerformanceAction(deck, PerformanceAction.Kind.LOOP_OUT))
+                "HALF" -> onPerformance(PerformanceAction(deck, PerformanceAction.Kind.LOOP_SCALE, slider = 0.5))
+                "DOUBLE" -> onPerformance(PerformanceAction(deck, PerformanceAction.Kind.LOOP_SCALE, slider = 2.0))
+                "RELOOP" -> onPerformance(PerformanceAction(deck, PerformanceAction.Kind.RELOOP))
+                "4" -> onPerformance(PerformanceAction(deck, PerformanceAction.Kind.BEAT_LOOP, slider = 4.0))
             }
         },
-        onQuantize = { quantize = !quantize },
+        onQuantize = {
+            val next = !quantize
+            quantize = next
+            persist(settings.copy(quantize = next))
+        },
         onAuthorize = { tree.launch(removableInitialUri(context)) },
         onSimulate = onSimulate,
         onBrowseMove = { steps ->
@@ -445,14 +645,46 @@ fun DeckPage(
         onBrowseCategory = { category: BrowseCategory ->
             browse = openCategory(browse ?: stored, category)
         },
-        onQuery = { query ->
+        onQuery = { text ->
+            queryText = text
             val place = browse
-            if (place != null) browse = place.copy(query = query, index = 0)
+            if (place != null) browse = place.copy(query = text, index = 0)
         },
         onActive = { active = it },
         onFxChange = { fx = it },
         onOpenCategory = { category -> browse = openCategory(stored, category) },
         onSeek = { deck, seconds -> seekTo(deck, seconds) },
+        queryText = queryText,
+        nav = nav,
+        overlay = overlay,
+        onOverlay = { next ->
+            overlay = next
+            if (next.isNotEmpty()) browse = null
+        },
+        settings = settings,
+        onSettings = { persist(it) },
+        rmx = rmx,
+        onRmx = { rmx = it },
+        fxList = fxList,
+        tagNames = mergedTagNames(catalog?.trackTags.orEmpty(), addedTags, removedTags),
+        onTag = { id, name, add ->
+            if (add) {
+                addedTags = addedTags + (id to (addedTags[id].orEmpty() + name))
+                removedTags = removedTags + (id to (removedTags[id].orEmpty() - name))
+            } else {
+                removedTags = removedTags + (id to (removedTags[id].orEmpty() + name))
+                addedTags = addedTags + (id to (addedTags[id].orEmpty() - name))
+            }
+        },
+        midiLine = if (note.isBlank()) "DDJ-400: sem aparelho nesta sessão." else note,
+        onDiagnostics = { onPage(0) },
+        onTestTone = { route -> scope.launch(kotlinx.coroutines.Dispatchers.IO) { NativeEngine.start(deviceId, route) } },
+        searchBpm = searchBpm,
+        onSearchBpm = { min, max -> searchBpm = min to max },
+        searchKey = searchKey,
+        onSearchKey = { searchKey = it },
+        tagTrack = tagTrack ?: loaded.firstOrNull { it != null }?.id,
+        onTagTrack = { tagTrack = it },
         onLoad = { track, deck ->
             val source = volume
             if (source != null) {

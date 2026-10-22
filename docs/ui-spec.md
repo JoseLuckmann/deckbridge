@@ -13,7 +13,7 @@
 
 ## 2. Wireframe: PERFORMANCE — estrutura, não um tamanho fixo
 
-A tela Android 0.7.0 abre no player em paisagem: barra SOURCE, BROWSE, TAG LIST, PLAYLIST, SEARCH e MENU; coluna curta por deck; duas ondas empilhadas com o playhead perto de 30% da esquerda; painel BEAT FX à direita; grelha HOT CUE de 2×4; cartões embaixo com tempo, BPM e visão geral. A lista densa abre por cima. O desenho é próprio: sem logo e sem nome de produto de terceiros. O wireframe abaixo continua a ordem das informações.
+A tela Android 0.8.0 abre no player em paisagem. Uma faixa fina leva o relógio, REMAIN e o aviso de simulação. Por baixo, seis botões iguais e centrados: SOURCE, BROWSE, TAG LIST, PLAYLIST, SEARCH e MENU. O botão ativo fica mais claro. A coluna curta por deck, as duas ondas com o playhead perto de 30% da esquerda, a grelha HOT CUE de 2×4 e os cartões de baixo continuam. Entre os hot cues e os cartões há uma faixa de toque: salto de −32 a +32 batidas e loop (4, IN, OUT, metade, dobro, sair, e 1/4 a 32). À direita, BEAT FX ou RMX. RMX tem o painel na coluna e uma vista cheia: barra de intensidade, grelha X-Pad, isolador por canal e o nome do efeito. MENU abre PLAYER, AUDIO, CONTROLADORA, BIBLIOTECA, DIAGNÓSTICO e SOBRE. TAG LIST, PLAYLIST e SEARCH abrem as suas listas. O desenho é próprio: sem logo e sem nome de produto de terceiros. Os rótulos RMX e REMIX FX são deste projeto. O wireframe abaixo continua a ordem das informações da versão anterior.
 
 O desenho abaixo mostra a ordem das informações. Nas referências 800x480 e 1024x600 ele precisa caber inteiro. Em outra resolução, os mesmos blocos esticam ou encolhem sem cortar BPM, tempo e estado de PLAY. Em hardware fraco (OD-01), a waveform é o primeiro bloco a ser desligado.
 
