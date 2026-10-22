@@ -124,6 +124,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-22 | A068 | parcial | `78bd7c9` | tela 0.13.0, slip, frases 16/26 a 1 compasso, MATCHING, SUGGEST, auto gain, APK arm64 | escuta `BLOCKED_HARDWARE`; sem auto gain lido do export; voz e 4 decks por fazer | dono instala o APK arm64 0.13.0 |
 | 2026-10-22 | A069 | parcial | `9d592d9` | tela 0.13.1, tom CQT + EDMA, MIREX 0,586 nas 58 e 0,519 em 190, APK arm64 | 0,65 não atingido; holdout 0,456; escuta `BLOCKED_HARDWARE`; Chromosome F ≠ Bm | dono instala o APK arm64 0.13.1 |
 | 2026-10-22 | mix | parcial | `52f1929` | MP3 3:42 dos efeitos no motor do host, 320 kbps, true peak −1,44 dBTP | não é o tablet; Color FX só tem o filtro; escuta `BLOCKED_HARDWARE` | dono ouve `/opt/cursor/artifacts/demo-mix.mp3` |
+| 2026-10-22 | 0.14.0 | parcial | `594f21b` | DSP suave, de/para, drum build, mix v2 3:20, true peak −1,17 dBTP, APK versionCode 17 | host, não o tablet; escuta `BLOCKED_HARDWARE`; spiral, helix e o balanço do roll ainda diferem do manual | dono ouve `/opt/cursor/artifacts/demo-mix-v2.mp3` |
 
 ### Proposta Android
 - Estado: proposta, não aceita
