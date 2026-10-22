@@ -320,6 +320,24 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - HIL executado? não
 - Busca por voz (A053) e quatro decks (A054) continuam por fazer.
 
+### Tela 0.13.1
+- Estado: JVM deste host; escuta BLOCKED_HARDWARE. Não é o tablet e não é a DDJ-400.
+- Tom: o Goertzel até cerca de 1 kHz e o EDMA esparso saíram. Entrou um CQT de 12 bandas por oitava, janela de cerca de 67 ciclos, 32,7 Hz a 5 kHz, salto de 4096, log da magnitude, peso 1,7 abaixo de 180 Hz, Pearson com o EDMA publicado. Núcleos em float. Um seno puro continua maior.
+- Nas 58 GiantSteps: MIREX 0,476 para 0,586, exato 0,397 para 0,466, Camelot 0,552 para 0,759. A Essentia EDMA neste corte é 0,581 / 0,466 e o librosa CQT+EDMA refeito aqui é 0,591 / 0,483. O alvo 0,58 cumpre-se neste corte. O 0,65 não apareceu.
+- O dev (42) ficou em 0,636 e foi o único corte da escolha. Holdout (16) 0,456. Extra (190, `tools/fetch_key_extra.py`) 0,519. As 248 juntas: 0,535. Techno nas 58 sobe de 0,257 para 0,471, mas no extra fica em 0,363 (n=30). Drum and bass nas 58 sobe de 0,350 para 0,620; no extra, 0,536 (n=28). House e dubstep descem nas 58.
+- Erros nas 58, antes → depois: exato 23→27, quinta 7→9, relativo 1→7, paralelo 4→2, outro 23→13. No extra: 83, 18, 9, 20 e 60.
+- Foram medidos no dev e revertidos: HPCP, branqueamento, separação harmónico/percussivo, EDMM, bgate, Shaath, Krumhansl, Temperley, viés para menor e busca de afinação.
+- Tempo não mudou: Acc1 0,655, Acc2 0,724. Abaixo de 0,85 / 0,95.
+- Host: 283 ms por prévia de cerca de 2 min (análise completa). Estimativa no Tab S6 Lite, 2–4 vezes este núcleo: cerca de 0,6 s a 1,1 s. Não foi medido no tablet.
+- Chromosome Boutique, TKEY Bm: lê F e 154,20 BPM. Ecosystem, TKEY Ebm: lê Cm e 122,00. Silver, TKEY Em: lê D e 141,00 (o 0.12.1 lia Bm). Nenhuma foi forçada.
+- Piso do teste: MIREX ≥ 0,56 nas 58 e ≥ 0,48 no extra. O cache de pasta sem export passa a `0131`. O heap do teste JVM passou a 2g: o padrão estourava no lowpass das faixas longas depois das 248 análises.
+- Frases: o piso 16/26 a 1 compasso e 20/26 a 4 continua a passar. O tempo, que alimenta a grade, não mudou.
+- JVM: 80 testes. Na suíte junta, o PhraseHitRateTest estourou o heap padrão; isolado, com 2g, passa. DSP hospedeiro e gravação hospedeira: ALL PASS. Python: 42 passed.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4264469 bytes, SHA-256 `750ca1051930efdad9427913aeeea8aeedde9b746bc7242e9ff8915f19ec2aab`, versão 0.13.1 (versionCode 16), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`. O APK 0.13.0 (4264901 bytes, `204373723cb6aa50e7c5a999ae1aa3b0d396a16d326265ade72dd61dd01a8449`) fica só neste diário.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19591903 bytes, SHA-256 `1b464927afc55b05fd58b441cab2ee94d62b92380a1090fc3693bce49dddc3a3`.
+- HIL executado? não. O tom novo não acrescenta passo ao roteiro. Os passos 13 a 24 continuam por executar.
+- Busca por voz (A053) e quatro decks (A054) continuam por fazer.
+
 ### T020 — configuração
 - Estado: PASS
 - Perfil `runtime`, tela de referência 1024x600, `allow_write` recusado
@@ -340,7 +358,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 ### T078 — roteiro final
 - Estado: documento PASS; execução BLOCKED_HARDWARE
 - Arquivo: `docs/hil/roteiro-validacao-final.md`
-- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Em 0.12.1 os passos continuam os mesmos: a grade, o tom, a cor e a emenda do loop não são um gesto novo na controladora. Em 0.12.2 a análise de uma pasta sem export também não é um gesto na controladora. Em 0.13.0 os passos 22 a 24 cobrem slip, medidor de fase, MATCHING, SUGGEST, beat jump 64, frase, cues automáticos e auto gain. Os passos 13 a 24 continuam por executar
+- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Em 0.12.1 os passos continuam os mesmos: a grade, o tom, a cor e a emenda do loop não são um gesto novo na controladora. Em 0.12.2 a análise de uma pasta sem export também não é um gesto na controladora. Em 0.13.0 os passos 22 a 24 cobrem slip, medidor de fase, MATCHING, SUGGEST, beat jump 64, frase, cues automáticos e auto gain. Em 0.13.1 o tom novo não é um gesto na controladora. Os passos 13 a 24 continuam por executar
 
 ## Template de registro
 

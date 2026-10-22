@@ -110,11 +110,53 @@ Prints, neste host, com quatro prévias GiantSteps renomeadas (House, Techno, Tr
 
 É uma renderização Robolectric. Não é o tablet.
 
+## Tom — 0.13.1
+
+O detetor que estava no app lia Goertzel até cerca de 1 kHz e um EDMA esparso, que não é o perfil publicado. No mesmo corte de 58, isso dava MIREX 0,476. A escolha dos parâmetros usou só o dev: dentro de cada família, os ids ordenados, o índice 2, 5, 8… é holdout; família de uma faixa também vai para o holdout. São 42 no dev e 16 no holdout. O extra (190 prévias, `tools/fetch_key_extra.py`, `manifest-key-extra.tsv`) não entrou na escolha.
+
+Cada alavanca foi medida no dev e revertida quando não subia o MIREX. Ficou um CQT de 12 bandas por oitava, com janela de cerca de 67 ciclos, de 32,7 Hz a 5 kHz, salto de 4096 amostras, logaritmo da magnitude, peso 1,7 abaixo de 180 Hz, e correlação de Pearson com o EDMA publicado (Faraldo e outros). Núcleos em float. Um seno puro continua a sair como maior. Foram medidos e não ficaram: HPCP com picos e harmónicos 4 e 8, branqueamento, separação harmónico/percussivo, gate de croma, EDMM, bgate, Shaath, Krumhansl, Temperley, viés para menor e busca de afinação de ±30 cents. O Q baixo (uma janela da largura de um semitom) também não separava um seno de 440 Hz.
+
+| Corte | n | MIREX | exato |
+|---|---:|---:|---:|
+| 0.13.0, as 58 | 58 | 0,476 | 0,397 |
+| 0.13.1, dev | 42 | 0,636 | 0,524 |
+| 0.13.1, holdout | 16 | 0,456 | 0,312 |
+| 0.13.1, as 58 | 58 | 0,586 | 0,466 |
+| 0.13.1, extra | 190 | 0,519 | 0,437 |
+| 0.13.1, 58 mais extra | 248 | 0,535 | 0,444 |
+
+Nas 58, o Camelot compatível passou de 0,552 para 0,759. O tempo não mudou: Acc1 0,655 e Acc2 0,724. A Essentia KeyExtractor EDMA, na medição já feita destas 58, fica em 0,581 / 0,466. O librosa CQT com o mesmo EDMA e Pearson, refeito nesta passagem, deu 0,591 / 0,483. O alvo de igualar a Essentia cumpre-se neste corte de 58 (0,586). Não se cumpre no holdout nem nas 190 faixas novas. O 0,65 não apareceu.
+
+| Família | n | MIREX 0.13.0 | MIREX 0.13.1 | exato 0.13.1 |
+|---|---:|---:|---:|---:|
+| house | 10 | 0,660 | 0,630 | 0,500 |
+| techno | 7 | 0,257 | 0,471 | 0,429 |
+| trance | 8 | 0,563 | 0,575 | 0,375 |
+| drum-and-bass | 10 | 0,350 | 0,620 | 0,600 |
+| dubstep | 5 | 0,800 | 0,560 | 0,400 |
+| electronica | 7 | 0,314 | 0,786 | 0,714 |
+| glitch-hop | 5 | 0,400 | 0,620 | 0,400 |
+
+Erros nas 58. Quinta, relativo e paralelo usam o mesmo critério do peso MIREX.
+
+| | exato | quinta | relativo | paralelo | outro |
+|---|---:|---:|---:|---:|---:|
+| 0.13.0 | 23 | 7 | 1 | 4 | 23 |
+| 0.13.1 | 27 | 9 | 7 | 2 | 13 |
+
+Techno e drum and bass deixam de ser o buraco do corte pequeno: o techno sobe de 0,257 para 0,471, o drum and bass de 0,350 para 0,620. House desce de 0,660 para 0,630 e dubstep de 0,800 para 0,560. No extra, o techno volta a ser fraco (0,363 em 30) e o drum and bass fica em 0,536 em 28. O balde «outro» desce de 23 para 13 nas 58, mas ainda são 60 em 190 no extra. Os paralelos são 2 nas 58 e 20 no extra.
+
+No host, a análise completa (tempo, tom, frases e LUFS) mediu 283 ms por prévia de cerca de 2 min. A estimativa para o Tab S6 Lite, a 2–4 vezes este núcleo, fica entre cerca de 0,6 s e 1,1 s. Não foi medido no tablet. O alvo de cerca de 2 s, nessa estimativa, cabe.
+
+Chromosome Boutique, `TKEY` Bm: o 0.13.1 lê F e 154,20 BPM. Não é Bm. O 0.12.1 lia Bm e o 0.13.0 lia Am. Ecosystem, `TKEY` Ebm: lê Cm e 122,00 BPM (o 0.13.0 lia Fm). Silver, `TKEY` Em: lê D e 141,00 BPM (o 0.12.1 lia Bm, uma quinta). Caught In The Beat continua 160,00 e Fm, sem `TKEY`.
+
+O piso do `GroundTruthTest` nas 58 passa a MIREX ≥ 0,56. O extra, quando as prévias estão no disco, pede MIREX ≥ 0,48. Não travam 0,58 nem 0,65.
+
 ## O que fica aberto
 
-- Acc1 0,655, Acc2 0,724 e MIREX 0,476 ficam abaixo de 0,85, 0,95 e 0,70.
+- Acc1 0,655 e Acc2 0,724 continuam abaixo de 0,85 e 0,95. O MIREX 0,586 nas 58 fica abaixo de 0,65 e de 0,70.
+- O 0,586 não se repete fora do corte em que o dev foi afinado: holdout 0,456 (16 faixas) e extra 0,519 (190).
 - O erro que resta no tempo é de métrica (2/3, 3/4, 3/2), não de oitava. O pente do kick não vê a semínima quando o kick não cai nela, como em vários drum and bass.
-- O tom deste app é Goertzel por oitavas, não um HPCP. A régua com CQT também não chega a 0,70 neste corte.
-- O tom de Chromosome Boutique deixou de coincidir com o `TKEY` (Bm no 0.12.1, Am no 0.12.2).
+- Chromosome Boutique, Ecosystem e Silver não batem o `TKEY` (F, Cm e D).
 - Não há hip-hop com BPM publicado neste corpus; glitch-hop é o substituto, e o Acc1 dele é 0,400.
-- O áudio não foi ouvido. HIL `BLOCKED_HARDWARE`.
+- O áudio não foi ouvido. HIL `BLOCKED_HARDWARE`. A estimativa de tempo no tablet não é uma medição do aparelho.

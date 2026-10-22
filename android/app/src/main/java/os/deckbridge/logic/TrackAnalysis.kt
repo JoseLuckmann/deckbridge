@@ -2,10 +2,14 @@ package os.deckbridge.logic
 
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.cos
+import kotlin.math.ln1p
+import kotlin.math.log2
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.round
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -35,13 +39,9 @@ data class TrackRead(
     val energy: Double = 0.0,
 )
 
-private val MAJOR = doubleArrayOf(6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88)
-private val MINOR = doubleArrayOf(6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17)
-// Perfil EDMA (Faraldo e outros, música eletrônica). Não é o detector da Essentia.
-private val EDMA_MAJOR = doubleArrayOf(1.00, 0.00, 0.22, 0.00, 0.39, 0.16, 0.00, 0.44, 0.00, 0.24, 0.00, 0.18)
-private val EDMA_MINOR = doubleArrayOf(1.00, 0.00, 0.21, 0.32, 0.00, 0.22, 0.00, 0.43, 0.18, 0.00, 0.14, 0.20)
-private val TEMPERLEY_MAJOR = doubleArrayOf(5.0, 2.0, 3.5, 2.0, 4.5, 4.0, 2.0, 4.5, 2.0, 3.5, 1.5, 4.0)
-private val TEMPERLEY_MINOR = doubleArrayOf(5.0, 2.0, 3.5, 4.5, 2.0, 4.0, 2.0, 4.5, 3.5, 2.0, 1.5, 4.0)
+// EDMA publicado (Faraldo e outros). Índice 0 é a tónica. Não é o código da Essentia.
+private val EDMA_MAJOR = doubleArrayOf(1.00, 0.29, 0.50, 0.40, 0.60, 0.56, 0.32, 0.80, 0.31, 0.45, 0.42, 0.39)
+private val EDMA_MINOR = doubleArrayOf(1.00, 0.31, 0.44, 0.58, 0.33, 0.49, 0.29, 0.78, 0.43, 0.29, 0.53, 0.32)
 private val MAJOR_NAMES = listOf("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
 private val MINOR_NAMES = listOf("Cm", "Dbm", "Dm", "Ebm", "Em", "Fm", "F#m", "Gm", "Abm", "Am", "Bbm", "Bm")
 private val PITCH_CLASS = listOf("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
@@ -592,118 +592,144 @@ private fun percentile(values: FloatArray, fraction: Double): Double {
     return copy[index].toDouble()
 }
 
+private class CqtBin(val real: FloatArray, val imag: FloatArray, val freq: Double, val pc: Int) {
+    val half = real.size / 2
+}
+
+// Núcleos fixos a 22050 Hz. O custo de os construir fica fora de cada faixa.
+private val cqtBins: List<CqtBin> by lazy { buildCqtBins() }
+
 private fun detectKey(samples: FloatArray, rate: Int): Pair<String, Double> {
-    val frame = 4096
-    if (samples.size < frame * 2) return "—" to 0.0
-    val hop = frame
-    val count = (samples.size - frame) / hop
+    if (samples.size < 4096 * 2 || rate < 8000) return "—" to 0.0
+    if (rate == 22050) return detectKeyAt22050(samples)
+    val outCount = (samples.size.toDouble() * 22050.0 / rate).toInt()
+    if (outCount < 4096 * 2) return "—" to 0.0
+    val scaled = FloatArray(outCount)
+    val step = rate / 22050.0
+    for (index in 0 until outCount) {
+        val source = index * step
+        val left = source.toInt().coerceIn(0, samples.lastIndex)
+        val right = (left + 1).coerceAtMost(samples.lastIndex)
+        val frac = (source - left).toFloat()
+        val a = samples[left]
+        val b = samples[right]
+        scaled[index] = a + (b - a) * frac
+    }
+    return detectKeyAt22050(scaled)
+}
+
+private fun detectKeyAt22050(samples: FloatArray): Pair<String, Double> {
+    val hop = 4096
+    val count = (samples.size - hop) / hop
     if (count < 4) return "—" to 0.0
     val rms = DoubleArray(count)
     for (index in 0 until count) {
         val start = index * hop
         var energy = 0.0
-        for (cursor in start until start + frame) energy += samples[cursor] * samples[cursor]
-        rms[index] = energy / frame
+        for (cursor in start until start + hop) {
+            val value = samples[cursor].toDouble()
+            energy += value * value
+        }
+        rms[index] = energy / hop
     }
     val sorted = rms.copyOf()
     sorted.sort()
     val gate = sorted[sorted.size / 2]
-    val loud = ArrayList<Int>()
+    val loud = ArrayList<Int>(count / 2)
     for (index in 0 until count) {
         if (rms[index] >= gate) loud += index
     }
-    val step = max(1, loud.size / 220)
-    // Um seno puro não tem terça. O perfil menor ganha no cosseno porque a tónica pesa mais.
-    // Sem terça maior nem menor, o nome é o maior dessa nota.
-    run {
-        val chroma = DoubleArray(12)
-        var used = 0
-        var cursor = 0
-        while (cursor < loud.size && used < 40) {
-            addChroma(samples, loud[cursor] * hop, frame, rate, chroma, 0.0)
-            used += 1
-            cursor += step
-        }
-        val energy = chroma.sum()
-        if (energy > 1e-6) {
-            val peak = chroma.max()
-            if (peak / energy >= 0.5) {
-                val name = MAJOR_NAMES[chroma.indices.maxBy { chroma[it] }]
-                return name to (peak / energy).coerceIn(0.0, 1.0)
+    if (loud.size < 4) return "—" to 0.0
+    val chroma = DoubleArray(12)
+    val bins = cqtBins
+    for (bin in bins) {
+        val length = bin.real.size
+        var acc = 0.0
+        for (index in loud) {
+            val start = index * hop + hop / 2 - bin.half
+            if (start < 0 || start + length > samples.size) continue
+            var re = 0f
+            var im = 0f
+            var cursor = 0
+            val real = bin.real
+            val imag = bin.imag
+            while (cursor + 3 < length) {
+                val x0 = samples[start + cursor]
+                val x1 = samples[start + cursor + 1]
+                val x2 = samples[start + cursor + 2]
+                val x3 = samples[start + cursor + 3]
+                re += x0 * real[cursor] + x1 * real[cursor + 1] + x2 * real[cursor + 2] + x3 * real[cursor + 3]
+                im += x0 * imag[cursor] + x1 * imag[cursor + 1] + x2 * imag[cursor + 2] + x3 * imag[cursor + 3]
+                cursor += 4
             }
-        }
-    }
-    var bestName = "C"
-    var bestMargin = -1.0
-    var bestScore = 0.0
-    var cents = -30
-    while (cents <= 30) {
-        val chroma = DoubleArray(12)
-        var used = 0
-        var cursor = 0
-        while (cursor < loud.size) {
-            addChroma(samples, loud[cursor] * hop, frame, rate, chroma, cents / 100.0)
-            used += 1
-            cursor += step
-        }
-        if (used >= 4) {
-            val profiles = listOf(
-                matchProfiles(chroma, EDMA_MAJOR, EDMA_MINOR),
-                matchProfiles(chroma, MAJOR, MINOR),
-                matchProfiles(chroma, TEMPERLEY_MAJOR, TEMPERLEY_MINOR),
-            )
-            val pick = profiles.maxBy { it.third }
-            if (pick.third > bestMargin) {
-                bestMargin = pick.third
-                bestName = pick.first
-                bestScore = pick.second
+            while (cursor < length) {
+                val value = samples[start + cursor]
+                re += value * real[cursor]
+                im += value * imag[cursor]
+                cursor += 1
             }
+            val re64 = re.toDouble()
+            val im64 = im.toDouble()
+            acc += ln1p(sqrt(re64 * re64 + im64 * im64))
         }
-        cents += 10
+        val weight = if (bin.freq < 180.0) 1.7 else 1.0
+        chroma[bin.pc] += acc * weight
     }
-    return bestName to bestScore.coerceIn(0.0, 1.0)
-}
-
-private fun addChroma(samples: FloatArray, offset: Int, frame: Int, rate: Int, chroma: DoubleArray, semitoneShift: Double) {
-    val window = DoubleArray(frame) { index ->
-        0.5 - 0.5 * cos(2.0 * PI * index / (frame - 1))
-    }
-    for (pc in 0 until 12) {
-        var mag = 0.0
-        for (octave in 2..6) {
-            val midi = 12 * octave + pc
-            val freq = 440.0 * 2.0.pow((midi - 69 + semitoneShift) / 12.0)
-            if (freq < 40.0 || freq > rate * 0.45) continue
-            val weight = if (octave <= 3) 1.7 else 1.0
-            mag += weight * goertzel(samples, offset, frame, rate, freq, window)
-        }
-        chroma[pc] += mag
-    }
-}
-
-private fun goertzel(samples: FloatArray, offset: Int, n: Int, rate: Int, freq: Double, window: DoubleArray): Double {
-    val coeff = 2.0 * cos(2.0 * PI * freq / rate)
-    var s1 = 0.0
-    var s2 = 0.0
-    for (index in 0 until n) {
-        val s0 = samples[offset + index] * window[index] + coeff * s1 - s2
-        s2 = s1
-        s1 = s0
-    }
-    val power = s1 * s1 + s2 * s2 - coeff * s1 * s2
-    return kotlin.math.ln(1.0 + sqrt(power.coerceAtLeast(0.0)))
-}
-
-private fun matchProfiles(chroma: DoubleArray, major: DoubleArray, minor: DoubleArray): Triple<String, Double, Double> {
     val energy = chroma.sum()
-    if (energy < 1e-6) return Triple("—", 0.0, -1.0)
+    if (energy <= 1e-6) return "—" to 0.0
+    val peak = chroma.max()
+    // Um seno puro não tem terça. Sem terça, o nome é o da nota mais forte.
+    if (peak / energy >= 0.5) {
+        val name = MAJOR_NAMES[chroma.indices.maxBy { chroma[it] }]
+        return name to (peak / energy).coerceIn(0.0, 1.0)
+    }
+    return matchEdma(chroma)
+}
+
+private fun buildCqtBins(): List<CqtBin> {
+    val rate = 22050.0
+    val q = 4.0 / (2.0.pow(1.0 / 12.0) - 1.0)
+    var midi = ceil(69.0 + 12.0 * log2(32.7 / 440.0))
+    val bins = ArrayList<CqtBin>(96)
+    while (bins.size < 500) {
+        val freq = 440.0 * 2.0.pow((midi - 69.0) / 12.0)
+        if (freq > 5000.0) break
+        if (freq >= 32.7) {
+            var length = max(32, round(q * rate / freq).toInt())
+            if (length % 2 == 1) length += 1
+            val real = FloatArray(length)
+            val imag = FloatArray(length)
+            var windowSum = 0.0
+            for (index in 0 until length) {
+                val window = 0.5 - 0.5 * cos(2.0 * PI * index / (length - 1))
+                val time = index - length / 2.0
+                val theta = 2.0 * PI * freq * time / rate
+                real[index] = (window * cos(theta)).toFloat()
+                imag[index] = (window * -sin(theta)).toFloat()
+                windowSum += window
+            }
+            val inv = (1.0 / windowSum).toFloat()
+            for (index in 0 until length) {
+                real[index] *= inv
+                imag[index] *= inv
+            }
+            bins += CqtBin(real, imag, freq, (round(midi).toInt() % 12 + 12) % 12)
+        }
+        midi += 1.0
+    }
+    return bins
+}
+
+private fun matchEdma(chroma: DoubleArray): Pair<String, Double> {
     var bestName = "C"
     var best = -2.0
     var second = -2.0
     for (shift in 0 until 12) {
-        val majorScore = correlate(chroma, major, shift)
-        val minorScore = correlate(chroma, minor, shift)
-        for ((score, name) in listOf(majorScore to MAJOR_NAMES[shift], minorScore to MINOR_NAMES[shift])) {
+        val pairs = listOf(
+            pearson(chroma, EDMA_MAJOR, shift) to MAJOR_NAMES[shift],
+            pearson(chroma, EDMA_MINOR, shift) to MINOR_NAMES[shift],
+        )
+        for ((score, name) in pairs) {
             if (score > best) {
                 second = best
                 best = score
@@ -713,22 +739,30 @@ private fun matchProfiles(chroma: DoubleArray, major: DoubleArray, minor: Double
             }
         }
     }
-    return Triple(bestName, best, best - second)
+    return bestName to best.coerceIn(0.0, 1.0)
 }
 
-private fun correlate(chroma: DoubleArray, profile: DoubleArray, shift: Int): Double {
-    var dot = 0.0
-    var a = 0.0
-    var b = 0.0
+private fun pearson(chroma: DoubleArray, profile: DoubleArray, shift: Int): Double {
+    var meanLeft = 0.0
+    var meanRight = 0.0
     for (index in 0 until 12) {
-        val left = chroma[(index + shift) % 12]
-        val right = profile[index]
-        dot += left * right
-        a += left * left
-        b += right * right
+        meanLeft += chroma[index]
+        meanRight += profile[index]
     }
-    if (a <= 1e-12 || b <= 1e-12) return 0.0
-    return dot / sqrt(a * b)
+    meanLeft /= 12.0
+    meanRight /= 12.0
+    var dot = 0.0
+    var leftEnergy = 0.0
+    var rightEnergy = 0.0
+    for (index in 0 until 12) {
+        val left = chroma[(index + shift) % 12] - meanLeft
+        val right = profile[index] - meanRight
+        dot += left * right
+        leftEnergy += left * left
+        rightEnergy += right * right
+    }
+    if (leftEnergy <= 1e-12 || rightEnergy <= 1e-12) return 0.0
+    return dot / sqrt(leftEnergy * rightEnergy)
 }
 
 fun normalizeKeyName(raw: String): String {

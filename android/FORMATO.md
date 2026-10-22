@@ -66,7 +66,7 @@ O corpus de variantes (páginas, títulos longos e unicode, arte ausente, ANLZ a
 
 Na 0.12.2, uma pasta sem `export.pdb` e com MP3, WAV, FLAC, AIFF, M4A ou AAC não ganha PDB. O app analisa cada ficheiro, mostra o progresso e guarda BPM, tom, batidas e a miniatura RGB no cache do app. O volume continua só de leitura.
 
-Na 0.13.0 o mesmo cache também guarda frases, LUFS e energia. Os hot cues automáticos são refeitos na memória a partir dessas frases. O USB não recebe esses cues. Se o `.EXT` trouxer PSSI, a barra usa essas frases e o índice de 16 compassos deixa de ser a fonte. O banco de hot cue que o export já traz é só leitura. Não há coluna de auto gain publicada na linha de conteúdo que este parser lê; o trim é o LUFS medido no áudio, ou zero se a medição não existe.
+Na 0.13.1 o selo do cache de pasta sem export é `0131`. Um cache `0130` deixa de ser lido, porque o tom mudou. Na 0.13.0 o mesmo cache também guarda frases, LUFS e energia. Os hot cues automáticos são refeitos na memória a partir dessas frases. O USB não recebe esses cues. Se o `.EXT` trouxer PSSI, a barra usa essas frases e o índice de 16 compassos deixa de ser a fonte. O banco de hot cue que o export já traz é só leitura. Não há coluna de auto gain publicada na linha de conteúdo que este parser lê; o trim é o LUFS medido no áudio, ou zero se a medição não existe.
 
 ## Gravação
 

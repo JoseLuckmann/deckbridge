@@ -14,8 +14,8 @@ android {
         applicationId = "os.deckbridge.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15
-        versionName = "0.13.0"
+        versionCode = 16
+        versionName = "0.13.1"
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
@@ -101,6 +101,9 @@ androidComponents {
 }
 
 tasks.withType<Test>().configureEach {
+    // O worker padrão (~512 MB) estoura no lowpass das faixas longas depois
+    // das 248 análises de tom. O algoritmo em si cabe; o heap do teste não.
+    maxHeapSize = "2g"
     systemProperty("roborazzi.test.record", "true")
     systemProperty("roborazzi.output.dir", "/opt/cursor/artifacts/prints")
     systemProperty("usb.folder", System.getProperty("usb.folder") ?: "")
