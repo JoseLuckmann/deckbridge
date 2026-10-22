@@ -1,8 +1,8 @@
 # Tasks 001 — backlog executável por agentes
 
-**Versão:** 1.0.0 | **Formato:** IDs permanentes `T001...`, dependências explícitas, saída + evidência.  
-**Estados permitidos:** `TODO`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED_HARDWARE`, `BLOCKED_OWNER`, `DEFERRED`.  
-**Status inicial deste pacote:** `TODO`. A partir de 21/10/2026 as tarefas de software da Fase 0 passam a ter estado próprio na linha e no `implementation-log`. Tarefa sem marca continua `TODO`.
+**Versão:** 1.1.0 | **Formato:** IDs permanentes `T001...`, dependências explícitas, saída + evidência.  
+**Estados permitidos:** `TODO`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED_HARDWARE`, `BLOCKED_OWNER`, `DEFERRED`. No texto, `parcial` é o estado intermédio: o software existe e a prova no aparelho não.  
+**Leitura em 22/10/2026 (app 0.14.1):** cada tarefa abaixo traz estado. `PASS` aqui é prova de software ou de documento, nunca escuta na DDJ-400. Tarefa `[HIL]` sem aparelho fica `BLOCKED_HARDWARE`. A053 e A054 ficam `DEFERRED`. Os gates G0 e G1 não fecham.
 
 ## Regras de execução
 
@@ -19,21 +19,21 @@
 - [x] **T002** `[P]` Fixar Mixxx `2.5.6` tag/SHA, registrar releases e política de forks na ADR existente `docs/adr/0001-mixxx-base.md` (o caminho `docs/adr/001-upstream-base.md` só redireciona). **Deps:** nenhuma. **Teste:** checksum da fonte observado; `git tag -v` não rodou porque a chave não foi importada. **Aceite:** ADR, sem beta em release. **Estado:** `PASS` em 21/10/2026, com a assinatura PGP ainda não verificada.
 - [x] **T003** `[P]` Auditoria de licença por repositório (Mixxx, StandaloneMixxx, TriMixxx, Nautic, skins, pyrekordbox, libdjinterop, assets, codecs). **Deps:** T001. **Teste:** NOTICE/LICENSE/SBOM inicial. **Aceite:** sem código sem licença. **Estado:** `PASS` em 21/10/2026. StandaloneMixxx ficou `UNKNOWN` e não foi copiado. Codecs não foram auditados arquivo a arquivo porque não foram copiados.
 - [x] **T004** `[P]` Criar harness de evidências: template HIL, coleta de `uname`, Pi model, RAM, energia, kernel, Mixxx, DDJ firmware, logs, ISO time. **Deps:** T001. **Teste:** dados ausentes se tornam `UNKNOWN`, nunca valores inventados. **Estado:** `PASS` do harness em 21/10/2026. A coleta no Raspberry continua na T005, `BLOCKED_HARDWARE`.
-- [ ] **T005** `[HIL]` Inventariar Raspberry antigo com script read-only e DDJ-400 (firmware/model/power/cables). **Deps:** T004. **Aceite:** perfil H0 em JSON, foto de ligação opcional. **Se hardware ausente:** `BLOCKED_HARDWARE`.
+- [ ] **T005** `[HIL]` Inventariar Raspberry antigo com script read-only e DDJ-400 (firmware/model/power/cables). **Deps:** T004. **Aceite:** perfil H0 em JSON, foto de ligação opcional. **Se hardware ausente:** `BLOCKED_HARDWARE`. **Estado:** `BLOCKED_HARDWARE`.
 - [ ] **T006** `[P]` Criar ambiente x86_64 com Mixxx estável, fixtures áudio de licença aberta e guia de setup; testar execução fora do Pi. **Deps:** T002. **Teste:** smoke desktop CI manual reproduzível. **Estado:** guia e smoke prontos em 21/10/2026. Execução do Mixxx `BLOCKED` neste ambiente: o binário não está instalado. Áudio não foi tocado.
 - [ ] **T007** `[P]` Preparar pipeline arm64 baseado em Raspberry Pi OS; optar por Pi-gen/apt build após ADR. **Deps:** T002,T003. **Teste:** `.deb` ou release tarball arm64 com manifest e hashes. **Estado:** ADR-0004 e pacote `Architecture: all` com hash em 21/10/2026. Binário arm64 do Mixxx `BLOCKED_HARDWARE`. Pi-gen adiado para T041.
 - [x] **T008** `[P]` Ler mapping oficial DDJ-400 da versão fixada, extrair tabela de controls, JS hooks e LEDs sem inventar CC/notes. **Deps:** T002. **Entrega:** `docs/compatibility/ddj400-control-matrix.md`. **Estado:** `PASS` da extração em 21/10/2026. A captura na controladora é a T009, `BLOCKED_HARDWARE`.
-- [ ] **T009** `[HIL]` Capturar MIDI de DDJ-400 em hardware e correlacionar à matriz; investigar bug firmware slider. **Deps:** T005,T008. **Teste:** cada ação M0 tem evento correspondente ou exceção documentada.
-- [ ] **T010** `[HIL]` Enumerar canais de saída áudio da DDJ-400 em Linux; distinguir números lógicos e indexes do backend. **Deps:** T005. **Teste:** reproduzir sinais separados 1–2/3–4.
-- [ ] **T011** `[HIL]` Instalar Mixxx estável no Pi antigo e configurar mapping/ALSA com backup. **Deps:** T005,T007,T008. **Teste:** app inicia sem crash, controladora aparece.
-- [ ] **T012** `[HIL]` Realizar teste master/cue + 2 decks e play/cue/sync/tempo/FX/fader/jog com sample test. **Deps:** T009,T010,T011. **Teste:** matriz 15min + registros áudio/log (G0).
+- [ ] **T009** `[HIL]` Capturar MIDI de DDJ-400 em hardware e correlacionar à matriz; investigar bug firmware slider. **Deps:** T005,T008. **Teste:** cada ação M0 tem evento correspondente ou exceção documentada. **Estado:** `BLOCKED_HARDWARE`.
+- [ ] **T010** `[HIL]` Enumerar canais de saída áudio da DDJ-400 em Linux; distinguir números lógicos e indexes do backend. **Deps:** T005. **Teste:** reproduzir sinais separados 1–2/3–4. **Estado:** `BLOCKED_HARDWARE`.
+- [ ] **T011** `[HIL]` Instalar Mixxx estável no Pi antigo e configurar mapping/ALSA com backup. **Deps:** T005,T007,T008. **Teste:** app inicia sem crash, controladora aparece. **Estado:** `BLOCKED_HARDWARE`.
+- [ ] **T012** `[HIL]` Realizar teste master/cue + 2 decks e play/cue/sync/tempo/FX/fader/jog com sample test. **Deps:** T009,T010,T011. **Teste:** matriz 15min + registros áudio/log (G0). **Estado:** `BLOCKED_HARDWARE`.
 - [x] **T013** `[P]` Criar fixtures sintéticas de MP3/WAV/FLAC/AIFF e metadados + imagens de USB permitidas; direitos/atribuição. **Deps:** T001. **Teste:** hashes reproduzíveis, sem músicas comerciais. **OD-03 (21/10/2026):** MP3 e WAV são a prioridade de testes e desempenho; FLAC e AIFF permanecem, sem serem o foco. **Estado:** `PASS` em 21/10/2026. A pasta não é exportação rekordbox.
-- [ ] **T014** `[HIL]` Produzir USB teste no rekordbox, identificar export legacy/OneLibrary e gravar expected metadata (5 faixas, 3 playlists, cues, loops, beatgrids). **Deps:** T013 e OD-04. **Teste:** manter arquivos de teste privados quando tiverem mídia protegida.
+- [ ] **T014** `[HIL]` Produzir USB teste no rekordbox, identificar export legacy/OneLibrary e gravar expected metadata (5 faixas, 3 playlists, cues, loops, beatgrids). **Deps:** T013 e OD-04. **Teste:** manter arquivos de teste privados quando tiverem mídia protegida. **Estado:** `BLOCKED_HARDWARE`. Depende de um export feito no rekordbox do dono. OD-04 aberta.
 - [x] **T015** `[P]` Analisar árvore do código de import RB da versão Mixxx fixada e os padrões ANLZ; criar matriz semântica de cues. **Deps:** T002,T013. **Entrega:** `docs/compatibility/rekordbox-format-matrix.md`. **Estado:** `PASS` da leitura do fonte em 21/10/2026. Importação num pendrive real continua `BLOCKED_HARDWARE` (T016).
-- [ ] **T016** `[HIL]` Rodar import de USB real na build em Pi, comparar playlists/markers com expected, sem write. **Deps:** T011,T014,T015. **Teste:** hashes pré/pós; diff de cues/loops.
+- [ ] **T016** `[HIL]` Rodar import de USB real na build em Pi, comparar playlists/markers com expected, sem write. **Deps:** T011,T014,T015. **Teste:** hashes pré/pós; diff de cues/loops. **Estado:** `BLOCKED_HARDWARE`.
 - [ ] **T017** `[P]` Benchmark de CPU/RAM/temperatura/x-runs em desktop e harness Pi (15min). **Deps:** T004,T006. **Teste:** relatórios sem extrapolações. **Estado:** harness pronto em 21/10/2026. Amostra de desktop registrada à parte, sem Mixxx e sem extrapolar. Raspberry e x-runs `BLOCKED_HARDWARE`.
-- [ ] **T018** `[HIL]` Coletar benchmark no aparelho real que estiver ligado. **Deps:** T012,T017. **Teste:** gravação de dados em 15min. **OD-01 (21/10/2026):** o resultado alimenta o perfil de execução; não escolhe um modelo único de Raspberry.
-- [ ] **T019** Consolidar **Gate G0**, riscos, backlog reordenado e blockers owner, com matriz FR-001...004. **Deps:** T009,T010,T012,T016,T018. **Resultado:** `G0-evidence.md` PASS/FAIL/BLOCKED, sem liberar G1 com FAIL grave.
+- [ ] **T018** `[HIL]` Coletar benchmark no aparelho real que estiver ligado. **Deps:** T012,T017. **Teste:** gravação de dados em 15min. **OD-01 (21/10/2026):** o resultado alimenta o perfil de execução; não escolhe um modelo único de Raspberry. **Estado:** `BLOCKED_HARDWARE`.
+- [ ] **T019** Consolidar **Gate G0**, riscos, backlog reordenado e blockers owner, com matriz FR-001...004. **Deps:** T009,T010,T012,T016,T018. **Resultado:** `G0-evidence.md` PASS/FAIL/BLOCKED, sem liberar G1 com FAIL grave. **Estado:** `BLOCKED_HARDWARE`. G0 não fecha sem as provas de aparelho.
 
 ## Fase 1 — produto mínimo DDJ-400 standalone
 
@@ -60,49 +60,49 @@
 
 ## Fase 2 — appliance confiável
 
-- [ ] **T040** `[P]` Parametrizar perfis Pi4/Pi5 com valores de áudio *medidos*, temperatura, CPU e limites de cache. **Deps:** T039. **Teste:** config e benchmark por perfil; defaults safe.
-- [ ] **T041** `[P]` Criar build de imagem Pi pinado, com installer idempotente e release manifest SHA. **Deps:** T007,T031,T039. **Teste:** flash limpo + boot em cartão separado.
-- [ ] **T042** Implementar backup config/SQLite local + restore e migrations versionadas. **Deps:** T020,T041. **Teste:** migration N->N+1, rollback, integrity_check.
-- [ ] **T043** Implementar updater manual transacional e rollback em falha, bloqueado durante set. **Deps:** T041,T042. **Teste:** image good/bad e corte de atualização em bancada.
-- [ ] **T044** `[P]` Desenvolver captura e relatório de áudio xruns/CPU/thermal sem afetar RT. **Deps:** T032,T040. **Teste:** stress com instrumentação on/off.
-- [ ] **T045** `[P]` Melhorar waveform/artwork cache local com LRU e limites; não cachear áudio em P2 sem autorização específica. **Deps:** T024,T039. **Teste:** no USB writes, storage limit.
-- [ ] **T046** `[P]` Ajustar render e acessibilidade à referência 800x480/1024x600 e a outra resolução, touch landscape (OD-02, 21/10/2026); revisão humana. **Deps:** T027,T028. **Teste:** tela/rotação/touch real.
-- [ ] **T047** `[P]` Harden SD, logs, configs, usuários/serviços, udev, USB parser quotas e política de rede. **Deps:** T036,T041. **Teste:** port scan, root escalation checks, fuzz.
-- [ ] **T048** `[P]` Gerar SBOM, licença/NOTICE, bundle de fontes correspondentes de código modificado. **Deps:** T003,T041. **Teste:** auditoria legal e licença por arquivo.
-- [ ] **T049** `[HIL]` Executar benchmark 120min com 2 decks; monitorar underruns audíveis, latência e throttling. **Deps:** T040,T044,T046. **Teste:** NFR-001/002/004.
-- [ ] **T050** `[HIL]` Testar 10 cold boots/tempos e 20 power-loss em SD de laboratório; nunca com USB pessoal. **Deps:** T041,T042,T043. **Teste:** p95 boot, integrity_check, recovery.
-- [ ] **T051** `[HIL]` Testar fontes/USB múltiplos e dataset sintético de 10k faixas, limites de scan e browse. **Deps:** T045,T047. **Teste:** NFR-005/006; montar RO.
-- [ ] **T052** `[HIL]` Testar subalimentação, fan/throttling e hub USB alimentado como mitigação. **Deps:** T044,T049. **Teste:** alerta e registro, nunca testar com risco de danificar hardware.
-- [ ] **T053** `[P]` Criar manual do appliance (first boot, usar palco, diagnosticar, backup, reflash, restaurar, avisos USB). **Deps:** T043,T047. **Teste:** usuário segue procedimento sem conhecimento de Linux.
-- [ ] **T054** Consolidar **Gate G2** e assinar release candidate usando evidências HIL. **Deps:** T040–T053. **Produto:** imagem e release notes com hardware homologado.
+- [ ] **T040** `[P]` Parametrizar perfis Pi4/Pi5 com valores de áudio *medidos*, temperatura, CPU e limites de cache. **Deps:** T039. **Teste:** config e benchmark por perfil; defaults safe. **Estado:** `TODO`. Perfil do Pi não foi medido.
+- [ ] **T041** `[P]` Criar build de imagem Pi pinado, com installer idempotente e release manifest SHA. **Deps:** T007,T031,T039. **Teste:** flash limpo + boot em cartão separado. **Estado:** `TODO`. Imagem do Pi não foi gerada.
+- [ ] **T042** Implementar backup config/SQLite local + restore e migrations versionadas. **Deps:** T020,T041. **Teste:** migration N->N+1, rollback, integrity_check. **Estado:** `TODO` na trilha Pi. O histórico do tablet (A048) não é este backup de imagem.
+- [ ] **T043** Implementar updater manual transacional e rollback em falha, bloqueado durante set. **Deps:** T041,T042. **Teste:** image good/bad e corte de atualização em bancada. **Estado:** `TODO`.
+- [ ] **T044** `[P]` Desenvolver captura e relatório de áudio xruns/CPU/thermal sem afetar RT. **Deps:** T032,T040. **Teste:** stress com instrumentação on/off. **Estado:** `TODO` no Pi. O relatório do tablet (A008) existe no código e os números reais estão `BLOCKED_HARDWARE`.
+- [ ] **T045** `[P]` Melhorar waveform/artwork cache local com LRU e limites; não cachear áudio em P2 sem autorização específica. **Deps:** T024,T039. **Teste:** no USB writes, storage limit. **Estado:** `TODO`.
+- [ ] **T046** `[P]` Ajustar render e acessibilidade à referência 800x480/1024x600 e a outra resolução, touch landscape (OD-02, 21/10/2026); revisão humana. **Deps:** T027,T028. **Teste:** tela/rotação/touch real. **Estado:** `parcial`. O encaixe 800×480, 1024×600 e 2000×1200 está na trilha Android (A010, A035). A pele Mixxx e o toque real continuam por fazer.
+- [ ] **T047** `[P]` Harden SD, logs, configs, usuários/serviços, udev, USB parser quotas e política de rede. **Deps:** T036,T041. **Teste:** port scan, root escalation checks, fuzz. **Estado:** `TODO`.
+- [ ] **T048** `[P]` Gerar SBOM, licença/NOTICE, bundle de fontes correspondentes de código modificado. **Deps:** T003,T041. **Teste:** auditoria legal e licença por arquivo. **Estado:** `TODO` para a imagem do Pi. O NOTICE do repositório existe e não é este SBOM de release.
+- [ ] **T049** `[HIL]` Executar benchmark 120min com 2 decks; monitorar underruns audíveis, latência e throttling. **Deps:** T040,T044,T046. **Teste:** NFR-001/002/004. **Estado:** `BLOCKED_HARDWARE`.
+- [ ] **T050** `[HIL]` Testar 10 cold boots/tempos e 20 power-loss em SD de laboratório; nunca com USB pessoal. **Deps:** T041,T042,T043. **Teste:** p95 boot, integrity_check, recovery. **Estado:** `BLOCKED_HARDWARE`.
+- [ ] **T051** `[HIL]` Testar fontes/USB múltiplos e dataset sintético de 10k faixas, limites de scan e browse. **Deps:** T045,T047. **Teste:** NFR-005/006; montar RO. **Estado:** `BLOCKED_HARDWARE`.
+- [ ] **T052** `[HIL]` Testar subalimentação, fan/throttling e hub USB alimentado como mitigação. **Deps:** T044,T049. **Teste:** alerta e registro, nunca testar com risco de danificar hardware. **Estado:** `BLOCKED_HARDWARE`.
+- [ ] **T053** `[P]` Criar manual do appliance (first boot, usar palco, diagnosticar, backup, reflash, restaurar, avisos USB). **Deps:** T043,T047. **Teste:** usuário segue procedimento sem conhecimento de Linux. **Estado:** `TODO`. O manual do tablet está em `docs/android/` e em `STATUS.md`. O manual do aparelho Pi não existe.
+- [ ] **T054** Consolidar **Gate G2** e assinar release candidate usando evidências HIL. **Deps:** T040–T053. **Produto:** imagem e release notes com hardware homologado. **Estado:** `TODO`. G2 não fecha.
 
 ## Fase 3 — analytics e assistente (P3)
 
-- [ ] **T055** `[P]` Spike event bridge com Mixxx 2.5.6; comparar JS MIDI loopback vs queue C++; benchmark de impacto. **Deps:** G2 (T054). **Entrega:** ADR seleção sem sobrecarregar engine.
-- [ ] **T056** Criar `deckbridge.db` migrations para sessions/events/trackplays e pipeline best-effort idempotente. **Deps:** T042,T055. **Teste:** events ordenados e drops contados.
-- [ ] **T057** Implementar telemetria de controls/decks (load/play/cue/loop/volume/EQ/FX/etc.) com throttle. **Deps:** T055,T056. **Teste:** simulação e HIL 15min sem x-runs novos.
-- [ ] **T058** Gerar tracklist e export CSV/JSON/M3U com timestamps, fallback revisão manual. **Deps:** T057. **Teste:** fixtures de 1h e discrepâncias explícitas.
-- [ ] **T059** Implementar `LibraryAdapter` cache local e contratos paginados, sem competir com Mixxx DB. **Deps:** T054, T015. **Teste:** 10k fixture, timeout, mmap/SQLite read de cópia.
-- [ ] **T060** Implementar recomendador determinístico por BPM/key/energy/recent repeats e explicações. **Deps:** T059,T058. **Teste:** topK reproducível + reason codes + edge cases sem key.
-- [ ] **T061** `[P]` Implementar API REST local P3 conforme OpenAPI, com defaults em loopback/disabled e testes OpenAPI/security. **Deps:** T059,T056. **Teste:** 401/403/422/limits, nenhuma rota de mixer.
-- [ ] **T062** Implementar pairing físico opt-in, token revogável, PWA read-only de status, biblioteca e histórico. **Deps:** T061. **Teste:** scan em rede e flows de token/CORS/CSRF.
-- [ ] **T063** Habilitar gravação de áudio local opcional via Mixxx, quota e indicator, sem impactar engine. **Deps:** T054. **Teste:** armazenamento insuficiente gracefully, exclusão consentida.
-- [ ] **T064** Testar P3 HIL sob concorrência de APIs/indexação + 2h de áudio e consolidar G3. **Deps:** T055–T063. **Teste:** nenhuma regressão G2.
+- [ ] **T055** `[P]` Spike event bridge com Mixxx 2.5.6; comparar JS MIDI loopback vs queue C++; benchmark de impacto. **Deps:** G2 (T054). **Entrega:** ADR seleção sem sobrecarregar engine. **Estado:** `TODO`. A ponte de eventos do Mixxx não foi feita.
+- [ ] **T056** Criar `deckbridge.db` migrations para sessions/events/trackplays e pipeline best-effort idempotente. **Deps:** T042,T055. **Teste:** events ordenados e drops contados. **Estado:** `parcial`. O histórico do tablet (A048) grava sessão em SQLite local. A ponte Mixxx desta tarefa não existe.
+- [ ] **T057** Implementar telemetria de controls/decks (load/play/cue/loop/volume/EQ/FX/etc.) com throttle. **Deps:** T055,T056. **Teste:** simulação e HIL 15min sem x-runs novos. **Estado:** `TODO`.
+- [ ] **T058** Gerar tracklist e export CSV/JSON/M3U com timestamps, fallback revisão manual. **Deps:** T057. **Teste:** fixtures de 1h e discrepâncias explícitas. **Estado:** `parcial`. O tablet exporta CSV/M3U8 do histórico (A048). Não é a tracklist de uma hora do Mixxx.
+- [ ] **T059** Implementar `LibraryAdapter` cache local e contratos paginados, sem competir com Mixxx DB. **Deps:** T054, T015. **Teste:** 10k fixture, timeout, mmap/SQLite read de cópia. **Estado:** `TODO` para o adapter do Pi. A biblioteca do tablet é a trilha A015–A020.
+- [ ] **T060** Implementar recomendador determinístico por BPM/key/energy/recent repeats e explicações. **Deps:** T059,T058. **Teste:** topK reproducível + reason codes + edge cases sem key. **Estado:** `parcial`. SUGGEST no Android está na A068, com as métricas de tom e tempo que o analisador realmente tem. Não é o recomendador desta tarefa no Pi.
+- [ ] **T061** `[P]` Implementar API REST local P3 conforme OpenAPI, com defaults em loopback/disabled e testes OpenAPI/security. **Deps:** T059,T056. **Teste:** 401/403/422/limits, nenhuma rota de mixer. **Estado:** `TODO`. O OpenAPI P3 não está no ar.
+- [ ] **T062** Implementar pairing físico opt-in, token revogável, PWA read-only de status, biblioteca e histórico. **Deps:** T061. **Teste:** scan em rede e flows de token/CORS/CSRF. **Estado:** `TODO`.
+- [ ] **T063** Habilitar gravação de áudio local opcional via Mixxx, quota e indicator, sem impactar engine. **Deps:** T054. **Teste:** armazenamento insuficiente gracefully, exclusão consentida. **Estado:** `parcial`. O tablet grava WAV do master (A049). Não é a gravação do Mixxx. A escuta está `BLOCKED_HARDWARE`.
+- [ ] **T064** Testar P3 HIL sob concorrência de APIs/indexação + 2h de áudio e consolidar G3. **Deps:** T055–T063. **Teste:** nenhuma regressão G2. **Estado:** `TODO`. G3 não fecha.
 
 ## Fase 4 — Trainer (P4)
 
-- [ ] **T065** Definir conjunto de exercícios, rubric e dataset sintético/rotulado para transições musicais. **Deps:** T064. **Teste:** anotação reproduzível e inter-anotador se possível.
-- [ ] **T066** Implementar detector offline de frases por heurística e confidence, cache versionado. **Deps:** T065,T059. **Teste:** dataset benchmark; não alocar CPU em áudio.
-- [ ] **T067** Implementar `GUIDED_MIX` overlay opt-in (8/16/32 bars, markers, indicação de graves). **Deps:** T066. **Teste:** sem tocar em transport/fader, latência UI aceitável.
-- [ ] **T068** Implementar modo `TRAINING`, analytics e feedback após sessão. **Deps:** T065,T067. **Teste:** métricas coerentes com trilhas sintéticas rotuladas.
-- [ ] **T069** Ensaiar UI/CPU e HIL com guided/trainer 2 decks 2h sem regressão G2; consolidar G4. **Deps:** T066–T068. **Teste:** desativação instantânea e modo performance sem efeitos colaterais.
+- [ ] **T065** Definir conjunto de exercícios, rubric e dataset sintético/rotulado para transições musicais. **Deps:** T064. **Teste:** anotação reproduzível e inter-anotador se possível. **Estado:** `TODO`.
+- [ ] **T066** Implementar detector offline de frases por heurística e confidence, cache versionado. **Deps:** T065,T059. **Teste:** dataset benchmark; não alocar CPU em áudio. **Estado:** `parcial`. O detector de frases do app acerta 16 de 26 fronteiras a 1 compasso (`docs/testing/phrase-annotations.md`). Não é o modo trainer e não fecha G4.
+- [ ] **T067** Implementar `GUIDED_MIX` overlay opt-in (8/16/32 bars, markers, indicação de graves). **Deps:** T066. **Teste:** sem tocar em transport/fader, latência UI aceitável. **Estado:** `TODO`. A barra de frase do player não é o modo GUIDED_MIX.
+- [ ] **T068** Implementar modo `TRAINING`, analytics e feedback após sessão. **Deps:** T065,T067. **Teste:** métricas coerentes com trilhas sintéticas rotuladas. **Estado:** `TODO`.
+- [ ] **T069** Ensaiar UI/CPU e HIL com guided/trainer 2 decks 2h sem regressão G2; consolidar G4. **Deps:** T066–T068. **Teste:** desativação instantânea e modo performance sem efeitos colaterais. **Estado:** `TODO`. G4 não fecha.
 
 ## Fase 5 — OneLibrary e expansão (opcional, condicionado)
 
-- [ ] **T070** `[P]` Spike legal/técnico OneLibrary: determinar alcance de dados exportados autorizadamente e disponibilidade de acesso documentada. **Deps:** T054. **Resultado:** ADR `SUPPORTED/UNSUPPORTED/REQUIRES_AUTHORIZED_CREDENTIAL`, sem contorno de proteção.
-- [ ] **T071** Implementar copiar snapshot de DB+WAL para local protegido e abrir apenas cópia; reader OneLibrary com libdjinterop quando permitido. **Deps:** T070. **Teste:** nenhuma escrita USB, markers ANLZ tratados separadamente.
-- [ ] **T072** Teste de matrizes de export legado/OneLibrary e fallback UI claro; publicar capacidades campo a campo. **Deps:** T071. **Teste:** 2 export versions, sem claim `full support` com lacuna.
-- [ ] **T073** `[P]` Avaliar ControllerProfile extensível para FLX4/Hercules sem quebrar DDJ-400. **Deps:** T054. **Teste:** M0 regressão DDJ-400.
+- [ ] **T070** `[P]` Spike legal/técnico OneLibrary: determinar alcance de dados exportados autorizadamente e disponibilidade de acesso documentada. **Deps:** T054. **Resultado:** ADR `SUPPORTED/UNSUPPORTED/REQUIRES_AUTHORIZED_CREDENTIAL`, sem contorno de proteção. **Estado:** `TODO`.
+- [ ] **T071** Implementar copiar snapshot de DB+WAL para local protegido e abrir apenas cópia; reader OneLibrary com libdjinterop quando permitido. **Deps:** T070. **Teste:** nenhuma escrita USB, markers ANLZ tratados separadamente. **Estado:** `TODO`. A018 só prova que um arquivo inválido não abre e que um SQLite local de teste lê. Um exportLibrary.db real está `BLOCKED_HARDWARE`.
+- [ ] **T072** Teste de matrizes de export legado/OneLibrary e fallback UI claro; publicar capacidades campo a campo. **Deps:** T071. **Teste:** 2 export versions, sem claim `full support` com lacuna. **Estado:** `TODO`.
+- [ ] **T073** `[P]` Avaliar ControllerProfile extensível para FLX4/Hercules sem quebrar DDJ-400. **Deps:** T054. **Teste:** M0 regressão DDJ-400. **Estado:** `TODO`.
 - [ ] **T074** Definir projeto separado para writeback bidirecional com backup, transaction & autorizações — apenas se proprietário aprovar. **Deps:** T070, decisão OD-06 e decisão explícita de writeback. **Status:** `DEFERRED` por default.
 
 ## Trilha S — simulação sem hardware (IDs novos; T001–T074 não mudam)
@@ -120,7 +120,7 @@ O proprietário só terá DDJ-400 e Raspberry no fim do projeto (21/10/2026). Si
 OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Raspberry é o alvo 2. OD-12 a OD-16 estão provisórias. O acesso ao tablet ainda vai demorar: o que exige o aparelho fica `BLOCKED_HARDWARE`.
 
 - [x] **A001** Registrar OD-11 e as provisórias OD-12..OD-16. Aceitar a ADR de Android e emendar ADR-0001 e ADR-0002 sem apagar a trilha Raspberry. **Estado:** `PASS` de documento em 21/10/2026.
-- [x] **A002** Projeto `android/`: Kotlin, Compose, Oboe 1.11.0 pelo NDK, minSdk 26, targetSdk 34. Cobre Android 10 a 14 do Tab S6 Lite e também Android 8 da OD-01. **Estado:** `PASS` se o APK de debug for gerado nesta rodada.
+- [x] **A002** Projeto `android/`: Kotlin, Compose, Oboe 1.11.0 pelo NDK, minSdk 26, targetSdk 34. Cobre Android 10 a 14 do Tab S6 Lite e também Android 8 da OD-01. **Estado:** `PASS`. O APK 0.14.1 (versionCode 18) foi gerado. Não foi instalado no tablet.
 - [x] **A003** Mapa oficial da DDJ-400 dentro do app, com teste JVM. Bytes só do XML pinado. **Estado:** `PASS` de software.
 - [x] **A004** Relatório de diagnóstico: modelo, hardware, SoC só se o sistema informar, Android, bateria, latência e x-runs. Ausente vira UNKNOWN. O relato do djay entra como referência, não como medição. **Estado:** `PASS` do texto em teste.
 - [ ] **A005** Motor Oboe: tons diferentes nos canais 1–2 e 3–4, sem jogar o fone para o master se só houver 2 canais. **Estado:** código no APK. Escuta `BLOCKED_HARDWARE`.
@@ -216,7 +216,7 @@ OD-11 em 21/10/2026: tablet ligado direto na DDJ-400, sem equipamento extra. Ras
 
 ## Gerenciamento de blockers
 
-- O acesso ao tablet e à DDJ-400 ainda vai demorar. A014, a escuta da prova A0, a leitura de um pendrive rekordbox real (A019) e a escuta dos decks (A020) ficam `BLOCKED_HARDWARE`. O Raspberry é o alvo 2: T005/T009/T010/T011/T012/T014/T016/T018/T031/T033/T034/T035/T038/T039 e a execução da T078 continuam `BLOCKED_HARDWARE`. OD-04 segue aberta. OD-12 a OD-16 estão provisórias.
+- O acesso ao tablet e à DDJ-400 ainda vai demorar. A014, a escuta da prova A0, a leitura de um pendrive rekordbox real (A019) e a escuta dos decks (A020) ficam `BLOCKED_HARDWARE`. O roteiro `docs/hil/roteiro-validacao-final.md` tem os passos 13 a 24 por executar. O Raspberry é o alvo 2: T005/T009/T010/T011/T012/T014/T016/T018/T031/T033/T034/T035/T038/T039 e a execução da T078 continuam `BLOCKED_HARDWARE`. A trilha de aparelho T040–T054 está `TODO` ou `BLOCKED_HARDWARE`, não feita. OD-04 segue aberta. OD-12 a OD-16 estão provisórias. OD-17 a OD-24 estão decididas no `spec.md` e não fecham estes passos.
 - Na ausência de hardware, agentes seguem em software e na trilha T075–T079, **sem fechar G0 ou G1**.
 - Simulação, teste de desktop e emulação não substituem o roteiro `docs/hil/roteiro-validacao-final.md`.
 - Qualquer issue de upstream incompatível exige issue com repro, commit e contorno verificável.

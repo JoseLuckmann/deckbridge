@@ -1,12 +1,19 @@
 # Implementation Plan 001 — arquitetura e estratégia técnica
 
-**Relacionado a:** `spec.md` v1.0.0 | **Estado:** plano para execução incremental | **Data:** 2026-10-21
+**Relacionado a:** `spec.md` v1.1.0 | **Estado:** alvo 1 em simulação até a 0.14.1; alvo 2 por executar | **Data:** 2026-10-21, emenda 2026-10-22
+
+## Emenda 22/10/2026
+
+O produto que existe é o app em `android/`: Kotlin, Jetpack Compose, motor C++ com Oboe, mapa MIDI do XML pinado do Mixxx 2.5.6, leitor próprio de `export.pdb` e ANLZ. O USB é somente leitura (OD-23). A tela é a do OD-17. Os efeitos e o drum build são os das OD-20 e OD-21.
+
+O diagrama e as secções abaixo descrevem o alvo 2 (Raspberry + Mixxx). Essa trilha não foi construída como aparelho. Não apagar o plano: ele continua a ser o que falta fazer no Pi. Gates G0 e G1 continuam abertos. A leitura curta do que funciona e do que falta está em `STATUS.md`.
 
 ## 0. Technical Context
 
 | Dimensão | Decisão inicial | Observação / verificação |
 |---|---|---|
-| Core DJ | Mixxx 2.5.6 stable, tag imutável + patchset local | Mixxx 2.6 beta e 2.7 dev fora do release principal até nova decisão |
+| Alvo 1 | App Android no Galaxy Tab S6 Lite (OD-11, OD-17) | Kotlin, Compose, C++/Oboe. APK 0.14.1, versionCode 18. Escuta `BLOCKED_HARDWARE` |
+| Core DJ no alvo 2 | Mixxx 2.5.6 stable, tag imutável + patchset local | Não é o runtime do tablet. Mixxx 2.6 beta e 2.7 dev fora do release principal até nova decisão |
 | Core/runtime | C++ / Qt / scripts MIDI JavaScript/XML do Mixxx | Preservar API de controles upstream; minimizar patches C++ |
 | Pi OS | Raspberry Pi OS 64-bit, inicialmente Desktop Debian 13 Trixie onde suportado | alinhar distro/kernel ao hardware real e imagem mixxx-pi-gen |
 | Hardware | DDJ-400 USB class-compliant; Raspberry de vários modelos e Linux x86/ARM genérico (OD-01, 21/10/2026) | nenhum modelo é requisito; capacidade lida em execução; HIL continua obrigatório por aparelho |

@@ -20,7 +20,7 @@ A tabela tem 45 linhas. Uma linha pode citar duas classes; a contagem abaixo usa
 | Classe | Linhas | Feitas nesta 0.10.0 | Recomendação curta |
 |---|---|---|---|
 | 1 já estava | 16 | o realce de tom passou a aceitar Camelot e nota musical no mesmo sítio | manter |
-| 2 no ecrã | 14 | 9 na 0.10.0; na 0.12.0 entraram ordenar, Active Loop no ponto, reverse, grelha e contagem ao memory cue | o que resta é MATCHING, o resto do slip e o medidor de fase |
+| 2 no ecrã | 14 | 9 na 0.10.0; na 0.12.0 entraram ordenar, Active Loop, reverse, grelha e contagem; na 0.13.0, MATCHING, SUGGEST, slip alargado, medidor de fase, beat jump 64 e leitura de PSSI | o que resta de ecrã é sobretudo o que a classe 4 exige hardware ou rede |
 | 3 mapa DDJ-400 | 6, já dentro das 16 | 0 novas | não roubar o BEAT SYNC para o Key Sync |
 | 4 fora de alcance | 11 | 0 | não prometer Pro DJ Link, nuvem, Wi-Fi nem o ecrã do prato |
 | mista (1 e 2, ou 1 e 4) | 4: Active Loop, Tag List, modo do prato, On Air | 0 | o resto de cada uma está na própria linha |
@@ -51,7 +51,7 @@ A capa (tabela de artwork e ficheiros em `PIONEER/Artwork`) é leitura de biblio
 | Beat Sync de BPM | Manual, Beat Sync | 1 e 3: `PioneerDDJ400.syncPressed` (0x90/0x58 e 0x91/0x58). Pressão longa: `syncLongPressed` (0x5C) define o master | — | feito | Não usar este botão para Key Sync |
 | Master Tempo | Manual, Master Tempo | 1 | — | aproximação (duas linhas de atraso) | Não vender como o algoritmo comercial |
 | Quantize e valor de batida | Manual, Quantize; atalho QUANTIZE BEAT VALUE | 1 | — | feito no ecrã | Manter |
-| Beat Jump | Manual: o salto usa o valor de BEAT JUMP BEAT VALUE | 1 | — | 1, 2, 4, 8, 16 e 32 no ecrã. O manual não fixa a lista 1/2…64; o valor é um ajuste | Deixar o 64 como tarefa S se fizer falta |
+| Beat Jump | Manual: o salto usa o valor de BEAT JUMP BEAT VALUE | 1 | — | 1, 2, 4, 8, 16, 32 e, desde a 0.13.0, 64 no ecrã. O manual não fixa a lista; o valor é um ajuste | Manter |
 | Loop in / out | Manual; mapa `loop_in` 0x10, `loop_out` 0x11 | 1 e 3 | — | feito | Manter |
 | Loop de 4 e de 8 | Manual, botões 4 BEAT e 8 BEAT | 1 e 3: pads de beat loop `beatloop_4_toggle` (nota 0x64) e `beatloop_8_toggle` (0x65) em 0x97/0x99 | — | feito | Manter |
 | Metade e dobro do loop | Manual | 1 e 3: `PioneerDDJ400.cueLoopCallLeft` / `cueLoopCallRight` | — | feito | Manter |
@@ -59,21 +59,21 @@ A capa (tabela de artwork e ficheiros em `PIONEER/Artwork`) é leitura de biblio
 | Active Loop | Manual: o loop gravado começa quando a cabeça chega lá | 1 parcial, resto 2 | M | na 0.12.0 o loop da memória arma na carga e só entra quando a cabeça cruza o início | Ouvir no hardware |
 | Emergency Loop | Manual, Emergency Loop | 2 | S | feito, com as diferenças acima | Ouvir no hardware |
 | Gravar loop no USB | Manual, MEMORY | 4 | — | a leitura de memory cue já existe. Escrever o USB está fora (ADR-0002) | Não gravar o pendrive |
-| Slip | Manual, Slip | 2 | S / M | o regresso ao ponto está feito. Pausa, scratch, hot cue e reverse em slip ficam de fora | Tarefa M para o resto |
+| Slip | Manual, Slip | 2 | S / M | na 0.13.0 o regresso ao ponto também cobre pausa, scratch, hot cue premido e reverse no ecrã. A DDJ-400 não tem alavanca de slip reverse | Ouvir no hardware |
 | Slip Reverse | Manual: alavanca DIRECTION em SLIP REV | 4 | — | a DDJ-400 não tem essa alavanca | Não simular a alavanca |
 | Key Shift | Manual: toque em KEY SHIFT, um semitom, RESET | 2 | S | feito | Manter no ecrã |
 | Key Sync | Manual: o menor salto entre os seis tons vizinhos do master | 2 | S | feito como essa regra, com a nossa tabela | Não remapear o BEAT SYNC |
 | Hot Cue A–H | Manual, Hot Cues | 1 e 3: pads de hot cue | — | feito | Manter |
-| Hot Cue Bank | Manual: carrega um banco feito no rekordbox; o leitor não edita o banco | 2 | M | a troca A–H é memória do app. O ficheiro de banco não é lido | Tarefa se aparecer um export com bancos |
+| Hot Cue Bank | Manual: carrega um banco feito no rekordbox; o leitor não edita o banco | 2 | M | na 0.13.0 o banco do export é lido, só leitura. A troca A–H na memória do app continua. O USB não é escrito | Ouvir no hardware |
 | Hot Cue Auto Load | Atalho HOT CUE AUTO LOAD | 1 | — | preferência no menu | Manter |
 | Track Filter | Manual: só na biblioteca; não vale em TAG LIST, SEARCH, MATCHING, HOT CUE BANK nem FOLDER | 2 | S | janela de BPM e tom compatível na lista. Não é o ecrã inteiro de edição | Chega para já |
 | Search | Manual, SEARCH | 1 | — | título, artista, BPM e tom exato | Manter |
 | Tag List | Manual. Converter em playlist grava o dispositivo | 1 a lista da sessão; 4 a gravação | — | etiquetas da sessão. O USB não é destino | Manter |
 | Ordenar a lista ao tocar no título | Manual, track list | 2 | S | na 0.12.0 o cabeçalho ordena título, BPM, tom e tempo, e inverte no segundo toque | Manter |
-| Categoria MATCHING | O manual cita a categoria ao excluir o Track Filter | 2 | S | não há categoria própria. O realce do tom compatível já existe (classe 1) | Tarefa S se a lista MATCHING fizer falta |
+| Categoria MATCHING | O manual cita a categoria ao excluir o Track Filter | 2 | S | na 0.13.0 há lista MATCHING e SUGGEST. Não é o ecrã inteiro do leitor | Ouvir no hardware |
 | Tom no ecrã e realce de vizinhos | Manual, indicador Key; realce nosso a partir da roda | 1 | — | feito. `Am` e `8A` contam como o mesmo tom | Manter |
 | Beat countdown | Manual, ecrã de onda: compassos e batidas até ao cue gravado mais próximo | 2 | S | na 0.12.0 a contagem usa o hot cue ou o memory cue, o que estiver mais perto à frente | Manter |
-| Frase / PSSI | A análise pública do ANLZ descreve frases. O manual deste leitor descreve o beat countdown, não um ecrã PSSI. O anúncio de 2020 fala de dados de frase para iluminação | 2 | L | a barra colorida e o “FR” são o índice do compasso, de 16 em 16 | Não tratar isto como PSSI. Parse real fica em tarefa L |
+| Frase / PSSI | A análise pública do ANLZ descreve frases. O manual deste leitor descreve o beat countdown, não um ecrã PSSI. O anúncio de 2020 fala de dados de frase para iluminação | 2 | L | na 0.13.0 a tag PSSI do `.EXT` é lida (máscara publicada). 16 de 26 fronteiras anotadas caem a 1 compasso. Não é iluminação de palco | Ouvir no hardware |
 | Cor da onda BLUE / RGB / 3BAND | Manual, atalho WAVEFORM COLOR. BLUE é o valor de fábrica | 1 | — | as três estão no menu. Na 0.11.0 a cor lida o export (PWV5/PWV4, PWV7/PWV6, PWV3/PWAV). Sem a tag, o app analisa o WAV | Manter |
 | Zoom | Manual, modo Zoom | 1 | — | feito | Manter |
 | Playhead à esquerda ou ao centro | Atalho WAVEFORM CURRENT POSITION | 1 | — | o menu move o playhead. Se `DEVSETTING.DAT` trouxer o byte documentado, pode ser o padrão | Manter |
@@ -92,7 +92,7 @@ A capa (tabela de artwork e ficheiros em `PIONEER/Artwork`) é leitura de biblio
 | On Air ligado a uma mesa na rede | Manual, ON AIR DISPLAY via PRO DJ LINK | 4 o link; 1 o ON AIR local pelo fader | — | o badge local existe | Manter o local |
 | My Settings gravados no USB | Manual | 4 | — | escrever o USB está fora | Fora |
 | Ajuste de grelha | Manual, Grid Adjust | 2 | M | na 0.12.0 G−, G+, S−, S+ e G0 deslocam ou esticam a grade na memória do app. O USB não é escrito | Ouvir no hardware |
-| Fase em vez da onda | Atalho WAVEFORM / PHASE METER | 2 | M | não feito | Tarefa M, depois do resto |
+| Fase em vez da onda | Atalho WAVEFORM / PHASE METER | 2 | M | na 0.13.0 o menu troca WAVEFORM e PHASE METER | Ouvir no hardware |
 
 ## O que não é função deste leitor
 

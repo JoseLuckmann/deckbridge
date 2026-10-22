@@ -2,7 +2,7 @@
 
 ## Missão
 
-Implemente em incrementos verificáveis o DeckBridge OS, uma plataforma standalone para DDJ-400 em Raspberry Pi, fundamentada em `specs/001-ddj400-standalone/`. Priorize a integridade da biblioteca musical e a estabilidade do áudio acima de features.
+Implemente em incrementos verificáveis o DeckBridge OS, standalone para a DDJ-400, fundamentado em `specs/001-ddj400-standalone/` e em `STATUS.md`. O alvo 1 é o app Android no Galaxy Tab S6 Lite. O alvo 2 é o Raspberry Pi. Priorize a integridade da biblioteca musical e a estabilidade do áudio acima de features.
 
 ## Ordem normativa
 
@@ -16,7 +16,7 @@ Implemente em incrementos verificáveis o DeckBridge OS, uma plataforma standalo
 ## Regras
 
 - Não inventar resultados de testes, versões, compatibilidade, tempo de boot, consumo ou nomes de controles do Mixxx.
-- Não começar com um fork próprio de todo o engine. Primeiro um vertical slice em Mixxx upstream estável e mapping DDJ-400 existente.
+- No alvo 2, não começar com um fork próprio de todo o engine. Primeiro um vertical slice em Mixxx upstream estável e no mapping DDJ-400 existente. No alvo 1 o motor próprio já é o do app (OD-12, ainda provisória quanto à confirmação formal, e é o código que a 0.14.1 distribui).
 - NÃO alterar firmware da DDJ-400; nenhuma necessidade de engenharia reversa de USB proprietária no MVP.
 - **Nunca escrever no pendrive rekordbox** no MVP, nem permitir mount RW. Se algum parser abrir DB SQLite WAL, trabalhar em cópia isolada em disco local, não no pendrive.
 - Nunca copiar músicas protegidas ao repositório; fixtures sintéticas com licenças compatíveis, consentimento para testes de arquivos pessoais.

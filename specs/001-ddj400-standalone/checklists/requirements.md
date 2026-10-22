@@ -1,6 +1,6 @@
 # Checklist de qualidade e completude da especificação
 
-**Data:** 2026-10-21 | **Escopo:** definição de requisitos (não implementação).  
+**Data:** 2026-10-21, revista em 2026-10-22 | **Escopo:** definição de requisitos (não implementação). O app 0.14.1 não fecha os itens que pedem hardware.
 **Marcadores**: `[x]` = documentado, `[ ]` = pendente de validação ou execução; não confundir spec com produto concluído.
 
 ## Requisitos e definição de produto
@@ -13,7 +13,7 @@
 - [x] Histórias BDD de casos críticos.
 - [x] Error handling, USB removido, DDJ ausente, firmware e energia cobertos.
 - [x] Critérios G0–G4 com evidências e condições de bloqueio.
-- [x] Decisões arquiteturais assumidas e OWNER_DECISION documentadas.
+- [x] Decisões arquiteturais assumidas e OWNER_DECISION documentadas. OD-11 a OD-24 estão em `spec.md` §14. A constituição 1.1.0 separa alvo 1 (tablet) e alvo 2 (Pi).
 
 ## Integração e viabilidade
 

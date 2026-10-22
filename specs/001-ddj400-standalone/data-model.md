@@ -1,6 +1,6 @@
 # Data Model & Internal Contracts — DeckBridge OS
 
-**Versão dos contratos:** 1.0.0 | **Data:** 2026-10-21 | **Escopo:** serviços do produto; não modela o banco privado do Mixxx.
+**Versão dos contratos:** 1.0.0 | **Data:** 2026-10-21 | **Emenda:** 2026-10-22 | **Escopo:** serviços previstos do alvo 2 e do companion P3. Não é o esquema do app Android 0.14.1. O histórico do tablet é a tabela local da A048. O USB continua `READ_ONLY` (OD-23). Este texto não modela o banco privado do Mixxx.
 
 ## 1. Regras globais
 

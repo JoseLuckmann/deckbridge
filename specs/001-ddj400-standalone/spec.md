@@ -1,13 +1,13 @@
 # Feature Specification 001 — DeckBridge OS: DDJ-400 standalone
 
-**Status:** Draft pronto para implementação incremental; hardware ainda não validado.  
-**Versão do documento:** 1.0.0 (2026-10-21)  
-**Projeto:** DeckBridge OS (nome de trabalho, sujeito à decisão do proprietário)  
-**Tipo:** spec de produto e critérios de aceite, independente da escolha de stack; detalhes técnicos em `plan.md`.
+**Status:** Alvo 1 implementado em simulação até a 0.14.1. Hardware ainda não validado. Gates G0 e G1 abertos.  
+**Versão do documento:** 1.1.0 (2026-10-22). A 1.0.0 é de 2026-10-21.  
+**Projeto:** DeckBridge OS (nome de trabalho, OD-07 ainda aberta)  
+**Tipo:** spec de produto e critérios de aceite. O como está em `plan.md`. O que falta, em uma página, está em `STATUS.md`.
 
 ## 1. Resumo executivo
 
-Construir um **módulo portátil ligado por USB à DDJ-400** que elimina a necessidade de notebook/telefone para tocar música. Um Raspberry Pi executará Mixxx com UI adequada a tela pequena e navegação pelo hardware. O usuário prepara pendrives no rekordbox, conecta-os ao módulo e consegue selecionar faixas e tocar dois decks, com master e pré-escuta saindo da interface de áudio da DDJ-400. O sistema opera offline, tolera eventos comuns (USB conectado depois do boot, mudança de playlist, erro de arquivo), protege a biblioteca externa contra escritas e proporciona futura camada de telemetria, recomendações musicais e treinamento guiado.
+Construir um **módulo portátil ligado por USB à DDJ-400** que elimina a necessidade de notebook para tocar música. Desde a OD-11 o alvo 1 é um app Android nosso no Galaxy Tab S6 Lite, ligado direto na controladora. O Raspberry com Mixxx 2.5.6 é o alvo 2 e ainda não é um aparelho. O usuário prepara pendrives no rekordbox, conecta-os ao tablet e seleciona faixas em dois decks, com master e pré-escuta na interface de áudio da DDJ-400. O sistema opera offline, tolera eventos comuns (USB conectado depois do boot, mudança de playlist, erro de arquivo), protege a biblioteca externa contra escritas e deixa para depois a camada de telemetria, recomendações e treinamento. Até a 0.14.1 isso existe como app e como teste no host. A escuta no tablet continua `BLOCKED_HARDWARE`.
 
 **Não estamos desenvolvendo um plugin Android para rekordbox nem substituindo o firmware da DDJ-400.** Nosso produto é um computador DJ standalone independente do software proprietário da AlphaTheta.
 
@@ -36,12 +36,26 @@ A DDJ-400 é dependente de host para o software de mixagem. O rekordbox Android 
 
 P0 e P1 são obrigatórios. P2 antes de considerar apresentações públicas. P3–P5 são roadmap, não pré-requisitos para concluir P1.
 
+No alvo 1, o que a 0.5.0-palco até a 0.14.1 entregou está em simulação (JVM, motor hospedeiro, APK gerado). Isso não fecha P0 nem P1: falta a DDJ-400 no tablet. O alvo 2 permanece no papel.
+
 ### 1.4 Backlog adiado pelo dono em 2026-10-22
 
 Estes itens ficam `DEFERRED`. Não entram na 0.10.0 e não devem ser implementados até o dono reabrir.
 
-- Busca por voz.
-- Suporte a quatro decks.
+- Busca por voz. Tarefa A053, `DEFERRED`.
+- Suporte a quatro decks. Tarefa A054, `DEFERRED`. O produto continua em dois decks.
+
+### 1.5 O que a 0.14.1 já fixou no alvo 1
+
+Isto é requisito cumprido em software, com a escuta ainda aberta. O detalhe e os números estão em `STATUS.md`.
+
+- Tela no espírito do leitor de dois decks de club, desenho próprio, sem logo de terceiro (OD-17). Referência de encaixe: 800×480, 1024×600 e 2000×1200.
+- Onda RGB aditiva: grave vermelho, médio verde, agudo azul (OD-18). 3 BANDAS e AZUL continuam. Sem a tag, o app analisa e não escreve o USB.
+- RMX desde a 0.8.0: Scene FX, X-Pad, isolador e release (OD-19). O mapa dos pads é provisório.
+- Beat FX com de/para aos manuais públicos na 0.14.0 (OD-20). O que o manual não publica continua aproximação.
+- Drum build na 0.14.1: one-shots CC0 na fase da grade do deck (OD-21).
+- USB do rekordbox somente leitura (OD-23, ADR-0002).
+- Analisador com métricas publicadas, sem subir o piso do teste até o alvo que não foi atingido (OD-24).
 
 ## 2. Personas e casos de uso
 
@@ -78,7 +92,7 @@ Estes itens ficam `DEFERRED`. Não entram na 0.10.0 e não devem ser implementad
 
 ### 3.2 P1 — MVP standalone
 
-- Login automático controlado/local, boot direto no software DJ. Referência visual: tela de 7 polegadas a 800x480 ou 1024x600 (OD-02, 21/10/2026). O layout se adapta a outras resoluções.
+- Login automático controlado/local, boot direto no software DJ. Referência visual de 7 polegadas: 800x480 ou 1024x600 (OD-02). No alvo 1 o mesmo layout cabe em 2000×1200, a tela do Tab S6 Lite. O layout se adapta a outras resoluções.
 - Biblioteca navega via encoder e botão LOAD, sem mouse ou teclado durante apresentação.
 - Visualização de estado de dois decks: artista, faixa, BPM analisado/atual, tempo, posição, waveform, cue, loop, sync, tempo/pitch, VU e áudio.
 - FX, EQ, play, cue, sync, browse, hot cues, loops, pitch slider, jog wheels, faders, crossfader, PFL/pre-escuta, volume e feedback LED conforme mapeamento DDJ-400; documentar diferenças físicas/firmware.
@@ -385,7 +399,7 @@ Inventariar: CPU/RAM/núcleos, distro/versão, kernel, display (tipo e resoluç�
 - D-05: módulo independente da DDJ; sem abrir/modificar a controladora.
 - D-06: Linux Raspberry Pi OS 64-bit; código x86_64 de desenvolvimento e arm64 para distribuição.
 - D-07: offline-first, sem conta/servidor; PWA opt-in no futuro.
-- D-08: manter UI em skins Qt/Mixxx inicialmente; evitar reescrever player.
+- D-08: no alvo 2, UI em skins Qt/Mixxx. No alvo 1 a UI é Compose, no espírito do leitor de club (OD-17). O player do tablet foi escrito aqui.
 - D-09: ferramentas de analytics/IA somente fora da thread de áudio.
 - D-10: licença open source respeitando as dependências; nome independente de marcas existentes.
 
@@ -421,6 +435,21 @@ Adotam o padrão proposto na ADR de Android. Não estão fechadas.
 | OD-15 | Set só na bateria, sem hub. | provisório, confirmar com o dono |
 | OD-16 | Distribuição por APK direto. | provisório, confirmar com o dono |
 
+#### Decididas na construção do alvo 1 (22/10/2026)
+
+São o que o dono pediu e o que o app 0.14.1 faz. A escuta de cada uma continua `BLOCKED_HARDWARE`.
+
+| ID | Decisão | O que muda |
+|---|---|---|
+| OD-17 | A tela do alvo 1 segue o leitor de dois decks de club, em desenho próprio. Sem logo, sem nome e sem asset desse leitor. | Referência pública e a tabela do que falta: `docs/research/cdj3000-coverage.md`. Rede, nuvem e ecrã do prato ficam de fora (A058, `TODO`). |
+| OD-18 | A onda RGB é soma aditiva: grave vermelho, médio verde, agudo azul, no diagrama que o dono pediu. | 3 BANDAS e AZUL continuam no menu. PWV do export quando a tag existe. Sem a tag, análise no app. O USB não é escrito. |
+| OD-19 | O RMX entra na 0.8.0: Scene FX, X-Pad, isolador e release, no motor e no ecrã. | O mapa dos pads de SAMPLER com o painel aberto é provisório. Item 8 do checklist físico. |
+| OD-20 | Os efeitos têm de/para com os manuais públicos. Não se copia áudio, código nem curva não publicada. | `docs/research/fx-de-para.md`. Spiral, Helix, Mobius, Pitch e o balanço seco/roll continuam diferentes do manual. |
+| OD-21 | O drum build deixa o seno e passa a one-shots CC0, agendados na fase da grade do deck. | `docs/licenses/drum-samples.md`, `docs/research/drum-grid.md`. A 0.14.0 sintetizada fica só no caminho de teste com build em zero. |
+| OD-22 | Busca por voz e quatro decks não entram até o dono reabrir. | A053 e A054, `DEFERRED`. Igual ao §1.4. |
+| OD-23 | O USB do rekordbox é somente leitura no alvo 1 e no alvo 2. | ADR-0002. O Android é quem monta o volume. O app não pede escrita e não grava `export.pdb`, ANLZ nem áudio nesse volume. |
+| OD-24 | O analisador publica a medida e não finge o alvo. | Tempo, 58 faixas GiantSteps: Acc1 0,655, Acc2 0,724. Tom nas mesmas 58: MIREX 0,586, exato 0,466. Holdout (16): MIREX 0,456, exato 0,312. Extra (190): MIREX 0,519. Frases: 16 de 26 a 1 compasso. Os alvos 0,85 / 0,95 / 0,65 não foram atingidos. |
+
 #### Ainda abertas — `OWNER_DECISION` (não impedem P0/P1)
 
 | ID | Pergunta | Default escolhido | Quando precisa decidir |
@@ -439,7 +468,7 @@ Se o agente depender de dados não observáveis (modelo real Pi, firmware, USB e
 
 ## 15. Critérios de sucesso do projeto
 
-- **Técnico:** DDJ-400+Pi homologado realmente tocam um set contínuo com cue separado e export USB rekordbox imutável.
+- **Técnico:** no alvo 1, o Tab S6 Lite com a DDJ-400 toca um set contínuo com cue separado e o USB imutável. No alvo 2, o mesmo com o Pi. Nenhum dos dois foi feito no aparelho.
 - **Operacional:** o usuário prepara no rekordbox, conecta USB e atua sem notebook/celular/internet.
 - **Extensibilidade:** skin, mapping, engine e serviços têm fronteiras versionadas e testes, permitindo Smart DJ/Trainer depois.
 - **Segurança:** sem perda de biblioteca, sem exposição de API por default, rollback e observabilidade disponíveis.

@@ -1,6 +1,8 @@
 # Constituição do DeckBridge OS
 
-**Versão:** 1.0.0 | **Ratificação:** 2026-10-21 | **Última alteração:** 2026-10-21
+**Versão:** 1.1.0 | **Ratificação:** 2026-10-21 | **Última alteração:** 2026-10-22
+
+A emenda 1.1.0 está em `docs/adr/0006-constituicao-1.1.0.md`. O alvo 1 é o app Android no Galaxy Tab S6 Lite. O Raspberry com Mixxx é o alvo 2. O USB do rekordbox continua somente leitura.
 
 ## I. Audio-first: estabilidade acima de funcionalidades
 
@@ -16,11 +18,11 @@ Toda claim de compatibilidade, desempenho e segurança precisa de teste reproduz
 
 ## IV. Offline e controle físico primeiro
 
-A DDJ-400 deve conseguir controlar o fluxo musical sem internet. Tela permite uso durante apresentações; um app móvel é secundário e nunca é necessário para iniciar ou continuar tocando. Modos inteligentes não podem se sobrepor a controles manuais, salvo ativação explícita do DJ.
+A DDJ-400 deve conseguir controlar o fluxo musical sem internet. No alvo 1 o host é o tablet: o set não depende de notebook, de nuvem nem de um segundo celular. Um companion (PWA ou telefone) continua opcional e nunca é necessário para iniciar ou continuar tocando. No alvo 2 a tela do aparelho faz o mesmo papel. Modos inteligentes não podem se sobrepor a controles manuais, salvo ativação explícita do DJ.
 
 ## V. Upstream-first e interfaces versionadas
 
-Usar Mixxx 2.5.6 como referência inicial e aproveitar mapeamento DDJ-400 existente. Preferir skin, mapping e serviços desacoplados. Alterações no core exigem ADR, flag, teste de regressão e patch isolável; upstream quando possível. Interfaces e schemas são versionados, migração compatível e rollback suportado.
+No alvo 2, usar Mixxx 2.5.6 como referência e aproveitar o mapeamento DDJ-400 existente. Preferir skin, mapping e serviços desacoplados. Alterações nesse core exigem ADR, flag, teste de regressão e patch isolável; upstream quando possível. No alvo 1 o motor é o do app Android (Kotlin, Compose, C++ com Oboe). O mapa MIDI da DDJ-400 continua o XML pinado do Mixxx 2.5.6; não se copia áudio, código nem sample da Pioneer. Interfaces e schemas são versionados, migração compatível e rollback suportado.
 
 ## VI. Segurança e privacidade locais
 

@@ -1,30 +1,32 @@
 # DeckBridge OS — Spec Kit para um sistema DJ standalone
 
-**Estado:** especificação de engenharia inicial (não é software implementado)  
-**Data:** 2026-10-21  
+**Estado:** app Android 0.14.1 em simulação. A escuta na DDJ-400 continua `BLOCKED_HARDWARE`. A página única é `STATUS.md`.  
+**Data:** 2026-10-22  
 **Idioma:** pt-BR  
-**Hardware-alvo:** Pioneer DJ DDJ-400 + Raspberry Pi de vários modelos (inclusive antigos) e, de preferência, Linux x86/ARM genérico. Nenhum modelo é obrigatório (OD-01, 21/10/2026). Tela de referência: 7 polegadas, 800x480 ou 1024x600, layout adaptável (OD-02). Áudio prioritário: MP3 e WAV (OD-03).  
-**Motor:** Mixxx 2.5.6 estável (baseline a validar no repositório)  
-**Responsável pela visão:** proprietário do projeto (decisões pendentes em `spec.md`)
+**Alvo 1:** Galaxy Tab S6 Lite ligado direto na DDJ-400 (OD-11). Tela de referência 800×480, 1024×600 e 2000×1200 (OD-02, OD-17).  
+**Alvo 2:** Raspberry Pi de vários modelos e Linux x86/ARM genérico, com Mixxx 2.5.6 (OD-01). Ainda não é um aparelho.  
+**Áudio prioritário:** MP3 e WAV (OD-03). USB do rekordbox somente leitura (OD-23).  
+**Responsável pela visão:** proprietário do projeto (decisões em `spec.md` §14)
 
 ## Objetivo
 
-Transformar uma DDJ-400 em um equipamento **standalone**, que inicializa diretamente em uma interface para DJ, reproduz e pré-escuta dois decks via interface de áudio da própria controladora, navega em USBs exportados pelo rekordbox e permite desenvolvimento futuro de recomendações, registro de sets e DJ Trainer. Offline primeiro. O sistema **não é** uma tentativa de fazer o app rekordbox Android reconhecer a DDJ-400.
+Transformar uma DDJ-400 em um equipamento **standalone**. No alvo 1 o tablet inicializa o app, reproduz e pré-escuta dois decks pela interface de áudio da controladora e navega em USBs exportados pelo rekordbox. Offline primeiro. O sistema **não é** o app rekordbox para Android. O alvo 2, Raspberry com Mixxx, continua especificado e não foi montado.
 
 ## Leia nesta ordem (agentes)
 
-1. `AGENTS.md` — instruções operacionais obrigatórias para os agentes.
-2. `.specify/memory/constitution.md` — princípios/limites invioláveis.
-3. `specs/001-ddj400-standalone/spec.md` — requisitos, user stories, fluxos e gates.
-4. `specs/001-ddj400-standalone/research.md` — fontes, pressupostos e investigações obrigatórias.
-5. `specs/001-ddj400-standalone/plan.md` — arquitetura, interfaces e estratégia de implementação.
-6. `specs/001-ddj400-standalone/data-model.md` — entidades e contratos.
-7. `specs/001-ddj400-standalone/contracts/openapi.yaml` — API futura local (fase 0.3, não exigida para POC).
-8. `specs/001-ddj400-standalone/tasks.md` — plano de execução com dependências e evidências.
-9. `specs/001-ddj400-standalone/quickstart.md` — POC, builds, testes e rollout.
-10. `specs/001-ddj400-standalone/checklists/requirements.md` — verificação de qualidade da especificação.
+1. `STATUS.md` — versão, o que funciona, o que falta, decisões e como instalar.
+2. `AGENTS.md` — instruções operacionais obrigatórias para os agentes.
+3. `.specify/memory/constitution.md` — princípios/limites invioláveis.
+4. `specs/001-ddj400-standalone/spec.md` — requisitos, user stories, fluxos e gates.
+5. `specs/001-ddj400-standalone/research.md` — fontes, pressupostos e investigações obrigatórias.
+6. `specs/001-ddj400-standalone/plan.md` — arquitetura, interfaces e estratégia de implementação.
+7. `specs/001-ddj400-standalone/data-model.md` — entidades e contratos.
+8. `specs/001-ddj400-standalone/contracts/openapi.yaml` — API futura local (fase 0.3, não exigida para POC).
+9. `specs/001-ddj400-standalone/tasks.md` — plano de execução com dependências e evidências.
+10. `specs/001-ddj400-standalone/quickstart.md` — POC, builds, testes e rollout.
+11. `specs/001-ddj400-standalone/checklists/requirements.md` — verificação de qualidade da especificação.
 
-`ESPECIFICACAO_COMPLETA.md` concatena os documentos acima como **arquivo único para fornecer a um agente**. Em caso de divergência, os arquivos separados acima prevalecem; a versão consolidada é um artefato gerado.
+`ESPECIFICACAO_COMPLETA.md` concatena os documentos acima como **arquivo único para fornecer a um agente**. A edição 1.1.0 foi montada em 22/10/2026. Em caso de divergência, os arquivos separados acima prevalecem. O script gerador continua fora do repositório.
 
 ## GitHub Spec Kit
 

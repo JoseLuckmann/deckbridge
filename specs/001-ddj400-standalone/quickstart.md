@@ -1,5 +1,17 @@
 # Quickstart — POC, implementação por agentes e homologação
 
+**Emenda 22/10/2026.** O alvo 1 se constrói em `android/`. O texto das secções A em diante é o laboratório do alvo 2 (Raspberry + Mixxx) e não foi executado neste ambiente.
+
+```bash
+cd android
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/android-sdk}"
+./gradlew --offline :app:testMultiDebugUnitTest :app:assembleArm64Release :app:assembleMultiDebug
+```
+
+O APK do tablet sai em `app/build/outputs/apk/arm64/release/`. Assinatura de debug. A instalação e o roteiro de escuta estão em `docs/android/prova-a0.md` e em `STATUS.md`. A escuta continua `BLOCKED_HARDWARE`.
+
+
+
 **Guia de laboratório; não executar diretamente em dispositivos com dados importantes.** Use SD de teste e USB com faixas que podem ser copiadas/testadas legalmente. Este documento descreve passos e comandos, **não afirma que foram executados**.
 
 ## A. Começar sem comprar Raspberry novo

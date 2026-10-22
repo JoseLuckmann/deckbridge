@@ -4,6 +4,7 @@ info:
   version: 0.1.0-alpha
   description: >-
     API local opcional (P3), desligada por padrão. Nunca participa do caminho de áudio.
+    Emenda 2026-10-22: este contrato não está implementado. O app 0.14.1 não expõe esta API.
     Não oferece comandos remotos de reprodução/mixagem. Respostas sem caminhos de
     arquivos de host e sem acesso ao conteúdo das músicas.
 servers:

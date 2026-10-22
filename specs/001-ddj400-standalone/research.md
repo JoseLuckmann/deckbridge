@@ -2,6 +2,8 @@
 
 **Consulta:** 2026-10-21. Fontes são páginas e repositórios públicos; APIs, status e versões podem mudar. Fixar SHAs/versões antes do bootstrap.
 
+**Emenda 22/10/2026.** Estas fichas continuam a ser a diligência do alvo 2 (Mixxx no Pi). O alvo 1 não usa o Mixxx como runtime. O de/para dos efeitos está em `docs/research/fx-de-para.md`. A cobertura de ecrã está em `docs/research/cdj3000-coverage.md`. As métricas do analisador estão em `docs/testing/ground-truth-corpus.md`. Nenhuma destas fichas fecha um gate de hardware.
+
 ## R-01. Mixxx release e suas APIs
 
 - Fonte: https://mixxx.org/download/
