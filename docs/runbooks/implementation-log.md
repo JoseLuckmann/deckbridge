@@ -348,6 +348,17 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - A voz é espeak-ng pt-br, curta, por baixo da música. O knob de Color FX não tem ruído, pitch nem dub eco; esses gestos estão no Beat FX e no RMX.
 - HIL executado? não
 
+### Tela 0.14.0
+- Estado: host; escuta BLOCKED_HARDWARE. Não é o tablet e não é a DDJ-400.
+- O DSP desliza knobs (22–36 ms) e o liga/desliga (cerca de 18 ms). Eco e reverb deixam cauda e o seco volta. Filtro TPT, Q 0,95, zona morta e corte exponencial. Eco com feedback escurecido. Reverb com pré-atraso: RT60 0,65 s a nível 0,72. Isolador Linkwitz-Riley 24 dB/oitava. Drum build sintetizado, 1/4 a 1/32 de batida, no pad Drum, com o LEVEL/DEPTH a mandar na densidade. O de/para está em `docs/research/fx-de-para.md`.
+- Medidas (`tools/fx_measure.cpp`): salto do filtro suave 6e-8 contra 0,299 no biquad instantâneo; NaN 0; CPU 12,6 µs por bloco de 256 (orçamento 5333 µs). Gráficos em `docs/research/plots/`.
+- Mix v2: `/opt/cursor/artifacts/demo-mix-v2.mp3`, 3:20, 320 kbps, 8002605 bytes. PCM 0,981. MP3 −4,5 dB, true peak 0,874 (−1,17 dBTP), sem amostra acima de 1,0. Roteiro em `docs/testing/demo-mix-v2.md`. Sem locução. A comparação aos 1:52 é a curva antiga contra a nova.
+- DSP hospedeiro e gravação hospedeira: ALL PASS. O tom, o tempo e o cache `0131` não mudaram.
+- APK do tablet: `/opt/cursor/artifacts/deckbridge-arm64.apk`, 4271249 bytes, SHA-256 `071b08d672a836e747b04931fc446f294ff79a9d14c1ea104cbebbb03e87e94b`, versão 0.14.0 (versionCode 17), só arm64-v8a, minify e shrink. Assinatura de debug. Contém `libdeckbridge-engine.so` e `libsqlcipher.so`. Falta o ícone, como nas versões anteriores. O APK 0.13.1 (4264469 bytes, `750ca1051930efdad9427913aeeea8aeedde9b746bc7242e9ff8915f19ec2aab`) fica só neste diário.
+- APK com três ABIs: `/opt/cursor/artifacts/deckbridge-debug.apk`, 19611083 bytes, SHA-256 `6fd9bbc624014844c3a39d9bf3b25dc0e5667f59bb4479f1819dda6c558a56d5`.
+- HIL executado? não. Os passos 13 a 24 continuam por executar.
+- Busca por voz (A053) e quatro decks (A054) continuam por fazer.
+
 ### T020 — configuração
 - Estado: PASS
 - Perfil `runtime`, tela de referência 1024x600, `allow_write` recusado
@@ -368,7 +379,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 ### T078 — roteiro final
 - Estado: documento PASS; execução BLOCKED_HARDWARE
 - Arquivo: `docs/hil/roteiro-validacao-final.md`
-- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Em 0.12.1 os passos continuam os mesmos: a grade, o tom, a cor e a emenda do loop não são um gesto novo na controladora. Em 0.12.2 a análise de uma pasta sem export também não é um gesto na controladora. Em 0.13.0 os passos 22 a 24 cobrem slip, medidor de fase, MATCHING, SUGGEST, beat jump 64, frase, cues automáticos e auto gain. Em 0.13.1 o tom novo não é um gesto na controladora. Os passos 13 a 24 continuam por executar
+- Simulação não conta como estes passos. A lista passou a 16 em 0.9.0. Em 0.10.0 passou a 19. Em 0.11.0 passou a 20. Em 0.12.0 passou a 21. Em 0.12.1 os passos continuam os mesmos: a grade, o tom, a cor e a emenda do loop não são um gesto novo na controladora. Em 0.12.2 a análise de uma pasta sem export também não é um gesto na controladora. Em 0.13.0 os passos 22 a 24 cobrem slip, medidor de fase, MATCHING, SUGGEST, beat jump 64, frase, cues automáticos e auto gain. Em 0.13.1 o tom novo não é um gesto na controladora. Em 0.14.0 o DSP dos efeitos também não fecha passo de controladora. Os passos 13 a 24 continuam por executar
 
 ## Template de registro
 

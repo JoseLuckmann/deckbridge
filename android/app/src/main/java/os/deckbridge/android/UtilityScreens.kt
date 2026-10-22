@@ -41,6 +41,7 @@ import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.RmxState
 import os.deckbridge.logic.SCENE_BARS
 import os.deckbridge.logic.SCENE_NAMES
+import os.deckbridge.logic.drumBuildDivision
 import os.deckbridge.logic.StagePalette
 import os.deckbridge.logic.XBEAT_LABELS
 import os.deckbridge.logic.XPAD_NAMES
@@ -167,7 +168,12 @@ fun RmxRail(
             MiniChoice("$bars", rmx.bars == bars, Modifier.weight(1f)) { onRmx(rmx.copy(bars = bars)) }
         }
     }
-    TextInk(if (rmx.xOn) XPAD_NAMES[rmx.xMode] else "X-PAD", fontSize = 11.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp))
+    TextInk(
+        if (rmx.xOn && rmx.xMode == 2) "DRUM ${drumBuildDivision(rmx.drumBuild)}" else if (rmx.xOn) XPAD_NAMES[rmx.xMode] else "X-PAD",
+        fontSize = 11.sp,
+        color = Color(StagePalette.inkMuted),
+        modifier = Modifier.padding(top = 6.dp),
+    )
     UtilityButton("ABRIR RMX", onOpen, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
 }
 
@@ -204,7 +210,13 @@ fun RmxScreen(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit) {
                     }
                 }
             }
-            TextInk("X-PAD", fontSize = 11.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp))
+            TextInk(
+                if (rmx.xOn && rmx.xMode == 2) "X-PAD  DRUM BUILD  ${drumBuildDivision(rmx.drumBuild)}  ·  ${(rmx.drumBuild * 100).toInt()}%"
+                else "X-PAD",
+                fontSize = 11.sp,
+                color = Color(if (rmx.xOn && rmx.xMode == 2) StagePalette.accentOrange else StagePalette.inkMuted),
+                modifier = Modifier.padding(top = 6.dp),
+            )
             Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 XBEAT_LABELS.forEachIndexed { index, label ->
                     MiniChoice(label, rmx.xBeat == index, Modifier.weight(1f)) { onRmx(rmx.copy(xBeat = index)) }

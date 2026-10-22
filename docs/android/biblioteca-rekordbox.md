@@ -15,7 +15,7 @@ Isto continua a prova A0. O app agora também lê uma exportação rekordbox em 
 
 ## Instalar
 
-1. No tablet, copie `deckbridge-arm64.apk` (só arm64, versão 0.13.1). O `deckbridge-debug.apk` traz as três ABIs e serve ao emulador.
+1. No tablet, copie `deckbridge-arm64.apk` (só arm64, versão 0.14.0). O `deckbridge-debug.apk` traz as três ABIs e serve ao emulador.
 2. Permita instalar de origem desconhecida.
 3. Abra DeckBridge. A primeira tela é o diagnóstico. ESTADO no player volta para ela.
 4. No player, toque em BROWSE. AUTORIZAR pede a raiz do USB exportado pelo rekordbox, só leitura.
@@ -29,7 +29,7 @@ Isto continua a prova A0. O app agora também lê uma exportação rekordbox em 
 - O emulador desta máquina continua sem print fiel: o KVM acusou `kvm_spurious_fault` na rodada anterior.
 - OneLibrary só abre se a cópia local aceitar a chave pública. O arquivo sintético não abre.
 - O prato (jog) empurra o áudio por uma escala provisória de segundos. Não é a curva medida da DDJ-400. A escuta continua `BLOCKED_HARDWARE`.
-- O mixer da rota 3 processa a lista de Beat FX no motor (Low Cut Echo, Echo, Ping Pong, Spiral, Reverb, Trans, Flanger, Phaser, Pitch, Slip Roll, Roll, Helix, Mobius, Filter, Vinyl Brake) e o filtro do knob FILTER por canal. Spiral, Helix, Mobius, Pitch e o reverb são aproximações originais, não o algoritmo comercial. O knob FILTER é o único Sound Color FX deste mapa: não há seletor de seis efeitos. A escuta não foi feita.
+- O mixer da rota 3 processa a lista de Beat FX no motor (Low Cut Echo, Echo, Ping Pong, Spiral, Reverb, Trans, Flanger, Phaser, Pitch, Slip Roll, Roll, Helix, Mobius, Filter, Vinyl Brake) e o filtro do knob FILTER por canal. No 0.14.0 os knobs deslizam, o filtro é um SVF, o eco e a reverb deixam cauda, e o pad Drum no RMX faz um roll sintetizado (1/4 a 1/32) comandado pelo LEVEL/DEPTH. Spiral, Helix, Mobius e Pitch continuam aproximações. O de/para com os manuais está em `docs/research/fx-de-para.md`. O knob FILTER é o único Sound Color FX deste mapa: não há seletor de seis efeitos. A escuta não foi feita no aparelho.
 - RMX (Scene FX, X-Pad, isolador e release) também entra no motor, sincronizado ao BPM. O mapeamento MIDI é provisório: com o painel RMX ligado, os pads de SAMPLER (notas 0x30–0x37) disparam a cena e o X-Pad. SHIFT+SAMPLER não é tomado. O isolador é na tela. Ver o item 8 do checklist físico.
 - Master Tempo no menu é um deslocador de tom por duas linhas de atraso. Tenta devolver a afinação quando o tempo muda. Não é o algoritmo comercial.
 - A faixa de toque no player faz salto de batida e loop sem a controladora. O mesmo caminho existe no mapa oficial de BEAT JUMP e BEAT LOOP.

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+<rect width="960" height="540" fill="#121418"/>
+<text x="24" y="32" fill="#f4f1ea" font-family="sans-serif" font-size="18">Filtro TPT, resposta por posicao do knob</text>
+<line x1="64" y1="115.143" x2="920" y2="115.143" stroke="#2a3140"/>
+<text x="8" y="119.143" fill="#8b93a7" font-size="11">0</text>
+<line x1="64" y1="174.286" x2="920" y2="174.286" stroke="#2a3140"/>
+<text x="8" y="178.286" fill="#8b93a7" font-size="11">-6</text>
+<line x1="64" y1="233.429" x2="920" y2="233.429" stroke="#2a3140"/>
+<text x="8" y="237.429" fill="#8b93a7" font-size="11">-12</text>
+<line x1="64" y1="292.571" x2="920" y2="292.571" stroke="#2a3140"/>
+<text x="8" y="296.571" fill="#8b93a7" font-size="11">-18</text>
+<line x1="64" y1="351.714" x2="920" y2="351.714" stroke="#2a3140"/>
+<text x="8" y="355.714" fill="#8b93a7" font-size="11">-24</text>
+<line x1="64" y1="410.857" x2="920" y2="410.857" stroke="#2a3140"/>
+<text x="8" y="414.857" fill="#8b93a7" font-size="11">-30</text>
+<polyline fill="none" stroke="#7eb6ff" stroke-width="2" points="64,109.343 168.025,109.198 235.002,152.641 339.026,275.952 443.051,398.236 547.076,470 651.1,470 755.125,470 859.15,470 920,470 "/>
+<polyline fill="none" stroke="#f0c36a" stroke-width="2" points="64,115.062 168.025,114.826 235.002,114.761 339.026,113.028 443.051,125.403 547.076,250.437 651.1,241.679 755.125,226.547 859.15,223.023 920,222.391 "/>
+<polyline fill="none" stroke="#e07a5f" stroke-width="2" points="64,115.142 168.025,115.141 235.002,115.171 339.026,115.124 443.051,115.077 547.076,115.041 651.1,118.108 755.125,162.802 859.15,164.232 920,159.245 "/>
+<polyline fill="none" stroke="#8fbf8a" stroke-width="2" points="64,115.143 168.025,115.143 235.002,115.143 339.026,115.143 443.051,115.143 547.076,115.143 651.1,115.143 755.125,115.143 859.15,115.143 920,115.143 "/>
+<polyline fill="none" stroke="#d080d0" stroke-width="2" points="64,162.414 168.025,169.875 235.002,175.237 339.026,124.954 443.051,115.142 547.076,115.027 651.1,115.108 755.125,115.134 859.15,115.141 920,115.142 "/>
+<polyline fill="none" stroke="#f2efe6" stroke-width="2" points="64,233.107 168.025,233.703 235.002,234.855 339.026,240.95 443.051,267.643 547.076,208.533 651.1,115.599 755.125,113.206 859.15,114.647 920,114.973 "/>
+<polyline fill="none" stroke="#6ec8c8" stroke-width="2" points="64,470 168.025,470 235.002,470 339.026,470 443.051,470 547.076,470 651.1,379.333 755.125,253.286 859.15,126.735 920,105.837 "/>
+<text x="64" y="512" fill="#7eb6ff" font-family="sans-serif" font-size="13">knob 0</text>
+<text x="184" y="512" fill="#f0c36a" font-family="sans-serif" font-size="13">knob 0.18</text>
+<text x="304" y="512" fill="#e07a5f" font-family="sans-serif" font-size="13">knob 0.35</text>
+<text x="424" y="512" fill="#8fbf8a" font-family="sans-serif" font-size="13">knob 0.5</text>
+<text x="544" y="512" fill="#d080d0" font-family="sans-serif" font-size="13">knob 0.66</text>
+<text x="664" y="512" fill="#f2efe6" font-family="sans-serif" font-size="13">knob 0.84</text>
+<text x="784" y="512" fill="#6ec8c8" font-family="sans-serif" font-size="13">knob 1</text>
+</svg>

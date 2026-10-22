@@ -94,8 +94,10 @@ struct Deck {
             position = 0.0;
             return;
         }
-        leftOut = deckbridge::readLooped(left.data(), frames, position, loopStart, loopEnd, deckbridge::kFadeSamples);
-        rightOut = deckbridge::readLooped(right.data(), frames, position, loopStart, loopEnd, deckbridge::kFadeSamples);
+        leftOut = deckbridge::readPerformance(left.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
+                                             deckbridge::kFadeSamples);
+        rightOut = deckbridge::readPerformance(right.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
+                                              deckbridge::kFadeSamples);
         float ratio = 1.f;
         bool shift = false;
         if (keyLock && pitch > 0.05 && std::abs(pitch - 1.0) > 0.01) {
@@ -401,10 +403,11 @@ public:
         if (values == nullptr || count < 18) return;
         std::lock_guard<std::mutex> lock(mixMutex_);
         mixFx_.setSampleRate(48000);
+        const float drumBuild = count >= 19 ? values[18] : 0.f;
         mixFx_.setRmx(values[0] > 0.5f, static_cast<int>(values[1]), values[2] > 0.5f, values[3], values[4],
                       static_cast<int>(values[5]), values[6], values[7] > 0.5f, static_cast<int>(values[8]), values[9],
                       values[10], values[11], values[12], values[13], values[14], values[15] > 0.5f,
-                      static_cast<int>(values[16]), values[17]);
+                      static_cast<int>(values[16]), values[17], drumBuild);
     }
 
     float positionSeconds(int deck) {

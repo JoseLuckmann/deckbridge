@@ -513,7 +513,9 @@ fun DeckPage(
             }
             PerformanceAction.Kind.LOAD -> if (deck in 0..1) loadSelected(deck)
             PerformanceAction.Kind.BEAT_FX -> {
-                if (rmx.panel && action.hotIndex == 8) {
+                if (rmx.panel && action.hotIndex == 8 && rmx.xOn && rmx.xMode == 2) {
+                    rmx = rmx.copy(drumBuild = ((action.slider ?: 0.0) / 127.0).toFloat().coerceIn(0f, 1f))
+                } else if (rmx.panel && action.hotIndex == 8) {
                     rmx = rmx.copy(intensity = ((action.slider ?: 0.0) / 127.0).toFloat().coerceIn(0f, 1f))
                 } else if (rmx.panel && action.hotIndex == 3) {
                     val index = os.deckbridge.logic.SCENE_BARS.indexOf(rmx.bars).coerceAtLeast(0)

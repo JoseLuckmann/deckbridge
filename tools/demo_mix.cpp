@@ -57,8 +57,10 @@ struct Deck {
             position = 0.0;
             return;
         }
-        leftOut = deckbridge::readLooped(left.data(), frames, position, loopStart, loopEnd, deckbridge::kFadeSamples);
-        rightOut = deckbridge::readLooped(right.data(), frames, position, loopStart, loopEnd, deckbridge::kFadeSamples);
+        leftOut = deckbridge::readPerformance(left.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
+                                             deckbridge::kFadeSamples);
+        rightOut = deckbridge::readPerformance(right.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
+                                              deckbridge::kFadeSamples);
         float ratio = 1.f;
         bool shift = false;
         if (keyLock && pitch > 0.05 && std::abs(pitch - 1.0) > 0.01) {
@@ -169,6 +171,7 @@ struct Seg {
     std::string voicePath;
     bool each = false;
     std::function<void(double)> apply;
+    std::function<void(float &, float &)> tap;
 };
 
 struct Host {
@@ -181,6 +184,32 @@ struct Host {
     std::vector<float> outR;
     std::vector<Seg> segs;
     std::vector<std::pair<double, std::string>> cues;
+    deckbridge::DelayLine legacyL;
+    deckbridge::DelayLine legacyR;
+    deckbridge::Biquad legacyLpL;
+    deckbridge::Biquad legacyLpR;
+    bool legacyOn = false;
+
+    void legacy(float &left, float &right) {
+        if (!legacyOn) return;
+        if (legacyL.data.empty()) {
+            legacyL.prepare(96000);
+            legacyR.prepare(96000);
+        }
+        const float amount = 0.95f;
+        const float fb = 0.12f + 0.55f * amount;
+        const float echoL = legacyL.read(12000);
+        const float echoR = legacyR.read(12000);
+        legacyL.push(left + echoL * fb);
+        legacyR.push(right + echoR * fb);
+        float wetL = left * (1.f - amount * 0.65f) + echoL * amount;
+        float wetR = right * (1.f - amount * 0.65f) + echoR * amount;
+        const float cutoff = 120.f + (0.04f / 0.5f) * 2000.f;
+        legacyLpL.setLowpass(cutoff, static_cast<float>(kRate));
+        legacyLpR.setLowpass(cutoff, static_cast<float>(kRate));
+        left = legacyLpL.process(wetL);
+        right = legacyLpR.process(wetR);
+    }
 
     void armRoll(int deck) {
         Deck &target = decks[deck];
@@ -317,6 +346,7 @@ struct Host {
                 float masterL = al * (1.f - cross) * decks[0].volume + bl * cross * decks[1].volume;
                 float masterR = ar * (1.f - cross) * decks[0].volume + br * cross * decks[1].volume;
                 mix.processMaster(masterL, masterR);
+                if (seg.tap) seg.tap(masterL, masterR);
                 if (voice >= 0 && voices[voice].active()) {
                     const float spoken = voices[voice].next();
                     masterL = masterL * 0.70f + spoken;
@@ -414,6 +444,124 @@ bool writeWav(const char *path, const std::vector<float> &left, const std::vecto
     return true;
 }
 
+void buildV2(Host &host) {
+    auto add = [&](int bars, const std::string &cue, bool each, std::function<void(double)> apply, bool tap = false) {
+        Seg seg;
+        seg.samples = bars * kBar;
+        seg.cue = cue;
+        seg.each = each;
+        seg.apply = std::move(apply);
+        if (tap) seg.tap = [&](float &left, float &right) { host.legacy(left, right); };
+        host.segs.push_back(std::move(seg));
+    };
+    auto fxOff = [&]() {
+        host.legacyOn = false;
+        host.mix.setFilter(0, 0.5f);
+        host.mix.setFilter(1, 0.5f);
+        host.iso(1.f, 1.f, 1.f, 1.f, 1.f, 1.f);
+        host.beat(1, false, 0, 1, 0.5f);
+    };
+
+    add(8, "Deck A, filtro abre devagar", true, [&](double t) {
+        host.cross = 0.f;
+        fxOff();
+        host.mix.setFilter(0, 0.28f + 0.22f * static_cast<float>(t));
+    });
+    add(8, "Deck B entra, grave troca, filtro sobe", true, [&](double t) {
+        host.legacyOn = false;
+        host.cross = static_cast<float>(t);
+        host.mix.setFilter(1, 0.20f + 0.30f * static_cast<float>(t));
+        host.mix.setFilter(0, 0.50f - 0.12f * static_cast<float>(t));
+        const float lowA = 1.f - 0.55f * static_cast<float>(t);
+        const float lowB = 0.45f + 0.55f * static_cast<float>(t);
+        host.iso(lowA, 1.f, 1.f, lowB, 1.f, 1.f);
+        host.beat(1, false, 0, 1, 0.5f);
+    });
+    add(8, "Eco no deck B, de 1/2 para 1 tempo, 55%", true, [&](double t) {
+        host.cross = 1.f;
+        host.mix.setFilter(0, 0.5f);
+        host.mix.setFilter(1, 0.5f);
+        host.iso(1, 1, 1, 1, 1, 1);
+        host.beat(1, true, 70, 1, 0.5f + 0.5f * static_cast<float>(t));
+    });
+    add(4, "Eco desliga, a cauda continua", false, [&](double) {
+        host.cross = 1.f;
+        host.beat(1, false, 70, 1, 1.f);
+    });
+    add(4, "Flanger, profundidade sobe ate 60%", true, [&](double t) {
+        host.beat(6, true, 51 + static_cast<int>(25.0 * t), 1, 1.f);
+    });
+    add(4, "Phaser em 1/2, por volta de 55%", true, [&](double t) {
+        host.beat(7, true, 58 + static_cast<int>(12.0 * t), 1, 0.5f);
+    });
+    add(4, "Reverb por volta de 45%", true, [&](double t) {
+        host.beat(4, true, 45 + static_cast<int>(18.0 * t), 1, 1.f);
+    });
+    add(2, "Slip roll de 1 tempo", false, [&](double) { host.beat(9, true, 70, 1, 1.f); });
+    add(2, "Slip solta", false, [&](double) { host.beat(9, false, 0, 1, 1.f); });
+    add(2, "Roll de 1/2 tempo", false, [&](double) { host.beat(10, true, 64, 1, 0.5f); });
+    add(2, "Roll solta", false, [&](double) { host.beat(10, false, 0, 1, 0.5f); });
+    add(8, "Filtro do deck B, grave e agudo", true, [&](double t) {
+        host.cross = 1.f;
+        host.beat(13, false, 0, 1, 0.5f);
+        const float norm = t < 0.5 ? 0.50f - static_cast<float>(t / 0.5) * 0.28f
+                                    : 0.22f + static_cast<float>((t - 0.5) / 0.5) * 0.56f;
+        host.mix.setFilter(1, norm);
+        host.mix.setFilter(0, 0.5f);
+    });
+    add(8, "Comparacao: curva antiga, depois a nova", true, [&](double t) {
+        host.mix.setFilter(1, 0.5f);
+        if (t < 0.5) {
+            host.legacyOn = true;
+            host.beat(1, false, 0, 1, 0.5f);
+        } else {
+            host.legacyOn = false;
+            const float local = static_cast<float>((t - 0.5) / 0.5);
+            host.mix.setFilter(1, 0.46f - 0.16f * local);
+            host.beat(1, true, 64, 1, 0.5f);
+        }
+    }, true);
+    add(8, "Scene FX Echo UP, oito compassos", false, [&](double) {
+        host.legacyOn = false;
+        host.cross = 1.f;
+        host.mix.setFilter(0, 0.5f);
+        host.mix.setFilter(1, 0.5f);
+        host.beat(1, false, 0, 1, 0.5f);
+        host.mix.setRmx(true, 0, true, 1.f, 8.f, 0, 0.25f, false, -1, 1, 1, 1, 1, 1, 1, false, 1, kBpm, 0.f);
+    });
+    add(2, "Solta a cena no downbeat do drop", false, [&](double) {
+        host.mix.setRmx(true, 0, false, 0.f, 8.f, 0, 0.25f, false, -1, 1, 1, 1, 1, 1, 1, false, 1, kBpm, 0.f);
+    });
+    add(8, "Drum build, 1/4 ate 1/32", true, [&](double t) {
+        host.mix.setRmx(true, 0, false, 0.f, 8.f, 2, 0.25f, true, -1, 1, 1, 1, 1, 1, 1, false, 1, kBpm,
+                        static_cast<float>(t));
+    });
+    add(2, "Drop, o roll para no downbeat", false, [&](double) {
+        host.mix.setRmx(true, 0, false, 0.f, 8.f, 2, 0.25f, false, -1, 1, 1, 1, 1, 1, 1, false, 1, kBpm, 0.f);
+    });
+    add(4, "Eco na volta para o deck A", true, [&](double t) {
+        host.mix.setRmx(false, 0, false, 0.f, 1.f, 0, 0.25f, false, -1, 1, 1, 1, 1, 1, 1, false, 0, kBpm, 0.f);
+        host.cross = 1.f - 0.6f * static_cast<float>(t);
+        host.mix.setFilter(0, 0.5f);
+        host.mix.setFilter(1, 0.5f);
+        host.beat(1, true, 76, 0, 0.5f);
+    });
+    add(4, "Eco desliga na transicao, cauda", true, [&](double t) {
+        host.cross = 0.4f - 0.4f * static_cast<float>(t);
+        host.beat(1, false, 76, 0, 0.5f);
+    });
+    add(4, "Isolador, grave sobe e volta", true, [&](double t) {
+        host.cross = 0.f;
+        host.beat(1, false, 0, 0, 0.5f);
+        const float low = 1.f + 0.35f * std::sin(static_cast<float>(t) * 3.14159265f);
+        host.iso(low, 1.f, 1.f, 1.f, 1.f, 1.f);
+    });
+    add(4, "Final seco", false, [&](double) {
+        host.cross = 0.f;
+        fxOff();
+    });
+}
+
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -454,6 +602,10 @@ int main(int argc, char **argv) {
         for (size_t sample = 0; sample < left.size(); ++sample) voices[index].samples[sample] = left[sample] * gain;
     }
 
+    const bool v2 = argc >= 7 && std::strcmp(argv[6], "v2") == 0;
+    if (v2) {
+        buildV2(host);
+    } else {
     auto add = [&](int bars, const std::string &cue, int voice, bool each, std::function<void(double)> apply) {
         Seg seg;
         seg.samples = bars * kBar;
@@ -627,6 +779,7 @@ int main(int argc, char **argv) {
         host.cross = 0.f;
         neutral();
     });
+    }
 
     host.render(voices);
 

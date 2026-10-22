@@ -116,6 +116,103 @@ inline float readInterp(const float *data, int frames, double position) {
     return data[index] * (1.f - frac) + data[next] * frac;
 }
 
+inline void flushDenorm(float &value) {
+    if (std::fabs(value) < 1e-15f || !std::isfinite(value)) value = 0.f;
+}
+
+struct ParamSmooth {
+    float value = 0.f;
+    float coef = 1.f;
+    bool primed = false;
+
+    void setMs(float ms, int sampleRate) {
+        const float samples = std::max(1.f, ms * 0.001f * static_cast<float>(std::max(1, sampleRate)));
+        coef = 1.f - std::exp(-1.f / samples);
+    }
+
+    float next(float target, bool snap) {
+        if (!primed || snap) {
+            value = target;
+            primed = true;
+            return value;
+        }
+        value += (target - value) * coef;
+        if (std::fabs(target - value) < 1e-6f) value = target;
+        flushDenorm(value);
+        return value;
+    }
+};
+
+// Filtro TPT/SVF (Zavalishin). Implementação própria, Q musical, sem brickwall.
+struct Svf {
+    float ic1 = 0.f;
+    float ic2 = 0.f;
+    float g = 0.f;
+    float k = 1.f;
+    float a1 = 1.f;
+    float a2 = 0.f;
+    float a3 = 0.f;
+    int mode = 0;
+
+    void reset() { ic1 = ic2 = 0.f; }
+
+    void set(float freq, float sampleRate, float q, int nextMode) {
+        const float sr = std::max(8000.f, sampleRate);
+        freq = std::clamp(freq, 25.f, sr * 0.45f);
+        q = std::clamp(q, 0.55f, 2.2f);
+        g = std::tan(3.14159265f * freq / sr);
+        k = 1.f / q;
+        a1 = 1.f / (1.f + g * (g + k));
+        a2 = g * a1;
+        a3 = g * a2;
+        mode = nextMode;
+    }
+
+    float process(float input) {
+        if (!std::isfinite(input)) input = 0.f;
+        const float v3 = input - ic2;
+        const float v1 = a1 * ic1 + a2 * v3;
+        const float v2 = ic2 + a2 * ic1 + a3 * v3;
+        ic1 = 2.f * v1 - ic1;
+        ic2 = 2.f * v2 - ic2;
+        flushDenorm(ic1);
+        flushDenorm(ic2);
+        const float low = v2;
+        const float band = v1;
+        const float high = input - k * v1 - v2;
+        const float output = mode == 1 ? high : (mode == 2 ? band : low);
+        if (!std::isfinite(output)) {
+            reset();
+            return 0.f;
+        }
+        return output;
+    }
+};
+
+// Zona morta no centro. Lados em curva exponencial. Perto do centro o mix é de prateleira.
+inline void mapFilterKnob(float norm, float sampleRate, int &mode, float &freq, float &mix) {
+    if (norm > 0.47f && norm < 0.53f) {
+        mode = 0;
+        freq = 1000.f;
+        mix = 0.f;
+        return;
+    }
+    float travel = 0.f;
+    if (norm <= 0.47f) {
+        travel = (0.47f - norm) / 0.47f;
+        freq = 95.f * std::pow(11000.f / 95.f, 1.f - travel);
+        mode = 0;
+    } else {
+        travel = (norm - 0.53f) / 0.47f;
+        freq = 45.f * std::pow(8500.f / 45.f, travel);
+        mode = 1;
+    }
+    travel = std::clamp(travel, 0.f, 1.f);
+    mix = std::pow(travel, 0.7f);
+    if (travel < 0.2f) mix *= 0.35f + 0.65f * (travel / 0.2f);
+    freq = std::clamp(freq, 30.f, std::max(200.f, sampleRate) * 0.45f);
+}
+
 inline float readLooped(const float *data, int frames, double position, double loopStart, double loopEnd, int fade) {
     const float dry = readInterp(data, frames, position);
     if (!(loopEnd > loopStart) || fade <= 1) return dry;
@@ -133,6 +230,26 @@ inline float readLooped(const float *data, int frames, double position, double l
     if (t >= 1.0) return incoming;
     const float angle = static_cast<float>(t * 1.5707963267948966);
     return dry * std::cos(angle) + incoming * std::sin(angle);
+}
+
+inline float readRolled(const float *data, int frames, double position, double origin, double length, int fade) {
+    const float dry = readInterp(data, frames, position);
+    if (!(length > 1.0) || origin < 0.0 || fade <= 1) return dry;
+    if (position < origin || position >= origin + length) return dry;
+    const double into = (origin + length) - position;
+    if (into >= static_cast<double>(fade) || into < 0.0) return dry;
+    const double span = static_cast<double>(fade - 1);
+    const double t = std::min(1.0, std::max(0.0, (static_cast<double>(fade) - into) / span));
+    const float incoming = readInterp(data, frames, origin - (into - 1.0));
+    if (t >= 1.0) return incoming;
+    const float angle = static_cast<float>(t * 1.5707963267948966);
+    return dry * std::cos(angle) + incoming * std::sin(angle);
+}
+
+inline float readPerformance(const float *data, int frames, double position, double loopStart, double loopEnd,
+                             double rollOrigin, double rollLength, int fade) {
+    if (rollLength > 1.0 && rollOrigin >= 0.0) return readRolled(data, frames, position, rollOrigin, rollLength, fade);
+    return readLooped(data, frames, position, loopStart, loopEnd, fade);
 }
 
 inline void renderRoll(const float *src, int frames, int slice, float *dst) {
@@ -264,6 +381,8 @@ struct Biquad {
         const float y = b0 * x + z1;
         z1 = b1 * x - a1 * y + z2;
         z2 = b2 * x - a2 * y;
+        flushDenorm(z1);
+        flushDenorm(z2);
         return std::isfinite(y) ? y : 0.f;
     }
 
@@ -330,6 +449,15 @@ struct DelayLine {
         return data[static_cast<size_t>(index)];
     }
 
+    float readAt(float delay) const {
+        if (data.size() < 4) return 0.f;
+        const float limit = static_cast<float>(data.size() - 2);
+        delay = std::clamp(delay, 1.f, limit);
+        const int base = static_cast<int>(delay);
+        const float frac = delay - static_cast<float>(base);
+        return read(base) * (1.f - frac) + read(base + 1) * frac;
+    }
+
     void push(float sample) {
         if (data.empty()) return;
         data[static_cast<size_t>(write)] = sample;
@@ -383,51 +511,92 @@ struct BeatInsert {
     int sampleRate = 48000;
     int clock = 0;
     float lfo = 0.f;
-    float tail = 0.f;
+    float tailMix = 0.f;
+    float delaySm = 0.f;
+    float gateEnv = 1.f;
+    float darkL = 0.f;
+    float darkR = 0.f;
     bool brake = false;
     bool roll = false;
     bool slip = false;
+    bool ready = false;
+    bool snap = true;
     float brakePos = 0.f;
+    ParamSmooth levelSm;
+    ParamSmooth sendSm;
+    ParamSmooth wetSm;
+    ParamSmooth freqSm;
     DelayLine left;
     DelayLine right;
-    Biquad hpL, hpR, lpL, lpR;
+    DelayLine preL;
+    DelayLine preR;
+    Svf toneL;
+    Svf toneR;
+    Svf fbL;
+    Svf fbR;
     Biquad ap[8];
     std::vector<float> combL[4];
     std::vector<float> combR[4];
-    int combPos[4]{};
+    float combDampL[4]{};
+    float combDampR[4]{};
+    int combPosL[4]{};
+    int combPosR[4]{};
+    int lengths[4] = {1301, 1571, 1861, 2113};
 
     void prepare() {
         left.prepare(96000);
         right.prepare(96000);
-        const int lengths[4] = {1557, 1617, 1491, 1422};
+        const int pre = std::max(32, sampleRate / 40);
+        preL.prepare(pre + 8);
+        preR.prepare(pre + 8);
         for (int index = 0; index < 4; ++index) {
             const int n = std::max(32, lengths[index] * sampleRate / 48000);
             combL[index].assign(n, 0.f);
             combR[index].assign(n, 0.f);
-            combPos[index] = 0;
+            combDampL[index] = 0.f;
+            combDampR[index] = 0.f;
+            combPosL[index] = 0;
+            combPosR[index] = 0;
         }
         for (auto &item : ap) item.reset();
-        hpL.reset();
-        hpR.reset();
-        lpL.reset();
-        lpR.reset();
+        toneL.reset();
+        toneR.reset();
+        fbL.reset();
+        fbR.reset();
+        const float sr = static_cast<float>(sampleRate);
+        levelSm.setMs(32.f, sampleRate);
+        sendSm.setMs(18.f, sampleRate);
+        wetSm.setMs(22.f, sampleRate);
+        freqSm.setMs(36.f, sampleRate);
+        fbL.set(6200.f, sr, 0.707f, 0);
+        fbR.set(6200.f, sr, 0.707f, 0);
     }
 
     void clear() {
         left.clear();
         right.clear();
+        preL.clear();
+        preR.clear();
         for (int index = 0; index < 4; ++index) {
             std::fill(combL[index].begin(), combL[index].end(), 0.f);
             std::fill(combR[index].begin(), combR[index].end(), 0.f);
+            combDampL[index] = 0.f;
+            combDampR[index] = 0.f;
+            combPosL[index] = 0;
+            combPosR[index] = 0;
         }
         clock = 0;
         lfo = 0.f;
-        tail = 0.f;
+        tailMix = 0.f;
+        darkL = darkR = 0.f;
         brakePos = 0.f;
+        gateEnv = 1.f;
+        toneL.reset();
+        toneR.reset();
     }
 
     void configure(int nextEffect, bool enabled, float nextLevel, float nextBpm, float nextBeats, int rate) {
-        const bool changed = nextEffect != effect || std::abs(nextBeats - beats) > 0.001f;
+        const bool effectChanged = !ready || nextEffect != effect;
         effect = nextEffect;
         on = enabled;
         level = std::clamp(nextLevel, 0.f, 1.f);
@@ -437,14 +606,11 @@ struct BeatInsert {
         roll = on && (effect == 9 || effect == 10);
         slip = on && effect == 9;
         brake = on && effect == 14;
-        if (!on && (effect == 1 || effect == 0 || effect == 2 || effect == 4 || effect == 11 || effect == 12)) tail = 1.f;
-        if (changed) clear();
-        if (left.data.empty()) prepare();
-        const float wet = std::max(level, tail);
-        hpL.setHighpass(180.f + wet * 2400.f, static_cast<float>(sampleRate));
-        hpR.setHighpass(180.f + wet * 2400.f, static_cast<float>(sampleRate));
-        lpL.setLowpass(400.f + (1.f - level) * 6000.f, static_cast<float>(sampleRate));
-        lpR.setLowpass(400.f + (1.f - level) * 6000.f, static_cast<float>(sampleRate));
+        if (left.data.empty() || !ready) prepare();
+        snap = effectChanged;
+        if (effectChanged && ready) clear();
+        if (effectChanged) delaySm = static_cast<float>(delaySamples());
+        ready = true;
     }
 
     int delaySamples() const {
@@ -453,6 +619,10 @@ struct BeatInsert {
     }
 
     bool transportEffect() const { return effect == 9 || effect == 10 || effect == 14; }
+
+    bool tailEffect() const {
+        return effect == 0 || effect == 1 || effect == 2 || effect == 3 || effect == 4 || effect == 11 || effect == 12;
+    }
 
     float brakeMul() {
         if (!brake) return 1.f;
@@ -465,191 +635,231 @@ struct BeatInsert {
         if (left.data.empty()) prepare();
         const float dryL = inL;
         const float dryR = inR;
+        const bool snapNow = snap;
+        snap = false;
+        const float amount = levelSm.next(level, snapNow);
+        const float targetDelay = static_cast<float>(delaySamples());
+        if (snapNow) delaySm = targetDelay;
+        else {
+            const float glide = 1.f - std::exp(-1.f / std::max(1.f, 0.05f * static_cast<float>(sampleRate)));
+            delaySm += (targetDelay - delaySm) * glide;
+        }
         if (transportEffect()) {
             inL = sanitize(dryL);
             inR = sanitize(dryR);
             clock += 1;
             return;
         }
-        const float amount = on ? level : tail;
-        if (amount <= 0.0008f) {
-            tail = 0.f;
-            inL = sanitize(dryL);
-            inR = sanitize(dryR);
-            return;
-        }
+        const float beat = static_cast<float>(samplesPerBeat(bpm, sampleRate));
+        const float lfoHz = std::max(0.05f, bpm / 60.f) / std::max(0.25f, beats);
+        lfo += static_cast<float>(kTwoPi) * lfoHz / static_cast<float>(sampleRate);
+        if (lfo > static_cast<float>(kTwoPi)) lfo -= static_cast<float>(kTwoPi);
         float wetL = dryL;
         float wetR = dryR;
-        const int delay = delaySamples();
-        const float beat = static_cast<float>(samplesPerBeat(bpm, sampleRate));
-        lfo += static_cast<float>(kTwoPi) / std::max(32.f, beat * 2.f);
-        if (lfo > static_cast<float>(kTwoPi)) lfo -= static_cast<float>(kTwoPi);
+        const float sr = static_cast<float>(sampleRate);
         switch (effect) {
-            case 0: {
-                const float fb = 0.18f + 0.62f * amount;
-                const float echoL = hpL.process(left.read(delay));
-                const float echoR = hpR.process(right.read(delay));
-                left.push(dryL + echoL * fb);
-                right.push(dryR + echoR * fb);
-                wetL = dryL * (1.f - amount) + echoL * amount;
-                wetR = dryR * (1.f - amount) + echoR * amount;
+            case 0:
+            case 1:
+            case 2:
+            case 3:
+            case 11:
+            case 12:
+                echoFamily(dryL, dryR, amount, snapNow, wetL, wetR);
                 break;
-            }
-            case 1: {
-                const float fb = 0.12f + 0.55f * amount;
-                const float echoL = left.read(delay);
-                const float echoR = right.read(delay);
-                left.push(dryL + echoL * fb);
-                right.push(dryR + echoR * fb);
-                wetL = dryL * (1.f - amount * 0.65f) + echoL * amount;
-                wetR = dryR * (1.f - amount * 0.65f) + echoR * amount;
-                break;
-            }
-            case 2: {
-                const int half = std::max(1, delay / 2);
-                const float fb = 0.2f + 0.5f * amount;
-                const float echoL = left.read(delay);
-                const float echoR = right.read(half);
-                left.push(dryR + echoR * fb);
-                right.push(dryL + echoL * fb);
-                wetL = dryL * (1.f - amount) + echoL * amount;
-                wetR = dryR * (1.f - amount) + echoR * amount;
-                break;
-            }
-            case 3: {
-                const int spiral = std::max(8, static_cast<int>(delay * (1.f - 0.75f * (0.5f + 0.5f * std::sin(lfo)))));
-                const float fb = 0.35f + 0.45f * amount;
-                const float echoL = left.read(spiral);
-                const float echoR = right.read(spiral);
-                left.push(dryL + echoL * fb);
-                right.push(dryR + echoR * fb);
-                wetL = dryL * (1.f - amount) + echoL * amount;
-                wetR = dryR * (1.f - amount) + echoR * amount;
-                break;
-            }
             case 4:
-                wetL = reverb(dryL, combL, 0);
-                wetR = reverb(dryR, combR, 1);
-                wetL = dryL * (1.f - amount) + wetL * amount;
-                wetR = dryR * (1.f - amount) + wetR * amount;
+                reverbPair(dryL, dryR, amount, snapNow, wetL, wetR);
                 break;
             case 5: {
-                const int period = std::max(8, delay);
+                const int period = std::max(8, static_cast<int>(delaySm));
                 const float duty = 0.18f + 0.62f * amount;
                 const bool open = (clock % period) < static_cast<int>(period * duty);
-                const float gate = open ? 1.f : 0.f;
-                wetL = dryL * gate;
-                wetR = dryR * gate;
+                const float coef = 1.f - std::exp(-1.f / std::max(1.f, 0.004f * sr));
+                gateEnv += ((open ? 1.f : 0.f) - gateEnv) * coef;
+                wetL = dryL * gateEnv;
+                wetR = dryR * gateEnv;
                 break;
             }
             case 6: {
-                const int flanger = 180 + static_cast<int>(140.f * (0.5f + 0.5f * std::sin(lfo)));
-                const float fb = 0.35f * amount;
-                const float echoL = left.read(flanger);
-                const float echoR = right.read(flanger + 7);
+                const float lfoPos = 0.5f + 0.5f * std::sin(lfo);
+                const float flanger = 90.f + 220.f * lfoPos;
+                const float fb = 0.08f + 0.42f * amount;
+                const float echoL = left.readAt(flanger);
+                const float echoR = right.readAt(flanger + 11.f);
                 left.push(dryL + echoL * fb);
                 right.push(dryR + echoR * fb);
-                wetL = dryL * (1.f - amount * 0.7f) + echoL * amount;
-                wetR = dryR * (1.f - amount * 0.7f) + echoR * amount;
+                const float wet = 0.2f + 0.55f * amount;
+                wetL = dryL * (1.f - wet * 0.5f) + echoL * wet;
+                wetR = dryR * (1.f - wet * 0.5f) + echoR * wet;
                 break;
             }
             case 7: {
+                const float target = 280.f + 2200.f * (0.5f + 0.5f * std::sin(lfo));
+                const float freq = freqSm.next(target, snapNow);
                 float x = dryL;
                 float y = dryR;
-                const float freq = 400.f + 1800.f * (0.5f + 0.5f * std::sin(lfo));
                 for (int index = 0; index < 4; ++index) {
-                    ap[index].setAllpass(freq * (1.f + 0.15f * index), static_cast<float>(sampleRate), 0.6f);
+                    ap[index].setAllpass(freq * (1.f + 0.17f * index), sr, 0.65f);
                     x = ap[index].process(x);
-                    ap[index + 4].setAllpass(freq * (1.f + 0.15f * index), static_cast<float>(sampleRate), 0.6f);
+                    ap[index + 4].setAllpass(freq * (1.f + 0.17f * index), sr, 0.65f);
                     y = ap[index + 4].process(y);
                 }
-                wetL = dryL * (1.f - amount) + x * amount;
-                wetR = dryR * (1.f - amount) + y * amount;
+                const float wet = 0.25f + 0.6f * amount;
+                const float fb = 0.15f * amount;
+                wetL = dryL * (1.f - wet) + (x + fb * (x - dryL)) * wet;
+                wetR = dryR * (1.f - wet) + (y + fb * (y - dryR)) * wet;
                 break;
             }
             case 8: {
-                const float semis = (amount * 2.f - 1.f) * 7.f;
+                const float semis = (amount * 2.f - 1.f) * 5.f;
                 const float ratio = std::pow(2.f, semis / 12.f);
-                wetL = dryL * 0.45f + pitchOne(left, dryL, ratio) * 0.85f;
-                wetR = dryR * 0.45f + pitchOne(right, dryR, ratio) * 0.85f;
-                break;
-            }
-            case 11: {
-                const int helix = std::max(16, static_cast<int>(delay * (0.55f + 0.45f * (0.5f + 0.5f * std::sin(lfo * 0.5f)))));
-                const float fb = 0.4f + 0.4f * amount;
-                const float echoL = left.read(helix);
-                const float echoR = right.read(std::max(8, helix / 2));
-                left.push(dryR + echoR * fb);
-                right.push(dryL + echoL * fb);
-                wetL = dryL * (1.f - amount) + echoL * amount;
-                wetR = dryR * (1.f - amount) + echoR * amount;
-                break;
-            }
-            case 12: {
-                const int a = delay;
-                const int b = std::max(8, (delay * 3) / 2);
-                const float fb = 0.28f + 0.5f * amount;
-                const float echoL = left.read(a);
-                const float echoR = right.read(b);
-                left.push(dryL * 0.6f + echoR * fb);
-                right.push(dryR * 0.6f + echoL * fb);
-                wetL = dryL * (1.f - amount) + echoL * amount;
-                wetR = dryR * (1.f - amount) + echoR * amount;
+                const float wet = 0.35f + 0.4f * std::fabs(amount - 0.5f) * 2.f;
+                wetL = dryL * (1.f - wet) + pitchOne(left, dryL, ratio) * wet * 1.2f;
+                wetR = dryR * (1.f - wet) + pitchOne(right, dryR, ratio) * wet * 1.2f;
                 break;
             }
             case 13: {
-                const float cutoff = level < 0.5f ? (80.f + level * 2.f * 1800.f) : (200.f + (level - 0.5f) * 2.f * 8000.f);
-                if (level < 0.48f) {
-                    lpL.setLowpass(cutoff, static_cast<float>(sampleRate));
-                    lpR.setLowpass(cutoff, static_cast<float>(sampleRate));
-                    wetL = lpL.process(dryL);
-                    wetR = lpR.process(dryR);
-                } else if (level > 0.52f) {
-                    hpL.setHighpass(cutoff, static_cast<float>(sampleRate));
-                    hpR.setHighpass(cutoff, static_cast<float>(sampleRate));
-                    wetL = hpL.process(dryL);
-                    wetR = hpR.process(dryR);
-                } else {
-                    wetL = dryL;
-                    wetR = dryR;
-                }
+                int mode = 0;
+                float freq = 1000.f;
+                float mix = 0.f;
+                mapFilterKnob(amount, sr, mode, freq, mix);
+                const float smoothFreq = freqSm.next(freq, snapNow);
+                const float smoothMix = wetSm.next(mix, snapNow);
+                toneL.set(smoothFreq, sr, 0.95f, mode);
+                toneR.set(smoothFreq, sr, 0.95f, mode);
+                wetL = dryL * (1.f - smoothMix) + toneL.process(dryL) * smoothMix;
+                wetR = dryR * (1.f - smoothMix) + toneR.process(dryR) * smoothMix;
                 break;
             }
             default:
                 break;
         }
-        if (!on) tail *= 0.9995f;
+        if (!tailEffect()) {
+            const float bypass = sendSm.next(on ? 0.f : 1.f, snapNow);
+            wetL = dryL * bypass + wetL * (1.f - bypass);
+            wetR = dryR * bypass + wetR * (1.f - bypass);
+        }
         inL = sanitize(wetL);
         inR = sanitize(wetR);
         clock += 1;
+        (void)beat;
     }
 
 private:
-    float reverb(float in, std::vector<float> *combs, int channel) {
+    float darken(Svf &filter, float sample) { return filter.process(sample); }
+
+    void echoFamily(float dryL, float dryR, float amount, bool snapNow, float &wetL, float &wetR) {
+        const float send = sendSm.next(on ? 1.f : 0.f, snapNow && on);
+        const float wetTarget = 0.1f + 0.58f * amount;
+        const float fbTarget = 0.16f + 0.5f * amount;
+        if (on) tailMix = wetSm.next(wetTarget, snapNow);
+        else {
+            tailMix *= 0.99986f;
+            if (tailMix < 1e-5f) tailMix = 0.f;
+        }
+        const float fb = std::min(0.82f, fbTarget) * (on ? 1.f : 0.92f);
+        const float delay = std::max(1.f, delaySm);
+        float echoL = 0.f;
+        float echoR = 0.f;
+        float pushL = dryL * send;
+        float pushR = dryR * send;
+        if (effect == 0) {
+            echoL = darken(fbL, left.readAt(delay));
+            echoR = darken(fbR, right.readAt(delay));
+            const float cut = 160.f + amount * 2600.f;
+            toneL.set(cut, static_cast<float>(sampleRate), 0.85f, 1);
+            toneR.set(cut, static_cast<float>(sampleRate), 0.85f, 1);
+            echoL = toneL.process(echoL);
+            echoR = toneR.process(echoR);
+        } else if (effect == 2) {
+            const float half = std::max(1.f, delay * 0.5f);
+            echoL = darken(fbL, left.readAt(delay));
+            echoR = darken(fbR, right.readAt(half));
+            pushL = dryR * send;
+            pushR = dryL * send;
+        } else if (effect == 3) {
+            const float spiral = std::max(8.f, delay * (1.f - 0.62f * (0.5f + 0.5f * std::sin(lfo))));
+            echoL = darken(fbL, left.readAt(spiral));
+            echoR = darken(fbR, right.readAt(spiral));
+        } else if (effect == 11) {
+            const float helix = std::max(16.f, delay * (0.62f + 0.38f * (0.5f + 0.5f * std::sin(lfo * 0.5f))));
+            echoL = darken(fbL, left.readAt(helix));
+            echoR = darken(fbR, right.readAt(std::max(8.f, helix * 0.5f)));
+            pushL = dryR * send;
+            pushR = dryL * send;
+        } else if (effect == 12) {
+            echoL = darken(fbL, left.readAt(delay));
+            echoR = darken(fbR, right.readAt(std::max(8.f, delay * 1.5f)));
+            pushL = dryL * send * 0.7f + echoR * fb;
+            pushR = dryR * send * 0.7f + echoL * fb;
+            left.push(pushL);
+            right.push(pushR);
+            const float duck = on ? tailMix * 0.4f : 0.f;
+            wetL = dryL * (1.f - duck) + echoL * tailMix;
+            wetR = dryR * (1.f - duck) + echoR * tailMix;
+            return;
+        } else {
+            echoL = darken(fbL, left.readAt(delay));
+            echoR = darken(fbR, right.readAt(delay));
+        }
+        left.push(pushL + echoL * fb);
+        right.push(pushR + echoR * fb);
+        const float duck = on ? tailMix * 0.42f : 0.f;
+        wetL = dryL * (1.f - duck) + echoL * tailMix;
+        wetR = dryR * (1.f - duck) + echoR * tailMix;
+    }
+
+    void reverbPair(float dryL, float dryR, float amount, bool snapNow, float &wetL, float &wetR) {
+        const float send = sendSm.next(on ? 1.f : 0.f, snapNow && on);
+        const float wetTarget = 0.12f + 0.5f * amount;
+        if (on) tailMix = wetSm.next(wetTarget, snapNow);
+        else {
+            tailMix *= 0.9999f;
+            if (tailMix < 1e-5f) tailMix = 0.f;
+        }
+        const int pre = std::max(8, sampleRate / 48);
+        const float inL = preL.read(pre);
+        const float inR = preR.read(pre);
+        preL.push(dryL * send);
+        preR.push(dryR * send);
+        const float bodyL = reverb(inL, combL, combDampL, combPosL, 0, amount);
+        const float bodyR = reverb(inR, combR, combDampR, combPosR, 1, amount);
+        const float duck = on ? tailMix * 0.35f : 0.f;
+        wetL = dryL * (1.f - duck) + bodyL * tailMix;
+        wetR = dryR * (1.f - duck) + bodyR * tailMix;
+    }
+
+    float reverb(float in, std::vector<float> *combs, float *damp, int *posns, int channel, float amount) {
         float sum = 0.f;
-        const float fb = 0.45f + 0.4f * level;
+        const float fb = 0.55f + 0.3f * amount;
+        const float dampCoef = 0.16f + 0.2f * amount;
         for (int index = 0; index < 4; ++index) {
             auto &buf = combs[index];
             if (buf.empty()) continue;
-            int &pos = combPos[index];
-            const float y = buf[static_cast<size_t>(pos)];
-            buf[static_cast<size_t>(pos)] = in + y * fb;
+            int &pos = posns[index];
+            const float delayed = buf[static_cast<size_t>(pos)];
+            damp[index] += (delayed - damp[index]) * dampCoef;
+            flushDenorm(damp[index]);
+            float write = in + damp[index] * fb;
+            if (!std::isfinite(write) || std::fabs(write) > 4.f) write = 0.f;
+            buf[static_cast<size_t>(pos)] = write;
             pos = (pos + 1) % static_cast<int>(buf.size());
-            sum += y;
+            sum += delayed;
         }
-        sum *= 0.25f;
+        sum *= 0.22f;
         Biquad &first = ap[channel];
         Biquad &second = ap[channel + 2];
-        first.setAllpass(900.f, static_cast<float>(sampleRate), 0.5f);
-        second.setAllpass(1400.f, static_cast<float>(sampleRate), 0.5f);
+        if (clock % 64 == 0) {
+            first.setAllpass(740.f, static_cast<float>(sampleRate), 0.6f);
+            second.setAllpass(1280.f, static_cast<float>(sampleRate), 0.6f);
+        }
         return second.process(first.process(sum));
     }
 
     float pitchOne(DelayLine &line, float in, float ratio) {
-        const int base = 1024;
-        const int wobble = static_cast<int>(180.f * std::sin(lfo * ratio));
-        const int delay = std::clamp(base + wobble, 64, 4000);
-        const float y = line.read(delay);
+        const float base = 900.f;
+        const float wobble = 140.f * std::sin(lfo * std::max(0.25f, ratio));
+        const float delay = std::clamp(base + wobble, 64.f, 4000.f);
+        const float y = line.readAt(delay);
         line.push(in);
         return y;
     }
@@ -663,29 +873,39 @@ struct SceneFx {
     float ceiling = 1.f;
     bool holding = false;
     bool releasing = false;
+    bool armSnap = false;
+    int snapLeft = -1;
+    int clock = 0;
     int sampleRate = 48000;
     DelayLine left;
     DelayLine right;
-    Biquad hpL, hpR, lpL, lpR;
+    Svf hpL, hpR, lpL, lpR, noiseF;
     uint32_t noise = 0x1234567u;
-    std::vector<float> comb[2];
-    int combPos[2]{};
+    std::vector<float> comb[4];
+    float damp[4]{};
+    int combPos[4]{};
 
     void prepare() {
         left.prepare(96000);
         right.prepare(96000);
-        comb[0].assign(std::max(32, 1600 * sampleRate / 48000), 0.f);
-        comb[1].assign(std::max(32, 1900 * sampleRate / 48000), 0.f);
-        combPos[0] = combPos[1] = 0;
+        const int base[4] = {1327, 1499, 1741, 1987};
+        for (int index = 0; index < 4; ++index) {
+            comb[index].assign(std::max(32, base[index] * sampleRate / 48000), 0.f);
+            damp[index] = 0.f;
+            combPos[index] = 0;
+        }
     }
 
     void setHold(bool down) {
         if (down) {
             holding = true;
             releasing = false;
+            armSnap = false;
+            snapLeft = -1;
         } else if (holding || intensity > 0.f) {
             holding = false;
             releasing = intensity > 0.f;
+            armSnap = releasing;
         }
     }
 
@@ -702,119 +922,164 @@ struct SceneFx {
         const float dryR = inR;
         const float beat = static_cast<float>(samplesPerBeat(bpm, sampleRate));
         const float ramp = std::max(1.f, bars * 4.f * beat);
-        const float tail = std::max(1.f, 4.f * beat);
+        const int beatN = std::max(1, static_cast<int>(beat));
         if (holding) intensity = std::min(ceiling, intensity + 1.f / ramp);
         else if (releasing) {
-            intensity = std::max(0.f, intensity - 1.f / tail);
-            if (intensity <= 0.f) releasing = false;
+            if (armSnap && (clock % beatN) == 0) {
+                armSnap = false;
+                snapLeft = std::max(1, static_cast<int>(0.018f * sampleRate));
+            }
+            if (!armSnap && snapLeft > 0) {
+                intensity = std::max(0.f, intensity - std::max(intensity, 0.001f) / static_cast<float>(snapLeft));
+                snapLeft -= 1;
+                if (snapLeft == 0 || intensity <= 0.0008f) {
+                    intensity = 0.f;
+                    releasing = false;
+                }
+            }
         }
         if (intensity <= 0.0008f && !holding) {
             inL = sanitize(dryL);
             inR = sanitize(dryR);
+            clock += 1;
             return;
         }
-        const int delay = std::clamp(static_cast<int>(beat), 1, 95999);
         const float t = intensity;
+        const float curve = std::pow(std::clamp(t, 0.f, 1.f), 1.35f);
+        const int delay = std::clamp(static_cast<int>(beat), 1, 95999);
+        const float sr = static_cast<float>(sampleRate);
         float wetL = dryL;
         float wetR = dryR;
         switch (scene) {
             case 0: {
-                hpL.setHighpass(100.f + t * 7000.f, static_cast<float>(sampleRate));
-                hpR.setHighpass(100.f + t * 7000.f, static_cast<float>(sampleRate));
-                const float fb = 0.2f + 0.7f * t;
-                const float eL = hpL.process(left.read(delay));
-                const float eR = hpR.process(right.read(delay));
+                const float cut = 140.f * std::pow(48.f, curve);
+                hpL.set(std::min(cut, sr * 0.4f), sr, 0.9f, 1);
+                hpR.set(std::min(cut, sr * 0.4f), sr, 0.9f, 1);
+                const float fb = std::min(0.84f, 0.18f + 0.62f * curve);
+                float eL = hpL.process(fbL(left.read(delay)));
+                float eR = hpR.process(fbR(right.read(delay)));
                 left.push(dryL + eL * fb);
                 right.push(dryR + eR * fb);
-                wetL = dryL * (1.f - t * 0.5f) + eL * t;
-                wetR = dryR * (1.f - t * 0.5f) + eR * t;
+                const float rise = noiseF.process(noiseSample(noise)) * curve * curve * 0.07f;
+                noiseF.set(400.f * std::pow(18.f, curve), sr, 0.9f, 2);
+                wetL = dryL * (1.f - curve * 0.35f) + eL * (0.15f + 0.7f * curve) + rise;
+                wetR = dryR * (1.f - curve * 0.35f) + eR * (0.15f + 0.7f * curve) + rise;
                 break;
             }
             case 1: {
-                const float n = noiseSample(noise);
-                hpL.setHighpass(200.f + t * 9000.f, static_cast<float>(sampleRate));
-                const float colored = hpL.process(n) * t * 0.35f;
-                wetL = dryL * (1.f - t * 0.4f) + colored;
-                wetR = dryR * (1.f - t * 0.4f) + colored;
+                const float cut = 180.f * std::pow(40.f, curve);
+                noiseF.set(std::min(cut, sr * 0.42f), sr, 1.05f, 2);
+                const float colored = noiseF.process(noiseSample(noise)) * (0.045f + 0.16f * curve);
+                wetL = dryL * (1.f - curve * 0.28f) + colored;
+                wetR = dryR * (1.f - curve * 0.28f) + colored;
                 break;
             }
             case 2: {
-                const int spiral = std::max(8, static_cast<int>(delay * (1.f - 0.85f * t)));
-                const float fb = 0.3f + 0.6f * t;
+                const int spiral = std::max(8, static_cast<int>(delay * (1.f - 0.78f * curve)));
+                const float fb = std::min(0.86f, 0.22f + 0.58f * curve);
                 const float eL = left.read(spiral);
                 const float eR = right.read(spiral);
-                left.push(dryL + eL * fb);
-                right.push(dryR + eR * fb);
-                wetL = dryL * (1.f - t) + eL * t;
-                wetR = dryR * (1.f - t) + eR * t;
+                left.push(dryL + fbL(eL) * fb);
+                right.push(dryR + fbR(eR) * fb);
+                wetL = dryL * (1.f - curve * 0.7f) + eL * curve;
+                wetR = dryR * (1.f - curve * 0.7f) + eR * curve;
                 break;
             }
             case 3: {
-                hpL.setHighpass(80.f + t * 5000.f, static_cast<float>(sampleRate));
-                hpR.setHighpass(80.f + t * 5000.f, static_cast<float>(sampleRate));
-                wetL = hpL.process(dryL) * (1.f - t * 0.3f) + verb(dryL, 0) * t;
-                wetR = hpR.process(dryR) * (1.f - t * 0.3f) + verb(dryR, 1) * t;
+                const float cut = 90.f * std::pow(30.f, curve);
+                hpL.set(std::min(cut, sr * 0.4f), sr, 0.85f, 1);
+                hpR.set(std::min(cut, sr * 0.4f), sr, 0.85f, 1);
+                wetL = hpL.process(dryL) * (1.f - curve * 0.25f) + verb(dryL, 0, curve) * (0.15f + 0.75f * curve);
+                wetR = hpR.process(dryR) * (1.f - curve * 0.25f) + verb(dryR, 1, curve) * (0.15f + 0.75f * curve);
                 break;
             }
             case 4: {
-                lpL.setLowpass(8000.f - t * 7400.f, static_cast<float>(sampleRate));
-                lpR.setLowpass(8000.f - t * 7400.f, static_cast<float>(sampleRate));
-                wetL = lpL.process(dryL) * (1.f - t * 0.45f) + verb(dryL, 0) * (0.2f + t);
-                wetR = lpR.process(dryR) * (1.f - t * 0.45f) + verb(dryR, 1) * (0.2f + t);
+                const float cut = 9000.f * std::pow(0.08f, curve);
+                lpL.set(std::max(80.f, cut), sr, 0.85f, 0);
+                lpR.set(std::max(80.f, cut), sr, 0.85f, 0);
+                wetL = lpL.process(dryL) * (1.f - curve * 0.4f) + verb(dryL, 0, curve) * (0.1f + 0.7f * curve);
+                wetR = lpR.process(dryR) * (1.f - curve * 0.4f) + verb(dryR, 1, curve) * (0.1f + 0.7f * curve);
                 break;
             }
             case 5: {
-                lpL.setLowpass(10000.f - t * 9600.f, static_cast<float>(sampleRate));
-                lpR.setLowpass(10000.f - t * 9600.f, static_cast<float>(sampleRate));
-                const float fb = 0.15f + 0.7f * t;
-                const float eL = lpL.process(left.read(delay));
-                const float eR = lpR.process(right.read(delay));
+                const float cut = 10000.f * std::pow(0.06f, curve);
+                lpL.set(std::max(70.f, cut), sr, 0.9f, 0);
+                lpR.set(std::max(70.f, cut), sr, 0.9f, 0);
+                const float fb = std::min(0.84f, 0.16f + 0.6f * curve);
+                const float eL = lpL.process(fbL(left.read(delay)));
+                const float eR = lpR.process(fbR(right.read(delay)));
                 left.push(dryL + eL * fb);
                 right.push(dryR + eR * fb);
-                wetL = dryL * (1.f - t * 0.7f) + eL * t;
-                wetR = dryR * (1.f - t * 0.7f) + eR * t;
+                wetL = dryL * (1.f - curve * 0.55f) + eL * curve;
+                wetR = dryR * (1.f - curve * 0.55f) + eR * curve;
                 break;
             }
             case 6: {
-                lpL.setLowpass(6000.f - t * 5200.f, static_cast<float>(sampleRate));
-                lpR.setLowpass(6000.f - t * 5200.f, static_cast<float>(sampleRate));
+                const float cut = 7000.f * std::pow(0.12f, curve);
+                lpL.set(std::max(90.f, cut), sr, 0.8f, 0);
+                lpR.set(std::max(90.f, cut), sr, 0.8f, 0);
                 wetL = lpL.process(dryL);
                 wetR = lpR.process(dryR);
                 break;
             }
             default: {
                 const int dub = std::max(8, (delay * 3) / 4);
-                const float fb = 0.35f + 0.55f * t;
+                const float fb = std::min(0.86f, 0.3f + 0.5f * curve);
                 const float eL = left.read(dub);
                 const float eR = right.read(dub);
+                lpL.set(5200.f * std::pow(0.35f, curve), sr, 0.8f, 0);
+                lpR.set(5200.f * std::pow(0.35f, curve), sr, 0.8f, 0);
                 left.push(lpL.process(dryL + eL * fb));
                 right.push(lpR.process(dryR + eR * fb));
-                lpL.setLowpass(5000.f - t * 3000.f, static_cast<float>(sampleRate));
-                lpR.setLowpass(5000.f - t * 3000.f, static_cast<float>(sampleRate));
-                wetL = dryL * (1.f - t * 0.4f) + eL * t;
-                wetR = dryR * (1.f - t * 0.4f) + eR * t;
+                wetL = dryL * (1.f - curve * 0.35f) + eL * (0.2f + 0.7f * curve);
+                wetR = dryR * (1.f - curve * 0.35f) + eR * (0.2f + 0.7f * curve);
                 break;
             }
         }
         inL = sanitize(wetL);
         inR = sanitize(wetR);
+        clock += 1;
     }
 
 private:
-    float verb(float in, int channel) {
-        auto &buf = comb[channel];
-        if (buf.empty()) return in;
-        int &pos = combPos[channel];
-        const float y = buf[static_cast<size_t>(pos)];
-        buf[static_cast<size_t>(pos)] = in + y * (0.4f + 0.4f * intensity);
-        pos = (pos + 1) % static_cast<int>(buf.size());
-        return y;
+    float fbStateL = 0.f;
+    float fbStateR = 0.f;
+
+    float dark(float sample, float &state) {
+        const float g = 1.f - std::exp(-6.2831853f * 5000.f / static_cast<float>(std::max(1, sampleRate)));
+        state += (sample - state) * g;
+        flushDenorm(state);
+        return state;
+    }
+
+    float fbL(float sample) { return dark(sample, fbStateL); }
+    float fbR(float sample) { return dark(sample, fbStateR); }
+
+    float verb(float in, int channel, float curve) {
+        float sum = 0.f;
+        const float fb = 0.4f + 0.42f * curve;
+        for (int index = 0; index < 2; ++index) {
+            const int slot = channel * 2 + index;
+            auto &buf = comb[slot];
+            if (buf.empty()) continue;
+            int &pos = combPos[slot];
+            const float y = buf[static_cast<size_t>(pos)];
+            damp[slot] += (y - damp[slot]) * 0.35f;
+            flushDenorm(damp[slot]);
+            float write = in + damp[slot] * fb;
+            if (!std::isfinite(write) || std::fabs(write) > 4.f) write = 0.f;
+            buf[static_cast<size_t>(pos)] = write;
+            pos = (pos + 1) % static_cast<int>(buf.size());
+            sum += y;
+        }
+        return sum * 0.45f;
     }
 };
 
 struct XPad {
     int mode = 0;
     float beats = 0.25f;
+    float build = 0.f;
     bool requested = false;
     bool engaged = false;
     float bpm = 120.f;
@@ -822,32 +1087,41 @@ struct XPad {
     int clock = 0;
     int voice = -1;
     int env = 0;
+    int envFull = 1;
     float phase = 0.f;
+    float hatState = 0.f;
     Biquad hp;
     uint32_t noise = 0x51u;
 
-    void set(int nextMode, float nextBeats, bool on, float nextBpm, int rate) {
+    void set(int nextMode, float nextBeats, bool on, float nextBpm, int rate, float nextBuild = 0.f) {
         mode = nextMode;
         beats = nextBeats > 0.f ? nextBeats : 0.25f;
+        build = std::clamp(nextBuild, 0.f, 1.f);
         requested = on;
         bpm = nextBpm > 1.f ? nextBpm : 120.f;
         sampleRate = rate > 0 ? rate : 48000;
-        if (!on) {
-            engaged = false;
-            env = 0;
-        }
+        if (!on && !engaged) env = 0;
     }
 
     int sliceSamples() const {
+        if (mode == 2 && build > 0.04f) {
+            const float divs[4] = {0.25f, 0.125f, 0.0625f, 0.03125f};
+            const int stage = std::min(3, static_cast<int>(build * 4.f));
+            return std::max(1, static_cast<int>(samplesPerBeat(bpm, sampleRate) * divs[stage]));
+        }
         return std::max(1, static_cast<int>(samplesPerBeat(bpm, sampleRate) * beats));
     }
 
     bool rollEngaged() const { return engaged && mode == 0; }
 
     void process(float &inL, float &inR) {
+        const int beatN = std::max(1, static_cast<int>(samplesPerBeat(bpm, sampleRate)));
         const int slice = sliceSamples();
         if (requested && !engaged && (clock % slice) == 0) engaged = true;
-        if (!requested) engaged = false;
+        if (!requested && (clock % beatN) == 0) {
+            engaged = false;
+            env = 0;
+        }
         if (!engaged) {
             clock += 1;
             inL = sanitize(inL);
@@ -855,22 +1129,28 @@ struct XPad {
             return;
         }
         if ((clock % slice) == 0) {
-            env = sampleRate / 12;
-            voice = (voice + 1) & 3;
+            envFull = std::max(8, std::min(sampleRate / 12, std::max(8, slice / 2)));
+            env = envFull;
+            if (mode == 2 && build > 0.04f) voice = ((clock % beatN) == 0) ? 0 : 1;
+            else voice = (voice + 1) & 3;
             phase = 0.f;
         }
         if (mode == 1) {
-            const bool open = (clock % slice) < slice / 2;
-            const float g = open ? 1.f : 0.f;
-            inL = sanitize(inL * g);
-            inR = sanitize(inR * g);
+            const int openFor = slice / 2;
+            const bool open = (clock % slice) < openFor;
+            const float coef = 1.f - std::exp(-1.f / std::max(1.f, 0.005f * static_cast<float>(sampleRate)));
+            hatState += ((open ? 1.f : 0.f) - hatState) * coef;
+            inL = sanitize(inL * hatState);
+            inR = sanitize(inR * hatState);
         } else if (mode == 2) {
             const float hit = drum();
-            inL = sanitize(inL * 0.85f + hit);
-            inR = sanitize(inR * 0.85f + hit);
+            const float duck = build > 0.04f ? (0.15f + 0.2f * build) : 0.15f;
+            inL = sanitize(inL * (1.f - duck) + hit);
+            inR = sanitize(inR * (1.f - duck) + hit);
         } else if (mode == 3) {
             const bool open = (clock % slice) < (slice * 2) / 3;
-            hp.setHighpass(open ? 1800.f : 8000.f, static_cast<float>(sampleRate));
+            const float cut = open ? 900.f : 4200.f;
+            hp.setHighpass(cut, static_cast<float>(sampleRate), 0.9f);
             inL = sanitize(hp.process(inL));
             inR = sanitize(inL);
         }
@@ -879,25 +1159,34 @@ struct XPad {
     }
 
     float drum() {
-        if (env <= 0) return 0.f;
-        const float t = 1.f - (static_cast<float>(env) / static_cast<float>(sampleRate / 12));
+        if (env <= 0 || envFull <= 0) return 0.f;
+        const float t = 1.f - (static_cast<float>(env) / static_cast<float>(envFull));
+        const float rise = build > 0.04f ? build : 0.f;
+        const float pitch = 1.f + rise * 0.75f;
+        const float level = (build > 0.04f ? (0.34f + 0.62f * rise) : 0.85f);
         const float decay = std::exp(-6.f * t);
-        const int which = voice;
+        const int which = voice < 0 ? 0 : voice;
         float y = 0.f;
         if (which == 0) {
-            phase += static_cast<float>(kTwoPi) * (140.f - 80.f * t) / static_cast<float>(sampleRate);
-            y = std::sin(phase) * decay + noiseSample(noise) * decay * decay * 0.25f;
+            phase += static_cast<float>(kTwoPi) * (150.f - 90.f * t) * pitch / static_cast<float>(sampleRate);
+            y = std::sin(phase) * decay + noiseSample(noise) * decay * decay * 0.2f;
         } else if (which == 1) {
-            y = noiseSample(noise) * decay * 0.7f + std::sin(phase) * decay * 0.2f;
-            phase += static_cast<float>(kTwoPi) * 180.f / static_cast<float>(sampleRate);
+            const float body = std::sin(phase) * std::exp(-10.f * t);
+            phase += static_cast<float>(kTwoPi) * (190.f * pitch) / static_cast<float>(sampleRate);
+            const float g = 1.f - std::exp(-6.2831853f * (1800.f + 5000.f * rise) / static_cast<float>(sampleRate));
+            const float n = noiseSample(noise);
+            hatState += (n - hatState) * g;
+            y = hatState * decay * 0.72f + body * 0.18f;
         } else if (which == 2) {
-            const float burst = (t < 0.15f || (t > 0.22f && t < 0.32f) || (t > 0.4f && t < 0.48f)) ? 1.f : 0.2f;
-            y = noiseSample(noise) * decay * burst * 0.55f;
+            const float burst = (t < 0.12f || (t > 0.2f && t < 0.3f) || (t > 0.38f && t < 0.46f)) ? 1.f : 0.18f;
+            y = noiseSample(noise) * decay * burst * 0.5f;
         } else {
-            hp.setHighpass(6000.f, static_cast<float>(sampleRate));
-            y = hp.process(noiseSample(noise)) * std::exp(-18.f * t) * 0.45f;
+            const float g = 1.f - std::exp(-6.2831853f * 7000.f / static_cast<float>(sampleRate));
+            const float n = noiseSample(noise);
+            hatState += (n - hatState) * g;
+            y = (n - hatState) * std::exp(-16.f * t) * 0.4f;
         }
-        return y;
+        return y * level;
     }
 };
 
@@ -910,28 +1199,22 @@ struct Isolator {
     int sampleRate = 48000;
     int clock = 0;
     bool ready = false;
-    Biquad lp1, lp2, hp1, hp2, bpHp1, bpHp2, bpLp1, bpLp2;
-    Biquad rlp1, rlp2, rhp1, rhp2, rbpHp1, rbpHp2, rbpLp1, rbpLp2;
+    Biquad lowA, lowB, restA, restB, midA, midB, highA, highB;
+    Biquad rLowA, rLowB, rRestA, rRestB, rMidA, rMidB, rHighA, rHighB;
 
     void prepare(int rate) {
         sampleRate = rate > 0 ? rate : 48000;
         const float sr = static_cast<float>(sampleRate);
-        lp1.setLowpass(200.f, sr);
-        lp2.setLowpass(200.f, sr);
-        hp1.setHighpass(2000.f, sr);
-        hp2.setHighpass(2000.f, sr);
-        bpHp1.setHighpass(200.f, sr);
-        bpHp2.setHighpass(200.f, sr);
-        bpLp1.setLowpass(2000.f, sr);
-        bpLp2.setLowpass(2000.f, sr);
-        rlp1.setLowpass(200.f, sr);
-        rlp2.setLowpass(200.f, sr);
-        rhp1.setHighpass(2000.f, sr);
-        rhp2.setHighpass(2000.f, sr);
-        rbpHp1.setHighpass(200.f, sr);
-        rbpHp2.setHighpass(200.f, sr);
-        rbpLp1.setLowpass(2000.f, sr);
-        rbpLp2.setLowpass(2000.f, sr);
+        auto arm = [&](Biquad &lp1, Biquad &lp2, Biquad &hp1, Biquad &hp2, float freq) {
+            lp1.setLowpass(freq, sr, 0.7071f);
+            lp2.setLowpass(freq, sr, 0.7071f);
+            hp1.setHighpass(freq, sr, 0.7071f);
+            hp2.setHighpass(freq, sr, 0.7071f);
+        };
+        arm(lowA, lowB, restA, restB, 200.f);
+        arm(midA, midB, highA, highB, 2000.f);
+        arm(rLowA, rLowB, rRestA, rRestB, 200.f);
+        arm(rMidA, rMidB, rHighA, rHighB, 2000.f);
         ready = true;
     }
 
@@ -952,16 +1235,23 @@ struct Isolator {
         smL += (low - smL) * coef;
         smM += (mid - smM) * coef;
         smH += (high - smH) * coef;
+        flushDenorm(smL);
+        flushDenorm(smM);
+        flushDenorm(smH);
         if (unity() && std::abs(smL - 1.f) < 0.02f && std::abs(smM - 1.f) < 0.02f && std::abs(smH - 1.f) < 0.02f) {
             clock += 1;
             return;
         }
-        const float lLow = lp2.process(lp1.process(inL));
-        const float lHigh = hp2.process(hp1.process(inL));
-        const float lMid = bpLp2.process(bpLp1.process(bpHp2.process(bpHp1.process(inL))));
-        const float rLow = rlp2.process(rlp1.process(inR));
-        const float rHigh = rhp2.process(rhp1.process(inR));
-        const float rMid = rbpLp2.process(rbpLp1.process(rbpHp2.process(rbpHp1.process(inR))));
+        auto split = [](Biquad &lp1, Biquad &lp2, Biquad &hp1, Biquad &hp2, Biquad &m1, Biquad &m2, Biquad &h1, Biquad &h2,
+                        float in, float &lowOut, float &midOut, float &highOut) {
+            lowOut = lp2.process(lp1.process(in));
+            const float rest = hp2.process(hp1.process(in));
+            midOut = m2.process(m1.process(rest));
+            highOut = h2.process(h1.process(rest));
+        };
+        float lLow, lMid, lHigh, rLow, rMid, rHigh;
+        split(lowA, lowB, restA, restB, midA, midB, highA, highB, inL, lLow, lMid, lHigh);
+        split(rLowA, rLowB, rRestA, rRestB, rMidA, rMidB, rHighA, rHighB, inR, rLow, rMid, rHigh);
         float gateGain = 1.f;
         if (gate) {
             const int slice = std::max(1, static_cast<int>(samplesPerBeat(120.0, sampleRate) / 2.0));
@@ -983,6 +1273,8 @@ struct ReleaseFx {
     float pos = 1.f;
     float bpm = 120.f;
     int sampleRate = 48000;
+    float darkL = 0.f;
+    float darkR = 0.f;
     DelayLine left;
     DelayLine right;
 
@@ -995,6 +1287,7 @@ struct ReleaseFx {
         right.prepare(96000);
         left.clear();
         right.clear();
+        darkL = darkR = 0.f;
     }
 
     bool active() const {
@@ -1016,11 +1309,18 @@ struct ReleaseFx {
         if (kind == 1) {
             const int delay = std::clamp(static_cast<int>(samplesPerBeat(bpm, sampleRate)), 1, 95999);
             const float dry = 1.f - pos;
-            const float fb = 0.55f * (1.f - pos);
-            const float eL = left.read(delay);
-            const float eR = right.read(delay);
-            left.push(inL + eL * fb);
-            right.push(inR + eR * fb);
+            const float fb = 0.5f * (1.f - pos);
+            const float g = 1.f - std::exp(-6.2831853f * 5500.f / static_cast<float>(sampleRate));
+            float eL = left.read(delay);
+            float eR = right.read(delay);
+            darkL += (eL - darkL) * g;
+            darkR += (eR - darkR) * g;
+            flushDenorm(darkL);
+            flushDenorm(darkR);
+            eL = darkL;
+            eR = darkR;
+            left.push(inL * dry + eL * fb);
+            right.push(inR * dry + eR * fb);
             inL = sanitize(inL * dry + eL * (1.f - dry));
             inR = sanitize(inR * dry + eR * (1.f - dry));
         }
@@ -1031,28 +1331,42 @@ struct ReleaseFx {
 struct ColorFilter {
     float norm = 0.5f;
     int sampleRate = 48000;
-    Biquad left;
-    Biquad right;
+    bool snap = true;
+    ParamSmooth freqSm;
+    ParamSmooth mixSm;
+    Svf left;
+    Svf right;
+    int mode = 0;
 
     void set(float value, int rate) {
-        norm = std::clamp(value, 0.f, 1.f);
-        sampleRate = rate > 0 ? rate : 48000;
+        const float next = std::clamp(value, 0.f, 1.f);
+        if (std::fabs(next - norm) > 0.2f) snap = true;
+        norm = next;
+        const int nextRate = rate > 0 ? rate : 48000;
+        if (nextRate != sampleRate || freqSm.coef == 1.f) {
+            sampleRate = nextRate;
+            freqSm.setMs(32.f, sampleRate);
+            mixSm.setMs(28.f, sampleRate);
+        }
+        sampleRate = nextRate;
     }
 
     void process(float &inL, float &inR) {
-        if (std::abs(norm - 0.5f) < 0.02f) return;
+        int targetMode = 0;
+        float freq = 1000.f;
+        float mix = 0.f;
+        mapFilterKnob(norm, static_cast<float>(sampleRate), targetMode, freq, mix);
+        const bool snapNow = snap || !freqSm.primed;
+        snap = false;
+        const float smoothFreq = freqSm.next(freq, snapNow);
+        const float smoothMix = mixSm.next(mix, snapNow);
+        if (smoothMix < 0.001f) return;
+        mode = targetMode;
         const float sr = static_cast<float>(sampleRate);
-        if (norm < 0.5f) {
-            const float cutoff = 120.f + (norm / 0.5f) * 2000.f;
-            left.setLowpass(cutoff, sr);
-            right.setLowpass(cutoff, sr);
-        } else {
-            const float cutoff = 180.f + ((norm - 0.5f) / 0.5f) * 6000.f;
-            left.setHighpass(cutoff, sr);
-            right.setHighpass(cutoff, sr);
-        }
-        inL = sanitize(left.process(inL));
-        inR = sanitize(right.process(inR));
+        left.set(smoothFreq, sr, 0.95f, mode);
+        right.set(smoothFreq, sr, 0.95f, mode);
+        inL = sanitize(inL * (1.f - smoothMix) + left.process(inL) * smoothMix);
+        inR = sanitize(inR * (1.f - smoothMix) + right.process(inR) * smoothMix);
     }
 };
 
@@ -1092,7 +1406,7 @@ struct MixerFx {
 
     void setRmx(bool armed, int sceneId, bool holding, float ceiling, float bars, int xMode, float xBeats, bool xOn,
                 int releaseKind, float low0, float mid0, float high0, float low1, float mid1, float high1, bool gate,
-                int nextChannel, float bpm) {
+                int nextChannel, float bpm, float drumBuild = 0.f) {
         const bool was = rmx;
         rmx = armed;
         if (armed) beat.on = false;
@@ -1110,7 +1424,7 @@ struct MixerFx {
             scene.setCeiling(ceiling);
             scene.intensity = ceiling;
         }
-        xpad.set(xMode, xBeats, armed && xOn, bpm, sampleRate);
+        xpad.set(xMode, xBeats, armed && xOn, bpm, sampleRate, std::clamp(drumBuild, 0.f, 1.f));
         iso[0].set(low0, mid0, high0, gate);
         iso[1].set(low1, mid1, high1, gate);
         if (releaseKind < 0) release.kind = -1;

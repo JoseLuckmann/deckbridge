@@ -777,6 +777,7 @@ data class RmxState(
     val high: List<Float> = listOf(1f, 1f),
     val gate: Boolean = false,
     val channel: Int = 0,
+    val drumBuild: Float = 0f,
 ) {
     fun sceneName(): String = SCENE_NAMES[scene.coerceIn(0, SCENE_NAMES.lastIndex)]
 }
@@ -812,7 +813,16 @@ fun rmxPayload(state: RmxState, bpm: Float): FloatArray = floatArrayOf(
     if (state.gate) 1f else 0f,
     state.channel.toFloat(),
     bpm,
+    state.drumBuild.coerceIn(0f, 1f),
 )
+
+fun drumBuildDivision(build: Float): String = when {
+    build < 0.04f -> "GRADE"
+    build < 0.25f -> "1/4"
+    build < 0.50f -> "1/8"
+    build < 0.75f -> "1/16"
+    else -> "1/32"
+}
 
 fun mergedTagNames(catalog: Map<Int, List<RbTag>>, added: Map<Int, Set<String>>, removed: Map<Int, Set<String>>): Map<Int, List<String>> {
     val ids = catalog.keys + added.keys + removed.keys
