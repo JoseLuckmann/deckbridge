@@ -122,6 +122,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 | 2026-10-22 | A066 | parcial | `9453e82` | tela 0.12.1, grade no kick, tom MIREX 0,50, RGB aditivo, emenda de loop, APK arm64 | escuta e pendrive do dono `BLOCKED_HARDWARE`; cobertura do kick 57–93%; Ecosystem Fm ≠ TKEY Ebm | dono instala o APK arm64 0.12.1 e ouve o trecho |
 | 2026-10-22 | A067 | parcial | `efbd367` | tela 0.12.2, corpus GiantSteps, Acc1 0,655, Acc2 0,724, MIREX 0,476, pasta sem export, APK arm64 | alvos 0,85 / 0,95 / 0,70 não atingidos; escuta `BLOCKED_HARDWARE`; Chromosome 154,2 e tom Am, TKEY é Bm | dono instala o APK arm64 0.12.2 e abre uma pasta sem export |
 | 2026-10-22 | A068 | parcial | `78bd7c9` | tela 0.13.0, slip, frases 16/26 a 1 compasso, MATCHING, SUGGEST, auto gain, APK arm64 | escuta `BLOCKED_HARDWARE`; sem auto gain lido do export; voz e 4 decks por fazer | dono instala o APK arm64 0.13.0 |
+| 2026-10-22 | A069 | parcial | `9d592d9` | tela 0.13.1, tom CQT + EDMA, MIREX 0,586 nas 58 e 0,519 em 190, APK arm64 | 0,65 não atingido; holdout 0,456; escuta `BLOCKED_HARDWARE`; Chromosome F ≠ Bm | dono instala o APK arm64 0.13.1 |
 
 ### Proposta Android
 - Estado: proposta, não aceita
