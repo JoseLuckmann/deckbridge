@@ -27,3 +27,7 @@ Medidas objetivas (`tools/fx_rmx_test.cpp`, 0 falhas; `tools/spectro.py` para o 
 - Color FX: o centro deixa o som original (diferença RMS < 1e-4) nos seis tipos. DUB ECHO e SPACE deixam cauda ao voltar ao centro e depois somem.
 
 Limites: sem escuta. As curvas dos seis Color FX são nossas; os manuais não as publicam. O deslocador de grão (`GrainShift`, janela de 2048) tem artefatos em material tonal denso; serve a repetições de eco, não a um Pitch limpo.
+
+## Arquivo no repositório
+
+`docs/testing/audio/mix-house-sintetica.mp3` (192 kbps, 3:10) é a mix das duas faixas sintetizadas no código, sem material de terceiros, por isso pode ficar no git. O roteiro é `mix-house-sintetica.tsv` (segundos, compasso, evento). Faixas públicas do corpus CC BY 3.0 (`tools/fetch_real_corpus.py`) não puderam ser baixadas nesta sessão: o proxy do ambiente bloqueou archive.org (403).
