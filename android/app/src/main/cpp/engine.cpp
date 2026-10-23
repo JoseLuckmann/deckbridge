@@ -456,8 +456,14 @@ public:
             target.loopStart = static_cast<double>(startSec) * target.sampleRate;
             target.loopEnd = static_cast<double>(endSec) * target.sampleRate;
         } else {
+            const bool wasLooping = target.loopEnd > target.loopStart;
             target.loopStart = -1.0;
             target.loopEnd = -1.0;
+            // Loop roll com SLIP: ao sair do loop a faixa volta ao ponto em que estaria sem ele.
+            if (wasLooping && target.userSlip && target.slipAnchor >= 0.0) {
+                const double frames = static_cast<double>(target.left.size());
+                target.position = std::min(std::max(0.0, target.slipAnchor), frames > 1.0 ? frames - 1.0 : 0.0);
+            }
         }
     }
 

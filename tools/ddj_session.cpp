@@ -11,6 +11,7 @@
 //   <t>   pos <deck> <seg>            posição inicial do deck
 //   <t>   play <deck> <0|1>
 //   <t>   seek <deck> <seg>
+//   <t>   loop <deck> <entradaSeg> <saidaSeg>   (saída <= entrada desliga o loop)
 //   <t>   pitch <deck> <mult>
 //   <t>   vol <deck> <0..1>
 //   <t>   cross <0..1>
@@ -46,6 +47,8 @@ struct Deck {
     double lastEmitted = 0.0;
     double gridOrigin = 0.0;
     double gridBpm = 0.0;
+    double loopStart = -1.0;
+    double loopEnd = -1.0;
 
     void read(double rateMul, float &l, float &r) {
         l = r = 0.f;
@@ -60,6 +63,10 @@ struct Deck {
         l = deckbridge::readInterp(left.data(), frames, position);
         r = deckbridge::readInterp(right.data(), frames, position);
         position += pitch * rateMul;
+        // Loop de batida: ao passar da saída, volta para a entrada mantendo a fração do passo (sem emenda).
+        if (loopEnd > loopStart && position >= loopEnd) {
+            position = loopStart + std::fmod(position - loopEnd, loopEnd - loopStart);
+        }
     }
 };
 
@@ -240,6 +247,9 @@ int main(int argc, char **argv) {
                 decks[deckOf()].playing = a[1] > 0.5;
             } else if (op.name == "seek" && a.size() >= 2) {
                 decks[deckOf()].position = std::max(0.0, a[1] * kRate);
+            } else if (op.name == "loop" && a.size() >= 3) {
+                decks[deckOf()].loopStart = a[1] * kRate;
+                decks[deckOf()].loopEnd = a[2] > a[1] ? a[2] * kRate : -1.0;
             } else if (op.name == "pitch" && a.size() >= 2) {
                 decks[deckOf()].pitch = a[1];
             } else if (op.name == "vol" && a.size() >= 2) {

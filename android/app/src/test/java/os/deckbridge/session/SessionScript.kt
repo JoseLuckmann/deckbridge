@@ -12,7 +12,9 @@ object SessionScript {
     /** Atraso antes do PLAY do deck 1: tela vazia, BROWSE, LOAD, hot cue. */
     const val INTRO = 4.8
     const val SOLO_BARS = 8
-    const val END = 110.0
+    const val END = 112.0
+    const val DRIFT = 0.0004
+    const val LATE = 0.020
 
     private fun bar(bpm: Double) = 240.0 / bpm
 
@@ -90,14 +92,32 @@ object SessionScript {
         m(tB0 - 4.9, 150, 71, 127)        // LOAD deck 2
         tempoRamp(tB0 - 4.3, tB0 - 2.6, 1, 1.0, pitchB + 0.0045)
         tempoRamp(tB0 - 2.6, tB0 - 1.7, 1, pitchB + 0.0045, pitchB - 0.0012)
-        tempoRamp(tB0 - 1.7, tB0 - 1.0, 1, pitchB - 0.0012, pitchB)
+        // O fader para um pouco acima do ponto (0,04%): o deck 2 vai se afastar devagar e o DJ corrige no prato.
+        tempoRamp(tB0 - 1.7, tB0 - 1.0, 1, pitchB - 0.0012, pitchB + DRIFT)
         // Filtro passa-alta subindo no deck 1 até a entrada do deck 2 (build de transição).
         ramp(tB0 - 3.2, tB0 - 0.15, 182, 23, 64, 110)
         m(tB0 - 0.05, 182, 23, 64)
 
+        // Roll de loop no deck 1 (pads BEAT LOOP e CUE/LOOP CALL): 8, 4, 2, 1, 1/2 e 1/4 de batida, cada um por
+        // o seu tamanho, tudo em batidas inteiras do deck 1. Sai no instante em que o deck 2 entra.
+        val beat = 60.0 / bpmA
+        ui(tB0 - 17 * beat, "SLIP ligado (menu ···)") { toggleSlip(0) }
+        m(tB0 - 16 * beat, 151, 101, 127)        // pad 6: loop de 8 batidas
+        m(tB0 - 8 * beat, 151, 100, 127)         // pad 5: 4 batidas
+        m(tB0 - 4 * beat, 151, 99, 127)          // pad 4: 2 batidas
+        m(tB0 - 2 * beat, 151, 98, 127)          // pad 3: 1 batida
+        m(tB0 - 1 * beat, 144, 81, 127)          // CUE/LOOP CALL esquerda: 1/2
+        m(tB0 - 0.5 * beat, 144, 81, 127)        // de novo: 1/4
+        m(tB0, 144, 77, 127)                     // RELOOP/EXIT: sai do loop e a faixa volta onde estaria (SLIP)
+        ui(tB0 + 1.0, "SLIP desligado") { toggleSlip(0) }
+
         // O deck 2 entra na linha do compasso, sem SYNC, e o fader sobe.
-        m(tB0, 145, 11, 127)              // PLAY deck 2
+        m(tB0 + LATE, 145, 11, 127)       // PLAY deck 2, 20 ms atrasado (a mão não é perfeita)
         ramp(tB0 + 0.60, tB0 + 2.40, 177, 19, 0, 127)
+        // Ajuste de grade pelo prato: cada passo vale 5 ms (valor 65 = +1). O DJ ouve o deck 2 atrasado e empurra.
+        for (at in doubleArrayOf(2.60, 2.75, 4.40, 4.55)) m(tB0 + at, 177, 35, 65)
+        // Depois acerta o fader de tempo, que estava 0,04% acima.
+        tempoRamp(tB0 + 8.0, tB0 + 8.6, 1, pitchB + DRIFT, pitchB)
 
         // O deck 1 salta ao breakdown (hot cue 3, compasso 32) e o grave do deck 2 entra.
         m(tCue, 151, 2, 127)
@@ -140,6 +160,13 @@ object SessionScript {
         ramp(tA32 + 12.8, tA32 + 16.5, 182, 31, 64, 0)
         m(tA32 + 17.6, 145, 11, 127)      // PAUSE deck 2
 
+        // Final: o deck 1 trava em loop de 4 batidas e vai encolhendo até o eco e o fader fecharem.
+        ui(tA32 + 39 * beat, "SLIP ligado (menu ···)") { toggleSlip(0) }
+        m(tA32 + 40 * beat, 151, 100, 127)       // pad 5: 4 batidas
+        m(tA32 + 44 * beat, 151, 99, 127)        // 2 batidas
+        m(tA32 + 46 * beat, 151, 98, 127)        // 1 batida
+        m(tA32 + 47 * beat, 144, 81, 127)        // 1/2
+        m(tA32 + 47.5 * beat, 144, 81, 127)      // 1/4
         // Final: eco no deck 1 e fader descendo.
         m(tA32 + 21.0, 148, 99, 127)
         m(tA32 + 21.1, 148, 16, 127)

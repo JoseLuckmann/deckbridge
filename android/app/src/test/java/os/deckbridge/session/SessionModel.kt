@@ -8,6 +8,10 @@ import os.deckbridge.logic.BeatFxState
 import os.deckbridge.logic.BrowsePlace
 import os.deckbridge.logic.browseRows
 import os.deckbridge.logic.moveBrowse
+import os.deckbridge.logic.advancePlayhead
+import os.deckbridge.logic.jogSeconds
+import os.deckbridge.logic.scaleLoop
+import os.deckbridge.logic.toggleBeatLoop
 import os.deckbridge.logic.quantizeSeconds
 import os.deckbridge.logic.DeckFace
 import os.deckbridge.logic.GridEdit
@@ -50,6 +54,8 @@ class SessionModel(private val catalog: RbCatalog, private val gridShiftMs: Doub
     var t = 0.0
         private set
     val pos = doubleArrayOf(0.0, 0.0)
+    /** Posição "sem loop" enquanto o SLIP está ligado (o que o slipAnchor do motor acompanha). */
+    private val shadow = doubleArrayOf(0.0, 0.0)
     var faces = listOf(
         DeckFace(playing = false, onAir = false, gridShiftMs = gridShiftMs[0]),
         DeckFace(playing = false, onAir = false, gridShiftMs = gridShiftMs[1]),
@@ -138,7 +144,11 @@ class SessionModel(private val catalog: RbCatalog, private val gridShiftMs: Doub
     fun advance(dt: Double) {
         t += dt
         for (deck in 0..1) {
-            if (faces[deck].playing) pos[deck] += dt * faces[deck].pitch
+            if (faces[deck].playing) {
+                val face = faces[deck]
+                pos[deck] = advancePlayhead(pos[deck], dt * face.pitch, face.loopStart.toDouble(), face.loopEnd.toDouble())
+                if (face.slip) shadow[deck] += dt * face.pitch
+            }
             syncFace(deck)
         }
         updateRmxRamp(dt)
@@ -247,6 +257,24 @@ class SessionModel(private val catalog: RbCatalog, private val gridShiftMs: Doub
                 ops += "%.4f\tfilter\t%d\t%.5f".format(t, deck, value / 127f)
             }
             PerformanceAction.Kind.SYNC -> syncDeck(deck)
+            PerformanceAction.Kind.BEAT_LOOP -> if (deck in 0..1 && loaded[deck]) {
+                val face = faces[deck]
+                val next = toggleBeatLoop(face.loopStart, face.loopEnd, pos[deck].toFloat(), action.slider ?: 4.0, tracks[deck].bpm)
+                if (next == null) setLoop(deck, null) else setLoop(deck, next)
+            }
+            PerformanceAction.Kind.LOOP_SCALE -> if (deck in 0..1) {
+                val face = faces[deck]
+                scaleLoop(face.loopStart, face.loopEnd, action.slider ?: 1.0)?.let { setLoop(deck, it) }
+            }
+            PerformanceAction.Kind.RELOOP -> if (deck in 0..1) {
+                val face = faces[deck]
+                if (face.loopEnd > face.loopStart) setLoop(deck, null)
+            }
+            // Prato no modo vinil (padrão do app): cada passo desloca o ponto, como o DeckPage.
+            PerformanceAction.Kind.JOG -> if (deck in 0..1 && loaded[deck]) {
+                val seconds = jogSeconds((action.slider ?: 0.0))
+                seekTo(deck, pos[deck] + seconds)
+            }
             PerformanceAction.Kind.BROWSE_MOVE -> browse?.let { place -> browse = moveBrowse(place, (action.slider ?: 0.0).toInt(), rows().size) }
             PerformanceAction.Kind.LOAD -> if (deck in 0..1) loadSelected(deck)
             PerformanceAction.Kind.MASTER -> if (deck in 0..1) master = deck
@@ -277,6 +305,34 @@ class SessionModel(private val catalog: RbCatalog, private val gridShiftMs: Doub
             else -> Unit
         }
         emitEffects()
+    }
+
+    /** Toque no botão SLIP do cartão (menu \"···\"): ligado, a faixa continua por baixo do loop. */
+    fun toggleSlip(deck: Int) {
+        val face = faces[deck]
+        if (!face.slip) {
+            shadow[deck] = pos[deck]
+            edit(deck) { it.copy(slip = true) }
+        } else {
+            if (face.loopEnd > face.loopStart) {
+                setLoop(deck, null)
+            }
+            edit(deck) { it.copy(slip = false) }
+        }
+    }
+
+    private fun setLoop(deck: Int, range: Pair<Float, Float>?) {
+        if (range == null) {
+            val face = faces[deck]
+            val wasLooping = face.loopEnd > face.loopStart
+            edit(deck) { it.copy(memoryStart = face.loopStart, memoryEnd = face.loopEnd, loopStart = -1f, loopEnd = -1f) }
+            ops += "%.4f\tloop\t%d\t-1\t-1".format(t, deck)
+            // Mesmo comportamento do motor: sair do loop com SLIP ligado volta ao ponto em que a faixa estaria.
+            if (wasLooping && face.slip) seekTo(deck, shadow[deck])
+        } else {
+            edit(deck) { it.copy(loopStart = range.first, loopEnd = range.second, memoryStart = range.first, memoryEnd = range.second) }
+            ops += "%.4f\tloop\t%d\t%.6f\t%.6f".format(t, deck, range.first, range.second)
+        }
     }
 
     private fun seekTo(deck: Int, seconds: Double) {

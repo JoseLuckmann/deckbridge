@@ -27,7 +27,9 @@ import os.deckbridge.logic.BrowsePlace
 import os.deckbridge.logic.DeckFace
 import os.deckbridge.logic.GlitchWatch
 import os.deckbridge.logic.LOOP_ADJUST_STEP
+import os.deckbridge.logic.JOG_BEND_HOLD_MS
 import os.deckbridge.logic.adjustLoopPoint
+import os.deckbridge.logic.jogBentPitch
 import os.deckbridge.logic.PerformanceAction
 import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.RbTrack
@@ -330,6 +332,7 @@ fun DeckPage(
     }
 
     val reverseHoldWasSlip = remember { BooleanArray(2) }
+    val jogBendUntil = remember { LongArray(2) }
 
     fun deckAction(deck: Int, action: String) {
         val face = faces.getOrElse(deck) { DeckFace() }
@@ -580,9 +583,9 @@ fun DeckPage(
                 }
                 val bend = (action.slider ?: 0.0) * settings.jogSensitivity
                 if (!settings.jogVinyl && kotlin.math.abs(bend) < 20.0) {
-                    val pitched = (faces[deck].pitch + bend * 0.002).toFloat().coerceIn(0.5f, 2f)
-                    setPitch(deck, pitched)
-                    edit(deck) { it.copy(pitch = pitched, sync = false) }
+                    // Bend temporário: o tempo do fader (face.pitch) não muda, o motor volta a ele quando o prato para.
+                    setPitch(deck, jogBentPitch(faces[deck].pitch, bend))
+                    jogBendUntil[deck] = System.currentTimeMillis() + JOG_BEND_HOLD_MS
                 } else {
                     val seconds = (jogSeconds(bend)).toFloat()
                     NativeEngine.nudge(deck, seconds)
@@ -914,6 +917,18 @@ fun DeckPage(
 
     var controllerUp by remember { mutableStateOf(PerformanceHub.controllerConnected) }
     var audioWarning by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(40)
+            val now = System.currentTimeMillis()
+            for (deck in 0..1) {
+                if (jogBendUntil[deck] > 0L && now >= jogBendUntil[deck]) {
+                    jogBendUntil[deck] = 0L
+                    setPitch(deck, faces[deck].pitch)
+                }
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         val watch = GlitchWatch()
         while (true) {

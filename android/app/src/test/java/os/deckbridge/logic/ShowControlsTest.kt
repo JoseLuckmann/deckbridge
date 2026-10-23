@@ -64,4 +64,25 @@ class ShowControlsTest {
         assertNull(watch.update(4, 21_001L))
         assertEquals("ÁUDIO: FALHAS (6)", watch.update(6, 22_000L))
     }
+
+    @Test
+    fun jogBendIsOnTopOfTheFaderTempoAndStaysInRange() {
+        assertEquals(1.0f, jogBentPitch(1.0f, 0.0), 0f)
+        assertEquals(1.0096f, jogBentPitch(1.0f, 4.8), 1e-6f)
+        assertEquals(0.9904f, jogBentPitch(1.0f, -4.8), 1e-6f)
+        assertEquals(2.0f, jogBentPitch(1.99f, 100.0), 0f)
+        assertEquals(0.5f, jogBentPitch(0.51f, -100.0), 0f)
+    }
+
+    @Test
+    fun loopWrapKeepsTheBeatPhaseWhenTheLoopIsWholeBeats() {
+        val beat = 60.0 / 130.0
+        // Loop de 2 batidas iniciado numa batida; depois de 10 batidas o playhead está de novo numa batida.
+        var position = 40.0
+        val start = position
+        val end = position + 2 * beat
+        repeat(500) { position = advancePlayhead(position, 10 * beat / 500, start, end) }
+        val beatsFromStart = (position - start) / beat
+        assertEquals(0.0, beatsFromStart - Math.round(beatsFromStart), 1e-6)
+    }
 }

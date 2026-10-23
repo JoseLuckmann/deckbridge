@@ -339,3 +339,9 @@ class GlitchWatch(private val holdMs: Long = 15_000L) {
         return if (nowMs < shownUntil) "ÁUDIO: FALHAS ($count)" else null
     }
 }
+
+/** Pitch bend do prato fora do modo vinil: soma ao tempo base só enquanto o prato gira (volta quando para). */
+fun jogBentPitch(base: Float, bend: Double): Float = (base + bend * 0.002).toFloat().coerceIn(0.5f, 2f)
+
+/** Tempo sem passos do prato para soltar o bend e voltar ao tempo do fader. */
+const val JOG_BEND_HOLD_MS = 150L

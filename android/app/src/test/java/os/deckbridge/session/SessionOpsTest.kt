@@ -14,7 +14,9 @@ class SessionOpsTest {
         // Origens do bumbo medidas no áudio por limiar de 25% do ataque na faixa de 1 a 5 kHz (método independente da análise do app).
         val oA = 0.0
         val oB = 0.0
-        val checkpoints = doubleArrayOf(24.0, 27.0, 33.0, 41.0, 44.0, 48.0, 57.0, 63.0, 82.0, 88.0, 93.0)
+        val tb0 = SessionScript.INTRO + 1.0 + SessionScript.SOLO_BARS * 240.0 / catalog.tracks[0].bpm
+        val early = DoubleArray(13) { tb0 + 0.5 + it }
+        val checkpoints = early + doubleArrayOf(33.0, 41.0, 44.0, 48.0, 57.0, 63.0, 82.0, 88.0, 93.0, 99.0)
         var nextCheck = 0
         val model = runSession(catalog, 10) { m, frame ->
             val t = frame / 10.0
