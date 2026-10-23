@@ -16,6 +16,8 @@ class SessionAnalysisTest {
             val first = analysis?.beats?.take(5)?.joinToString { "${it.timeMs}ms/${it.beatInBar}" }
             analysis?.hotCues?.forEach { out.appendLine("   hot ${it.index} ${it.timeMs} ms") }
             analysis?.memoryCues?.forEach { out.appendLine("   mem ${it.timeMs} ms") }
+            analysis?.phrases?.forEach { out.appendLine("   fr ${it.kind} ${it.startMs}-${it.endMs} ms") }
+            out.appendLine("   energia ${analysis?.energy} lufs ${analysis?.loudnessLufs}")
             out.appendLine("${track.id} ${track.title} bpm=${track.bpm} key=${track.keyName} dur=${track.durationSeconds}s beats=${analysis?.beats?.size} first=[$first] mainCueMs=${analysis?.mainCueMs} hot=${analysis?.hotCues?.size} wave=${analysis?.waveSource}")
         }
         out.appendLine("analysis took ${(System.currentTimeMillis() - started) / 1000} s")

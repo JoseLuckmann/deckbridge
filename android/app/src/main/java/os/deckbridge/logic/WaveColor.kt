@@ -359,7 +359,7 @@ fun decodeWavMono(bytes: ByteArray): WavPcm? {
     }
     if (dataAt < 0 || rate < 8000 || channels != 1 || bits != 16) return null
     val samples = dataLen / 2
-    if (samples <= 0 || samples > 12_000_000 || dataAt + samples * 2 > bytes.size) return null
+    if (samples <= 0 || samples > 30_000_000 || dataAt + samples * 2 > bytes.size) return null
     val out = FloatArray(samples)
     for (index in 0 until samples) {
         val raw = bytes.u16le(dataAt + index * 2).toShort().toInt()

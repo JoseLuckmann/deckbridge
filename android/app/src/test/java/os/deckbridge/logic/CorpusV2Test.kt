@@ -56,17 +56,20 @@ class CorpusV2Test {
 
     @Test
     fun tempoAndKeyMetrics() {
+        // Pesado (uns 12 min com o tom): só roda com CORPUS=1 e com o corpus baixado.
+        assumeTrue(System.getenv("CORPUS") == "1")
         val all = items()
         assumeTrue(all.size >= 200)
-        val results = run(all, wantTempo = true, wantKey = true)
+        // CORPUS_KEY=0 pula o tom (a parte lenta) quando só o andamento mudou.
+        val results = run(all, wantTempo = true, wantKey = System.getenv("CORPUS_KEY") != "0")
         val text = buildString {
             for (scope in listOf("train", "holdout", "all")) {
                 val subset = results.filter { scope == "all" || (scope == "holdout") == it.item.holdout }
                 val tempo = subset.filter { it.item.bpm != null }
                 val keys = subset.filter { it.item.key != null }
                 appendLine("$scope tempo n=${tempo.size} tight1pct=${fmt(tempo.count { abs(it.bpm - it.item.bpm!!) / it.item.bpm!! <= 0.01 }.toDouble() / tempo.size)} acc1=${fmt(tempo.count { acc1(it.item.bpm!!, it.bpm) }.toDouble() / tempo.size)} acc2=${fmt(tempo.count { acc2(it.item.bpm!!, it.bpm) }.toDouble() / tempo.size)}")
-                val weights = keys.map { mirexWeight(it.key, normalizeKeyName(it.item.key!!)) }
-                appendLine("$scope key n=${keys.size} mirex=${fmt(weights.average())} exact=${fmt(weights.count { it == 1.0 }.toDouble() / keys.size)}")
+                val weights = keys.filter { it.key.isNotEmpty() }.map { mirexWeight(it.key, normalizeKeyName(it.item.key!!)) }
+                if (weights.isNotEmpty()) appendLine("$scope key n=${weights.size} mirex=${fmt(weights.average())} exact=${fmt(weights.count { it == 1.0 }.toDouble() / weights.size)}")
                 tempo.groupBy { it.item.family }.toSortedMap().forEach { (name, group) ->
                     appendLine("  $scope fam $name n=${group.size} acc1=${fmt(group.count { acc1(it.item.bpm!!, it.bpm) }.toDouble() / group.size)} acc2=${fmt(group.count { acc2(it.item.bpm!!, it.bpm) }.toDouble() / group.size)}")
                 }
@@ -77,7 +80,16 @@ class CorpusV2Test {
         }
         File(root, "metrics-v2.txt").writeText(text)
         println(text)
-        val acc1 = results.filter { it.item.bpm != null }.let { rows -> rows.count { acc1(it.item.bpm!!, it.bpm) }.toDouble() / rows.size }
-        assertTrue("acc1 $acc1", acc1 >= 0.40)
+        val rows = results.filter { it.item.bpm != null }
+        val acc1 = rows.count { acc1(it.item.bpm!!, it.bpm) }.toDouble() / rows.size
+        val acc2 = rows.count { acc2(it.item.bpm!!, it.bpm) }.toDouble() / rows.size
+        // Pisos abaixo do medido (todas as faixas: 0,868 e 0,955; holdout 0,894 e 0,947).
+        assertTrue("acc1 $acc1", acc1 >= 0.82)
+        assertTrue("acc2 $acc2", acc2 >= 0.92)
+        val keyed = results.filter { it.key.isNotEmpty() }
+        if (keyed.isNotEmpty()) {
+            val mirex = keyed.map { mirexWeight(it.key, normalizeKeyName(it.item.key!!)) }.average()
+            assertTrue("mirex $mirex", mirex >= 0.58)
+        }
     }
 }

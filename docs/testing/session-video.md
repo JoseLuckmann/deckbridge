@@ -48,3 +48,25 @@ Limites: heurística validada em duas faixas house reais e num teste sintético 
 - **Engine:** sair de um loop com SLIP ligado agora volta à posição sem loop (antes só voltava ao desligar o SLIP). Teste do áudio: o trecho do loop de 2 batidas se repete (correlação 0,89 contra 0,06 sem loop).
 - **App:** o pitch bend do prato fora do modo vinil era permanente; agora é temporário (volta ao tempo do fader 150 ms depois do último passo).
 - Limites: o prato no modo vinil (padrão do app) desloca a posição em passos de 5 ms por unidade; o SLIP é ligado pela tela (a DDJ-400 do mapa pinado não tem botão de SLIP). Só simulação.
+
+## Set completo de seis faixas (23/10/2026)
+
+Seis faixas de teste (as duas dos vídeos anteriores e quatro novas) tocadas do começo ao fim, sem saltar trechos, em dois decks que se alternam. O DJ é automático (`SetAgent`): cada transição é planejada com o estado real do modelo e executada por mensagens MIDI da DDJ-400 e toques na tela, sem SYNC.
+
+Ordem: t5 (126 BPM, Gm), t4 (128, Gm), t6 (128, Bbm), t1 (130, Bbm), t2 (129, Abm), t3 (135, Gm). Duração: 26,3 min.
+
+Cada transição, na ordem em que acontece:
+
+1. BROWSE, giro do encoder e LOAD da próxima faixa no deck livre, hot cue 1 (primeira batida, quantizado).
+2. O BPM da faixa nova é igualado ao que toca pelo fader de tempo (passa do ponto, volta e acerta), com o fader do canal embaixo, o EQ LOW fechado e o filtro em passa-altas.
+3. O PLAY cai na linha de um compasso múltiplo de 8 da faixa que toca, corrigido pelo desvio medido entre os ataques reais e a grade (`tools/onset_offsets.py`), que é o "ouvido" do DJ. Nas transições 1 e 4 a entrada é 12 ms atrasada e dois passos do prato (5 ms cada) corrigem.
+4. O fader do canal sobe devagar em dois compassos, o filtro abre em oito.
+5. Troca de grave no meio da sobreposição (16 a 19 compassos, conforme a faixa), o deck novo vira master.
+6. Um efeito diferente na saída de cada transição: filtro fechando e eco; roll de loop com slip (8, 4, 2, 1, 1/2, 1/4 de batida); RMX Noise UP com roll de bumbo e palma; eco de reverb e fader descendo; Color FX DUB ECHO.
+7. O deck que saiu para ao fim da faixa; a faixa que ficou volta devagar ao tempo original em 16 compassos.
+
+O final repete o roll com slip, mais o eco Spiral e o fader fechando. Cada faixa ganha o ganho automático do app (alvo −10 LUFS).
+
+`checks.txt`: a fase entre os decks seis compassos depois de cada entrada ficou entre −2,0 e +0,1 ms (grade do analisador mais o desvio medido; não é medida independente do áudio).
+
+Limites: o roteiro não olha para a estrutura musical das faixas (o analisador só marca intro e fim), só para a grade; o Color FX e o EQ são o modelo de estudo do app. Só simulação no host.

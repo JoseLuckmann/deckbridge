@@ -56,7 +56,7 @@ fun analyzeTrack(samples: FloatArray, rate: Int): TrackRead {
     val kick = kickFlux(samples, rate)
     val full = fullBandFlux(samples, rate)
     val peaks = strongPeaks(kick.values, kick.rate)
-    val firstPick = pickBpm(kick.values, kick.rate, peaks, onsetTempo(samples, rate))
+    val firstPick = pickBpm(kick.values, kick.rate, peaks, onsetTempo(samples, rate, kick.values, kick.rate))
     val phaseFix = refineGridPhase(samples, rate, firstPick.bpm, firstPick.phase)
     val bpmPick = if (phaseFix == null) firstPick else firstPick.copy(phase = phaseFix.first)
     // Com a fase corrigida, os picos de referência passam a ser os da figura que escolhemos.
@@ -94,7 +94,7 @@ internal fun estimateTempo(samples: FloatArray, rate: Int): Double {
     if (samples.size < rate / 2 || rate < 8000) return 0.0
     val kick = kickFlux(samples, rate)
     val peaks = strongPeaks(kick.values, kick.rate)
-    return pickBpm(kick.values, kick.rate, peaks, onsetTempo(samples, rate)).bpm
+    return pickBpm(kick.values, kick.rate, peaks, onsetTempo(samples, rate, kick.values, kick.rate)).bpm
 }
 
 fun structurePoints(low: DoubleArray, high: DoubleArray, windowSec: Double): StructurePoints {
@@ -204,23 +204,24 @@ private fun refineGridPhase(samples: FloatArray, rate: Int, bpm: Double, phase: 
         (energy / hop).toFloat()
     }
     val body = profile(Flux(bodyEnergy, frameRate))
-    var coarse = 0
-    for (index in 1 until steps) if (body[index] > body[coarse]) coarse = index
     val floor = body.min()
     // Sem contraste entre o bumbo e o resto da batida, não há o que corrigir.
-    if (body[coarse] - floor < 0.4) return null
-    // O ataque (clique) fica até 40 ms antes do máximo do corpo.
-    var best = coarse
-    var bestClick = -1.0
-    for (back in 0..(0.04 * frameRate).roundToInt()) {
-        val index = Math.floorMod(coarse - back, steps)
-        if (clickProfile[index] > bestClick) {
-            bestClick = clickProfile[index]
+    if (body.max() - floor < 0.4) return null
+    // O ataque (clique) está no início do bumbo e o corpo (100 a 250 Hz) tem o máximo cerca de 18 ms depois. Soma o
+    // clique (60%) com o corpo deslocado (40%): o clique sozinho empata com o chapéu no contratempo, o corpo sozinho
+    // vaza o baixo no contratempo. Só vale onde há corpo grave na mesma batida (fluxo de 40 a 150 Hz).
+    val lead = (0.018 * frameRate).roundToInt()
+    var best = -1
+    var bestScore = -1.0
+    for (index in 0 until steps) {
+        if (lowProfile[index] < 0.5) continue
+        val value = 0.6 * clickProfile[index] + 0.4 * body[Math.floorMod(index + lead, steps)]
+        if (value > bestScore) {
+            bestScore = value
             best = index
         }
     }
-    // Precisa ter corpo grave na mesma batida; um clique sozinho no contratempo é chapéu.
-    if (lowProfile[best] < 0.5) return null
+    if (best < 0) return null
     val currentShift = ((phase * frameRate).roundToInt()).let { Math.floorMod(it, steps) }
     val gap = Math.floorMod(best - currentShift, steps).let { min(it, steps - it) }
     if (gap < (0.015 * frameRate).roundToInt()) return null
@@ -437,7 +438,8 @@ private fun structureEnvelope(samples: FloatArray, rate: Int): StructEnv {
     return StructEnv(low, high, window)
 }
 
-private fun pickBpm(env: FloatArray, envRate: Double, peaks: DoubleArray, forced: Double = 0.0): BpmPick {
+private fun pickBpm(env: FloatArray, envRate: Double, peaks: DoubleArray, seed: TempoSeed? = null): BpmPick {
+    val forced = seed?.bpm ?: 0.0
     if (env.size < 8) return BpmPick(0.0, 0.0, 0.0)
     val minLag = max(1, (envRate * 60.0 / 190.0).roundToInt())
     val maxLag = min(env.size / 2, (envRate * 60.0 / 80.0).roundToInt())
@@ -502,7 +504,18 @@ private fun pickBpm(env: FloatArray, envRate: Double, peaks: DoubleArray, forced
         found
     }
     val (phase, _) = coverage(peaks, local, duration, 72)
-    val refined = refineTempo(peaks, local, phase, duration)
+    // O período vindo do envelope já foi refinado na faixa inteira (refineByGrid); a inclinação dos picos do bumbo só
+    // refina o pente antigo.
+    val refined = if (seed == null) {
+        refineTempo(peaks, local, phase, duration)
+    } else {
+        // Dois candidatos: o do envelope e o refinado pela inclinação dos picos do bumbo; vale o que mantém mais
+        // ataques na grade em toda a faixa. Depois um polimento fino (±0,15 BPM, passo de 0,005).
+        val fromKick = refineTempo(peaks, local, phase, duration).first
+        val pick = if (seed.scorer.score(fromKick) > seed.scorer.score(local)) fromKick else local
+        val polished = seed.scorer.polish(pick, 0.15, 0.005)
+        polished to coverage(peaks, polished, duration, 120).first
+    }
     val confidence = if (mean <= 1e-12) 0.0 else (scores[lags.first()] / mean).coerceIn(0.0, 99.0)
     return BpmPick(refined.first, confidence, refined.second)
 }

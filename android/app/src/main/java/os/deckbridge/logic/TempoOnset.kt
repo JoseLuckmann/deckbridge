@@ -200,10 +200,12 @@ private fun combScore(acf: DoubleArray, rateEnv: Double, bpm: Double): Double {
 }
 
 /** BPM pelo envelope multibanda: pente de 60 a 200 BPM (passo de 0,5) vezes o prior, depois refino de ±1 BPM a 0,05. */
-internal fun onsetTempo(samples: FloatArray, rate: Int): Double {
-    val envelope = onsetEnvelope(samples, rate) ?: return 0.0
+internal class TempoSeed(val bpm: Double, val scorer: GridScorer)
+
+internal fun onsetTempo(samples: FloatArray, rate: Int, kick: FloatArray? = null, kickRate: Double = 0.0): TempoSeed? {
+    val envelope = onsetEnvelope(samples, rate) ?: return null
     val maxLag = (envelope.rate * 60.0 / 50.0 * 4.0).toInt() + 4
-    if (envelope.values.size < maxLag * 2) return 0.0
+    if (envelope.values.size < maxLag * 2) return null
     val acf = envelopeAcf(envelope.values, maxLag)
     var best = 0.0
     var bestScore = -1.0
@@ -227,5 +229,67 @@ internal fun onsetTempo(samples: FloatArray, rate: Int): Double {
         }
         candidate += 0.05
     }
-    return refined
+    return TempoSeed(refined, GridScorer(envelope.values, envelope.rate, kick, kickRate))
+}
+
+/**
+ * O pente de autocorrelação tem a resolução de um quadro do envelope (11,6 ms): 0,1 BPM de erro desloca o fim de uma
+ * faixa de cinco minutos em cerca de 0,3 s. O período é refinado na faixa inteira: a pontuação de um BPM soma o
+ * envelope numa grade regular (melhor de 24 fases); o valor certo mantém as batidas em cima dos ataques até o fim.
+ * Dois envelopes em pé de igualdade (cada um dividido pela sua média): o multibanda e o fluxo do bumbo.
+ */
+internal class GridScorer(private val values: FloatArray, private val rate: Double, private val kick: FloatArray?, private val kickRate: Double) {
+    private val meanMulti = values.average().coerceAtLeast(1e-9)
+    private val meanKick = if (kick == null || kick.isEmpty()) 0.0 else kick.average().coerceAtLeast(1e-12)
+    val duration = values.size / rate
+
+    private fun sample(array: FloatArray, arrayRate: Double, time: Double): Double {
+        val position = time * arrayRate
+        val index = position.toInt()
+        if (index < 0 || index + 1 >= array.size) return 0.0
+        val fraction = position - index
+        return array[index] * (1.0 - fraction) + array[index + 1] * fraction
+    }
+
+    private fun at(time: Double): Double {
+        var total = sample(values, rate, time) / meanMulti
+        if (kick != null && meanKick > 0.0) total += sample(kick, kickRate, time) / meanKick
+        return total
+    }
+
+    fun score(bpm: Double): Double {
+        val beat = 60.0 / bpm
+        var best = 0.0
+        val phases = 24
+        for (step in 0 until phases) {
+            var sum = 0.0
+            var time = beat * step / phases
+            while (time < duration - 0.1) {
+                sum += at(time)
+                time += beat
+            }
+            if (sum > best) best = sum
+        }
+        return best / (duration / beat)
+    }
+
+    /** Melhor BPM em volta de `seed` (passo `step`, `reach` para cada lado), com o vértice da parábola. */
+    fun polish(seed: Double, reach: Double, step: Double): Double {
+        val count = (reach / step).toInt() * 2 + 1
+        val scores = DoubleArray(count)
+        var best = 0
+        for (index in 0 until count) {
+            scores[index] = score(seed - reach + index * step)
+            if (scores[index] > scores[best]) best = index
+        }
+        var out = seed - reach + best * step
+        if (best in 1 until count - 1) {
+            val a = scores[best - 1]
+            val b = scores[best]
+            val c = scores[best + 1]
+            val denominator = a - 2.0 * b + c
+            if (abs(denominator) > 1e-12) out += step * (0.5 * (a - c) / denominator).coerceIn(-0.5, 0.5)
+        }
+        return out
+    }
 }

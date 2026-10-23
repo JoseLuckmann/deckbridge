@@ -8,6 +8,10 @@
 //
 // Formato do ops.tsv (campos separados por TAB):
 //   grid  <deck> <origemSeg> <bpm>
+//   <t>   load <deck> <arquivo>       troca a faixa do deck (índice na linha de comando, modo set)
+//   <t>   gridat <deck> <origem> <bpm>
+//   <t>   trim <deck> <linear>
+//   <t>   colorfx <deck> <tipo>
 //   <t>   pos <deck> <seg>            posição inicial do deck
 //   <t>   play <deck> <0|1>
 //   <t>   seek <deck> <seg>
@@ -37,9 +41,14 @@ namespace {
 
 constexpr int kRate = 48000;
 
-struct Deck {
+struct Audio {
     std::vector<float> left;
     std::vector<float> right;
+};
+
+struct Deck {
+    const std::vector<float> *leftData = nullptr;
+    const std::vector<float> *rightData = nullptr;
     double position = 0.0;
     double pitch = 1.0;
     float volume = 0.f;
@@ -49,10 +58,12 @@ struct Deck {
     double gridBpm = 0.0;
     double loopStart = -1.0;
     double loopEnd = -1.0;
+    float trim = 1.f;  // ganho automático por faixa (o trim da análise de loudness)
 
     void read(double rateMul, float &l, float &r) {
         l = r = 0.f;
-        const int frames = static_cast<int>(left.size());
+        if (leftData == nullptr || rightData == nullptr) return;
+        const int frames = static_cast<int>(leftData->size());
         if (!playing || frames < 4) return;
         if (position < 0.0) position = 0.0;
         if (position >= frames - 2) {
@@ -60,8 +71,8 @@ struct Deck {
             return;
         }
         lastEmitted = position;
-        l = deckbridge::readInterp(left.data(), frames, position);
-        r = deckbridge::readInterp(right.data(), frames, position);
+        l = deckbridge::readInterp(leftData->data(), frames, position) * trim;
+        r = deckbridge::readInterp(rightData->data(), frames, position) * trim;
         position += pitch * rateMul;
         // Loop de batida: ao passar da saída, volta para a entrada mantendo a fração do passo (sem emenda).
         if (loopEnd > loopStart && position >= loopEnd) {
@@ -70,7 +81,7 @@ struct Deck {
     }
 };
 
-bool loadWav(const char *path, Deck &deck) {
+bool loadWav(const char *path, Audio &deck) {
     FILE *file = std::fopen(path, "rb");
     if (file == nullptr) return false;
     char riff[12];
@@ -168,20 +179,34 @@ void writeWav(const char *path, const std::vector<float> &l, const std::vector<f
 }  // namespace
 
 int main(int argc, char **argv) {
-    if (argc < 5) {
-        std::fprintf(stderr, "uso: ddj_session deckA.wav deckB.wav ops.tsv saida.wav\n");
+    // Modo antigo: deckA.wav deckB.wav ops.tsv saida.wav. Modo set: ops.tsv saida.wav faixa0.wav faixa1.wav ...
+    const bool setMode = argc >= 4 && std::string(argv[1]).size() > 4 && std::string(argv[1]).substr(std::string(argv[1]).size() - 4) == ".tsv";
+    if (!setMode && argc < 5) {
+        std::fprintf(stderr, "uso: ddj_session deckA.wav deckB.wav ops.tsv saida.wav | ddj_session ops.tsv saida.wav faixa0.wav ...\n");
         return 2;
     }
+    const char *opsPath = setMode ? argv[1] : argv[3];
+    const char *outPath = setMode ? argv[2] : argv[4];
+    std::vector<Audio> audios;
+    const int firstFile = setMode ? 3 : 1;
+    const int fileCount = setMode ? argc - 3 : 2;
+    audios.resize(static_cast<size_t>(fileCount));
+    for (int index = 0; index < fileCount; ++index) {
+        if (!loadWav(argv[firstFile + index], audios[static_cast<size_t>(index)])) {
+            std::fprintf(stderr, "WAV 48 kHz 16 bit esperado: %s\n", argv[firstFile + index]);
+            return 2;
+        }
+    }
     Deck decks[2];
-    if (!loadWav(argv[1], decks[0]) || !loadWav(argv[2], decks[1])) {
-        std::fprintf(stderr, "WAV 48 kHz 16 bit esperado\n");
-        return 2;
+    for (int d = 0; d < 2 && d < fileCount; ++d) {
+        decks[d].leftData = &audios[static_cast<size_t>(d)].left;
+        decks[d].rightData = &audios[static_cast<size_t>(d)].right;
     }
     const bool drumsOk = loadDrums();
     std::fprintf(stderr, "bateria gravada: %s\n", drumsOk ? "ok" : "incompleta");
     std::vector<Op> ops;
     {
-        FILE *file = std::fopen(argv[3], "r");
+        FILE *file = std::fopen(opsPath, "r");
         if (file == nullptr) return 2;
         char line[2048];
         while (std::fgets(line, sizeof(line), file) != nullptr) {
@@ -232,7 +257,7 @@ int main(int argc, char **argv) {
     long nan = 0;
     double peak = 0.0;
     // Picos por janela de 50 ms para os medidores da tela: canal 1, canal 2, master E, master D.
-    std::string levelsPath = std::string(argv[4]) + ".levels.tsv";
+    std::string levelsPath = std::string(outPath) + ".levels.tsv";
     FILE *levels = std::fopen(levelsPath.c_str(), "w");
     float win[4] = {0.f, 0.f, 0.f, 0.f};
     for (long i = 0; i < total; ++i) {
@@ -247,6 +272,24 @@ int main(int argc, char **argv) {
                 decks[deckOf()].playing = a[1] > 0.5;
             } else if (op.name == "seek" && a.size() >= 2) {
                 decks[deckOf()].position = std::max(0.0, a[1] * kRate);
+            } else if (op.name == "load" && a.size() >= 2) {
+                const int file = static_cast<int>(a[1]);
+                if (file >= 0 && file < fileCount) {
+                    Deck &target = decks[deckOf()];
+                    target.leftData = &audios[static_cast<size_t>(file)].left;
+                    target.rightData = &audios[static_cast<size_t>(file)].right;
+                    target.position = 0.0;
+                    target.playing = false;
+                    target.pitch = 1.0;
+                    target.loopStart = target.loopEnd = -1.0;
+                }
+            } else if (op.name == "trim" && a.size() >= 2) {
+                decks[deckOf()].trim = static_cast<float>(a[1]);
+            } else if (op.name == "gridat" && a.size() >= 3) {
+                decks[deckOf()].gridOrigin = a[1];
+                decks[deckOf()].gridBpm = a[2];
+            } else if (op.name == "colorfx" && a.size() >= 2) {
+                mix.setColorKind(deckOf(), static_cast<int>(a[1]));
             } else if (op.name == "loop" && a.size() >= 3) {
                 decks[deckOf()].loopStart = a[1] * kRate;
                 decks[deckOf()].loopEnd = a[2] > a[1] ? a[2] * kRate : -1.0;
@@ -319,7 +362,7 @@ int main(int argc, char **argv) {
         outR[outR.size() - 1 - static_cast<size_t>(i)] *= 1.f - g;
     }
     if (levels != nullptr) std::fclose(levels);
-    writeWav(argv[4], outL, outR);
+    writeWav(outPath, outL, outR);
     std::printf("segundos %.1f pico %.3f nan %ld ops %zu\n", endAt, peak, nan, ops.size());
     return nan == 0 ? 0 : 1;
 }
