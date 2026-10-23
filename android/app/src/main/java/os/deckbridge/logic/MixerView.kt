@@ -13,7 +13,16 @@ data class MixerState(
     val headLevel: Float = 0.75f,
     val filter: List<Int> = listOf(64, 64),
     val colorFx: Int = 5,
+    /** Picos já convertidos para 0..1 da escala do medidor: canal 1, canal 2, master E, master D. */
+    val levels: List<Float> = listOf(0f, 0f, 0f, 0f),
 )
+
+/** Pico linear para a posição do medidor: −48 dBFS embaixo, 0 dBFS em cima. */
+fun meterFraction(peak: Float): Float {
+    if (peak <= 0f) return 0f
+    val db = 20f * log10(peak)
+    return ((db + 48f) / 48f).coerceIn(0f, 1f)
+}
 
 val EQ_BAND_NAMES = listOf("LOW", "MID", "HI")
 
@@ -51,7 +60,7 @@ fun headLevelDbLabel(knob: Float): String {
 fun headMixLabel(mix: Float): String = when {
     mix < 0.08f -> "CUE"
     mix > 0.92f -> "MASTER"
-    else -> "%d%% MASTER".format((mix * 100).toInt())
+    else -> "%d%%".format((mix * 100).toInt())
 }
 
 fun crossfaderLabel(cross: Float): String = when {

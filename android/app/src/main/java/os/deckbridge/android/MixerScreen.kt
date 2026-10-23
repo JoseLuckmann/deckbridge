@@ -40,12 +40,18 @@ import os.deckbridge.logic.trimDbLabel
  * Mostra o que a DDJ-400 manda e aceita toque, para o aluno ver o nome do controle que mexe.
  */
 @Composable
-fun MixerScreen(mixer: MixerState, onKnob: (PerformanceAction) -> Unit, onClose: () -> Unit) {
+fun MixerScreen(mixer: MixerState, onKnob: (PerformanceAction) -> Unit, onColorFx: (Int) -> Unit, onClose: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Color(StagePalette.bg)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextInk("MIXER", color = Color(StagePalette.accentBlue), fontSize = 20.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            TextInk("COLOR FX ${COLOR_FX_NAMES.getOrElse(mixer.colorFx) { "FILTER" }}", fontSize = 13.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(end = 12.dp))
             UtilityButton("FECHAR", onClose)
+        }
+        // COLOR FX: o tipo vale para os dois canais; o knob FILTER de cada canal faz o resto.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextInk("COLOR FX", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted), modifier = Modifier.width(84.dp))
+            COLOR_FX_NAMES.forEachIndexed { index, name ->
+                UtilityButton(name, { onColorFx(index) }, selected = mixer.colorFx == index, modifier = Modifier.weight(1f))
+            }
         }
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Channel(0, mixer, onKnob, Modifier.weight(1f))
@@ -77,6 +83,7 @@ private fun Channel(deck: Int, mixer: MixerState, onKnob: (PerformanceAction) ->
             Bar("FADER", mixer.volume[deck], "%d%%".format((mixer.volume[deck] * 100).toInt()), false, Modifier.weight(1f)) {
                 onKnob(PerformanceAction(deck, PerformanceAction.Kind.VOLUME, slider = it.toDouble()))
             }
+            Meter("LVL", listOf(mixer.levels[deck]), Modifier.width(30.dp))
         }
     }
 }
@@ -93,6 +100,7 @@ private fun Center(mixer: MixerState, onKnob: (PerformanceAction) -> Unit, modif
                 onKnob(PerformanceAction(-1, PerformanceAction.Kind.HEAD_GAIN, slider = it.toDouble()))
             }
         }
+        Meter("MASTER", listOf(mixer.levels[2], mixer.levels[3]), Modifier.height(90.dp).fillMaxWidth())
         TextInk("CROSSFADER", fontSize = 11.sp, color = Color(StagePalette.inkMuted))
         TextInk(crossfaderLabel(mixer.cross), fontSize = 14.sp, weight = FontWeight.Bold, mono = true)
         Canvas(Modifier.fillMaxWidth().height(14.dp).background(Color(StagePalette.bg)).border(1.dp, Color(StagePalette.line))) {
@@ -129,5 +137,28 @@ private fun Bar(label: String, knob: Float, text: String, centred: Boolean, modi
             }
         }
         TextInk(label, fontSize = 12.sp, weight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+/** Medidor de pico: verde até −9 dB, amarelo até −3 dB, vermelho acima. Uma barra por canal de áudio. */
+@Composable
+private fun Meter(label: String, fractions: List<Float>, modifier: Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Canvas(Modifier.weight(1f).fillMaxWidth().padding(vertical = 4.dp).background(Color(StagePalette.bg)).border(1.dp, Color(StagePalette.line))) {
+            val gap = 3f
+            val barWidth = (size.width - gap * (fractions.size + 1)) / fractions.size
+            fractions.forEachIndexed { index, value ->
+                val x = gap + index * (barWidth + gap)
+                val top = size.height * (1f - value.coerceIn(0f, 1f))
+                val green = size.height * (1f - 0.8125f)
+                val yellow = size.height * (1f - 0.9375f)
+                if (value > 0f) {
+                    drawRect(Color(0xFF3FBF6B), Offset(x, maxOf(top, green)), Size(barWidth, size.height - maxOf(top, green)))
+                    if (top < green) drawRect(Color(0xFFE8C23A), Offset(x, maxOf(top, yellow)), Size(barWidth, green - maxOf(top, yellow)))
+                    if (top < yellow) drawRect(Color(0xFFE5484D), Offset(x, top), Size(barWidth, yellow - top))
+                }
+            }
+        }
+        TextInk(label, fontSize = 10.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
     }
 }

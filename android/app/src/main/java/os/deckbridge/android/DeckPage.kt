@@ -103,6 +103,7 @@ fun DeckPage(
     var trimKnobs by remember { mutableStateOf(listOf(0.5f, 0.5f)) }
     var headMix by remember { mutableStateOf(0f) }
     var headLevel by remember { mutableStateOf(0.75f) }
+    var levels by remember { mutableStateOf(listOf(0f, 0f, 0f, 0f)) }
     var pflA by remember { mutableStateOf(false) }
     var pflB by remember { mutableStateOf(false) }
     var faces by remember { mutableStateOf(listOf(DeckFace(), DeckFace())) }
@@ -819,6 +820,17 @@ fun DeckPage(
         }
     }
 
+    // Medidores da tela MIXER: lê os picos do motor 20 vezes por segundo e deixa cair devagar.
+    LaunchedEffect(overlay) {
+        if (overlay != "mixer") return@LaunchedEffect
+        val raw = FloatArray(4)
+        while (true) {
+            NativeEngine.levels(raw)
+            levels = levels.mapIndexed { index, old -> kotlin.math.max(os.deckbridge.logic.meterFraction(raw[index]), old * 0.82f) }
+            delay(50)
+        }
+    }
+
     // Deck com SYNC ligado segue o tempo do líder enquanto o líder mexe no pitch.
     LaunchedEffect(pitchA, pitchB, master, faces[0].sync, faces[1].sync) {
         for (deck in 0..1) {
@@ -904,6 +916,7 @@ fun DeckPage(
             headLevel = headLevel,
             filter = listOf(faces[0].filter, faces[1].filter),
             colorFx = settings.colorFx,
+            levels = levels,
         ),
         onMixerKnob = { action -> onPerformance(action) },
         catalog = catalog,

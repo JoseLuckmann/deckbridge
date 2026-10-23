@@ -186,6 +186,12 @@ object NativeEngine {
         return nativeRecordPoll()
     }
 
+    /** Picos lineares desde a última leitura: canal 1, canal 2, master E, master D. */
+    fun levels(dest: FloatArray) {
+        if (!loaded || dest.size < 4) return
+        nativeLevels(dest)
+    }
+
     fun recordPull(dest: FloatArray): Int {
         if (!loaded) return 0
         return nativeRecordPull(dest)
@@ -248,6 +254,7 @@ object NativeEngine {
     private external fun nativeNudge(deck: Int, seconds: Float)
     private external fun nativeSetBeatFx(effect: Int, on: Boolean, level: Int, channel: Int, bpm: Float, beats: Float)
     private external fun nativeSetFilter(deck: Int, norm: Float)
+    private external fun nativeLevels(dest: FloatArray)
     private external fun nativeSetEq(deck: Int, low: Float, mid: Float, high: Float)
     private external fun nativeSetTrimKnob(deck: Int, norm: Float)
     private external fun nativeSetHead(mix: Float, level: Float)

@@ -297,7 +297,7 @@ fun PlayerScreen(
         } else if (overlay == "search" && catalog != null) {
             SearchScreen(catalog.tracks, queryText, searchBpm.first, searchBpm.second, searchKey, onQuery, onSearchBpm, onSearchKey, onLoad) { onOverlay("") }
         } else if (overlay == "mixer") {
-            MixerScreen(mixer, onMixerKnob) { onOverlay("") }
+            MixerScreen(mixer, onMixerKnob, { onSettings(settings.copy(colorFx = it)) }) { onOverlay("") }
         } else if (overlay == "history") {
             HistoryScreen(historyRows, { onOverlay("") }, { onHistoryExport(historyCsv(historyRows)) }, { onHistoryExport(historyM3u8(historyRows)) })
         } else if (overlay == "tags") {

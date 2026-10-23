@@ -182,27 +182,19 @@ fun RmxRail(
 fun RmxScreen(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit) {
     val build = rmx.scene < 4
     val accent = Color(if (build) StagePalette.accentOrange else StagePalette.accentBlue)
+    val drumArmed = rmx.xOn && rmx.xMode == 2
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(StagePalette.bg))) {
         val compact = maxWidth < 1400.dp
-        Column(Modifier.fillMaxSize().padding(if (compact) 8.dp else 14.dp)) {
+        val tall = if (compact) 40.dp else 48.dp
+        Column(Modifier.fillMaxSize().padding(if (compact) 8.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextInk("REMIX FX", color = accent, fontSize = if (compact) 16.sp else 22.sp, weight = FontWeight.Bold)
                 TextInk(rmx.sceneName(), fontSize = if (compact) 14.sp else 18.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 12.dp), maxLines = 1)
                 UtilityButton("FECHAR", onClose)
             }
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                SceneDial(rmx.intensity, rmx.sceneName(), accent, Modifier.width(if (compact) 148.dp else 196.dp).height(if (compact) 148.dp else 196.dp))
-                Column(Modifier.weight(1f)) {
-                    TextInk(if (build) "BUILD-UP" else "BREAK-DOWN", fontSize = 14.sp, color = accent, weight = FontWeight.Bold)
-                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        SCENE_BARS.forEach { bars ->
-                            MiniChoice("$bars", rmx.bars == bars, Modifier.weight(1f).height(48.dp)) { onRmx(rmx.copy(bars = bars)) }
-                        }
-                    }
-                    TextInk("${rmx.bars} compassos · ${(rmx.intensity * 100).toInt()}%", fontSize = if (compact) 14.sp else 18.sp, modifier = Modifier.padding(top = 8.dp))
-                }
-            }
-            Row(Modifier.padding(top = 8.dp).height(if (compact) 108.dp else 132.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // SCENE FX: o dial mostra a intensidade, os oito pads seguram a cena enquanto estão apertados.
+            Row(Modifier.fillMaxWidth().height(if (compact) 104.dp else 132.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SceneDial(rmx.intensity, rmx.sceneName(), accent, Modifier.width(if (compact) 104.dp else 132.dp).fillMaxHeight())
                 SCENE_NAMES.forEachIndexed { index, name ->
                     val hot = rmx.scene == index && rmx.holding
                     val tone = Color(if (index < 4) StagePalette.accentOrange else StagePalette.accentBlue)
@@ -211,60 +203,66 @@ fun RmxScreen(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit) {
                     }
                 }
             }
-            TextInk(
-                if (rmx.xOn && rmx.xMode == 2) "DRUM  ${drumPatternLabel(rmx)}  ·  ${(rmx.drumBuild * 100).toInt()}%"
-                else "X-PAD",
-                fontSize = 11.sp,
-                color = Color(if (rmx.xOn && rmx.xMode == 2) StagePalette.accentOrange else StagePalette.inkMuted),
-                modifier = Modifier.padding(top = 6.dp),
-            )
-            if (rmx.xOn && rmx.xMode == 2) {
-                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    DRUM_VOICES.forEachIndexed { index, name ->
-                        MiniChoice(name, rmx.drumVoice == index, Modifier.weight(1f)) {
-                            onRmx(rmx.copy(drumVoice = index, xMode = 2, xOn = true, panel = true))
+            RmxSection(if (build) "BUILD-UP  ·  ${rmx.bars} compassos até o máximo  ·  ${(rmx.intensity * 100).toInt()}%" else "BREAK-DOWN  ·  ${rmx.bars} compassos até o máximo  ·  ${(rmx.intensity * 100).toInt()}%", accent) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SCENE_BARS.forEach { bars ->
+                        MiniChoice("$bars", rmx.bars == bars, Modifier.weight(1f).height(tall), big = true) { onRmx(rmx.copy(bars = bars)) }
+                    }
+                }
+            }
+            // X-PAD: o modo, a fração do tempo e, no modo Drum, o desenho do build.
+            RmxSection(if (drumArmed) "X-PAD  ·  DRUM  ${drumPatternLabel(rmx)}" else "X-PAD  ·  ${XPAD_NAMES.getOrElse(rmx.xMode) { "" }}${if (rmx.xOn) "  (ligado)" else ""}", if (drumArmed) accent else Color(StagePalette.inkMuted)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    XPAD_NAMES.forEachIndexed { index, name ->
+                        MiniChoice(if (index == 2 && rmx.xOn && rmx.xMode == 2) "DRUM ▶" else name, rmx.xOn && rmx.xMode == index, Modifier.weight(1f).height(tall), big = true) {
+                            onRmx(rmx.copy(xMode = index, xOn = !(rmx.xOn && rmx.xMode == index), panel = true, drumBuild = if (index == 2 && rmx.drumBuild < 0.2f) 1f else rmx.drumBuild))
                         }
                     }
                 }
-                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    XBEAT_LABELS.forEachIndexed { index, label ->
+                        MiniChoice(label, rmx.xBeat == index, Modifier.weight(1f).height(tall), big = true) { onRmx(rmx.copy(xBeat = index)) }
+                    }
+                }
+                // Escolhas do drum build: sempre visíveis; escolher aqui não dispara o gesto.
+                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DRUM_VOICES.forEachIndexed { index, name ->
+                        MiniChoice(name, rmx.drumVoice == index, Modifier.weight(1f).height(tall), big = true) { onRmx(rmx.copy(drumVoice = index)) }
+                    }
                     listOf(4, 8, 16).forEach { bars ->
-                        MiniChoice("${bars}c", rmx.drumBars == bars, Modifier.weight(1f)) { onRmx(rmx.copy(drumBars = bars)) }
+                        MiniChoice("${bars}c", rmx.drumBars == bars, Modifier.weight(0.7f).height(tall), big = true) { onRmx(rmx.copy(drumBars = bars)) }
                     }
-                    MiniChoice(if (rmx.drumGap) "GAP" else "SEM GAP", rmx.drumGap, Modifier.weight(1.2f)) { onRmx(rmx.copy(drumGap = !rmx.drumGap)) }
-                    MiniChoice(if (rmx.drumPitch) "PITCH" else "TOM", rmx.drumPitch, Modifier.weight(1f)) { onRmx(rmx.copy(drumPitch = !rmx.drumPitch)) }
+                    MiniChoice(if (rmx.drumGap) "GAP" else "SEM GAP", rmx.drumGap, Modifier.weight(1f).height(tall), big = true) { onRmx(rmx.copy(drumGap = !rmx.drumGap)) }
+                    MiniChoice(if (rmx.drumPitch) "PITCH" else "TOM", rmx.drumPitch, Modifier.weight(1f).height(tall), big = true) { onRmx(rmx.copy(drumPitch = !rmx.drumPitch)) }
                 }
             }
-            Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                XBEAT_LABELS.forEachIndexed { index, label ->
-                    MiniChoice(label, rmx.xBeat == index, Modifier.weight(1f)) { onRmx(rmx.copy(xBeat = index)) }
-                }
-            }
-            Row(Modifier.padding(top = 4.dp).height(if (compact) 36.dp else 48.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                XPAD_NAMES.forEachIndexed { index, name ->
-                    MiniChoice(name, rmx.xOn && rmx.xMode == index, Modifier.weight(1f).fillMaxHeight()) {
-                        onRmx(rmx.copy(xMode = index, xOn = !(rmx.xOn && rmx.xMode == index), panel = true))
-                    }
-                }
-            }
-            Row(Modifier.weight(1f).fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                IsolatorColumn("CH 1", rmx.low[0], rmx.mid[0], rmx.high[0], Modifier.weight(1f)) { band, value ->
+            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                IsolatorColumn("ISOLATE  CH 1", rmx.low[0], rmx.mid[0], rmx.high[0], Modifier.weight(1f)) { band, value ->
                     onRmx(rmx.copy(low = rmx.low.setAt(0, if (band == 0) value else rmx.low[0]), mid = rmx.mid.setAt(0, if (band == 1) value else rmx.mid[0]), high = rmx.high.setAt(0, if (band == 2) value else rmx.high[0])))
                 }
-                IsolatorColumn("CH 2", rmx.low[1], rmx.mid[1], rmx.high[1], Modifier.weight(1f)) { band, value ->
+                IsolatorColumn("ISOLATE  CH 2", rmx.low[1], rmx.mid[1], rmx.high[1], Modifier.weight(1f)) { band, value ->
                     onRmx(rmx.copy(low = rmx.low.setAt(1, if (band == 0) value else rmx.low[1]), mid = rmx.mid.setAt(1, if (band == 1) value else rmx.mid[1]), high = rmx.high.setAt(1, if (band == 2) value else rmx.high[1])))
                 }
             }
-            Row(Modifier.padding(top = 8.dp).height(48.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextInk("RELEASE", fontSize = 11.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 58.dp else 72.dp))
-                MiniChoice("BRAKE", rmx.release == 0, Modifier.weight(1f).fillMaxHeight()) { onRmx(rmx.copy(release = if (rmx.release == 0) -1 else 0, panel = true)) }
-                MiniChoice("ECHO OUT", rmx.release == 1, Modifier.weight(1f).fillMaxHeight()) { onRmx(rmx.copy(release = if (rmx.release == 1) -1 else 1, panel = true)) }
-                MiniChoice("BACKSPIN", rmx.release == 2, Modifier.weight(1f).fillMaxHeight()) { onRmx(rmx.copy(release = if (rmx.release == 2) -1 else 2, panel = true)) }
-                MiniChoice(if (rmx.gate) "GATE ON" else "GATE", rmx.gate, Modifier.weight(1f).fillMaxHeight()) { onRmx(rmx.copy(gate = !rmx.gate)) }
+            Row(Modifier.height(tall), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextInk("RELEASE FX", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 78.dp else 96.dp))
+                MiniChoice("BRAKE", rmx.release == 0, Modifier.weight(1f).fillMaxHeight(), big = true) { onRmx(rmx.copy(release = if (rmx.release == 0) -1 else 0, panel = true)) }
+                MiniChoice("ECHO OUT", rmx.release == 1, Modifier.weight(1f).fillMaxHeight(), big = true) { onRmx(rmx.copy(release = if (rmx.release == 1) -1 else 1, panel = true)) }
+                MiniChoice("BACKSPIN", rmx.release == 2, Modifier.weight(1f).fillMaxHeight(), big = true) { onRmx(rmx.copy(release = if (rmx.release == 2) -1 else 2, panel = true)) }
+                MiniChoice(if (rmx.gate) "GATE ON" else "GATE", rmx.gate, Modifier.weight(1f).fillMaxHeight(), big = true) { onRmx(rmx.copy(gate = !rmx.gate)) }
                 listOf("1" to 0, "2" to 1, "MST" to 2).forEach { (label, channel) ->
-                    MiniChoice(label, rmx.channel == channel, Modifier.width(if (compact) 36.dp else 48.dp).fillMaxHeight()) { onRmx(rmx.copy(channel = channel)) }
+                    MiniChoice(label, rmx.channel == channel, Modifier.width(if (compact) 44.dp else 60.dp).fillMaxHeight(), big = true) { onRmx(rmx.copy(channel = channel)) }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RmxSection(title: String, accent: Color, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(8.dp)) {
+        TextInk(title, fontSize = 12.sp, weight = FontWeight.Bold, color = accent, maxLines = 1, modifier = Modifier.padding(bottom = 6.dp))
+        content()
     }
 }
 
@@ -446,14 +444,14 @@ internal fun UtilityButton(label: String, onClick: () -> Unit, selected: Boolean
 }
 
 @Composable
-private fun MiniChoice(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val fill = if (selected) Color(0xFF1A3A68) else Color(StagePalette.panel)
+private fun MiniChoice(label: String, selected: Boolean, modifier: Modifier, big: Boolean = false, onClick: () -> Unit) {
+    val fill = if (selected) Color(0xFF1A3A68) else Color(if (big) StagePalette.panelRaised else StagePalette.panel)
     val ink = if (selected) Color.White else Color(StagePalette.ink)
     Box(
-        modifier.heightIn(min = 26.dp).background(fill).border(1.dp, Color(if (selected) StagePalette.accentBlue else StagePalette.line)).clickable(onClick = onClick).padding(horizontal = 4.dp),
+        modifier.heightIn(min = if (big) 40.dp else 26.dp).background(fill).border(1.dp, Color(if (selected) StagePalette.accentBlue else StagePalette.line)).clickable(onClick = onClick).padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        TextInk(label, color = ink, fontSize = 11.sp, weight = FontWeight.Bold, maxLines = 1)
+        TextInk(label, color = ink, fontSize = if (big) 14.sp else 11.sp, weight = FontWeight.Bold, maxLines = 1)
     }
 }
 

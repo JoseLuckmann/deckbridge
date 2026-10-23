@@ -369,6 +369,10 @@ public:
         headGain_ = k <= 0.01f ? 0.f : std::pow(10.f, (k - 0.75f) * 2.f * 12.f / 20.f);
     }
 
+    void takeLevels(float *out) {
+        for (int index = 0; index < 4; ++index) out[index] = levels_[index].exchange(0.f);
+    }
+
     void setColorKind(int deck, int kind) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         mixFx_.setSampleRate(48000);
@@ -479,6 +483,7 @@ public:
             const bool phonesOpen = channels >= 4;
             phonesAudible_.store(phonesOpen && (decks_[0].pfl || decks_[1].pfl));
             mixFx_.setSampleRate(rate);
+            float peak[4] = {0.f, 0.f, 0.f, 0.f};
             for (int frame = 0; frame < numFrames; ++frame) {
                 mixFx_.beginSample();
                 if (mixFx_.release.active() && mixFx_.release.kind != 1) {
@@ -511,6 +516,10 @@ public:
                 float masterR = ar * (1.f - cross_) * decks_[0].volume + br * cross_ * decks_[1].volume;
                 mixFx_.processMaster(masterL, masterR);
                 masterLimit_.process(masterL, masterR);
+                peak[0] = std::max(peak[0], std::max(std::fabs(al), std::fabs(ar)));
+                peak[1] = std::max(peak[1], std::max(std::fabs(bl), std::fabs(br)));
+                peak[2] = std::max(peak[2], std::fabs(masterL));
+                peak[3] = std::max(peak[3], std::fabs(masterR));
                 liveRate_.store(rate);
                 recorder_.push(masterL, masterR);
                 float phoneL = 0.f;
@@ -539,6 +548,9 @@ public:
                     else if (channel == 3) sample = phoneR;
                     out[frame * channels + channel] = sample;
                 }
+            }
+            for (int index = 0; index < 4; ++index) {
+                if (peak[index] > levels_[index].load()) levels_[index].store(peak[index]);
             }
             return oboe::DataCallbackResult::Continue;
         }
@@ -668,6 +680,8 @@ private:
     std::atomic<int> openedChannels_{0};
     std::atomic<bool> opened_{false};
     std::atomic<bool> phonesAudible_{false};
+    // Picos desde a última leitura: canal 1, canal 2, master E, master D. A thread de áudio só sobe; a tela zera ao ler.
+    std::atomic<float> levels_[4] = {0.f, 0.f, 0.f, 0.f};
     Deck decks_[2];
     deckbridge::MixerFx mixFx_;
     deckbridge::PeakLimiter masterLimit_;
@@ -883,6 +897,14 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeRecordPoll(JNIEnv *env, jobject) {
     const std::string line = engine().pollRecord();
     return env->NewStringUTF(line.c_str());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeLevels(JNIEnv *env, jobject, jfloatArray dest) {
+    if (dest == nullptr || env->GetArrayLength(dest) < 4) return;
+    float values[4];
+    engine().takeLevels(values);
+    env->SetFloatArrayRegion(dest, 0, 4, values);
 }
 
 extern "C" JNIEXPORT jint JNICALL

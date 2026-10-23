@@ -132,6 +132,25 @@ class ScreenShotsTablet {
     }
 
     @Test
+    fun mixerView() {
+        val catalog = simulatedCatalog()
+        val mixer = os.deckbridge.logic.MixerState(
+            eq = listOf(listOf(0.0f, 0.62f, 0.5f), listOf(0.5f, 0.3f, 0.85f)),
+            trim = listOf(0.55f, 0.45f),
+            volume = listOf(0.9f, 0.55f),
+            cross = 0.42f,
+            headMix = 0.35f,
+            headLevel = 0.8f,
+            filter = listOf(64, 30),
+            colorFx = 1,
+            levels = listOf(0.82f, 0.55f, 0.78f, 0.74f),
+        )
+        capture("$PRINTS/mixer.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), overlay = "mixer", nav = "MIXER", mixer = mixer))
+        }
+    }
+
+    @Test
     fun menu() {
         val catalog = simulatedCatalog()
         capture("$PRINTS/menu.png") { activity ->
@@ -354,6 +373,7 @@ private fun player(
     settings: PlayerSettings = PlayerSettings(),
     usbLabel: String = "USB simulado",
     historyIds: List<Int> = emptyList(),
+    mixer: os.deckbridge.logic.MixerState = os.deckbridge.logic.MixerState(),
 ): ComposeView {
     val left = catalog.tracks.first { it.title == leftTitle }
     val right = catalog.tracks.first { it.title == rightTitle }
@@ -383,6 +403,7 @@ private fun player(
     return ComposeView(activity).apply {
         setContent {
             PlayerScreen(
+            mixer = mixer,
                 catalog = catalog,
                 tracks = listOf(left, right),
                 clock = "21:14",

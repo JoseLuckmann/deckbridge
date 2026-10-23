@@ -255,3 +255,13 @@ class SyncPhaseTest {
         org.junit.Assert.assertEquals(0.5, beatPhase(0.25, 0.0, 120.0), 1e-9)
     }
 }
+
+class MeterTest {
+    @org.junit.Test
+    fun meterScaleRunsFromMinus48ToZeroDbfs() {
+        org.junit.Assert.assertEquals(0f, meterFraction(0f), 0f)
+        org.junit.Assert.assertEquals(1f, meterFraction(1f), 1e-6f)
+        org.junit.Assert.assertEquals(0.5f, meterFraction(0.0631f), 0.01f)
+        org.junit.Assert.assertEquals(0f, meterFraction(0.001f), 0f)
+    }
+}
