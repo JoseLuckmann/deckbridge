@@ -71,3 +71,12 @@ Nada existe hoje. Proposta mínima, tudo observável e desligável, sem automati
 - O trainer não pode competir por CPU com o áudio (`spec.md` §3.5). Medir antes de ligar por padrão.
 - Marca: usar nomes de função, não logótipos nem o layout idêntico do LCD.
 - Escuta e controle seguem `BLOCKED_HARDWARE` até o tablet com a DDJ-400.
+
+## 5. Regra de layout (decisão do dono, 23/10/2026)
+
+A tela principal segue o leitor de club: o que ele não mostra não aparece, ou fica discreto e desligado por padrão. Consequências já aplicadas:
+
+- A barra superior voltou a ter SOURCE, BROWSE, TAG LIST, PLAYLIST, SEARCH e MENU. A mesa (EQ, TRIM, fones, medidores) abre só pelo MENU, em Áudio.
+- O RMX abre **acoplado** embaixo, no lugar dos hot cues, do loop e dos cartões dos decks. As duas ondas e a grade ficam à vista, para ver o ponto da música em que a cena entra.
+- Dicas e exercícios do Trainer (ainda sem tela) entram desligados por padrão.
+- Todo ajuste de interface sai com um print (`docs/ui/`, `/opt/cursor/artifacts/prints/`) para avaliação.

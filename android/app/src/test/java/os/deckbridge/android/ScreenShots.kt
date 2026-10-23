@@ -340,6 +340,28 @@ class ScreenShotsTablet {
     }
 }
 
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [33], qualifiers = "w1280dp-h720dp-mdpi")
+class ScreenShotsCompact {
+    @Test
+    fun playerCompact() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/compact-player.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), leftTitle = "Quarto Escuro", posA = 100f))
+        }
+    }
+
+    @Test
+    fun rmxDockCompact() {
+        val catalog = simulatedCatalog()
+        val rmx = RmxState(panel = true, full = true, scene = 1, holding = true, intensity = 0.55f, bars = 8, xOn = true, xMode = 2, drumBuild = 1f)
+        capture("$PRINTS/compact-rmx-dock.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), leftTitle = "Quarto Escuro", posA = 100f, rmx = rmx))
+        }
+    }
+}
+
 private fun capture(path: String, fill: (ScreenshotActivity) -> Unit) {
     val activity = Robolectric.buildActivity(ScreenshotActivity::class.java).setup().get()
     fill(activity)

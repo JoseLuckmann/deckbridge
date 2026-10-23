@@ -169,7 +169,7 @@ fun PlayerScreen(
     val shownNav = nav.ifBlank {
         when {
             overlay == "menu" -> "MENU"
-            overlay == "mixer" -> "MIXER"
+            overlay == "mixer" -> "MENU"
             overlay == "search" -> "SEARCH"
             overlay == "tags" -> "TAG LIST"
             browse != null -> picked.ifBlank { "BROWSE" }
@@ -263,8 +263,11 @@ fun PlayerScreen(
                     modifier = Modifier.width(rail).fillMaxHeight(),
                 )
             }
-            HotCueBand(catalog, tracks, faces, compact, settings.cuePreset, onActive, onHot, onHotUp, Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 6.dp))
-            PerformanceStrip(
+            if (rmx.full) {
+                RmxDock(rmx, onRmx, { onRmx(rmx.copy(full = false)) }, compact, Modifier.fillMaxWidth().height(if (compact) 292.dp else 400.dp).padding(top = if (compact) 3.dp else 6.dp))
+            }
+            if (!rmx.full) HotCueBand(catalog, tracks, faces, compact, settings.cuePreset, onActive, onHot, onHotUp, Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 6.dp))
+            if (!rmx.full) PerformanceStrip(
                 deck = activeDeck,
                 face = faces.getOrElse(activeDeck) { DeckFace() },
                 compact = compact,
@@ -275,7 +278,7 @@ fun PlayerScreen(
                 onBeatLoop = { beats -> onBeatLoop(activeDeck, beats) },
                 onAction = { onDeckAction(activeDeck, it) },
             )
-            Row(
+            if (!rmx.full) Row(
                 Modifier.fillMaxWidth().height(if (compact) 118.dp else 176.dp).padding(top = if (compact) 3.dp else 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -293,7 +296,7 @@ fun PlayerScreen(
             ) { info = false }
         }
         if (overlay == "menu") {
-            MenuScreen(settings, midiLine, onSettings, { onOverlay("") }, onDiagnostics, onTestTone, catalog?.usbWaveNote.orEmpty()) { onOverlay("history") }
+            MenuScreen(settings, midiLine, onSettings, { onOverlay("") }, onDiagnostics, onTestTone, catalog?.usbWaveNote.orEmpty(), { onOverlay("history") }, { onOverlay("mixer") })
         } else if (overlay == "search" && catalog != null) {
             SearchScreen(catalog.tracks, queryText, searchBpm.first, searchBpm.second, searchKey, onQuery, onSearchBpm, onSearchKey, onLoad) { onOverlay("") }
         } else if (overlay == "mixer") {
@@ -303,8 +306,6 @@ fun PlayerScreen(
         } else if (overlay == "tags") {
             val pool = tracks.filterNotNull().ifEmpty { catalog?.tracks.orEmpty() }
             TagScreen(pool, tagNames, tagTrack, onTagTrack, onTag) { onOverlay("") }
-        } else if (rmx.full) {
-            RmxScreen(rmx, onRmx) { onRmx(rmx.copy(full = false)) }
         }
         if (browse != null && catalog != null && overlay.isEmpty() && !rmx.full) {
             BrowseScreen(
@@ -377,7 +378,7 @@ private fun TopBar(
             }
         }
         Row(Modifier.fillMaxWidth().height(if (compact) 44.dp else 60.dp).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            listOf("SOURCE", "BROWSE", "TAG LIST", "PLAYLIST", "SEARCH", "MIXER", "MENU").forEach { label ->
+            listOf("SOURCE", "BROWSE", "TAG LIST", "PLAYLIST", "SEARCH", "MENU").forEach { label ->
                 NavButton(label, compact, nav == label, Modifier.weight(1f)) { onNav(label) }
             }
         }

@@ -58,6 +58,7 @@ fun MenuScreen(
     onTestTone: (Int) -> Unit,
     usbWaveNote: String = "",
     onHistory: () -> Unit = {},
+    onMixer: () -> Unit = {},
 ) {
     var section by remember { mutableIntStateOf(0) }
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(StagePalette.bg))) {
@@ -82,7 +83,7 @@ fun MenuScreen(
                 ) {
                     when (section) {
                         0 -> PlayerPane(settings, wide, usbWaveNote, onSettings)
-                        1 -> AudioPane(settings, wide, onSettings, onTestTone)
+                        1 -> AudioPane(settings, wide, onSettings, onTestTone, onMixer)
                         2 -> ControllerPane(settings, wide, midiLine, onSettings)
                         3 -> LibraryPane(wide)
                         4 -> RecordPane(settings, wide, onSettings)
@@ -348,7 +349,7 @@ private fun PlayerPane(settings: PlayerSettings, wide: Boolean, usbWaveNote: Str
 }
 
 @Composable
-private fun AudioPane(settings: PlayerSettings, wide: Boolean, onSettings: (PlayerSettings) -> Unit, onTestTone: (Int) -> Unit) {
+private fun AudioPane(settings: PlayerSettings, wide: Boolean, onSettings: (PlayerSettings) -> Unit, onTestTone: (Int) -> Unit, onMixer: () -> Unit) {
     PairRow(
         { modifier ->
             GroupCard("Saída", modifier) {
@@ -359,6 +360,10 @@ private fun AudioPane(settings: PlayerSettings, wide: Boolean, onSettings: (Play
                     }
                 }
                 TextInk("Latência real UNKNOWN até o aparelho.", fontSize = 13.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(bottom = 6.dp))
+                // A mesa (EQ, TRIM, fones) não existe na tela de um leitor; fica aqui, fora do caminho do palco.
+                Line("Mesa") {
+                    Chips(listOf("ABRIR EQ / TRIM / FONES" to false)) { onMixer() }
+                }
             }
         },
         { modifier ->

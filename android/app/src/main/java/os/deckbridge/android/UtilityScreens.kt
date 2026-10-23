@@ -178,23 +178,32 @@ fun RmxRail(
     UtilityButton("ABRIR RMX", onOpen, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
 }
 
+/**
+ * RMX acoplado: ocupa o lugar dos hot cues, do loop e dos cartões dos decks. As ondas e a grade
+ * ficam à vista em cima, para o DJ ver o ponto da música em que aplica a cena.
+ */
 @Composable
-fun RmxScreen(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit) {
+fun RmxDock(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit, compact: Boolean, modifier: Modifier = Modifier) {
     val build = rmx.scene < 4
     val accent = Color(if (build) StagePalette.accentOrange else StagePalette.accentBlue)
     val drumArmed = rmx.xOn && rmx.xMode == 2
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color(StagePalette.bg))) {
-        val compact = maxWidth < 1400.dp
-        val tall = if (compact) 40.dp else 48.dp
-        Column(Modifier.fillMaxSize().padding(if (compact) 8.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextInk("REMIX FX", color = accent, fontSize = if (compact) 16.sp else 22.sp, weight = FontWeight.Bold)
-                TextInk(rmx.sceneName(), fontSize = if (compact) 14.sp else 18.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 12.dp), maxLines = 1)
-                UtilityButton("FECHAR", onClose)
+    val row = if (compact) 36.dp else 46.dp
+    Row(modifier.border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TextInk("REMIX FX", color = accent, fontSize = if (compact) 13.sp else 16.sp, weight = FontWeight.Bold)
+                TextInk(
+                    "${rmx.sceneName()}  ·  ${(rmx.intensity * 100).toInt()}%  ·  ${if (drumArmed) "DRUM ${drumPatternLabel(rmx)}" else "${rmx.bars} compassos"}",
+                    fontSize = if (compact) 11.sp else 13.sp,
+                    color = Color(StagePalette.inkMuted),
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f).padding(start = 10.dp),
+                )
+                TextInk("FECHAR", color = Color(StagePalette.accentBlue), fontSize = if (compact) 12.sp else 14.sp, weight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onClose).padding(horizontal = 8.dp, vertical = 4.dp))
             }
-            // SCENE FX: o dial mostra a intensidade, os oito pads seguram a cena enquanto estão apertados.
-            Row(Modifier.fillMaxWidth().height(if (compact) 104.dp else 132.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SceneDial(rmx.intensity, rmx.sceneName(), accent, Modifier.width(if (compact) 104.dp else 132.dp).fillMaxHeight())
+            // SCENE FX: os oito pads seguram a cena enquanto estão apertados; o anel mostra a intensidade.
+            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                SceneDial(rmx.intensity, rmx.sceneName(), accent, Modifier.width(if (compact) 64.dp else 90.dp).fillMaxHeight())
                 SCENE_NAMES.forEachIndexed { index, name ->
                     val hot = rmx.scene == index && rmx.holding
                     val tone = Color(if (index < 4) StagePalette.accentOrange else StagePalette.accentBlue)
@@ -203,66 +212,55 @@ fun RmxScreen(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit) {
                     }
                 }
             }
-            RmxSection(if (build) "BUILD-UP  ·  ${rmx.bars} compassos até o máximo  ·  ${(rmx.intensity * 100).toInt()}%" else "BREAK-DOWN  ·  ${rmx.bars} compassos até o máximo  ·  ${(rmx.intensity * 100).toInt()}%", accent) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SCENE_BARS.forEach { bars ->
-                        MiniChoice("$bars", rmx.bars == bars, Modifier.weight(1f).height(tall), big = true) { onRmx(rmx.copy(bars = bars)) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextInk("COMPASSOS", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 62.dp else 78.dp))
+                SCENE_BARS.forEach { bars ->
+                    MiniChoice("$bars", rmx.bars == bars, Modifier.weight(0.6f).height(row), big = true) { onRmx(rmx.copy(bars = bars)) }
+                }
+                TextInk("X-PAD", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 6.dp).width(if (compact) 36.dp else 46.dp))
+                XPAD_NAMES.forEachIndexed { index, name ->
+                    MiniChoice(if (index == 2 && drumArmed) "DRUM ▶" else name, rmx.xOn && rmx.xMode == index, Modifier.weight(1f).height(row), big = true) {
+                        onRmx(rmx.copy(xMode = index, xOn = !(rmx.xOn && rmx.xMode == index), panel = true, drumBuild = if (index == 2 && rmx.drumBuild < 0.2f) 1f else rmx.drumBuild))
                     }
                 }
             }
-            // X-PAD: o modo, a fração do tempo e, no modo Drum, o desenho do build.
-            RmxSection(if (drumArmed) "X-PAD  ·  DRUM  ${drumPatternLabel(rmx)}" else "X-PAD  ·  ${XPAD_NAMES.getOrElse(rmx.xMode) { "" }}${if (rmx.xOn) "  (ligado)" else ""}", if (drumArmed) accent else Color(StagePalette.inkMuted)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    XPAD_NAMES.forEachIndexed { index, name ->
-                        MiniChoice(if (index == 2 && rmx.xOn && rmx.xMode == 2) "DRUM ▶" else name, rmx.xOn && rmx.xMode == index, Modifier.weight(1f).height(tall), big = true) {
-                            onRmx(rmx.copy(xMode = index, xOn = !(rmx.xOn && rmx.xMode == index), panel = true, drumBuild = if (index == 2 && rmx.drumBuild < 0.2f) 1f else rmx.drumBuild))
-                        }
-                    }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextInk("TEMPO", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 62.dp else 78.dp))
+                XBEAT_LABELS.forEachIndexed { index, label ->
+                    MiniChoice(label, rmx.xBeat == index, Modifier.weight(0.6f).height(row), big = true) { onRmx(rmx.copy(xBeat = index)) }
                 }
-                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    XBEAT_LABELS.forEachIndexed { index, label ->
-                        MiniChoice(label, rmx.xBeat == index, Modifier.weight(1f).height(tall), big = true) { onRmx(rmx.copy(xBeat = index)) }
-                    }
-                }
-                // Escolhas do drum build: sempre visíveis; escolher aqui não dispara o gesto.
-                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    DRUM_VOICES.forEachIndexed { index, name ->
-                        MiniChoice(name, rmx.drumVoice == index, Modifier.weight(1f).height(tall), big = true) { onRmx(rmx.copy(drumVoice = index)) }
-                    }
-                    listOf(4, 8, 16).forEach { bars ->
-                        MiniChoice("${bars}c", rmx.drumBars == bars, Modifier.weight(0.7f).height(tall), big = true) { onRmx(rmx.copy(drumBars = bars)) }
-                    }
-                    MiniChoice(if (rmx.drumGap) "GAP" else "SEM GAP", rmx.drumGap, Modifier.weight(1f).height(tall), big = true) { onRmx(rmx.copy(drumGap = !rmx.drumGap)) }
-                    MiniChoice(if (rmx.drumPitch) "PITCH" else "TOM", rmx.drumPitch, Modifier.weight(1f).height(tall), big = true) { onRmx(rmx.copy(drumPitch = !rmx.drumPitch)) }
+                TextInk("DRUM", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 6.dp).width(if (compact) 36.dp else 46.dp))
+                DRUM_VOICES.forEachIndexed { index, name ->
+                    MiniChoice(name, rmx.drumVoice == index, Modifier.weight(if (index == 3) 1.3f else 1f).height(row), big = true) { onRmx(rmx.copy(drumVoice = index)) }
                 }
             }
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                IsolatorColumn("ISOLATE  CH 1", rmx.low[0], rmx.mid[0], rmx.high[0], Modifier.weight(1f)) { band, value ->
-                    onRmx(rmx.copy(low = rmx.low.setAt(0, if (band == 0) value else rmx.low[0]), mid = rmx.mid.setAt(0, if (band == 1) value else rmx.mid[0]), high = rmx.high.setAt(0, if (band == 2) value else rmx.high[0])))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextInk("RELEASE", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 62.dp else 78.dp))
+                MiniChoice("BRAKE", rmx.release == 0, Modifier.weight(1f).height(row), big = true) { onRmx(rmx.copy(release = if (rmx.release == 0) -1 else 0, panel = true)) }
+                MiniChoice("ECHO OUT", rmx.release == 1, Modifier.weight(1f).height(row), big = true) { onRmx(rmx.copy(release = if (rmx.release == 1) -1 else 1, panel = true)) }
+                MiniChoice("BACKSPIN", rmx.release == 2, Modifier.weight(1f).height(row), big = true) { onRmx(rmx.copy(release = if (rmx.release == 2) -1 else 2, panel = true)) }
+                MiniChoice(if (rmx.gate) "GATE ON" else "GATE", rmx.gate, Modifier.weight(0.8f).height(row), big = true) { onRmx(rmx.copy(gate = !rmx.gate)) }
+                TextInk("ROLL", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 4.dp))
+                listOf(4, 8, 16).forEach { bars ->
+                    MiniChoice("${bars}c", rmx.drumBars == bars, Modifier.weight(0.5f).height(row), big = true) { onRmx(rmx.copy(drumBars = bars)) }
                 }
-                IsolatorColumn("ISOLATE  CH 2", rmx.low[1], rmx.mid[1], rmx.high[1], Modifier.weight(1f)) { band, value ->
-                    onRmx(rmx.copy(low = rmx.low.setAt(1, if (band == 0) value else rmx.low[1]), mid = rmx.mid.setAt(1, if (band == 1) value else rmx.mid[1]), high = rmx.high.setAt(1, if (band == 2) value else rmx.high[1])))
-                }
-            }
-            Row(Modifier.height(tall), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextInk("RELEASE FX", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 78.dp else 96.dp))
-                MiniChoice("BRAKE", rmx.release == 0, Modifier.weight(1f).fillMaxHeight(), big = true) { onRmx(rmx.copy(release = if (rmx.release == 0) -1 else 0, panel = true)) }
-                MiniChoice("ECHO OUT", rmx.release == 1, Modifier.weight(1f).fillMaxHeight(), big = true) { onRmx(rmx.copy(release = if (rmx.release == 1) -1 else 1, panel = true)) }
-                MiniChoice("BACKSPIN", rmx.release == 2, Modifier.weight(1f).fillMaxHeight(), big = true) { onRmx(rmx.copy(release = if (rmx.release == 2) -1 else 2, panel = true)) }
-                MiniChoice(if (rmx.gate) "GATE ON" else "GATE", rmx.gate, Modifier.weight(1f).fillMaxHeight(), big = true) { onRmx(rmx.copy(gate = !rmx.gate)) }
+                MiniChoice(if (rmx.drumGap) "GAP" else "SEM GAP", rmx.drumGap, Modifier.weight(0.8f).height(row), big = true) { onRmx(rmx.copy(drumGap = !rmx.drumGap)) }
+                MiniChoice(if (rmx.drumPitch) "PITCH" else "TOM", rmx.drumPitch, Modifier.weight(0.8f).height(row), big = true) { onRmx(rmx.copy(drumPitch = !rmx.drumPitch)) }
+                TextInk("CH", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 4.dp))
                 listOf("1" to 0, "2" to 1, "MST" to 2).forEach { (label, channel) ->
-                    MiniChoice(label, rmx.channel == channel, Modifier.width(if (compact) 44.dp else 60.dp).fillMaxHeight(), big = true) { onRmx(rmx.copy(channel = channel)) }
+                    MiniChoice(label, rmx.channel == channel, Modifier.weight(0.5f).height(row), big = true) { onRmx(rmx.copy(channel = channel)) }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun RmxSection(title: String, accent: Color, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(8.dp)) {
-        TextInk(title, fontSize = 12.sp, weight = FontWeight.Bold, color = accent, maxLines = 1, modifier = Modifier.padding(bottom = 6.dp))
-        content()
+        // ISOLATE dos dois canais, compacto, à direita.
+        Row(Modifier.width(if (compact) 250.dp else 330.dp).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IsolatorColumn("CH 1", rmx.low[0], rmx.mid[0], rmx.high[0], Modifier.weight(1f)) { band, value ->
+                onRmx(rmx.copy(low = rmx.low.setAt(0, if (band == 0) value else rmx.low[0]), mid = rmx.mid.setAt(0, if (band == 1) value else rmx.mid[0]), high = rmx.high.setAt(0, if (band == 2) value else rmx.high[0])))
+            }
+            IsolatorColumn("CH 2", rmx.low[1], rmx.mid[1], rmx.high[1], Modifier.weight(1f)) { band, value ->
+                onRmx(rmx.copy(low = rmx.low.setAt(1, if (band == 0) value else rmx.low[1]), mid = rmx.mid.setAt(1, if (band == 1) value else rmx.mid[1]), high = rmx.high.setAt(1, if (band == 2) value else rmx.high[1])))
+            }
+        }
     }
 }
 
@@ -281,7 +279,7 @@ private fun IsolatorColumn(title: String, low: Float, mid: Float, high: Float, m
 private fun isoDbLabel(gain: Float): String {
     if (gain <= 0.02f) return "KILL"
     val db = 20.0 * kotlin.math.ln(gain.toDouble()) / kotlin.math.ln(10.0)
-    return "%+.0f dB".format(db)
+    return "%+.0fdB".format(db)
 }
 
 @Composable

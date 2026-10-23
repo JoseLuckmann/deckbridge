@@ -174,7 +174,8 @@ class SessionModel(catalog: RbCatalog, private val gridShiftMs: DoubleArray) {
     var overlay = ""
 
     fun openRmx() {
-        rmx = rmx.copy(panel = true)
+        // Painel RMX acoplado embaixo: as ondas continuam à vista.
+        rmx = rmx.copy(panel = true, full = true)
     }
 
     fun closeRmx() {
