@@ -79,10 +79,39 @@ class PlayerLogicTest {
         assertEquals(0, scene.hotIndex)
         assertEquals(1.0, scene.slider!!, 0.0)
         assertEquals(0.0, hit(151, 48, 0)!!.slider!!, 0.0)
-        assertEquals(null, hit(152, 48, 127))
+        // O segundo banco de pads escolhe o som do drum build (0.14.1): pad 8 é o primeiro som.
+        val voice = hit(152, 48, 127)
+        assertEquals(PerformanceAction.Kind.RMX, voice!!.kind)
+        assertEquals(8, voice.hotIndex)
         val page = hit(152, 39, 127)
         assertEquals(PerformanceAction.Kind.BEAT_JUMP_PAGE, page!!.kind)
         assertEquals(1, page.hotIndex)
+    }
+
+    @Test
+    fun mixerKnobsUseTheHighByteOfTheFourteenBitPairs() {
+        fun act(status: Int, note: Int, value: Int) = interpretPerformance(map.lookup(status, note), value, TempoAssembler())
+        val kill = act(176, 15, 0)
+        assertEquals(PerformanceAction.Kind.EQ, kill!!.kind)
+        assertEquals(0, kill.deck)
+        assertEquals(0, kill.hotIndex)
+        assertEquals(0.0, kill.slider!!, 0.0)
+        val hiB = act(177, 7, 127)
+        assertEquals(1, hiB!!.deck)
+        assertEquals(2, hiB.hotIndex)
+        assertEquals(1.0, hiB.slider!!, 0.0)
+        assertEquals(1, act(176, 11, 64)!!.hotIndex)
+        // O byte baixo (+32) não pode mexer nos controles: eram 7 bits de ruído sobre o valor do byte alto.
+        assertEquals(null, act(176, 47, 90))
+        assertEquals(null, act(176, 51, 100))
+        assertEquals(null, act(182, 63, 100))
+        assertEquals(PerformanceAction.Kind.VOLUME, act(176, 19, 100)!!.kind)
+        assertEquals(PerformanceAction.Kind.CROSSFADER, act(182, 31, 100)!!.kind)
+        val trim = act(177, 4, 64)
+        assertEquals(PerformanceAction.Kind.TRIM, trim!!.kind)
+        assertEquals(1, trim.deck)
+        assertEquals(PerformanceAction.Kind.HEAD_MIX, act(182, 12, 127)!!.kind)
+        assertEquals(PerformanceAction.Kind.HEAD_GAIN, act(182, 13, 127)!!.kind)
     }
 
     @Test

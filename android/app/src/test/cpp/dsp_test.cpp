@@ -236,6 +236,31 @@ int main() {
         expect(std::abs(l - 0.2f) < 1e-3f && scene.intensity <= 0.001f, std::string(scenes[sceneId]) + " release returns to dry");
     }
 
+    // EQ de canal: kill à esquerda, unidade no centro, +6 dB à direita; LOW não mexe em 5 kHz.
+    {
+        expect(deckbridge::eqGainFromKnob(0.f) == 0.f && std::abs(deckbridge::eqGainFromKnob(0.5f) - 1.f) < 1e-6f, "EQ knob: kill e centro");
+        expect(std::abs(deckbridge::eqGainFromKnob(1.f) - 1.995f) < 0.01f, "EQ knob: +6 dB no fim");
+        auto rmsAfter = [&](float freq, float low, float mid, float high) {
+            deckbridge::MixerFx fx;
+            fx.setSampleRate(48000);
+            fx.setEq(0, low, mid, high);
+            const int n = 48000;
+            double sum = 0.0;
+            for (int i = 0; i < n; ++i) {
+                float l = 0.5f * std::sin(static_cast<float>(deckbridge::kTwoPi) * freq * i / 48000.f);
+                float r = l;
+                fx.processDeck(0, l, r);
+                if (i > n / 2) sum += static_cast<double>(l) * l;
+            }
+            return std::sqrt(sum / (n / 2)) / (0.5 / std::sqrt(2.0));
+        };
+        expect(rmsAfter(80.f, 0.f, 0.5f, 0.5f) < 0.05, "EQ LOW kill tira o grave de 80 Hz (mais de 26 dB)");
+        expect(rmsAfter(5000.f, 0.f, 0.5f, 0.5f) > 0.9, "EQ LOW kill deixa o agudo de 5 kHz");
+        expect(rmsAfter(600.f, 0.5f, 0.f, 0.5f) < 0.05, "EQ MID kill tira 600 Hz (mais de 26 dB)");
+        expect(rmsAfter(80.f, 0.5f, 0.5f, 0.5f) > 0.97 && rmsAfter(80.f, 0.5f, 0.5f, 0.5f) < 1.03, "EQ no centro é transparente");
+        expect(rmsAfter(80.f, 1.f, 0.5f, 0.5f) > 1.85, "EQ LOW à direita sobe cerca de 6 dB");
+    }
+
     deckbridge::XPad drums;
     drums.set(2, 1.f, true, 120.f, 48000);
     std::vector<float> hits(48000, 0.f);

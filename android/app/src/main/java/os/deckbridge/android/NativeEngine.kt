@@ -92,6 +92,24 @@ object NativeEngine {
         nativeSetFilter(deck, norm)
     }
 
+    /** EQ de canal, knobs 0..1 (centro 0,5, esquerda toda é kill). */
+    fun setEq(deck: Int, low: Float, mid: Float, high: Float) {
+        if (!loaded) return
+        nativeSetEq(deck, low, mid, high)
+    }
+
+    /** TRIM do canal, 0..1 (centro 0 dB). */
+    fun setTrimKnob(deck: Int, norm: Float) {
+        if (!loaded) return
+        nativeSetTrimKnob(deck, norm)
+    }
+
+    /** HEADPHONES MIX (0 cue, 1 master) e LEVEL, 0..1. */
+    fun setHead(mix: Float, level: Float) {
+        if (!loaded) return
+        nativeSetHead(mix, level)
+    }
+
     /** 0 SPACE, 1 DUB ECHO, 2 SWEEP, 3 NOISE, 4 CRUSH, 5 FILTER. */
     fun setColorKind(deck: Int, kind: Int) {
         if (!loaded) return
@@ -230,6 +248,9 @@ object NativeEngine {
     private external fun nativeNudge(deck: Int, seconds: Float)
     private external fun nativeSetBeatFx(effect: Int, on: Boolean, level: Int, channel: Int, bpm: Float, beats: Float)
     private external fun nativeSetFilter(deck: Int, norm: Float)
+    private external fun nativeSetEq(deck: Int, low: Float, mid: Float, high: Float)
+    private external fun nativeSetTrimKnob(deck: Int, norm: Float)
+    private external fun nativeSetHead(mix: Float, level: Float)
     private external fun nativeSetColorKind(deck: Int, kind: Int)
     private external fun nativeSetKeyLock(deck: Int, enabled: Boolean)
     private external fun nativeSetKeyShift(deck: Int, semitones: Int)

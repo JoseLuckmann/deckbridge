@@ -11,6 +11,7 @@ data class PerformanceAction(
         BROWSE_MOVE, BROWSE_ENTER, BROWSE_BACK, LOAD,
         BEAT_FX, FILTER, QUANTIZE, SYNC, MASTER,
         BEAT_JUMP, BEAT_JUMP_PAGE, LOOP_IN, LOOP_OUT, RELOOP, LOOP_SCALE, BEAT_LOOP, RMX,
+        EQ, TRIM, HEAD_MIX, HEAD_GAIN,
     }
 }
 
@@ -41,8 +42,23 @@ fun performanceAction(hit: ControlHit, value: Int): PerformanceAction? {
             val index = hit.key.removePrefix("hotcue_").substringBefore("_").toIntOrNull()?.minus(1) ?: return null
             PerformanceAction(deck, PerformanceAction.Kind.HOT_CUE, index)
         }
-        hit.key == "volume" && deck >= 0 -> PerformanceAction(deck, PerformanceAction.Kind.VOLUME, slider = slider)
-        hit.key == "crossfader" -> PerformanceAction(-1, PerformanceAction.Kind.CROSSFADER, slider = slider)
+        // Controles contínuos de 14 bits: só o byte alto (midino < 32) vale. O byte baixo (+32) é a parte fina e,
+        // lido como valor inteiro, faria o fader saltar entre o grosso e o fino.
+        hit.key == "volume" && deck >= 0 && hit.midino < 32 -> PerformanceAction(deck, PerformanceAction.Kind.VOLUME, slider = slider)
+        hit.key == "crossfader" && hit.midino < 32 -> PerformanceAction(-1, PerformanceAction.Kind.CROSSFADER, slider = slider)
+        hit.group.startsWith("[EqualizerRack1_[Channel") && hit.midino < 32 -> {
+            val band = when (hit.key) {
+                "parameter1" -> 0
+                "parameter2" -> 1
+                "parameter3" -> 2
+                else -> return null
+            }
+            val eqDeck = if (hit.group.contains("[Channel2]")) 1 else 0
+            PerformanceAction(eqDeck, PerformanceAction.Kind.EQ, hotIndex = band, slider = slider)
+        }
+        hit.key == "pregain" && deck >= 0 && hit.midino < 32 -> PerformanceAction(deck, PerformanceAction.Kind.TRIM, slider = slider)
+        hit.group == "[Master]" && hit.key == "headMix" && hit.midino < 32 -> PerformanceAction(-1, PerformanceAction.Kind.HEAD_MIX, slider = slider)
+        hit.group == "[Master]" && hit.key == "headGain" && hit.midino < 32 -> PerformanceAction(-1, PerformanceAction.Kind.HEAD_GAIN, slider = slider)
         hit.key == "PioneerDDJ400.jogTurn" && deck >= 0 -> {
             PerformanceAction(deck, PerformanceAction.Kind.JOG, slider = (value - 64) * JOG_BEND_SCALE)
         }

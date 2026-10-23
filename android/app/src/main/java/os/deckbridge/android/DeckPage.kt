@@ -97,6 +97,11 @@ fun DeckPage(
     var volA by remember { mutableFloatStateOf(0.8f) }
     var volB by remember { mutableFloatStateOf(0.8f) }
     var cross by remember { mutableFloatStateOf(0.5f) }
+    // Estado do mixer da controladora (EQ, TRIM, fones), 0..1 com o centro em 0,5.
+    var eqKnobs by remember { mutableStateOf(listOf(listOf(0.5f, 0.5f, 0.5f), listOf(0.5f, 0.5f, 0.5f))) }
+    var trimKnobs by remember { mutableStateOf(listOf(0.5f, 0.5f)) }
+    var headMix by remember { mutableStateOf(0f) }
+    var headLevel by remember { mutableStateOf(0.75f) }
     var pflA by remember { mutableStateOf(false) }
     var pflB by remember { mutableStateOf(false) }
     var faces by remember { mutableStateOf(listOf(DeckFace(), DeckFace())) }
@@ -468,6 +473,26 @@ fun DeckPage(
                 if (deck in 0..1) edit(deck) { it.copy(onAir = level > 0.2f) }
             }
             PerformanceAction.Kind.CROSSFADER -> cross = action.slider!!.toFloat()
+            PerformanceAction.Kind.EQ -> if (deck in 0..1 && action.hotIndex in 0..2) {
+                val level = action.slider!!.toFloat()
+                eqKnobs = eqKnobs.mapIndexed { index, row ->
+                    if (index == deck) row.mapIndexed { band, value -> if (band == action.hotIndex) level else value } else row
+                }
+                NativeEngine.setEq(deck, eqKnobs[deck][0], eqKnobs[deck][1], eqKnobs[deck][2])
+            }
+            PerformanceAction.Kind.TRIM -> if (deck in 0..1) {
+                val level = action.slider!!.toFloat()
+                trimKnobs = trimKnobs.mapIndexed { index, value -> if (index == deck) level else value }
+                NativeEngine.setTrimKnob(deck, level)
+            }
+            PerformanceAction.Kind.HEAD_MIX -> {
+                headMix = action.slider!!.toFloat()
+                NativeEngine.setHead(headMix, headLevel)
+            }
+            PerformanceAction.Kind.HEAD_GAIN -> {
+                headLevel = action.slider!!.toFloat()
+                NativeEngine.setHead(headMix, headLevel)
+            }
             PerformanceAction.Kind.PITCH -> {
                 if (deck !in 0..1) return
                 val range = PerformanceHub.tempo?.rangeOf(deck) ?: faces[deck].range

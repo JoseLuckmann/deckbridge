@@ -14,7 +14,7 @@ class VirtualDdj400(private val map: MidiMap) {
     }
 
     fun volume(deck: Int, value: Int): ByteArray {
-        return packet(map.find(group(deck), "volume", "CHANNELFADER"), value)
+        return packet(map.findMsb(group(deck), "volume", "CHANNELFADER"), value)
     }
 
     fun crossfader(value: Int): ByteArray {

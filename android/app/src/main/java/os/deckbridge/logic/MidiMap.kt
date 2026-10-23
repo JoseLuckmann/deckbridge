@@ -16,6 +16,11 @@ class MidiMap(private val controls: List<ControlHit>) {
         return controls.first { it.group == group && it.key == key && it.description.contains(descriptionContains) }
     }
 
+    /** O byte alto de um controle de 14 bits (midino < 32); o baixo vem 32 notas acima. */
+    fun findMsb(group: String, key: String, descriptionContains: String): ControlHit {
+        return controls.first { it.group == group && it.key == key && it.description.contains(descriptionContains) && it.midino < 32 }
+    }
+
     fun lookup(status: Int, data1: Int): ControlHit {
         val found = controls.find { it.status == status && it.midino == data1 }
         if (found != null) return found

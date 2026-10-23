@@ -2338,11 +2338,21 @@ private:
     }
 };
 
+// Knob do EQ de canal (0..1) para ganho linear: esquerda toda = kill, centro = 1, direita toda = +6 dB.
+// Curva nossa, no estilo isolador; o manual da DDJ-400 não publica a curva.
+inline float eqGainFromKnob(float knob) {
+    const float k = std::clamp(knob, 0.f, 1.f);
+    if (k <= 0.03f) return 0.f;
+    if (k < 0.5f) return std::pow((k - 0.03f) / 0.47f, 1.6f);
+    return std::pow(10.f, (k - 0.5f) * 2.f * 6.f / 20.f);
+}
+
 struct MixerFx {
     BeatInsert beat;
     SceneFx scene;
     XPad xpad;
     Isolator iso[2];
+    Isolator eq[2];
     ReleaseFx release;
     ColorFilter color[2];
     bool rmx = false;
@@ -2363,8 +2373,16 @@ struct MixerFx {
         iso[0].prepare(sampleRate);
         iso[1].prepare(sampleRate);
         if (changed) {
+            eq[0].prepare(sampleRate);
+            eq[1].prepare(sampleRate);
             for (auto &item : color) item.prepare(sampleRate);
         }
+    }
+
+    // EQ de canal de 3 bandas (LOW, MID, HI), knobs 0..1. Roda antes do Color FX, como num mixer.
+    void setEq(int deck, float low, float mid, float high) {
+        if (deck < 0 || deck > 1) return;
+        eq[deck].set(eqGainFromKnob(low), eqGainFromKnob(mid), eqGainFromKnob(high), false);
     }
 
     void setColorKind(int deck, int kind) {
@@ -2464,6 +2482,7 @@ struct MixerFx {
 
     void processDeck(int deck, float &left, float &right) {
         if (deck < 0 || deck > 1) return;
+        eq[deck].process(left, right);
         color[deck].process(left, right);
         iso[deck].process(left, right);
         if (channel == deck) applyInsert(left, right);

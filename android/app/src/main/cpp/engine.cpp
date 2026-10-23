@@ -347,6 +347,28 @@ public:
         mixFx_.setFilter(deck, norm);
     }
 
+    void setEq(int deck, float low, float mid, float high) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        mixFx_.setSampleRate(48000);
+        mixFx_.setEq(deck, low, mid, high);
+    }
+
+    // TRIM do canal, 0..1: −12 dB à esquerda, 0 dB no centro, +12 dB à direita.
+    void setTrimKnob(int deck, float norm) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1) return;
+        const float k = std::clamp(norm, 0.f, 1.f);
+        trimKnob_[deck] = std::pow(10.f, (k - 0.5f) * 2.f * 12.f / 20.f);
+    }
+
+    // HEADPHONES MIX (0 = só cue, 1 = só master) e LEVEL (0..1, 0 dB em 0,75).
+    void setHead(float mix, float level) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        headMix_ = std::clamp(mix, 0.f, 1.f);
+        const float k = std::clamp(level, 0.f, 1.f);
+        headGain_ = k <= 0.01f ? 0.f : std::pow(10.f, (k - 0.75f) * 2.f * 12.f / 20.f);
+    }
+
     void setColorKind(int deck, int kind) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         mixFx_.setSampleRate(48000);
@@ -481,10 +503,10 @@ public:
                                     gridLive, true);
                 mixFx_.processDeck(0, al, ar);
                 mixFx_.processDeck(1, bl, br);
-                al *= trim_[0];
-                ar *= trim_[0];
-                bl *= trim_[1];
-                br *= trim_[1];
+                al *= trim_[0] * trimKnob_[0];
+                ar *= trim_[0] * trimKnob_[0];
+                bl *= trim_[1] * trimKnob_[1];
+                br *= trim_[1] * trimKnob_[1];
                 float masterL = al * (1.f - cross_) * decks_[0].volume + bl * cross_ * decks_[1].volume;
                 float masterR = ar * (1.f - cross_) * decks_[0].volume + br * cross_ * decks_[1].volume;
                 mixFx_.processMaster(masterL, masterR);
@@ -506,6 +528,8 @@ public:
                         phoneL *= 0.5f;
                         phoneR *= 0.5f;
                     }
+                    phoneL = (phoneL * (1.f - headMix_) + masterL * headMix_) * headGain_;
+                    phoneR = (phoneR * (1.f - headMix_) + masterR * headMix_) * headGain_;
                 }
                 for (int channel = 0; channel < channels; ++channel) {
                     float sample = 0.f;
@@ -648,6 +672,9 @@ private:
     deckbridge::MixerFx mixFx_;
     deckbridge::PeakLimiter masterLimit_;
     float trim_[2]{1.f, 1.f};
+    float trimKnob_[2]{1.f, 1.f};
+    float headMix_ = 0.f;
+    float headGain_ = 1.f;
     deckbridge::MasterRecorder recorder_;
     std::atomic<int> liveRate_{48000};
     int bufferFrames_ = 256;
@@ -762,6 +789,21 @@ Java_os_deckbridge_android_NativeEngine_nativeSetBeatFx(
 extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeSetFilter(JNIEnv *, jobject, jint deck, jfloat norm) {
     engine().setFilter(deck, norm);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetEq(JNIEnv *, jobject, jint deck, jfloat low, jfloat mid, jfloat high) {
+    engine().setEq(deck, low, mid, high);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetTrimKnob(JNIEnv *, jobject, jint deck, jfloat norm) {
+    engine().setTrimKnob(deck, norm);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetHead(JNIEnv *, jobject, jfloat mix, jfloat level) {
+    engine().setHead(mix, level);
 }
 
 extern "C" JNIEXPORT void JNICALL
