@@ -169,6 +169,8 @@ fun PlayerScreen(
     var fxPanel by remember { mutableStateOf(true) }
     var picked by remember { mutableStateOf("") }
     var popup by remember { mutableStateOf(startPopup) }
+    var popupDeck by remember { mutableStateOf(activeDeck) }
+    val togglePopup = { d: Int, k: String -> if (popup == k && popupDeck == d) popup = "" else { popupDeck = d; popup = k } }
     val shownNav = nav.ifBlank {
         when {
             overlay == "menu" -> "MENU"
@@ -271,35 +273,30 @@ fun PlayerScreen(
                 RmxDock(rmx, onRmx, { onRmx(rmx.copy(full = false)) }, compact, Modifier.fillMaxWidth().height(if (compact) 292.dp else 400.dp).padding(top = if (compact) 3.dp else 6.dp))
             }
             if (!rmx.full) HotCueBand(catalog, tracks, faces, compact, settings.cuePreset, onActive, onHot, onHotUp, Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 6.dp))
-            if (!rmx.full) PerformanceStrip(
-                deck = activeDeck,
-                face = faces.getOrElse(activeDeck) { DeckFace() },
-                compact = compact,
-                open = popup,
-                modifier = Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 4.dp),
-                onOpen = { popup = it },
-            )
             if (!rmx.full) Row(
-                Modifier.fillMaxWidth().height(if (compact) 118.dp else 176.dp).padding(top = if (compact) 3.dp else 4.dp),
+                Modifier.fillMaxWidth().height(if (compact) 136.dp else 196.dp).padding(top = if (compact) 3.dp else 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0), settings.cuePreset), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings)
-                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1), settings.cuePreset), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings)
+                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0), settings.cuePreset), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings, popup, popupDeck, togglePopup)
+                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1), settings.cuePreset), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings, popup, popupDeck, togglePopup)
             }
         }
         if (popup.isNotEmpty() && !rmx.full) {
-            val cards = (if (compact) 118 else 176) + (if (compact) 24 else 30) + 10
+            val cards = (if (compact) 136 else 196) + 6
+            val popTrack = tracks.getOrNull(popupDeck)
+            val popFace = faces.getOrElse(popupDeck) { DeckFace() }
             Box(Modifier.fillMaxSize().clickable { popup = "" })
             PerformancePopup(
                 kind = popup,
-                deck = activeDeck,
-                face = faces.getOrElse(activeDeck) { DeckFace() },
+                deck = popupDeck,
+                face = popFace,
+                loopBeats = if (popTrack == null) 0.0 else (popFace.loopEnd - popFace.loopStart) * popTrack.bpm / 60.0,
                 compact = compact,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = cards.dp).fillMaxWidth(0.62f),
-                onJump = { beats -> onJump(activeDeck, beats) },
-                onLoop = { which -> onLoopButton(activeDeck, which) },
-                onBeatLoop = { beats -> onBeatLoop(activeDeck, beats) },
-                onAction = { onDeckAction(activeDeck, it) },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = cards.dp, start = 4.dp, end = 4.dp).fillMaxWidth(),
+                onJump = { beats -> onJump(popupDeck, beats) },
+                onLoop = { which -> onLoopButton(popupDeck, which) },
+                onBeatLoop = { beats -> onBeatLoop(popupDeck, beats) },
+                onAction = { onDeckAction(popupDeck, it) },
                 onClose = { popup = "" },
             )
         }
@@ -687,36 +684,28 @@ private fun HotGrid(
     }
 }
 
-/** Linha fina de atalhos: cada botão abre um popup, como a tela de toque do leitor de club. */
+/** Botão de toque do cabeçalho do player, em duas linhas, com sublinhado quando ativo (como o CDJ-3000). */
 @Composable
-private fun PerformanceStrip(
-    deck: Int,
-    face: DeckFace,
-    compact: Boolean,
-    open: String,
-    modifier: Modifier,
-    onOpen: (String) -> Unit,
-) {
-    val loopOn = face.loopEnd > face.loopStart
-    Row(modifier.height(if (compact) 24.dp else 30.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        TextInk("D${deck + 1}", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentBlue), modifier = Modifier.width(if (compact) 22.dp else 28.dp))
-        listOf(
-            "JUMP" to false,
-            "LOOP" to loopOn,
-            "KEY" to (face.keyShift != 0),
-            "GRID" to (face.gridShiftMs != 0.0 || face.gridStretch != 1.0),
-            "MAIS" to (face.slip || face.reversed || face.emergency || face.cueBank != 0),
-        ).forEach { (label, lit) ->
-            Choice(label, open == label || lit, compact, Modifier.weight(1f).height(if (compact) 22.dp else 28.dp)) { onOpen(if (open == label) "" else label) }
-        }
+private fun TouchTab(first: String, second: String, lit: Boolean, open: Boolean, compact: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val ink = if (open) Color(inkOn(StagePalette.accentBlue)) else if (lit) Color(StagePalette.accentBlue) else Color(StagePalette.ink)
+    Column(
+        modifier.height(if (compact) 28.dp else 38.dp).background(Color(if (open) StagePalette.accentBlue else StagePalette.bg)).border(1.dp, Color(if (open) StagePalette.accentBlue else StagePalette.line)).clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        TextInk(first, color = ink, fontSize = if (compact) 8.sp else 10.sp, weight = FontWeight.Bold, maxLines = 1)
+        if (second.isNotEmpty()) TextInk(second, color = ink, fontSize = if (compact) 8.sp else 10.sp, weight = FontWeight.Bold, maxLines = 1)
+        Box(Modifier.padding(top = 1.dp).width(if (compact) 22.dp else 30.dp).height(2.dp).background(if (lit && !open) Color(StagePalette.accentBlue) else Color.Transparent))
     }
 }
 
+/** Faixa de toque que abre entre as ondas e o cartão do deck, como o beat loop do CDJ-3000: células de borda laranja, a ativa preenchida. */
 @Composable
 private fun PerformancePopup(
     kind: String,
     deck: Int,
     face: DeckFace,
+    loopBeats: Double,
     compact: Boolean,
     modifier: Modifier,
     onJump: (Int) -> Unit,
@@ -726,64 +715,52 @@ private fun PerformancePopup(
     onClose: () -> Unit,
 ) {
     val loopOn = face.loopEnd > face.loopStart
-    Column(
-        modifier.background(Color(StagePalette.panel)).border(1.dp, Color(StagePalette.accentBlue)).clickable(enabled = false) {}.padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextInk("D${deck + 1}  $kind", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentBlue), modifier = Modifier.weight(1f))
-            Box(Modifier.clickable(onClick = onClose).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                TextInk("FECHAR", fontSize = 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
-            }
-        }
+    Column(modifier.background(Color(StagePalette.bg)).border(1.dp, Color(StagePalette.line)).clickable(enabled = false) {}.padding(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         when (kind) {
-            "JUMP" -> {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf(-64, -32, -16, -8, -4, -2, -1).forEach { b -> PopKey("$b", false, Modifier.weight(1f)) { onJump(b) } }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf(1, 2, 4, 8, 16, 32, 64).forEach { b -> PopKey("+$b", false, Modifier.weight(1f)) { onJump(b) } }
-                }
-            }
             "LOOP" -> {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    PopKey("4 BEAT", loopOn, Modifier.weight(1.4f)) { onLoop("4") }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf(0.25 to "1/4", 0.5 to "1/2", 1.0 to "1", 2.0 to "2", 4.0 to "4", 8.0 to "8", 16.0 to "16", 32.0 to "32").forEach { (beats, label) ->
+                        PopKey(label, loopOn && kotlin.math.abs(loopBeats - beats) < 0.05, Modifier.weight(1f)) { onBeatLoop(beats) }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     PopKey("IN", false, Modifier.weight(1f)) { onLoop("IN") }
                     PopKey("OUT", false, Modifier.weight(1f)) { onLoop("OUT") }
                     PopKey("1/2X", false, Modifier.weight(1f)) { onLoop("HALF") }
                     PopKey("2X", false, Modifier.weight(1f)) { onLoop("DOUBLE") }
-                    PopKey("EXIT", loopOn, Modifier.weight(1f)) { onLoop("RELOOP") }
+                    PopKey("RELOOP/EXIT", loopOn, Modifier.weight(2f)) { onLoop("RELOOP") }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf(0.25 to "1/4", 0.5 to "1/2", 1.0 to "1", 2.0 to "2", 4.0 to "4", 8.0 to "8", 16.0 to "16", 32.0 to "32").forEach { (beats, label) ->
-                        PopKey(label, false, Modifier.weight(1f)) { onBeatLoop(beats) }
-                    }
+            }
+            "JUMP" -> {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf(-64, -32, -16, -8, -4, -2, -1).forEach { b -> PopKey("$b", false, Modifier.weight(1f)) { onJump(b) } }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf(1, 2, 4, 8, 16, 32, 64).forEach { b -> PopKey("+$b", false, Modifier.weight(1f)) { onJump(b) } }
                 }
             }
             "KEY" -> {
                 val shiftLabel = if (face.keyShift > 0) "+${face.keyShift}" else face.keyShift.toString()
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     PopKey("−", false, Modifier.weight(1f)) { onAction("KEY-") }
                     PopKey(shiftLabel, face.keyShift != 0, Modifier.weight(1f)) { onAction("KEY0") }
                     PopKey("+", false, Modifier.weight(1f)) { onAction("KEY+") }
                     PopKey("KEY SYNC", false, Modifier.weight(2f)) { onAction("SYNC") }
                 }
             }
-            "GRID" -> {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    PopKey("−10 ms", face.gridShiftMs < 0.0, Modifier.weight(1f)) { onAction("G-") }
-                    PopKey("+10 ms", face.gridShiftMs > 0.0, Modifier.weight(1f)) { onAction("G+") }
-                    PopKey("−0,1%", face.gridStretch < 1.0, Modifier.weight(1f)) { onAction("S-") }
-                    PopKey("+0,1%", face.gridStretch > 1.0, Modifier.weight(1f)) { onAction("S+") }
-                    PopKey("RESET", false, Modifier.weight(1f)) { onAction("G0") }
-                }
-            }
             else -> {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     PopKey("SLIP", face.slip, Modifier.weight(1f)) { onAction("SLIP") }
                     PopKey("REV", face.reversed, Modifier.weight(1f)) { onAction("REV") }
                     PopKey("EMERG", face.emergency, Modifier.weight(1f)) { onAction("EMERG") }
                     PopKey("HOT CUE ${cueBankLetter(face.cueBank)}", face.cueBank != 0, Modifier.weight(1.4f)) { onAction("BANK") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    PopKey("GRADE −10 ms", face.gridShiftMs < 0.0, Modifier.weight(1f)) { onAction("G-") }
+                    PopKey("+10 ms", face.gridShiftMs > 0.0, Modifier.weight(1f)) { onAction("G+") }
+                    PopKey("−0,1%", face.gridStretch < 1.0, Modifier.weight(1f)) { onAction("S-") }
+                    PopKey("+0,1%", face.gridStretch > 1.0, Modifier.weight(1f)) { onAction("S+") }
+                    PopKey("RESET", false, Modifier.weight(1f)) { onAction("G0") }
                 }
             }
         }
@@ -792,11 +769,12 @@ private fun PerformancePopup(
 
 @Composable
 private fun PopKey(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val orange = Color(StagePalette.accentOrange)
     Box(
-        modifier.height(40.dp).background(Color(StagePalette.bg)).border(if (selected) 1.5.dp else 1.dp, Color(if (selected) StagePalette.accentBlue else StagePalette.line), RoundedCornerShape(2.dp)).clickable(onClick = onClick),
+        modifier.height(36.dp).background(if (selected) orange else Color(StagePalette.panel)).border(1.5.dp, orange).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        TextInk(label, color = if (selected) Color(StagePalette.accentBlue) else Color(StagePalette.ink), fontSize = 12.sp, weight = FontWeight.Bold, maxLines = 1)
+        TextInk(label, color = if (selected) Color(inkOn(StagePalette.accentOrange)) else Color(StagePalette.ink), fontSize = 13.sp, weight = FontWeight.Bold, maxLines = 1)
     }
 }
 
@@ -822,6 +800,9 @@ private fun DeckCard(
     onSeek: (Int, Float) -> Unit,
     waveMode: Int = 0,
     settings: PlayerSettings = PlayerSettings(),
+    popup: String = "",
+    popupDeck: Int = -1,
+    onPopup: (Int, String) -> Unit = { _, _ -> },
 ) {
     val duration = (track?.durationSeconds ?: 0).toDouble()
     val shown = if (track == null) {
@@ -845,12 +826,20 @@ private fun DeckCard(
                 TextInk("DECK ${deck + 1}", color = badgeInk, fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold)
             }
             CoverTile(artworkOf(track), track?.title ?: "", Modifier.padding(start = 6.dp).size(if (compact) 22.dp else 32.dp))
-            TextInk(track?.title ?: "Sem faixa", fontSize = if (compact) 12.sp else 15.sp, weight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                TextInk(track?.title ?: "Sem faixa", fontSize = if (compact) 12.sp else 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                if (track != null) TextInk("${track.keyName.ifBlank { "—" }}", fontSize = if (compact) 10.sp else 12.sp, color = Color(StagePalette.inkMuted), maxLines = 1)
+            }
             if (face.onAir) {
                 Box(Modifier.clip(RoundedCornerShape(2.dp)).background(Color(StagePalette.onAir)).padding(horizontal = 5.dp, vertical = 1.dp)) {
                     TextInk("ON AIR", color = Color.White, fontSize = if (compact) 8.sp else 10.sp, weight = FontWeight.Bold)
                 }
             }
+            val tab = Modifier.padding(start = 4.dp).width(if (compact) 52.dp else 72.dp)
+            TouchTab("BEAT", "LOOP", face.loopEnd > face.loopStart, popup == "LOOP" && popupDeck == deck, compact, tab) { onPopup(deck, "LOOP") }
+            TouchTab("KEY", "SHIFT", face.keyShift != 0, popup == "KEY" && popupDeck == deck, compact, tab) { onPopup(deck, "KEY") }
+            TouchTab("BEAT", "JUMP", false, popup == "JUMP" && popupDeck == deck, compact, tab) { onPopup(deck, "JUMP") }
+            TouchTab("···", "", face.slip || face.reversed || face.emergency || face.cueBank != 0 || face.gridShiftMs != 0.0 || face.gridStretch != 1.0, popup == "MAIS" && popupDeck == deck, compact, Modifier.padding(start = 4.dp).width(if (compact) 28.dp else 40.dp)) { onPopup(deck, "MAIS") }
         }
         Row(Modifier.padding(top = if (compact) 2.dp else 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).clickable { onRemain(deck) }) {
@@ -866,6 +855,7 @@ private fun DeckCard(
                 Box(Modifier.padding(top = 2.dp).clip(RoundedCornerShape(2.dp)).background(Color(StagePalette.playBg)).padding(horizontal = 4.dp, vertical = 1.dp)) {
                     TextInk(rangeBadge(face.range), color = Color(StagePalette.playInk), fontSize = 10.sp, weight = FontWeight.Bold)
                 }
+                if (face.keyLock) TextInk("MT", color = Color(StagePalette.accentOrange), fontSize = 10.sp, weight = FontWeight.Bold, modifier = Modifier.padding(top = 1.dp))
             }
             Column(horizontalAlignment = Alignment.End, modifier = Modifier.clickable { onMaster(deck) }) {
                 if (master) {

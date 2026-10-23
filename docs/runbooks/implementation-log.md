@@ -451,3 +451,8 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Mudança: a faixa de ~40 botões (beat jump, loop, KEY, grade, SLIP, REV...) saiu da tela principal. Ficou uma linha fina com JUMP, LOOP, KEY, GRID e MAIS; cada botão abre um popup sobre as ondas (como a tela de toque do leitor de club). Tocar fora ou em FECHAR fecha.
 - Evidência: `docs/ui/compact-player.png`, `compact-popup-loop.png`, `compact-popup-key.png` (Robolectric/Roborazzi, JVM).
 - Status: UI verificada só em simulação; uso no tablet `BLOCKED_HARDWARE`.
+
+## 2026-10-23 — Cabeçalho do deck no padrão do CDJ-3000
+
+- Mudança: a linha de atalhos saiu. BEAT LOOP, KEY SHIFT e BEAT JUMP (mais "···" para SLIP/REV/EMERG/banco/grade) ficam no cabeçalho de cada deck, em duas linhas, com sublinhado quando ativos e preenchimento azul quando abertos. O popup abre como faixa de células de borda laranja logo acima dos cartões, com o beat loop ativo preenchido. Key sob o título e MT ao lado do tempo.
+- Evidência: `docs/ui/compact-popup-loop.png`, `compact-popup-key.png`, `compact-player.png`. Só simulação; tablet `BLOCKED_HARDWARE`.
