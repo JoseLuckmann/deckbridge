@@ -512,8 +512,11 @@ public:
                 ar *= trim_[0] * trimKnob_[0];
                 bl *= trim_[1] * trimKnob_[1];
                 br *= trim_[1] * trimKnob_[1];
-                float masterL = al * (1.f - cross_) * decks_[0].volume + bl * cross_ * decks_[1].volume;
-                float masterR = ar * (1.f - cross_) * decks_[0].volume + br * cross_ * decks_[1].volume;
+                // Crossfader aditivo (slow fade): os dois canais ficam inteiros no centro, como num mixer.
+                const float sideA = std::min(1.f, 2.f * (1.f - cross_));
+                const float sideB = std::min(1.f, 2.f * cross_);
+                float masterL = al * sideA * decks_[0].volume + bl * sideB * decks_[1].volume;
+                float masterR = ar * sideA * decks_[0].volume + br * sideB * decks_[1].volume;
                 mixFx_.processMaster(masterL, masterR);
                 masterLimit_.process(masterL, masterR);
                 peak[0] = std::max(peak[0], std::max(std::fabs(al), std::fabs(ar)));

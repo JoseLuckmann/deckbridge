@@ -374,6 +374,18 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - HIL executado? não
 - Próximo passo: compilar o app (`gradlew testMultiDebugUnitTest`), ouvir no tablet, ajustar níveis das cenas; expor seletor de Color FX na tela do deck; Roll/Slip Roll com balanço seco/roll.
 
+### Mixer, SYNC, Trainer, RMX e vídeo de sessão (0.15.0, continuação)
+- Estado: host; escuta BLOCKED_HARDWARE. Android compila aqui (SDK instalado em ~/android-sdk): `testMultiDebugUnitTest` passa e `assembleMultiDebug` compila o C++ nas três ABIs.
+- EQ de canal de 3 bandas, TRIM e fones ligados da DDJ-400 ao motor; controles de 14 bits só pelo byte alto (o baixo fazia o fader saltar).
+- Tela MIXER (EQ, TRIM, filtro, fader, crossfader, fones, medidores de pico, seletor dos seis Color FX).
+- SYNC: alinha a fase da batida (deck líder, quantize ligado), segue o tempo do líder e solta ao apertar de novo.
+- Crossfader aditivo (slow fade).
+- Tela RMX reorganizada: seções, alvos de 40-48 dp, controles do drum build sempre visíveis.
+- `logic/Trainer.kt`: dicas do modo guiado e três exercícios (beatmatch, troca de grave, entrada na frase) com testes. A interface do Trainer ainda não existe.
+- `docs/testing/session-video.md`: vídeo de sessão por MIDI. Achado: a grade do analisador cai fora do bumbo em house (222 ms e 123 ms nas duas faixas de teste).
+- HIL executado? não
+- Próximo passo: interface do Trainer (dicas e exercícios), correção da fase do analisador, escuta no tablet.
+
 ### Tela 0.14.1
 - Estado: host; escuta BLOCKED_HARDWARE. Não é o tablet e não é a DDJ-400.
 - Commit: `e3c0e84`.

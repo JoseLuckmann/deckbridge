@@ -16,7 +16,8 @@ data class PerformanceAction(
 }
 
 fun masterGain(volume: Double, crossfader: Double, deckIsB: Boolean): Double {
-    val side = if (deckIsB) crossfader else 1.0 - crossfader
+    // Curva aditiva (slow fade): no centro os dois canais ficam inteiros; o lado oposto fecha até o fim do curso.
+    val side = if (deckIsB) 2.0 * crossfader else 2.0 * (1.0 - crossfader)
     return (volume.coerceIn(0.0, 1.0) * side.coerceIn(0.0, 1.0)).coerceIn(0.0, 1.0)
 }
 
