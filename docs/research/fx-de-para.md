@@ -105,3 +105,8 @@ O manual: LOW/MID/HI no centro não fazem efeito. Além do isolador há CUT/ADD,
 - `docs/research/plots/drum-onset.svg` — erro de cada caso do teste de grade. O pior caso nesta máquina foi 0 ms. A linha de 1 ms é o limite pedido.
 
 Estes gráficos são do binário hospedeiro. Não foram medidos no tablet nem numa mesa Pioneer.
+
+
+## Atualização de 23/10/2026: o que a tabela acima ainda diz de menos
+
+O código já tem, e `tools/fx_rmx_test.cpp` cobre: Spiral com o deslocador de grão no laço de feedback (as repetições sobem de tom), Helix que trava o som no laço com o knob todo à direita, Pitch por grão de −1 a +1 oitava (−50% a +100%) e o roll com o balanço original/roll (`rollMixFromLevel`: esquerda é o original, direita o roll, 0,5 dá 70% de roll). Continua faltando: o pitch do Spiral e do Helix mudando junto com o tempo da faixa (o aparelho de referência faz isso), a gravação do Helix ao subir o LEVEL e o X-PAD de corte do Reverb.

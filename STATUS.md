@@ -186,3 +186,13 @@ As mixes de demonstração são do motor do host, não do tablet. Roteiros em `d
 | OD-24 | decidida | Publicar as métricas do analisador sem as tratar como alvo cumprido. |
 
 A constituição 1.1.0 está em `.specify/memory/constitution.md`. A emenda é a ADR-0006.
+
+
+## Atualização de 23/10/2026 (rodada de pendências)
+
+- Master Tempo e Key Shift por WSOLA (o deslocador antigo não segurava a afinação): `docs/testing/master-tempo.md`.
+- Tempo por envelope multibanda: holdout Acc1 0,894 e Acc2 0,947 (antes 0,629 e 0,742); tom por classificador linear: holdout MIREX 0,589 e exato 0,496 (antes 0,472 e 0,374): `docs/testing/tempo-corpus.md`. Frases: sem ganho, sem verdade de terreno.
+- Ícone adaptativo e assinatura de release (chave fora do git, `keystore.properties` ou variáveis `DECKBRIDGE_*`; sem chave o release sai sem assinatura). A chave de release de verdade ainda precisa ser criada pelo dono.
+- Ganho de saída do app (−12 a +6 dB) na tela da mesa; lista do set gravado (.cue e .txt); marcas de frase na onda; BEAT JUMP com valor 16 e setas; balanço do roll.
+- Set completo de seis faixas em vídeo (`docs/testing/session-video.md`).
+- Nada disto foi ouvido no tablet nem na DDJ-400 (`BLOCKED_HARDWARE`).
