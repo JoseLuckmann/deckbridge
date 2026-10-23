@@ -43,3 +43,4 @@ target/
 *.m4a
 *.ogg
 local-mixes/
+android/.kotlin/
