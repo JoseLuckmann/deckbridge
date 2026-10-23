@@ -76,8 +76,10 @@ struct Deck {
     bool userSlip = false;
     double slipAnchor = -1.0;
     bool holdingCue = false;
-    deckbridge::PitchShift shiftL;
-    deckbridge::PitchShift shiftR;
+    deckbridge::Wsola stretch;
+    double expectedPos = -1.0;
+    int shiftCached = 999;
+    double shiftFactor = 1.0;
 
     Deck() {
         for (double &item : hot) item = -1.0;
@@ -101,23 +103,42 @@ struct Deck {
             return;
         }
         lastEmitted = position;
-        leftOut = deckbridge::readPerformance(left.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
-                                             deckbridge::kFadeSamples);
-        rightOut = deckbridge::readPerformance(right.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
-                                              deckbridge::kFadeSamples);
-        float ratio = 1.f;
-        bool shift = false;
-        if (keyLock && pitch > 0.05 && std::abs(pitch - 1.0) > 0.01) {
-            ratio = static_cast<float>(1.0 / pitch);
-            shift = true;
-        }
-        if (keyShift != 0) {
-            ratio *= std::pow(2.f, static_cast<float>(keyShift) / 12.f);
-            shift = true;
-        }
-        if (shift && std::abs(ratio - 1.f) > 0.0008f) {
-            leftOut = shiftL.process(leftOut, ratio);
-            rightOut = shiftR.process(rightOut, ratio);
+        // Salto vindo de fora (seek, hot cue, deck pausado e movido): o grão em andamento não vale mais.
+        if (expectedPos >= 0.0 && std::fabs(position - expectedPos) > 4096.0) stretch.reset();
+        // Master Tempo e Key Shift: WSOLA lê o grão direto da faixa (tom pela taxa de leitura, tempo pela posição).
+        // Sem nenhum dos dois, ou com o tempo a menos de 1% do original sob Master Tempo, a leitura é direta.
+        const bool lockActive = keyLock && pitch > 0.05 && std::abs(pitch - 1.0) > 0.01;
+        if (lockActive || keyShift != 0) {
+            const double convert = rateMul * static_cast<double>(sampleRate) / static_cast<double>(outputRate);
+            const double base = lockActive ? 1.0 : std::max(0.05, pitch);
+            if (shiftCached != keyShift) {
+                shiftCached = keyShift;
+                shiftFactor = std::pow(2.0, static_cast<double>(keyShift) / 12.0);
+            }
+            const double grainRate = base * shiftFactor * convert;
+            const double dir = reversed ? -1.0 : 1.0;
+            const bool wrapped = loopEnd > loopStart || (rollLength > 1.0 && rollOrigin >= 0.0);
+            auto readSource = [&](double at, float &a, float &b) {
+                if (rollLength > 1.0 && rollOrigin >= 0.0) {
+                    const double end = rollOrigin + rollLength;
+                    if (at >= end) at = rollOrigin + std::fmod(at - rollOrigin, rollLength);
+                } else if (loopEnd > loopStart) {
+                    const double length = loopEnd - loopStart;
+                    if (!reversed && at >= loopEnd) at = loopStart + std::fmod(at - loopStart, length);
+                    else if (reversed && at < loopStart) at = loopEnd - std::fmod(loopStart - at, length);
+                }
+                a = deckbridge::readPerformance(left.data(), frames, at, loopStart, loopEnd, rollOrigin, rollLength, deckbridge::kFadeSamples);
+                b = deckbridge::readPerformance(right.data(), frames, at, loopStart, loopEnd, rollOrigin, rollLength, deckbridge::kFadeSamples);
+            };
+            const double analysis = deckbridge::directedStep(pitch, rateMul, sampleRate, outputRate, reversed);
+            stretch.next(readSource, position, dir, grainRate, analysis, wrapped, leftOut, rightOut);
+        } else {
+            leftOut = deckbridge::readPerformance(left.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
+                                                 deckbridge::kFadeSamples);
+            rightOut = deckbridge::readPerformance(right.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
+                                                  deckbridge::kFadeSamples);
+            // Ao voltar para a leitura direta, o próximo grão começa limpo.
+            if (stretch.havePrev || stretch.phase < deckbridge::Wsola::kHop) stretch.reset();
         }
         const double step = deckbridge::directedStep(pitch, rateMul, sampleRate, outputRate, reversed);
         if (slip >= 0.0) slip += (pitch * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
@@ -132,6 +153,7 @@ struct Deck {
             if (reversed && !(loopEnd > loopStart)) playing = false;
         }
         wrapLoop();
+        expectedPos = position;
     }
 };
 

@@ -502,7 +502,8 @@ struct PitchShift {
 };
 
 // Deslocador de tom por dois grãos (atraso que varre uma janela, cruzados por Hann).
-// ratio > 1 sobe, < 1 desce. O PitchShift acima serve ao key lock; este vai nos efeitos.
+// ratio > 1 sobe, < 1 desce. Vai nos efeitos. O key lock e o Key Shift dos decks usam o Wsola (o PitchShift acima
+// ficou só no demo_mix antigo: no teste isolado ele não segura a afinação).
 struct GrainShift {
     static constexpr int kWindow = 2048;
     static constexpr int kSize = 4096;
@@ -536,6 +537,121 @@ struct GrainShift {
         const float y = tap(1.f + phase * kWindow) * w1 + tap(1.f + other * kWindow) * w2;
         write = (write + 1) % kSize;
         return sanitize(y);
+    }
+};
+
+// Master Tempo por WSOLA (sobreposição e soma com busca de correlação), lendo direto da faixa.
+// A faixa tem acesso aleatório, então não há latência: o grão que começa na posição de análise `position` é
+// emendado ao anterior no deslocamento (±kSearch amostras) que melhor continua a forma de onda. A taxa de
+// leitura do grão (`rate`) decide o tom; o avanço da posição de análise (feito pelo motor) decide o tempo.
+// Janela de 2048 amostras, salto de 1024, Hann periódica (soma 1 com 50% de sobreposição).
+struct Wsola {
+    static constexpr int kHop = 1024;
+    static constexpr int kWin = 2 * kHop;
+    static constexpr int kSearch = 220;
+    static constexpr int kCand = 4608;
+    float accL[kWin]{};
+    float accR[kWin]{};
+    float win[kWin]{};
+    float cand[kCand]{};
+    float target[kHop / 2]{};
+    int phase = kHop;
+    bool havePrev = false;
+    bool windowReady = false;
+    double prevStart = 0.0;
+    double lastHopPos = 0.0;
+
+    void reset() {
+        std::fill(std::begin(accL), std::end(accL), 0.f);
+        std::fill(std::begin(accR), std::end(accR), 0.f);
+        phase = kHop;
+        havePrev = false;
+    }
+
+    // read(pos, l, r) devolve a amostra interpolada já com o loop e o roll aplicados à posição.
+    // `step` é o avanço (com sinal) da posição de análise por amostra de saída; `wrapped` diz que há loop ou roll.
+    template <class Read>
+    void next(Read &&read, double position, double dir, double rate, double step, bool wrapped, float &l, float &r) {
+        if (!windowReady) {
+            for (int i = 0; i < kWin; ++i) win[i] = 0.5f - 0.5f * std::cos(6.2831853f * static_cast<float>(i) / kWin);
+            windowReady = true;
+        }
+        rate = std::clamp(rate, 0.25, 3.0);
+        if (phase >= kHop) {
+            // O que sobrou da segunda metade do grão anterior vira o começo; o resto zera.
+            for (int i = 0; i < kHop; ++i) {
+                accL[i] = accL[i + kHop];
+                accR[i] = accR[i + kHop];
+                accL[i + kHop] = 0.f;
+                accR[i + kHop] = 0.f;
+            }
+            if (havePrev && !wrapped) {
+                const double expected = lastHopPos + step * kHop;
+                if (std::fabs(position - expected) > 0.5 * kHop * std::max(1.0, std::fabs(step)) + kSearch) {
+                    havePrev = false;
+                    std::fill(std::begin(accL), std::end(accL), 0.f);
+                    std::fill(std::begin(accR), std::end(accR), 0.f);
+                }
+            }
+            auto mono = [&](double pos) {
+                float a = 0.f;
+                float b = 0.f;
+                read(pos, a, b);
+                return 0.5f * (a + b);
+            };
+            int delta = 0;
+            if (havePrev) {
+                const int length = std::min(kCand, 2 * kSearch + static_cast<int>(kHop * rate) + 2);
+                for (int m = 0; m < length; ++m) cand[m] = mono(position + dir * static_cast<double>(m - kSearch));
+                for (int j = 0; j < kHop / 2; ++j) target[j] = mono(prevStart + dir * (kHop + 2 * j) * rate);
+                auto score = [&](int d) {
+                    double dot = 0.0;
+                    double energy = 1e-9;
+                    for (int j = 0; j < kHop / 2; ++j) {
+                        const int at = kSearch + d + static_cast<int>(2.0 * j * rate + 0.5);
+                        const float c = at >= 0 && at < length ? cand[at] : 0.f;
+                        dot += static_cast<double>(target[j]) * c;
+                        energy += static_cast<double>(c) * c;
+                    }
+                    // Leve preferência pelo centro: sem som, não vaga pela janela.
+                    return dot / std::sqrt(energy) * (1.0 - 0.0004 * std::abs(d));
+                };
+                double best = -1e30;
+                for (int d = -kSearch; d <= kSearch; d += 4) {
+                    const double value = score(d);
+                    if (value > best) {
+                        best = value;
+                        delta = d;
+                    }
+                }
+                const int center = delta;
+                for (int d = std::max(-kSearch, center - 3); d <= std::min(kSearch, center + 3); ++d) {
+                    const double value = score(d);
+                    if (value > best) {
+                        best = value;
+                        delta = d;
+                    }
+                }
+            }
+            const double start = position + dir * static_cast<double>(delta);
+            // Grão de partida (início, salto de hot cue): sem subida de Hann, para não amaciar o primeiro ataque.
+            const bool fresh = !havePrev;
+            for (int i = 0; i < kWin; ++i) {
+                float a = 0.f;
+                float b = 0.f;
+                read(start + dir * i * rate, a, b);
+                const float gain = fresh && i < kHop ? 1.f : win[i];
+                accL[i] += a * gain;
+                accR[i] += b * gain;
+            }
+            prevStart = start;
+            lastHopPos = position;
+            havePrev = true;
+            phase = 0;
+        }
+        l = sanitize(accL[phase]);
+        r = sanitize(accR[phase]);
+        phase += 1;
     }
 };
 

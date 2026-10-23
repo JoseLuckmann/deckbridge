@@ -49,7 +49,7 @@ A capa (tabela de artwork e ficheiros em `PIONEER/Artwork`) é leitura de biblio
 | Função | Fonte | Classe | Esforço | Estado | Recomendação |
 |---|---|---|---|---|---|
 | Beat Sync de BPM | Manual, Beat Sync | 1 e 3: `PioneerDDJ400.syncPressed` (0x90/0x58 e 0x91/0x58). Pressão longa: `syncLongPressed` (0x5C) define o master | — | feito | Não usar este botão para Key Sync |
-| Master Tempo | Manual, Master Tempo | 1 | — | aproximação (duas linhas de atraso) | Não vender como o algoritmo comercial |
+| Master Tempo | Manual, Master Tempo | 1 | — | WSOLA (janela de 2048, salto de 1024, busca de ±220 amostras), lendo direto da faixa, sem latência; o deslocador antigo de dois atrasos não segurava a afinação (19,5 Hz no lugar de 220 Hz no teste isolado) | Não vender como o algoritmo comercial; ouvir no hardware |
 | Quantize e valor de batida | Manual, Quantize; atalho QUANTIZE BEAT VALUE | 1 | — | feito no ecrã | Manter |
 | Beat Jump | Manual: o salto usa o valor de BEAT JUMP BEAT VALUE | 1 | — | 1, 2, 4, 8, 16, 32 e, desde a 0.13.0, 64 no ecrã. O manual não fixa a lista; o valor é um ajuste | Manter |
 | Loop in / out | Manual; mapa `loop_in` 0x10, `loop_out` 0x11 | 1 e 3 | — | feito | Manter |
