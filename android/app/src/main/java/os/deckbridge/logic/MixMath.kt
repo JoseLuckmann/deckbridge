@@ -11,7 +11,7 @@ data class PerformanceAction(
         BROWSE_MOVE, BROWSE_ENTER, BROWSE_BACK, LOAD,
         BEAT_FX, FILTER, QUANTIZE, SYNC, MASTER,
         BEAT_JUMP, BEAT_JUMP_PAGE, LOOP_IN, LOOP_OUT, RELOOP, LOOP_SCALE, BEAT_LOOP, RMX,
-        EQ, TRIM, HEAD_MIX, HEAD_GAIN, PFL,
+        EQ, TRIM, HEAD_MIX, HEAD_GAIN, PFL, START,
     }
 }
 
@@ -214,6 +214,10 @@ fun surfaceAction(hit: ControlHit, value: Int): PerformanceAction? {
             if (hit.midino != 23 && hit.midino != 24) null
             else PerformanceAction(deck, PerformanceAction.Kind.FILTER, slider = value.coerceIn(0, 127) / 127.0)
         }
+        // SHIFT+CUE: volta ao começo da faixa e toca. SHIFT+CUE/LOOP CALL: salto rápido de 32 batidas.
+        "start_play" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.START) else null
+        "PioneerDDJ400.quickJumpBack" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.BEAT_JUMP, slider = -32.0) else null
+        "PioneerDDJ400.quickJumpForward" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.BEAT_JUMP, slider = 32.0) else null
         "PioneerDDJ400.toggleQuantize" -> PerformanceAction(deck, PerformanceAction.Kind.QUANTIZE)
         "PioneerDDJ400.syncPressed" -> PerformanceAction(deck, PerformanceAction.Kind.SYNC)
         "PioneerDDJ400.syncLongPressed" -> PerformanceAction(deck, PerformanceAction.Kind.MASTER)

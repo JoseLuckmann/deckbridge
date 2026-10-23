@@ -281,3 +281,19 @@ class PflMapTest {
         org.junit.Assert.assertEquals(setOf(0, 1), hits.map { interpretPerformance(it, 127, TempoAssembler())!!.deck }.toSet())
     }
 }
+
+class ExtraPerformanceTest {
+    @org.junit.Test
+    fun shiftCueAndQuickJumpAreMapped() {
+        val map = MidiMap.loadResource()
+        fun hitsOf(key: String) = (0..127).flatMap { note -> (144..151).map { map.lookup(it, note) } }.filter { it.key == key }
+        val start = hitsOf("start_play")
+        org.junit.Assert.assertEquals(2, start.size)
+        org.junit.Assert.assertEquals(PerformanceAction.Kind.START, interpretPerformance(start.first(), 127, TempoAssembler())!!.kind)
+        val back = interpretPerformance(hitsOf("PioneerDDJ400.quickJumpBack").first(), 127, TempoAssembler())!!
+        org.junit.Assert.assertEquals(PerformanceAction.Kind.BEAT_JUMP, back.kind)
+        org.junit.Assert.assertEquals(-32.0, back.slider!!, 0.0)
+        val forward = interpretPerformance(hitsOf("PioneerDDJ400.quickJumpForward").first(), 127, TempoAssembler())!!
+        org.junit.Assert.assertEquals(32.0, forward.slider!!, 0.0)
+    }
+}

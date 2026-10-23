@@ -104,6 +104,7 @@ fun DeckPage(
     var headMix by remember { mutableStateOf(0f) }
     var headLevel by remember { mutableStateOf(0.75f) }
     var levels by remember { mutableStateOf(listOf(0f, 0f, 0f, 0f)) }
+    var peakHeld by remember { mutableStateOf(FloatArray(4)) }
     var pflA by remember { mutableStateOf(false) }
     var pflB by remember { mutableStateOf(false) }
     var faces by remember { mutableStateOf(listOf(DeckFace(), DeckFace())) }
@@ -523,6 +524,11 @@ fun DeckPage(
                 trimKnobs = trimKnobs.mapIndexed { index, value -> if (index == deck) level else value }
                 NativeEngine.setTrimKnob(deck, level)
             }
+            PerformanceAction.Kind.START -> if (deck in 0..1) {
+                seekTo(deck, 0f)
+                edit(deck) { it.copy(playing = true) }
+                NativeEngine.transport(deck, true)
+            }
             PerformanceAction.Kind.PFL -> if (deck in 0..1) {
                 if (deck == 0) pflA = !pflA else pflB = !pflB
             }
@@ -823,13 +829,54 @@ fun DeckPage(
         }
     }
 
-    // Medidores da tela MIXER: lê os picos do motor 20 vezes por segundo e deixa cair devagar.
-    LaunchedEffect(overlay) {
-        if (overlay != "mixer") return@LaunchedEffect
+    // Um só leitor dos picos do motor (o contador zera ao ler): alimenta os medidores da mesa e o VU da controladora.
+    LaunchedEffect(Unit) {
         val raw = FloatArray(4)
         while (true) {
             NativeEngine.levels(raw)
-            levels = levels.mapIndexed { index, old -> kotlin.math.max(os.deckbridge.logic.meterFraction(raw[index]), old * 0.82f) }
+            peakHeld = FloatArray(4) { index -> kotlin.math.max(raw[index], peakHeld[index] * 0.8f) }
+            if (overlay == "mixer") levels = peakHeld.map { os.deckbridge.logic.meterFraction(it) }
+            delay(50)
+        }
+    }
+
+    // LEDs da DDJ-400 e VU: só as mudanças, 20 vezes por segundo. Reenvia tudo quando a controladora reconecta.
+    LaunchedEffect(Unit) {
+        val diff = os.deckbridge.logic.LedDiff()
+        var epoch = -1
+        while (true) {
+            if (epoch != PerformanceHub.ledEpoch) {
+                epoch = PerformanceHub.ledEpoch
+                diff.resend()
+            }
+            if (PerformanceHub.ledPort != null) {
+                val peaks = peakHeld
+                val state = os.deckbridge.logic.LedState(
+                    decks = (0..1).map { deck ->
+                        val face = faces[deck]
+                        val track = loaded.getOrNull(deck)
+                        val cues = track?.let { liveCatalog.value?.analyses?.get(it.id)?.hotCues }.orEmpty().map { it.index }.filter { it in 0..7 }.toMutableSet()
+                        cueBanks[deck][0].forEachIndexed { index, value -> if (value >= 0f) cues += index }
+                        val bpm = track?.bpm ?: 0.0
+                        val loopBeats = if (face.loopEnd > face.loopStart && bpm > 1.0) (face.loopEnd - face.loopStart) * bpm / 60.0 else 0.0
+                        os.deckbridge.logic.DeckLed(
+                            loaded = track != null,
+                            playing = face.playing,
+                            sync = face.sync,
+                            pfl = if (deck == 0) pflA else pflB,
+                            hotCues = cues,
+                            beatLoop = os.deckbridge.logic.beatLoopIndex(loopBeats),
+                            peak = peaks[deck],
+                        )
+                    },
+                    beatFxOn = fx.on && !rmx.panel,
+                    samplerPads = buildSet {
+                        if (rmx.panel && rmx.holding) add(rmx.scene.coerceIn(0, 7))
+                        if (rmx.panel && rmx.xOn) add((4 + rmx.xMode).coerceIn(0, 7))
+                    },
+                )
+                diff.messages(state).forEach { PerformanceHub.sendMidi(it) }
+            }
             delay(50)
         }
     }

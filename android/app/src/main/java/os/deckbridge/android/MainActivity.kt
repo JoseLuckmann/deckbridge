@@ -188,9 +188,17 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
                 if (port.type == MidiDeviceInfo.PortInfo.TYPE_OUTPUT) index else null
             }
             if (outputs.isEmpty()) return
+            val inputs = info.ports.mapIndexedNotNull { index, port ->
+                if (port.type == MidiDeviceInfo.PortInfo.TYPE_INPUT) index else null
+            }
             manager?.openDevice(info, { device ->
                 if (device == null) return@openDevice
                 opened[info.id] = device
+                // Porta de saída do app: acende os LEDs da controladora.
+                inputs.firstOrNull()?.let { index ->
+                    PerformanceHub.ledPort = runCatching { device.openInputPort(index) }.getOrNull()
+                    PerformanceHub.ledEpoch += 1
+                }
                 outputs.forEach { index ->
                     val port = device.openOutputPort(index) ?: return@forEach
                     port.connect(object : MidiReceiver() {
@@ -211,7 +219,10 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
             }
 
             override fun onDeviceRemoved(info: MidiDeviceInfo) {
-                opened.remove(info.id)?.let { runCatching { it.close() } }
+                opened.remove(info.id)?.let {
+                    PerformanceHub.ledPort = null
+                    runCatching { it.close() }
+                }
                 handler.post { notice = "Controladora MIDI desconectada. A música continua; ao religar o cabo ela volta sozinha." }
             }
         }
