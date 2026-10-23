@@ -23,7 +23,7 @@ O que o roteiro mostra: hot cue e PLAY, filtro, EQ LOW em kill, SYNC (tempo e fa
 
 Achados desta sessão:
 
-- **Grade do analisador fora do bumbo.** Nas duas faixas de teste (house, 130 e 129 BPM) o BPM saiu certo, mas a primeira batida da grade caiu 222 ms e 123 ms fora do bumbo medido no áudio (o analisador escolheu um baixo em contratempo). O SYNC alinha pela grade, então a fase ficaria errada. O vídeo aplica o ajuste de grade que o app já tem (G−/G+, −222 ms e −123 ms), como um DJ faria ao preparar as faixas. Com a grade ajustada a fase entre os decks fica entre 0,0 e −0,5 ms (`checks.txt`). Corrigir a escolha de fase do analisador é item de backlog.
+- **Grade do analisador fora do bumbo.** Nas duas faixas de teste (house, 130 e 129 BPM) o BPM saiu certo, mas a primeira batida da grade caiu 222 ms e 123 ms fora do bumbo medido no áudio (o analisador escolheu um baixo em contratempo). O SYNC alinha pela grade, então a fase ficaria errada. O vídeo aplica o ajuste de grade que o app já tem (G−/G+, −222 ms e −123 ms), como um DJ faria ao preparar as faixas. Com a grade ajustada a fase entre os decks fica entre 0,0 e −0,5 ms (`checks.txt`). **Corrigido em 23/10/2026** (ver abaixo).
 - **Crossfader:** a lei era linear (cada canal a 50% no centro). Passou a aditiva (os dois inteiros no centro), em `engine.cpp`, `masterGain` e no teste.
 - Os auto cues do app (compassos 16, 32 e 168 da primeira faixa; 32 da segunda) caem em barras exatas.
 
@@ -32,3 +32,11 @@ Achados desta sessão:
 O roteiro agora começa com os dois decks vazios: BROWSE, giro do encoder, LOAD do deck 1 (nota 70) e do deck 2 (nota 71), hot cue quantizado e PLAY. O SYNC não é usado: o BPM do deck 2 é igualado pelo fader de tempo (MSB/LSB, status 176+deck, notas 0 e 32, passando do ponto e voltando) e o PLAY do deck 2 cai na linha do compasso do deck 1 (8 compassos de solo).
 
 `checks.txt` (fase entre decks, medida contra o bumbo real): −2,5 ms na entrada, 0,0 ms depois do salto de hot cue, +0,1 ms no retorno à primeira faixa. Entre 44 s e 63 s o deck 1 está pausado (a fase listada ali não vale). Só simulação e áudio do motor C++; escuta no tablet segue `BLOCKED_HARDWARE`.
+
+## Fase da grade corrigida no analisador (23/10/2026)
+
+`refineGridPhase` (`TrackAnalysis.kt`) corrige a fase quando o pico grave mais forte é um baixo no contratempo. O corpo do bumbo (100 a 250 Hz) tem o máximo de energia por fase logo depois do ataque e o mínimo no contratempo; o ataque vem do fluxo logarítmico de 1 a 5 kHz, a fase só é trocada se tiver também corpo grave (40 a 150 Hz) e difere mais de 15 ms da anterior, e a mediana do início do ataque (25% do pico, envelope de 1 ms) fecha o ajuste fino. A grade passa a ser regular, sem recolar nos picos do fluxo.
+
+Medido nas duas faixas de teste (sem nenhum ajuste manual de grade): primeira batida 1 ms e 0 ms do início do bumbo (antes 222 ms e 123 ms fora), e a fase entre os decks no vídeo sem SYNC fica entre −0,5 e −1,0 ms. As origens do bumbo vêm de uma medição independente (limiar de 25% do ataque na faixa de 1 a 5 kHz). O vídeo `sessao-sem-sync.mp4` ainda foi gerado com o ajuste manual antigo (−222/−123 ms); o roteiro agora roda sem ele.
+
+Limites: heurística validada em duas faixas house reais e num teste sintético (`gridLocksToTheKickWhenAnOffbeatBassIsLouder`, que falha sem a correção). Gêneros sem bumbo marcado (ambient, breakbeat) caem no caminho antigo, porque o contraste do corpo é pequeno. Não há corpus de grade com verdade de terreno para medir a taxa de acerto geral: marcado como risco.

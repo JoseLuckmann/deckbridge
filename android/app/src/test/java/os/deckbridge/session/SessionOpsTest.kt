@@ -11,8 +11,8 @@ class SessionOpsTest {
         assumeTrue(SessionAssets.enabled())
         val catalog = SessionAssets.catalog()
         val notes = StringBuilder()
-        // Origens reais do bumbo medidas no áudio (não as da análise do app): 0,005 s e 0,0 s.
-        val oA = 0.005
+        // Origens do bumbo medidas no áudio por limiar de 25% do ataque na faixa de 1 a 5 kHz (método independente da análise do app).
+        val oA = 0.0
         val oB = 0.0
         val checkpoints = doubleArrayOf(24.0, 27.0, 33.0, 41.0, 44.0, 48.0, 57.0, 63.0, 82.0, 88.0, 93.0)
         var nextCheck = 0

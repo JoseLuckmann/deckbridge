@@ -67,6 +67,45 @@ class TrackAnalysisTest {
     }
 
     @Test
+    fun gridLocksToTheKickWhenAnOffbeatBassIsLouder() {
+        val rate = 24000
+        val bpm = 128.0
+        val samples = FloatArray(rate * 60)
+        val beat = rate * 60.0 / bpm
+        val random = java.util.Random(7)
+        var index = 0
+        while (index * beat + beat < samples.size) {
+            val kick = (index * beat).toInt() + (0.012 * rate).toInt()
+            for (offset in 0 until (0.18 * rate).toInt()) {
+                val at = kick + offset
+                if (at >= samples.size) break
+                val t = offset.toDouble() / rate
+                val body = sin(2.0 * PI * (52.0 + 90.0 * kotlin.math.exp(-t * 40.0)) * t) * kotlin.math.exp(-t * 18.0) * 0.35
+                val click = if (offset < 70) (random.nextDouble() * 2.0 - 1.0) * 0.45 * (1.0 - offset / 70.0) else 0.0
+                samples[at] += (body + click).toFloat()
+            }
+            // Baixo no contratempo, mais longo e mais forte que o bumbo, e chapéu aberto no mesmo lugar.
+            val off = ((index + 0.5) * beat).toInt() + (0.012 * rate).toInt()
+            for (offset in 0 until (0.22 * rate).toInt()) {
+                val at = off + offset
+                if (at >= samples.size) break
+                val t = offset.toDouble() / rate
+                samples[at] += (sin(2.0 * PI * 58.0 * t) * kotlin.math.exp(-t * 6.0) * 0.90).toFloat()
+                if (offset < (0.09 * rate).toInt()) samples[at] += ((random.nextDouble() * 2.0 - 1.0) * 0.12 * (1.0 - offset / (0.09 * rate))).toFloat()
+            }
+            index += 1
+        }
+        val read = analyzeTrack(samples, rate)
+        val period = 60.0 / read.bpm
+        val first = read.beats.first().timeMs / 1000.0
+        val kickPhase = 0.012
+        var delta = (first - kickPhase) % period
+        if (delta > period / 2) delta -= period
+        if (delta < -period / 2) delta += period
+        assertTrue("bpm ${read.bpm} primeira batida $first erro ${delta * 1000.0} ms", abs(delta) < 0.020)
+    }
+
+    @Test
     fun sineAt440IsA() {
         val rate = 22050
         val samples = FloatArray(rate * 2) { index ->

@@ -10,7 +10,7 @@ const val SESSION_TICK = 0.02
  * até esse instante. Devolve o modelo no fim, com o registro de operações.
  */
 fun runSession(catalog: RbCatalog, fps: Int, maxSeconds: Double = SessionScript.END, onFrame: (SessionModel, Int) -> Unit = { _, _ -> }): SessionModel {
-    val model = SessionModel(catalog, doubleArrayOf(-222.0, -123.0))
+    val model = SessionModel(catalog, doubleArrayOf(0.0, 0.0))
     // Hot cues da análise do app (pad 1..4 = índices 0..3).
     for (deck in 0..1) {
         val cues = catalog.analyses[catalog.tracks[deck].id]?.hotCues.orEmpty().map { it.index to it.timeMs / 1000.0 }

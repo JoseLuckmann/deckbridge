@@ -56,9 +56,14 @@ fun analyzeTrack(samples: FloatArray, rate: Int): TrackRead {
     val kick = kickFlux(samples, rate)
     val full = fullBandFlux(samples, rate)
     val peaks = strongPeaks(kick.values, kick.rate)
-    val bpmPick = pickBpm(kick.values, kick.rate, peaks)
-    val beats = beatGrid(peaks, bpmPick, samples.size.toDouble() / rate)
-    val kickError = kickGridError(peaks, beats, bpmPick.bpm)
+    val firstPick = pickBpm(kick.values, kick.rate, peaks)
+    val phaseFix = refineGridPhase(samples, rate, firstPick.bpm, firstPick.phase)
+    val bpmPick = if (phaseFix == null) firstPick else firstPick.copy(phase = phaseFix.first)
+    // Com a fase corrigida, os picos de referência passam a ser os da figura que escolhemos.
+    val gridPeaks = phaseFix?.second ?: peaks
+    // Fase corrigida pelo ataque: grade regular, sem recolar nos picos do fluxo (que caem alguns ms depois do início).
+    val beats = beatGrid(if (phaseFix == null) peaks else DoubleArray(0), bpmPick, samples.size.toDouble() / rate)
+    val kickError = kickGridError(gridPeaks, beats, bpmPick.bpm)
     val fullError = fullBandGridError(full.values, full.rate, beats)
     val key = detectKey(samples, rate)
     val duration = samples.size.toDouble() / rate
@@ -140,6 +145,144 @@ private fun parseKey(raw: String): Pair<Int, Boolean>? {
     val index = PITCH_CLASS.indexOf(root)
     if (index < 0) return null
     return index to minor
+}
+
+/**
+ * O pico grave mais forte pode ser um baixo no contratempo (house): o BPM sai certo e a primeira batida da grade cai
+ * 100 a 230 ms fora do bumbo. O bumbo tem ataque (clique) e corpo grave na mesma batida. O fluxo logarítmico (que vê
+ * o salto a partir do silêncio) de 1 a 5 kHz, cruzado com o de 40 a 150 Hz, aponta o bumbo nas duas faixas de teste.
+ * Só troca a fase se a nova for bem mais forte e também tiver corpo grave. Devolve a fase e os picos da figura.
+ */
+private fun refineGridPhase(samples: FloatArray, rate: Int, bpm: Double, phase: Double): Pair<Double, DoubleArray>? {
+    if (bpm < 70.0 || rate < 16000) return null
+    val seconds = min(samples.size.toDouble() / rate, 180.0)
+    val head = samples.copyOf((seconds * rate).toInt())
+    val lowBand = bandpass(head, rate, 40.0, 150.0)
+    val clickBand = bandpass(head, rate, 1000.0, 5000.0)
+    val low = logFlux(lowBand, rate)
+    val click = logFlux(clickBand, rate)
+    val frameRate = low.rate
+    val beatFrames = 60.0 / bpm * frameRate
+    val steps = beatFrames.roundToInt()
+    if (steps < 20 || low.values.size < steps * 16) return null
+    fun profile(flux: Flux): DoubleArray {
+        val out = DoubleArray(steps)
+        for (shift in 0 until steps) {
+            var sum = 0.0
+            var count = 0
+            var at = shift.toDouble()
+            while (at < flux.values.size - 1) {
+                sum += flux.values[at.roundToInt()]
+                count += 1
+                at += beatFrames
+            }
+            out[shift] = if (count == 0) 0.0 else sum / count
+        }
+        // Suaviza ±3 quadros (6 ms) em círculo.
+        val smooth = DoubleArray(steps) { index -> (-3..3).sumOf { out[Math.floorMod(index + it, steps)] } / 7.0 }
+        val top = smooth.max().coerceAtLeast(1e-12)
+        return DoubleArray(steps) { smooth[it] / top }
+    }
+    val lowProfile = profile(low)
+    val clickProfile = profile(click)
+    // Corpo do bumbo (100 a 250 Hz): a energia média por fase tem o máximo logo depois do ataque do bumbo e o
+    // mínimo no contratempo. É o que separa o bumbo do baixo e do chapéu no contratempo.
+    val bodyBand = bandpass(head, rate, 100.0, 250.0)
+    val hop = max(1, rate / 500)
+    val bodyFrames = bodyBand.size / hop
+    val bodyEnergy = FloatArray(bodyFrames) { index ->
+        var energy = 0.0
+        for (cursor in index * hop until index * hop + hop) energy += bodyBand[cursor] * bodyBand[cursor]
+        (energy / hop).toFloat()
+    }
+    val body = profile(Flux(bodyEnergy, frameRate))
+    var coarse = 0
+    for (index in 1 until steps) if (body[index] > body[coarse]) coarse = index
+    val floor = body.min()
+    // Sem contraste entre o bumbo e o resto da batida, não há o que corrigir.
+    if (body[coarse] - floor < 0.4) return null
+    // O ataque (clique) fica até 40 ms antes do máximo do corpo.
+    var best = coarse
+    var bestClick = -1.0
+    for (back in 0..(0.04 * frameRate).roundToInt()) {
+        val index = Math.floorMod(coarse - back, steps)
+        if (clickProfile[index] > bestClick) {
+            bestClick = clickProfile[index]
+            best = index
+        }
+    }
+    // Precisa ter corpo grave na mesma batida; um clique sozinho no contratempo é chapéu.
+    if (lowProfile[best] < 0.5) return null
+    val currentShift = ((phase * frameRate).roundToInt()).let { Math.floorMod(it, steps) }
+    val gap = Math.floorMod(best - currentShift, steps).let { min(it, steps - it) }
+    if (gap < (0.015 * frameRate).roundToInt()) return null
+    val newPhase = best / frameRate
+    val clickPeaks = strongPeaks(click.values, click.rate)
+    // Ajuste fino: o pico de clique mais perto da fase escolhida.
+    val snapped = if (clickPeaks.isEmpty()) newPhase else {
+        val near = nearestPeak(clickPeaks, newPhase + beatFrames / frameRate * 8)
+        val offset = (near - (newPhase + 8 * 60.0 / bpm))
+        if (abs(offset) <= 0.012) newPhase + offset else newPhase
+    }
+    val period = 60.0 / bpm
+    var fixed = (snapped + onsetCorrection(clickBand, rate, snapped, period)) % period
+    if (fixed < 0.0) fixed += period
+    if (fixed > period - 0.012) fixed = 0.0
+    return fixed.coerceAtLeast(0.0) to clickPeaks
+}
+
+/**
+ * O pico do fluxo fica alguns ms depois do início do bumbo. No envelope de 1 ms da faixa de clique, procura o instante em
+ * que o ataque passa de 25% do pico de cada batida e devolve a mediana do desvio (até ±20 ms), para a grade cair no início.
+ */
+private fun onsetCorrection(click: FloatArray, rate: Int, phase: Double, period: Double): Double {
+    val width = max(1, rate / 1000)
+    val env = FloatArray(click.size)
+    var acc = 0f
+    for (index in click.indices) {
+        acc += abs(click[index])
+        if (index >= width) acc -= abs(click[index - width])
+        env[index] = acc / width
+    }
+    val offsets = ArrayList<Double>()
+    val reach = (0.025 * rate).toInt()
+    for (beat in 2 until 160) {
+        val center = ((phase + beat * period) * rate).toInt()
+        val from = center - reach
+        val to = center + reach
+        if (from < 0 || to >= env.size) break
+        var peak = 0f
+        for (index in from..to) if (env[index] > peak) peak = env[index]
+        if (peak <= 1e-6f) continue
+        var edge = from
+        while (edge < to && env[edge] < 0.25f * peak) edge += 1
+        offsets += (edge - center).toDouble() / rate
+    }
+    if (offsets.size < 16) return 0.0
+    offsets.sort()
+    return offsets[offsets.size / 2].coerceIn(-0.020, 0.020)
+}
+
+private fun bandpass(samples: FloatArray, rate: Int, lowHz: Double, highHz: Double): FloatArray {
+    val upper = zeroPhaseLowpass(samples, rate, min(highHz, rate * 0.45))
+    val lower = zeroPhaseLowpass(samples, rate, lowHz)
+    return FloatArray(samples.size) { upper[it] - lower[it] }
+}
+
+private fun logFlux(band: FloatArray, rate: Int): Flux {
+    val hop = max(1, rate / 500)
+    val frames = band.size / hop
+    val env = FloatArray(frames)
+    var previous = 0.0
+    for (index in 0 until frames) {
+        var energy = 0.0
+        val start = index * hop
+        for (cursor in start until start + hop) energy += band[cursor] * band[cursor]
+        val level = ln1p(energy / hop * 1e6)
+        env[index] = (level - previous).coerceAtLeast(0.0).toFloat()
+        previous = level
+    }
+    return Flux(env, rate.toDouble() / hop)
 }
 
 private data class BpmPick(val bpm: Double, val confidence: Double, val phase: Double)

@@ -124,7 +124,7 @@ class SessionFramesTest {
     }
 
     private fun runSessionFirstFrame(catalog: os.deckbridge.logic.RbCatalog): Frame {
-        val model = SessionModel(catalog, doubleArrayOf(-222.0, -123.0))
+        val model = SessionModel(catalog, doubleArrayOf(0.0, 0.0))
         return Frame(model.faces, model.fx, model.rmx, model.mixer(), model.master, "", "", model.deckTracks(), null)
     }
 }
