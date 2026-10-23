@@ -91,6 +91,29 @@ A tabela está em `docs/research/cdj3000-coverage.md`. Fora desta linha: Pro DJ 
 10. Alvo 2: inventário do Pi, áudio de 4 canais no Linux, imagem. T005 em diante.
 11. Pro DJ Link, nuvem e ecrã do prato ficam de fora. A058.
 
+## Como continuar o projeto
+
+Quem recebe o repositório clona o bundle, que traz o histórico, os ramos e as tags.
+
+```bash
+git clone deckbridge-os.bundle deckbridge-os
+cd deckbridge-os
+```
+
+O ramo é `main`. Nesta entrega não há outros ramos nem tags.
+
+Pré-requisitos do alvo 1: JDK 17 ou mais recente (bytecode 17; a 0.14.1 foi gerada com OpenJDK 21), Android SDK com `android-35`, build-tools `35.0.0`, NDK `27.2.12479018` e CMake `3.22.1`, `ANDROID_HOME` nesse SDK, e o wrapper `android/gradlew` (Gradle `8.11.1`, Android Gradle Plugin `8.7.3`, Kotlin `2.0.21`). Os testes do motor no host pedem `g++` com C++17. A trilha Python pede Python 3.
+
+```bash
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/android-sdk}"
+cd android
+./gradlew :app:testMultiDebugUnitTest :app:assembleArm64Release :app:assembleMultiDebug
+```
+
+`--offline` exige cache já preenchido. O APK arm64 sai em `app/build/outputs/apk/arm64/release/`.
+
+Leitura: `STATUS.md` (esta página), `specs/001-ddj400-standalone/spec.md`, `plan.md` e `tasks.md`. O roteiro de hardware é `docs/hil/roteiro-validacao-final.md`, com os passos 13 a 24 ainda abertos. As listas antigas estão em `docs/hil/checklist-fase0.md` e `docs/hil/checklist-fase1.md`.
+
 ## Construir, testar e instalar
 
 No diretório `android/`, com o SDK em `ANDROID_HOME` (nesta máquina, `$HOME/android-sdk`):

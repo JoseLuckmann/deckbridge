@@ -12,6 +12,44 @@
 
 Transformar uma DDJ-400 em um equipamento **standalone**. No alvo 1 o tablet inicializa o app, reproduz e pré-escuta dois decks pela interface de áudio da controladora e navega em USBs exportados pelo rekordbox. Offline primeiro. O sistema **não é** o app rekordbox para Android. O alvo 2, Raspberry com Mixxx, continua especificado e não foi montado.
 
+## Como continuar o projeto
+
+O histórico inteiro vai no ficheiro `deckbridge-os.bundle` (todos os ramos, todas as tags).
+
+```bash
+git clone deckbridge-os.bundle deckbridge-os
+cd deckbridge-os
+```
+
+O clone fica em `main`. Nesta entrega só existe esse ramo, sem tags.
+
+Para o app Android:
+
+- JDK 17 ou mais recente. O bytecode do app é 17. A build da 0.14.1 usou OpenJDK 21.
+- Android SDK com a plataforma `android-35`, build-tools `35.0.0`, NDK `27.2.12479018` e CMake `3.22.1`. A variável `ANDROID_HOME` aponta para esse SDK.
+- Gradle `8.11.1` pelo wrapper `android/gradlew` (o jar está no repositório). Android Gradle Plugin `8.7.3`. Kotlin `2.0.21`.
+- `g++` com C++17, para os testes do motor no host.
+- Python 3, para a trilha `pytest`.
+
+```bash
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/android-sdk}"
+cd android
+./gradlew :app:testMultiDebugUnitTest :app:assembleArm64Release :app:assembleMultiDebug
+```
+
+`--offline` só serve se o cache do Gradle e as dependências do SDK já estiverem na máquina. O APK do tablet sai em `app/build/outputs/apk/arm64/release/`. O de três ABIs sai em `app/build/outputs/apk/multi/debug/`. Os dois levam assinatura de debug.
+
+Onde está o resto:
+
+- `STATUS.md` — o que a 0.14.1 faz, o que falta e as decisões.
+- `specs/001-ddj400-standalone/spec.md` — requisitos.
+- `specs/001-ddj400-standalone/plan.md` — plano. O diagrama do Mixxx é o alvo 2.
+- `specs/001-ddj400-standalone/tasks.md` — cada tarefa com estado.
+- `docs/hil/roteiro-validacao-final.md` — roteiro no hardware. Os passos 13 a 24 continuam por executar. Simulação não os fecha.
+- `docs/hil/checklist-fase0.md` e `docs/hil/checklist-fase1.md` — as listas das duas fases.
+
+O USB do rekordbox é só leitura. Busca por voz (A053) e quatro decks (A054) continuam adiados.
+
 ## Leia nesta ordem (agentes)
 
 1. `STATUS.md` — versão, o que funciona, o que falta, decisões e como instalar.
