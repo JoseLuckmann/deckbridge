@@ -26,3 +26,9 @@ Achados desta sessão:
 - **Grade do analisador fora do bumbo.** Nas duas faixas de teste (house, 130 e 129 BPM) o BPM saiu certo, mas a primeira batida da grade caiu 222 ms e 123 ms fora do bumbo medido no áudio (o analisador escolheu um baixo em contratempo). O SYNC alinha pela grade, então a fase ficaria errada. O vídeo aplica o ajuste de grade que o app já tem (G−/G+, −222 ms e −123 ms), como um DJ faria ao preparar as faixas. Com a grade ajustada a fase entre os decks fica entre 0,0 e −0,5 ms (`checks.txt`). Corrigir a escolha de fase do analisador é item de backlog.
 - **Crossfader:** a lei era linear (cada canal a 50% no centro). Passou a aditiva (os dois inteiros no centro), em `engine.cpp`, `masterGain` e no teste.
 - Os auto cues do app (compassos 16, 32 e 168 da primeira faixa; 32 da segunda) caem em barras exatas.
+
+## Versão sem SYNC (23/10/2026)
+
+O roteiro agora começa com os dois decks vazios: BROWSE, giro do encoder, LOAD do deck 1 (nota 70) e do deck 2 (nota 71), hot cue quantizado e PLAY. O SYNC não é usado: o BPM do deck 2 é igualado pelo fader de tempo (MSB/LSB, status 176+deck, notas 0 e 32, passando do ponto e voltando) e o PLAY do deck 2 cai na linha do compasso do deck 1 (8 compassos de solo).
+
+`checks.txt` (fase entre decks, medida contra o bumbo real): −2,5 ms na entrada, 0,0 ms depois do salto de hot cue, +0,1 ms no retorno à primeira faixa. Entre 44 s e 63 s o deck 1 está pausado (a fase listada ali não vale). Só simulação e áudio do motor C++; escuta no tablet segue `BLOCKED_HARDWARE`.
