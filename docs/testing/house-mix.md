@@ -31,3 +31,7 @@ Limites: sem escuta. As curvas dos seis Color FX são nossas; os manuais não as
 ## Arquivo no repositório
 
 `docs/testing/audio/mix-house-sintetica.mp3` (192 kbps, 3:10) é a mix das duas faixas sintetizadas no código, sem material de terceiros, por isso pode ficar no git. O roteiro é `mix-house-sintetica.tsv` (segundos, compasso, evento). Faixas públicas do corpus CC BY 3.0 (`tools/fetch_real_corpus.py`) não puderam ser baixadas nesta sessão: o proxy do ambiente bloqueou archive.org (403).
+
+## Ajuste do roll (v2)
+
+Queixa: os golpes do roll soavam curtos e secos. Mudanças no `XPad`: reverb própria dos golpes (FDN, RT60 de 1,1 a 2,5 s conforme o gesto, retorno sem grave, cauda de 4 s que atravessa o drop), palma e caixa abertas no estéreo (Haas de 9 ms), saturação leve no barramento, e o passa-altas do bumbo cai de 40% para 25% de mistura para manter o corpo. Largura (lado) nos dois últimos compassos do build 4: de −29,6 dB para −19,4 dB. Sem escuta; o `risers=false` desliga tudo isso nos testes de onset.

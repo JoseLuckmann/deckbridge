@@ -1492,7 +1492,11 @@ struct XPad {
     bool wasRequested = false;
     Svf drumHp;
     // Camadas da subida: ruído em faixa que abre, tom que sobe, grave da música que sai, bombeio por golpe, silêncio e impacto no drop.
-    Svf riseL, riseR, musicHpL, musicHpR, impactHp;
+    Svf riseL, riseR, musicHpL, musicHpR, impactHp, sendHp, returnHpL, returnHpR;
+    // Espaço do roll: reverb própria dos golpes (como o roll do RMX, que passa por reverb), largura e saturação leve.
+    Fdn drumTank;
+    DelayLine wideLine;
+    int tankHold = 0;
     uint32_t riseSeedA = 0xA5A5A5u;
     uint32_t riseSeedB = 0x5A5A5A5u;
     float risePhase = 0.f;
@@ -1519,6 +1523,10 @@ struct XPad {
         requested = on;
         bpm = nextBpm > 1.f ? nextBpm : 120.f;
         sampleRate = rate > 0 ? rate : 48000;
+        if (!drumTank.ready() || drumTank.sampleRate != sampleRate) {
+            drumTank.prepare(sampleRate);
+            wideLine.prepare(sampleRate / 20);
+        }
         drumVoice = std::clamp(nextVoice, 0, 3);
         drumBars = snapBars(nextBars);
         drumGap = nextGap;
@@ -1822,21 +1830,57 @@ struct XPad {
     void mixShots(float &inL, float &inR, float prog) {
         const double step = (sampleRate > 0 ? 48000.0 / static_cast<double>(sampleRate) : 1.0);
         float drum = 0.f;
+        float wide = 0.f;
         for (Shot &shot : shots) {
             if (!shot.on) continue;
-            drum += readVoice(shot.id, shot.cursor) * shot.vel;
+            const float value = readVoice(shot.id, shot.cursor) * shot.vel;
+            if (shot.id == 1 || shot.id == 2) wide += value;
+            else drum += value;
             shot.cursor += step * static_cast<double>(shot.rate);
             const auto &pcm = drumBank().voice[shot.id];
             if (drumBank().empty(shot.id) || shot.cursor >= static_cast<double>(pcm.size()) - 1.0) shot.on = false;
         }
         if (std::fabs(drum) > 1e-6f) {
-            const float cut = 40.f * std::pow(4.5f, std::clamp(prog, 0.f, 1.f) * build);
-            const float mix = 0.40f * std::clamp(prog, 0.f, 1.f) * build;
+            // O passa-altas só afina o bumbo no fim do gesto; o corpo continua (até 25%).
+            const float cut = 40.f * std::pow(3.5f, std::clamp(prog, 0.f, 1.f) * build);
+            const float mix = 0.25f * std::clamp(prog, 0.f, 1.f) * build;
             drumHp.set(cut, static_cast<float>(sampleRate), 0.7f, 1);
             const float high = drumHp.process(drum);
             drum = drum * (1.f - mix) + high * mix;
         } else if (prog < 0.001f) {
             drumHp.reset();
+        }
+        float busL = drum + wide;
+        float busR = drum + wide;
+        if (risers && sampleRate > 0 && wideLine.data.size() > 8) {
+            // Palma e caixa abrem no estéreo (Haas de 9 ms); bumbo e chimbal ficam no centro.
+            const int haas = std::max(1, sampleRate * 9 / 1000);
+            const float late = wideLine.read(haas);
+            wideLine.push(wide);
+            busR = drum + wide * 0.35f + late * 0.75f;
+            busL = drum + wide * 0.85f;
+            // Saturação suave: cola e dá corpo sem mudar o nível dos golpes fracos.
+            busL = std::tanh(1.5f * busL) / 1.5f * 1.18f;
+            busR = std::tanh(1.5f * busR) / 1.5f * 1.18f;
+        }
+        const float p0 = std::clamp(prog, 0.f, 1.f);
+        if (risers && drumTank.ready() && build > 0.04f) {
+            const float srf = static_cast<float>(sampleRate);
+            if (std::fabs(drum) + std::fabs(wide) > 1e-5f) tankHold = sampleRate * 4;
+            if (tankHold > 0) {
+                tankHold -= 1;
+                sendHp.set(220.f, srf, 0.7f, 1);
+                const float send = sendHp.process((busL + busR) * 0.5f);
+                drumTank.setRt60(1.1f + 1.4f * p0);
+                float vL = 0.f;
+                float vR = 0.f;
+                drumTank.process(send, send, 0.5f, vL, vR);
+                returnHpL.set(140.f, srf, 0.7f, 1);
+                returnHpR.set(140.f, srf, 0.7f, 1);
+                const float wet = (0.28f + 0.5f * p0) * build;
+                busL += returnHpL.process(vL) * wet;
+                busR += returnHpR.process(vR) * wet;
+            }
         }
         const float sr = static_cast<float>(sampleRate > 0 ? sampleRate : 48000);
         const float p = std::clamp(prog, 0.f, 1.f);
@@ -1892,8 +1936,8 @@ struct XPad {
             impactAge += 1;
             if (t > 1.8f) impactAge = -1;
         }
-        inL = sanitize(musL * musicGain + drum + extraL);
-        inR = sanitize(musR * musicGain + drum + extraR);
+        inL = sanitize(musL * musicGain + busL + extraL);
+        inR = sanitize(musR * musicGain + busR + extraR);
     }
 
     float drum() {
