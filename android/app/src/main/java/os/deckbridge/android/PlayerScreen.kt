@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -274,7 +275,7 @@ fun PlayerScreen(
             }
             if (!rmx.full) HotCueBand(catalog, tracks, faces, compact, settings.cuePreset, onActive, onHot, onHotUp, Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 6.dp))
             if (!rmx.full) Row(
-                Modifier.fillMaxWidth().height(if (compact) 136.dp else 196.dp).padding(top = if (compact) 3.dp else 4.dp),
+                Modifier.fillMaxWidth().height(if (compact) 150.dp else 208.dp).padding(top = if (compact) 3.dp else 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0), settings.cuePreset), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings, popup, popupDeck, togglePopup)
@@ -282,7 +283,7 @@ fun PlayerScreen(
             }
         }
         if (popup.isNotEmpty() && !rmx.full) {
-            val cards = (if (compact) 136 else 196) + 6
+            val cards = (if (compact) 150 else 208) + 6
             val popTrack = tracks.getOrNull(popupDeck)
             val popFace = faces.getOrElse(popupDeck) { DeckFace() }
             Box(Modifier.fillMaxSize().clickable { popup = "" })
@@ -445,8 +446,6 @@ private fun DeckInfo(
         } else {
             MetaLine("LOOP", "—", compact)
         }
-        MetaLine("JUMP", if (face.lastJump == 0.0) "1" else "%+.0f".format(face.lastJump), compact)
-        MetaLine("Q", if (quantize) quantizeMark(quantizeBeats) else "OFF", compact)
     }
 }
 
@@ -842,8 +841,15 @@ private fun DeckCard(
             TouchTab("···", "", face.slip || face.reversed || face.emergency || face.cueBank != 0 || face.gridShiftMs != 0.0 || face.gridStretch != 1.0, popup == "MAIS" && popupDeck == deck, compact, Modifier.padding(start = 4.dp).width(if (compact) 28.dp else 40.dp)) { onPopup(deck, "MAIS") }
         }
         Row(Modifier.padding(top = if (compact) 2.dp else 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.padding(end = 6.dp).width(if (compact) 50.dp else 64.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                InfoBox("QUANTIZE", if (quantize) quantizeMark(quantizeBeats) else "OFF", if (quantize) Color(StagePalette.onAir) else Color(StagePalette.inkMuted), compact, Modifier.clickable(onClick = onQuantize))
+                InfoBox("BEAT JUMP", if (face.lastJump == 0.0) "1" else "%.0f".format(kotlin.math.abs(face.lastJump)), Color(StagePalette.ink), compact)
+            }
             Column(Modifier.weight(1f).clickable { onRemain(deck) }) {
-                TextInk(if (face.remain) "REMAIN" else "TIME", fontSize = 9.sp, color = Color(StagePalette.inkMuted))
+                Row {
+                    TextInk(if (face.remain) "REMAIN" else "TIME", fontSize = 9.sp, color = Color(StagePalette.inkMuted))
+                    TextInk("SINGLE", fontSize = 8.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 8.dp))
+                }
                 Row(verticalAlignment = Alignment.Bottom) {
                     TextInk(clock.first, fontSize = if (compact) 22.sp else 36.sp, weight = FontWeight.Medium, mono = true, maxLines = 1)
                     TextInk(clock.second, fontSize = if (compact) 12.sp else 16.sp, weight = FontWeight.Medium, mono = true, modifier = Modifier.padding(bottom = if (compact) 2.dp else 5.dp))
@@ -887,6 +893,7 @@ private fun DeckCard(
             if (phraseLabel != null) add(phraseLabel) else if (phraseLeft > 0) add("FR $phraseLeft")
             if (settings.autoGain && gain.isFinite() && analysis != null) add("GAIN ${"%+.1f".format(gain)} dB")
             if (face.slip) add("SLIP")
+            if (face.loopAdjust == 1) add("AJUSTE LOOP IN") else if (face.loopAdjust == 2) add("AJUSTE LOOP OUT")
             if (face.emergency) add("EMERG")
             if (face.reversed) add("REV")
             if (face.activeLoopArmed) add("LOOP ARMADO")
@@ -897,12 +904,42 @@ private fun DeckCard(
         }
         OverviewWave(track, analysis, face.position.toDouble(), Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), waveMode) { seconds -> onSeek(deck, seconds) }
         PhraseBar(track, analysis?.phrases.orEmpty(), Modifier.fillMaxWidth().height(if (compact) 4.dp else 7.dp))
-        Row(Modifier.padding(top = if (compact) 2.dp else 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        TimeTicks(duration, compact, Modifier.fillMaxWidth())
+        Row(Modifier.padding(top = if (compact) 1.dp else 3.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.clickable { onPlay(deck) }) { Lamp(if (face.playing) "PLAY" else "PAUSE", face.playing, compact) }
             Lamp("A.HOT CUE", true, compact)
             Lamp("AUTO CUE", analysis?.mainCueMs != null && analysis.mainCueMs >= 0, compact)
             Box(Modifier.clickable(onClick = onQuantize)) {
                 Lamp(if (quantize) "QUANTIZE ${quantizeMark(quantizeBeats)}" else "QUANTIZE", quantize, compact)
+            }
+        }
+    }
+}
+
+/** Caixa pequena de dois níveis do leitor de club (QUANTIZE, BEAT JUMP): nome em cima, valor embaixo. */
+@Composable
+private fun InfoBox(label: String, value: String, ink: Color, compact: Boolean, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth().border(1.dp, ink).padding(horizontal = 3.dp, vertical = 1.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        TextInk(label, color = ink, fontSize = if (compact) 6.sp else 8.sp, weight = FontWeight.Bold, maxLines = 1)
+        TextInk(value, color = ink, fontSize = if (compact) 11.sp else 15.sp, weight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+/** Marcas de tempo restante sob o resumo da faixa (−12:00 … −1:00), como na tela do leitor. */
+@Composable
+private fun TimeTicks(durationSec: Double, compact: Boolean, modifier: Modifier) {
+    BoxWithConstraints(modifier.height(if (compact) 9.dp else 12.dp)) {
+        if (durationSec >= 120.0) {
+            val minutes = (durationSec / 60.0).toInt()
+            val step = if (minutes > 10) (minutes + 9) / 10 else 1
+            var minute = step
+            while (minute <= minutes) {
+                val fraction = ((durationSec - minute * 60.0) / durationSec).toFloat()
+                Row(Modifier.offset(x = maxWidth * fraction), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.width(1.dp).height(if (compact) 6.dp else 8.dp).background(Color(StagePalette.inkMuted)))
+                    TextInk("-$minute:00", fontSize = if (compact) 6.sp else 8.sp, color = Color(StagePalette.inkMuted), maxLines = 1, modifier = Modifier.padding(start = 2.dp))
+                }
+                minute += step
             }
         }
     }

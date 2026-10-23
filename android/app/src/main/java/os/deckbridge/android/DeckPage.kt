@@ -25,6 +25,9 @@ import os.deckbridge.logic.BeatFxState
 import os.deckbridge.logic.BrowseCategory
 import os.deckbridge.logic.BrowsePlace
 import os.deckbridge.logic.DeckFace
+import os.deckbridge.logic.GlitchWatch
+import os.deckbridge.logic.LOOP_ADJUST_STEP
+import os.deckbridge.logic.adjustLoopPoint
 import os.deckbridge.logic.PerformanceAction
 import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.RbTrack
@@ -326,6 +329,8 @@ fun DeckPage(
         }
     }
 
+    val reverseHoldWasSlip = remember { BooleanArray(2) }
+
     fun deckAction(deck: Int, action: String) {
         val face = faces.getOrElse(deck) { DeckFace() }
         val track = loaded.getOrNull(deck)
@@ -561,6 +566,18 @@ fun DeckPage(
             }
             PerformanceAction.Kind.JOG -> {
                 if (deck !in 0..1) return
+                if (faces[deck].loopAdjust != 0) {
+                    val face = faces[deck]
+                    val duration = liveLoaded.value.getOrNull(deck)?.durationSeconds?.toDouble() ?: 0.0
+                    val moved = adjustLoopPoint(face.loopStart, face.loopEnd, face.loopAdjust, (action.slider ?: 0.0) * LOOP_ADJUST_STEP, duration)
+                    if (moved == null) {
+                        edit(deck) { it.copy(loopAdjust = 0) }
+                    } else {
+                        edit(deck) { it.copy(loopStart = moved.first, loopEnd = moved.second, memoryStart = moved.first, memoryEnd = moved.second) }
+                        NativeEngine.setLoop(deck, moved.first, moved.second)
+                        return
+                    }
+                }
                 val bend = (action.slider ?: 0.0) * settings.jogSensitivity
                 if (!settings.jogVinyl && kotlin.math.abs(bend) < 20.0) {
                     val pitched = (faces[deck].pitch + bend * 0.002).toFloat().coerceIn(0.5f, 2f)
@@ -631,6 +648,26 @@ fun DeckPage(
                 if (deck !in 0..1) return
                 val next = stepJumpScale(faces[deck].jumpScale, action.hotIndex == 1)
                 edit(deck) { it.copy(jumpScale = next) }
+            }
+            PerformanceAction.Kind.REVERSE_HOLD -> {
+                if (deck !in 0..1) return
+                if (action.hotIndex == 1) {
+                    // Censor: slip ligado, reverso enquanto segura. Ao soltar, volta onde a faixa estaria.
+                    reverseHoldWasSlip[deck] = faces[deck].slip
+                    NativeEngine.setSlip(deck, true)
+                    NativeEngine.setReverse(deck, true)
+                    edit(deck) { it.copy(slip = true, reversed = true) }
+                } else {
+                    NativeEngine.setReverse(deck, false)
+                    if (!reverseHoldWasSlip[deck]) NativeEngine.setSlip(deck, false)
+                    edit(deck) { it.copy(reversed = false, slip = reverseHoldWasSlip[deck]) }
+                }
+            }
+            PerformanceAction.Kind.LOOP_ADJUST -> {
+                if (deck !in 0..1) return
+                val face = faces[deck]
+                val next = if (face.loopAdjust == action.hotIndex || face.loopEnd <= face.loopStart) 0 else action.hotIndex
+                edit(deck) { it.copy(loopAdjust = next) }
             }
             PerformanceAction.Kind.LOOP_IN -> {
                 if (deck !in 0..1) return
@@ -876,9 +913,12 @@ fun DeckPage(
     }
 
     var controllerUp by remember { mutableStateOf(PerformanceHub.controllerConnected) }
+    var audioWarning by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
+        val watch = GlitchWatch()
         while (true) {
             controllerUp = PerformanceHub.controllerConnected
+            audioWarning = watch.update(NativeEngine.glitches(), System.currentTimeMillis())
             delay(1_000)
         }
     }
@@ -1042,6 +1082,7 @@ fun DeckPage(
         warnings = buildList {
             if (!controllerUp && jvmBanner.isNullOrBlank()) add("SEM DDJ-400 (MIDI)")
             if (deviceId <= 0 && jvmBanner.isNullOrBlank()) add("SAÍDA: TABLET, SEM USB")
+            audioWarning?.let { add(it) }
         },
         onPage = onPage,
         onBrowse = { browse = stored },

@@ -503,7 +503,21 @@ public:
         return static_cast<float>(decks_[deck].position / decks_[deck].sampleRate);
     }
 
+    /** Conta uma falha quando o bloco demora mais que 90% do tempo que ele toca (o próximo bloco chegaria atrasado). */
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) override {
+        const auto began = std::chrono::steady_clock::now();
+        const auto result = processAudio(audioStream, audioData, numFrames);
+        const int rate = audioStream->getSampleRate();
+        if (rate > 0 && numFrames > 0) {
+            const double spent = std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+            if (spent > 0.9 * static_cast<double>(numFrames) / static_cast<double>(rate)) glitches_.fetch_add(1, std::memory_order_relaxed);
+        }
+        return result;
+    }
+
+    int glitchCount() const { return glitches_.load(std::memory_order_relaxed); }
+
+    oboe::DataCallbackResult processAudio(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) {
         auto *out = static_cast<float *>(audioData);
         const int channels = audioStream->getChannelCount();
         const int route = route_.load();
@@ -606,6 +620,7 @@ public:
     }
 
     void onErrorAfterClose(oboe::AudioStream *, oboe::Result error) override {
+        glitches_.fetch_add(1, std::memory_order_relaxed);
         bool retry = false;
         int device = 0;
         int route = 0;
@@ -734,6 +749,7 @@ private:
     std::mutex mutex_;
     std::mutex mixMutex_;
     std::shared_ptr<oboe::AudioStream> stream_;
+    std::atomic<int> glitches_{0};
     std::atomic<int> route_{0};
     std::atomic<int> openedChannels_{0};
     std::atomic<bool> opened_{false};
@@ -981,6 +997,11 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeRecordPoll(JNIEnv *env, jobject) {
     const std::string line = engine().pollRecord();
     return env->NewStringUTF(line.c_str());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeGlitches(JNIEnv *, jobject) {
+    return engine().glitchCount();
 }
 
 extern "C" JNIEXPORT void JNICALL

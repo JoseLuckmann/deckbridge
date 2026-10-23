@@ -429,6 +429,8 @@ data class DeckFace(
     val keyLock: Boolean = false,
     val keyShift: Int = 0,
     val slip: Boolean = false,
+    /** 0 = nenhum, 1 = o prato move a entrada do loop, 2 = a saída (SHIFT+LOOP IN/OUT da DDJ-400). */
+    val loopAdjust: Int = 0,
     val cueBank: Int = 0,
     val emergency: Boolean = false,
     val filter: Int = 64,

@@ -463,3 +463,11 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Mudança: `refineGridPhase` + `onsetCorrection` em `TrackAnalysis.kt`; teste sintético que falha sem a correção; roteiro de sessão sem o ajuste manual de grade.
 - Evidência: nas duas faixas reais, primeira batida 1 ms e 0 ms do bumbo; fase entre decks −0,5 a −1,0 ms sem SYNC. Suíte completa e `assembleMultiDebug` passam.
 - Risco: só duas faixas reais e um teste sintético; sem corpus com grade de referência. Gêneros sem bumbo marcado seguem o caminho antigo.
+
+## 2026-10-23 — Controles que faltavam, aviso de falha de áudio e cartão do deck
+
+- SHIFT+PLAY (`reverseroll`): reverso em slip enquanto segura (censor); ao soltar, volta onde a faixa estaria. SHIFT+LOOP IN / OUT: o prato move a entrada ou a saída do loop (2,5 ms por unidade de giro, mínimo de 10 ms entre os pontos) até apertar de novo; o cartão mostra "AJUSTE LOOP IN/OUT".
+- Aviso de falha de áudio: o motor conta blocos que demoram mais de 90% do tempo que tocam e quedas do stream (`nativeGlitches`); a barra superior mostra "ÁUDIO: FALHAS (n)" por 15 s depois de cada nova falha (`GlitchWatch`).
+- Cartão do deck mais próximo do leitor de club: caixas QUANTIZE e BEAT JUMP à esquerda do tempo, "SINGLE", marcas de tempo restante sob a onda geral; JUMP e Q saíram da coluna da esquerda.
+- Evidência: `ShowControlsTest` (4 testes), suíte completa e `assembleMultiDebug` (compila o C++) passam; `docs/ui/compact-player.png`.
+- Não verificado: reverso, ajuste de loop e contador de falhas no tablet e na DDJ-400 (`BLOCKED_HARDWARE`). O limiar de 90% do contador é nosso, não medido em hardware. O LED do SHIFT+PLAY não foi mapeado.

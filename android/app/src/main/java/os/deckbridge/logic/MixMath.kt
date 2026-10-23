@@ -11,7 +11,7 @@ data class PerformanceAction(
         BROWSE_MOVE, BROWSE_ENTER, BROWSE_BACK, LOAD,
         BEAT_FX, FILTER, QUANTIZE, SYNC, MASTER,
         BEAT_JUMP, BEAT_JUMP_PAGE, LOOP_IN, LOOP_OUT, RELOOP, LOOP_SCALE, BEAT_LOOP, RMX,
-        EQ, TRIM, HEAD_MIX, HEAD_GAIN, PFL, START,
+        EQ, TRIM, HEAD_MIX, HEAD_GAIN, PFL, START, REVERSE_HOLD, LOOP_ADJUST,
     }
 }
 
@@ -59,6 +59,8 @@ fun performanceAction(hit: ControlHit, value: Int): PerformanceAction? {
     }
     val slider = (value.coerceIn(0, 127) / 127.0)
     return when {
+        // SHIFT+PLAY: reverso em slip enquanto segura (censor). O soltar também chega: valor 0.
+        hit.key == "reverseroll" && deck >= 0 -> PerformanceAction(deck, PerformanceAction.Kind.REVERSE_HOLD, hotIndex = if (value > 0) 1 else 0)
         hit.key == "play" && value > 0 && deck >= 0 -> PerformanceAction(deck, PerformanceAction.Kind.PLAY)
         hit.key == "cue_default" && value > 0 && deck >= 0 -> PerformanceAction(deck, PerformanceAction.Kind.CUE)
         hit.key.startsWith("hotcue_") && hit.key.endsWith("_activate") && value > 0 && deck >= 0 -> {
@@ -221,6 +223,9 @@ fun surfaceAction(hit: ControlHit, value: Int): PerformanceAction? {
         "PioneerDDJ400.toggleQuantize" -> PerformanceAction(deck, PerformanceAction.Kind.QUANTIZE)
         "PioneerDDJ400.syncPressed" -> PerformanceAction(deck, PerformanceAction.Kind.SYNC)
         "PioneerDDJ400.syncLongPressed" -> PerformanceAction(deck, PerformanceAction.Kind.MASTER)
+        // SHIFT+LOOP IN / OUT: o prato passa a mover o ponto do loop até apertar de novo.
+        "PioneerDDJ400.toggleLoopAdjustIn" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.LOOP_ADJUST, hotIndex = 1) else null
+        "PioneerDDJ400.toggleLoopAdjustOut" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.LOOP_ADJUST, hotIndex = 2) else null
         "loop_in" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.LOOP_IN) else null
         "loop_out" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.LOOP_OUT) else null
         "reloop_toggle" -> if (deck >= 0) PerformanceAction(deck, PerformanceAction.Kind.RELOOP, hotIndex = 0) else null
@@ -300,4 +305,37 @@ fun advancePlayhead(position: Double, step: Double, loopStart: Double, loopEnd: 
         }
     }
     return next
+}
+
+/** Passo do ajuste de loop com o prato: segundos por unidade de giro (o prato manda (valor-64) * 0,8). */
+const val LOOP_ADJUST_STEP = 0.0025
+
+/**
+ * Move a entrada (which = 1) ou a saída (which = 2) do loop. A entrada fica pelo menos 10 ms antes da saída e a
+ * saída pelo menos 10 ms depois da entrada, dentro da faixa. Devolve null se não há loop.
+ */
+fun adjustLoopPoint(start: Float, end: Float, which: Int, delta: Double, durationSec: Double): Pair<Float, Float>? {
+    if (start < 0f || end <= start) return null
+    val limit = if (durationSec > 0.0) durationSec.toFloat() else Float.MAX_VALUE
+    return when (which) {
+        1 -> (start + delta.toFloat()).coerceIn(0f, end - 0.010f) to end
+        2 -> start to (end + delta.toFloat()).coerceIn(start + 0.010f, limit)
+        else -> null
+    }
+}
+
+/** Mostra a última falha de áudio por 15 s para o DJ saber que houve (e quantas desde que abriu). */
+class GlitchWatch(private val holdMs: Long = 15_000L) {
+    private var last = -1
+    private var shownUntil = 0L
+
+    /** `count` é o total do motor; devolve o aviso a mostrar, ou null. */
+    fun update(count: Int, nowMs: Long): String? {
+        if (last < 0) last = count
+        if (count > last) {
+            last = count
+            shownUntil = nowMs + holdMs
+        }
+        return if (nowMs < shownUntil) "ÁUDIO: FALHAS ($count)" else null
+    }
 }

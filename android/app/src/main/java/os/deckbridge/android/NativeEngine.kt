@@ -181,6 +181,9 @@ object NativeEngine {
         return nativeRecordPoll()
     }
 
+    /** Blocos que passaram de 90% do tempo e quedas do stream desde que o motor abriu. */
+    fun glitches(): Int = if (loaded) nativeGlitches() else 0
+
     /** Picos lineares desde a última leitura: canal 1, canal 2, master E, master D. */
     fun levels(dest: FloatArray) {
         if (!loaded || dest.size < 4) return
@@ -250,6 +253,7 @@ object NativeEngine {
     private external fun nativeSetBeatFx(effect: Int, on: Boolean, level: Int, channel: Int, bpm: Float, beats: Float)
     private external fun nativeSetFilter(deck: Int, norm: Float)
     private external fun nativeLevels(dest: FloatArray)
+    private external fun nativeGlitches(): Int
     private external fun nativeLoadDeckStereo(
         deck: Int,
         left: FloatArray,
