@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -175,7 +176,7 @@ fun RmxRail(
         color = Color(StagePalette.inkMuted),
         modifier = Modifier.padding(top = 6.dp),
     )
-    UtilityButton("ABRIR RMX", onOpen, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+    UtilityButton(if (rmx.full) "FECHAR RMX" else "ABRIR RMX", onOpen, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
 }
 
 /**
@@ -203,7 +204,7 @@ fun RmxDock(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit, compa
             }
             // SCENE FX: os oito pads seguram a cena enquanto estão apertados; o anel mostra a intensidade.
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                SceneDial(rmx.intensity, rmx.sceneName(), accent, Modifier.width(if (compact) 64.dp else 90.dp).fillMaxHeight())
+                SceneDial(rmx.intensity, rmx.sceneName(), accent, Modifier.width(if (compact) 64.dp else 90.dp).fillMaxHeight(), showName = false)
                 SCENE_NAMES.forEachIndexed { index, name ->
                     val hot = rmx.scene == index && rmx.holding
                     val tone = Color(if (index < 4) StagePalette.accentOrange else StagePalette.accentBlue)
@@ -314,9 +315,10 @@ private fun IsoBar(label: String, gain: Float, modifier: Modifier, onChange: (Fl
 }
 
 @Composable
-private fun SceneDial(intensity: Float, name: String, accent: Color, modifier: Modifier) {
+private fun SceneDial(intensity: Float, name: String, accent: Color, modifier: Modifier, showName: Boolean = true) {
     Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
+        // Sempre quadrado: numa coluna estreita e alta o anel virava um oval.
+        Canvas(Modifier.fillMaxWidth().aspectRatio(1f)) {
             val stroke = size.minDimension * 0.08f
             val inset = stroke
             drawArc(Color(StagePalette.line), -90f, 360f, false, topLeft = Offset(inset, inset), size = Size(size.width - inset * 2, size.height - inset * 2), style = Stroke(stroke, cap = StrokeCap.Round))
@@ -324,8 +326,8 @@ private fun SceneDial(intensity: Float, name: String, accent: Color, modifier: M
             drawCircle(Color(StagePalette.panel), radius = size.minDimension * 0.34f)
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            TextInk("${(intensity * 100).toInt()}", fontSize = 28.sp, weight = FontWeight.Bold, mono = true)
-            TextInk(name, fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 2)
+            TextInk("${(intensity * 100).toInt()}", fontSize = if (showName) 28.sp else 20.sp, weight = FontWeight.Bold, mono = true)
+            if (showName) TextInk(name, fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 2)
         }
     }
 }

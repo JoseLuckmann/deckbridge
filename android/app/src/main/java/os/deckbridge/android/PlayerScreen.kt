@@ -370,9 +370,9 @@ private fun TopBar(
                 }
                 TextInk(if (recording) "REC $recClock" else "REC", color = Color.White, fontSize = 10.sp, weight = FontWeight.Bold, maxLines = 1)
             }
-            TextInk(clock, fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.Medium, mono = true, modifier = Modifier.padding(start = 8.dp))
-            TextInk("REMAIN", fontSize = 9.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 8.dp))
-            TextInk(remain, fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.Medium, mono = true)
+            TextInk(clock, fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.Medium, mono = true, modifier = Modifier.padding(start = 10.dp))
+            TextInk("REMAIN", fontSize = 9.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 12.dp))
+            TextInk(remain, fontSize = if (compact) 11.sp else 13.sp, weight = FontWeight.Medium, mono = true, modifier = Modifier.padding(start = 5.dp))
             Box(Modifier.padding(start = 8.dp).clickable(onClick = onInfo)) {
                 TextInk("INFO", color = Color(StagePalette.accentBlue), fontSize = 11.sp, weight = FontWeight.Bold)
             }
@@ -481,7 +481,7 @@ private fun FxRail(
                 Choice("RMX", rmx.panel, compact, Modifier.weight(1f)) { onRmx(rmx.copy(panel = true)) }
             }
             if (rmx.panel) {
-                RmxRail(rmx, compact, onRmx) { onRmx(rmx.copy(full = true, panel = true)) }
+                RmxRail(rmx, compact, onRmx) { onRmx(rmx.copy(full = !rmx.full, panel = true)) }
             } else if (fxPanel) {
                 FxBody(fx, bpm, compact, showList, onFxChange)
             } else {
