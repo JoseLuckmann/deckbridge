@@ -265,3 +265,19 @@ class MeterTest {
         org.junit.Assert.assertEquals(0f, meterFraction(0.001f), 0f)
     }
 }
+
+class PflMapTest {
+    @org.junit.Test
+    fun channelCueButtonTogglesHeadphoneCue() {
+        val map = MidiMap.loadResource()
+        // O botão CUE do canal tem nome "pfl" no mapa; o byte exato vem do mapa pinado.
+        val hits = (0..127).flatMap { note -> listOf(144, 145, 146, 147, 148, 149, 150).map { map.lookup(it, note) } }.filter { it.key == "pfl" }
+        org.junit.Assert.assertEquals(2, hits.size)
+        hits.forEach { hit ->
+            val action = interpretPerformance(hit, 127, TempoAssembler())
+            org.junit.Assert.assertEquals(PerformanceAction.Kind.PFL, action!!.kind)
+            org.junit.Assert.assertNull(interpretPerformance(hit, 0, TempoAssembler()))
+        }
+        org.junit.Assert.assertEquals(setOf(0, 1), hits.map { interpretPerformance(it, 127, TempoAssembler())!!.deck }.toSet())
+    }
+}

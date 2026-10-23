@@ -9,12 +9,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -138,6 +140,9 @@ public:
     std::string start(int deviceId, int route) {
         std::lock_guard<std::mutex> lock(mutex_);
         closeLocked();
+        wantOpen_ = true;
+        lastDevice_ = deviceId;
+        lastRoute_ = route;
         route_.store(route);
         phonesSent_ = false;
         fallbackToTwo_ = false;
@@ -205,6 +210,7 @@ public:
     void stop() {
         recorder_.stop();
         std::lock_guard<std::mutex> lock(mutex_);
+        wantOpen_ = false;
         route_.store(0);
         closeLocked();
     }
@@ -228,21 +234,36 @@ public:
     void loadDeck(int deck, const float *data, int count, int channels, int rate, float bpm, float cueSeconds,
                   const float *hot, int hotCount, float loopStartSec, float loopEndSec) {
         if (deck < 0 || deck > 1 || data == nullptr) return;
-        std::lock_guard<std::mutex> lock(mixMutex_);
-        Deck &target = decks_[deck];
+        // A cópia de dezenas de MB acontece FORA do mutex do callback de áudio; dentro dele só se troca o vetor.
+        // Antes, carregar uma faixa travava o áudio do outro deck pelo tempo da cópia.
         const int ch = channels == 2 ? 2 : 1;
         const int frames = std::max(0, ch == 2 ? count / 2 : count);
-        target.left.assign(frames, 0.f);
-        target.right.assign(frames, 0.f);
+        std::vector<float> newLeft(static_cast<size_t>(frames));
+        std::vector<float> newRight(static_cast<size_t>(frames));
         for (int index = 0; index < frames; ++index) {
             if (ch == 2) {
-                target.left[index] = data[index * 2];
-                target.right[index] = data[index * 2 + 1];
+                newLeft[index] = data[index * 2];
+                newRight[index] = data[index * 2 + 1];
             } else {
-                target.left[index] = data[index];
-                target.right[index] = data[index];
+                newLeft[index] = data[index];
+                newRight[index] = data[index];
             }
         }
+        std::vector<float> oldLeft;
+        std::vector<float> oldRight;
+        {
+            std::lock_guard<std::mutex> lock(mixMutex_);
+            Deck &swapTarget = decks_[deck];
+            // Para a leitura antes da troca: o callback nunca vê uma posição de uma faixa na outra.
+            swapTarget.playing = false;
+            oldLeft.swap(swapTarget.left);
+            oldRight.swap(swapTarget.right);
+            swapTarget.left.swap(newLeft);
+            swapTarget.right.swap(newRight);
+        }
+        // oldLeft/oldRight liberam a memória da faixa antiga aqui, fora do lock.
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        Deck &target = decks_[deck];
         target.sampleRate = rate > 0 ? rate : 48000;
         target.bpm = bpm;
         target.position = 0.0;
@@ -337,19 +358,19 @@ public:
 
     void setBeatFx(int effect, bool on, int level, int channel, float bpm, float beats) {
         std::lock_guard<std::mutex> lock(mixMutex_);
-        mixFx_.setSampleRate(48000);
+        mixFx_.setSampleRate(rateForFx());
         mixFx_.setBeat(effect, on, std::clamp(level / 127.f, 0.f, 1.f), channel, bpm, beats);
     }
 
     void setFilter(int deck, float norm) {
         std::lock_guard<std::mutex> lock(mixMutex_);
-        mixFx_.setSampleRate(48000);
+        mixFx_.setSampleRate(rateForFx());
         mixFx_.setFilter(deck, norm);
     }
 
     void setEq(int deck, float low, float mid, float high) {
         std::lock_guard<std::mutex> lock(mixMutex_);
-        mixFx_.setSampleRate(48000);
+        mixFx_.setSampleRate(rateForFx());
         mixFx_.setEq(deck, low, mid, high);
     }
 
@@ -375,7 +396,7 @@ public:
 
     void setColorKind(int deck, int kind) {
         std::lock_guard<std::mutex> lock(mixMutex_);
-        mixFx_.setSampleRate(48000);
+        mixFx_.setSampleRate(rateForFx());
         mixFx_.setColorKind(deck, kind);
     }
 
@@ -436,10 +457,14 @@ public:
 
     void setBufferFrames(int frames) { bufferFrames_ = frames; }
 
+    // A taxa do stream aberto; antes de abrir, 48000. Os setters nunca pedem outra taxa que a do callback,
+    // senão o MixerFx realocaria buffers dentro do áudio.
+    int rateForFx() const { return sampleRate_ > 0 ? sampleRate_ : 48000; }
+
     void setRmx(const float *values, int count) {
         if (values == nullptr || count < 18) return;
         std::lock_guard<std::mutex> lock(mixMutex_);
-        mixFx_.setSampleRate(48000);
+        mixFx_.setSampleRate(rateForFx());
         const float drumBuild = count >= 19 ? values[18] : 0.f;
         const int drumVoice = count >= 20 ? static_cast<int>(values[19]) : 0;
         const int drumBars = count >= 21 ? static_cast<int>(values[20]) : 8;
@@ -575,10 +600,34 @@ public:
     }
 
     void onErrorAfterClose(oboe::AudioStream *, oboe::Result error) override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        opened_.store(false);
-        error_ = oboe::convertToText(error);
-        stream_.reset();
+        bool retry = false;
+        int device = 0;
+        int route = 0;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            opened_.store(false);
+            error_ = oboe::convertToText(error);
+            stream_.reset();
+            retry = wantOpen_ && !restarting_.exchange(true);
+            device = lastDevice_;
+            route = lastRoute_;
+        }
+        // Desconexão ou troca de rota do áudio: tenta reabrir, para o som voltar sem mexer na tela.
+        // As faixas e as posições dos decks não são tocadas. O hotplug de outro aparelho USB é tratado no Kotlin.
+        if (retry) {
+            std::thread([this, device, route]() {
+                for (int attempt = 0; attempt < 6; ++attempt) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(300 + attempt * 400));
+                    {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        if (!wantOpen_ || opened_.load()) break;
+                    }
+                    start(device, route);
+                    if (opened_.load()) break;
+                }
+                restarting_.store(false);
+            }).detach();
+        }
     }
 
 private:
@@ -698,6 +747,10 @@ private:
     float cross_ = 0.5f;
     double phase_[4]{};
     int sampleRate_ = 0;
+    bool wantOpen_ = false;
+    int lastDevice_ = 0;
+    int lastRoute_ = 0;
+    std::atomic<bool> restarting_{false};
     bool phonesSent_ = false;
     bool fallbackToTwo_ = false;
     std::string error_;

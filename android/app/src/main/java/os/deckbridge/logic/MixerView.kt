@@ -15,6 +15,8 @@ data class MixerState(
     val colorFx: Int = 5,
     /** Picos já convertidos para 0..1 da escala do medidor: canal 1, canal 2, master E, master D. */
     val levels: List<Float> = listOf(0f, 0f, 0f, 0f),
+    /** CUE de canal (pré-escuta nos fones), canal 1 e canal 2. */
+    val pfl: List<Boolean> = listOf(false, false),
 )
 
 /** Pico linear para a posição do medidor: −48 dBFS embaixo, 0 dBFS em cima. */

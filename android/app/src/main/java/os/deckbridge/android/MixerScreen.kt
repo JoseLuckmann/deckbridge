@@ -64,7 +64,12 @@ fun MixerScreen(mixer: MixerState, onKnob: (PerformanceAction) -> Unit, onColorF
 @Composable
 private fun Channel(deck: Int, mixer: MixerState, onKnob: (PerformanceAction) -> Unit, modifier: Modifier) {
     Column(modifier.border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        TextInk("CH ${deck + 1}", fontSize = 16.sp, weight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextInk("CH ${deck + 1}", fontSize = 16.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (mixer.pfl.getOrElse(deck) { false }) {
+                TextInk("CUE FONES", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentOrange))
+            }
+        }
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Bar("TRIM", mixer.trim[deck], trimDbLabel(mixer.trim[deck]), true, Modifier.weight(1f)) {
                 onKnob(PerformanceAction(deck, PerformanceAction.Kind.TRIM, slider = it.toDouble()))

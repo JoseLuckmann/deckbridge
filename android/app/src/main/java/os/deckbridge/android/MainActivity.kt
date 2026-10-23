@@ -63,6 +63,8 @@ import os.deckbridge.logic.interpretPerformance
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Em palco a tela não pode apagar nem bloquear no meio da música.
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val screen = intent?.getStringExtra("deckbridge.screen").orEmpty()
         val play = intent?.getBooleanExtra("deckbridge.play", false) ?: false
         val midi = intent?.getBooleanExtra("deckbridge.midi", false) ?: false
@@ -83,8 +85,25 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
             }
         }
     }
+    var audioDevice by remember { mutableIntStateOf(usbAudioDeviceId(context) ?: 0) }
+    DisposableEffect(Unit) {
+        // A DDJ-400 pode ser ligada, desligada ou religada com o app aberto; o id do aparelho muda a cada vez.
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        val callback = object : android.media.AudioDeviceCallback() {
+            override fun onAudioDevicesAdded(addedDevices: Array<out android.media.AudioDeviceInfo>?) {
+                audioDevice = usbAudioDeviceId(context) ?: 0
+            }
+
+            override fun onAudioDevicesRemoved(removedDevices: Array<out android.media.AudioDeviceInfo>?) {
+                audioDevice = usbAudioDeviceId(context) ?: 0
+            }
+        }
+        audioManager.registerAudioDeviceCallback(callback, Handler(Looper.getMainLooper()))
+        onDispose { audioManager.unregisterAudioDeviceCallback(callback) }
+    }
     var page by remember {
-        mutableIntStateOf(if (play || screen == "decks" || screen == "biblioteca") 2 else 0)
+        // O app abre direto nos decks. O diagnóstico fica em "deckbridge.screen=diagnostico" e no menu.
+        mutableIntStateOf(if (screen == "diagnostico") 0 else 2)
     }
     var browsePulse by remember { mutableIntStateOf(if (screen == "biblioteca") 1 else 0) }
     var volume by remember { mutableStateOf<ReadableVolume?>(null) }
@@ -153,17 +172,25 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
         }.start()
     }
 
+    // Biblioteca autorizada antes: abre sozinha ao iniciar, com o pendrive já ligado.
+    LaunchedEffect(Unit) {
+        if (catalog == null && removableVolumeLabel(context).isNotBlank()) {
+            persistedRekordboxVolumes(context).firstOrNull()?.let { openVolume(it) }
+        }
+    }
+
     DisposableEffect(Unit) {
-        val opened = mutableListOf<MidiDevice>()
+        val opened = mutableMapOf<Int, MidiDevice>()
         val manager = context.getSystemService(MidiManager::class.java)
-        manager?.devices?.forEach { info ->
+        fun openMidi(info: MidiDeviceInfo) {
+            if (opened.containsKey(info.id)) return
             val outputs = info.ports.mapIndexedNotNull { index, port ->
                 if (port.type == MidiDeviceInfo.PortInfo.TYPE_OUTPUT) index else null
             }
-            if (outputs.isEmpty()) return@forEach
-            manager.openDevice(info, { device ->
+            if (outputs.isEmpty()) return
+            manager?.openDevice(info, { device ->
                 if (device == null) return@openDevice
-                opened += device
+                opened[info.id] = device
                 outputs.forEach { index ->
                     val port = device.openOutputPort(index) ?: return@forEach
                     port.connect(object : MidiReceiver() {
@@ -173,18 +200,30 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
                         }
                     })
                 }
+                handler.post { notice = "Controladora MIDI conectada: ${info.properties.getString(MidiDeviceInfo.PROPERTY_NAME).orEmpty()}" }
             }, handler)
         }
+        manager?.devices?.forEach { openMidi(it) }
+        // Hotplug: a controladora pode entrar depois do app, ou sair e voltar no meio da apresentação.
+        val midiCallback = object : MidiManager.DeviceCallback() {
+            override fun onDeviceAdded(info: MidiDeviceInfo) {
+                openMidi(info)
+            }
+
+            override fun onDeviceRemoved(info: MidiDeviceInfo) {
+                opened.remove(info.id)?.let { runCatching { it.close() } }
+                handler.post { notice = "Controladora MIDI desconectada. A música continua; ao religar o cabo ela volta sozinha." }
+            }
+        }
+        manager?.registerDeviceCallback(midiCallback, handler)
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, intent: Intent?) {
                 usbLabel = removableVolumeLabel(context)
                 val action = intent?.action
                 if (action == UsbManager.ACTION_USB_DEVICE_DETACHED && catalogHolder[0]?.simulated == false) {
-                    catalog = null
-                    volume = null
-                    notice = "Pendrive removido. Nada volta a tocar sozinho."
-                    NativeEngine.transport(0, false)
-                    NativeEngine.transport(1, false)
+                    // As faixas dos decks já estão na memória: a música NÃO para quando um USB sai (pendrive ou o
+                    // cabo da DDJ-400). O catálogo fica, mas carregar uma faixa nova precisa do pendrive de volta.
+                    notice = "USB removido. A música dos decks continua; carregar faixas novas precisa do pendrive."
                 }
                 if (action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
                     notice = "Pendrive USB visto. Autorize a leitura se ainda não guardou a permissão."
@@ -202,7 +241,8 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
             context.registerReceiver(receiver, filter)
         }
         onDispose {
-            opened.forEach { runCatching { it.close() } }
+            manager?.unregisterDeviceCallback(midiCallback)
+            opened.values.forEach { runCatching { it.close() } }
             context.unregisterReceiver(receiver)
             NativeEngine.stop()
         }
@@ -231,7 +271,7 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
             else -> DeckPage(
                 catalog = catalog,
                 volume = volume,
-                deviceId = usbAudioDeviceId(context) ?: 0,
+                deviceId = audioDevice,
                 autoplay = play,
                 loaded = deckTracks,
                 onLoaded = { deck, track ->

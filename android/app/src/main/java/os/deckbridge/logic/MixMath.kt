@@ -11,7 +11,7 @@ data class PerformanceAction(
         BROWSE_MOVE, BROWSE_ENTER, BROWSE_BACK, LOAD,
         BEAT_FX, FILTER, QUANTIZE, SYNC, MASTER,
         BEAT_JUMP, BEAT_JUMP_PAGE, LOOP_IN, LOOP_OUT, RELOOP, LOOP_SCALE, BEAT_LOOP, RMX,
-        EQ, TRIM, HEAD_MIX, HEAD_GAIN,
+        EQ, TRIM, HEAD_MIX, HEAD_GAIN, PFL,
     }
 }
 
@@ -67,6 +67,8 @@ fun performanceAction(hit: ControlHit, value: Int): PerformanceAction? {
         }
         // Controles contínuos de 14 bits: só o byte alto (midino < 32) vale. O byte baixo (+32) é a parte fina e,
         // lido como valor inteiro, faria o fader saltar entre o grosso e o fino.
+        // CUE de canal (fones): liga e desliga a pré-escuta do canal.
+        hit.key == "pfl" && value > 0 && deck >= 0 -> PerformanceAction(deck, PerformanceAction.Kind.PFL)
         hit.key == "volume" && deck >= 0 && hit.midino < 32 -> PerformanceAction(deck, PerformanceAction.Kind.VOLUME, slider = slider)
         hit.key == "crossfader" && hit.midino < 32 -> PerformanceAction(-1, PerformanceAction.Kind.CROSSFADER, slider = slider)
         hit.group.startsWith("[EqualizerRack1_[Channel") && hit.midino < 32 -> {

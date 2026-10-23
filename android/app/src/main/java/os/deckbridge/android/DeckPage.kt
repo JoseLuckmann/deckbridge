@@ -523,6 +523,9 @@ fun DeckPage(
                 trimKnobs = trimKnobs.mapIndexed { index, value -> if (index == deck) level else value }
                 NativeEngine.setTrimKnob(deck, level)
             }
+            PerformanceAction.Kind.PFL -> if (deck in 0..1) {
+                if (deck == 0) pflA = !pflA else pflB = !pflB
+            }
             PerformanceAction.Kind.HEAD_MIX -> {
                 headMix = action.slider!!.toFloat()
                 NativeEngine.setHead(headMix, headLevel)
@@ -917,6 +920,7 @@ fun DeckPage(
             filter = listOf(faces[0].filter, faces[1].filter),
             colorFx = settings.colorFx,
             levels = levels,
+            pfl = listOf(pflA, pflB),
         ),
         onMixerKnob = { action -> onPerformance(action) },
         catalog = catalog,
