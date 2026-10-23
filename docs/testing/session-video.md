@@ -40,3 +40,11 @@ O roteiro agora começa com os dois decks vazios: BROWSE, giro do encoder, LOAD 
 Medido nas duas faixas de teste (sem nenhum ajuste manual de grade): primeira batida 1 ms e 0 ms do início do bumbo (antes 222 ms e 123 ms fora), e a fase entre os decks no vídeo sem SYNC fica entre −0,5 e −1,0 ms. As origens do bumbo vêm de uma medição independente (limiar de 25% do ataque na faixa de 1 a 5 kHz). O vídeo `sessao-sem-sync.mp4` ainda foi gerado com o ajuste manual antigo (−222/−123 ms); o roteiro agora roda sem ele.
 
 Limites: heurística validada em duas faixas house reais e num teste sintético (`gridLocksToTheKickWhenAnOffbeatBassIsLouder`, que falha sem a correção). Gêneros sem bumbo marcado (ambient, breakbeat) caem no caminho antigo, porque o contraste do corpo é pequeno. Não há corpus de grade com verdade de terreno para medir a taxa de acerto geral: marcado como risco.
+
+## Versão com loops e ajuste de grade pelo prato (23/10/2026)
+
+- **Loop roll no deck 1 antes da entrada do deck 2:** SLIP ligado (toque), pads BEAT LOOP de 8, 4, 2 e 1 batida e CUE/LOOP CALL para 1/2 e 1/4, cada passo começando numa batida. Sai no instante em que o deck 2 entra e a faixa volta onde estaria (SLIP): fase entre decks preservada (−20 ms de propósito, ver abaixo, depois +2 ms). O mesmo roll em sentido de saída no fim (4, 2, 1, 1/2, 1/4).
+- **Ajuste pelo prato:** o deck 2 entra 20 ms atrasado e com o fader de tempo 0,04% acima; o DJ empurra com quatro passos do prato (valor 65 = +5 ms cada) e depois acerta o fader. `checks.txt`: −20 ms na entrada, +1,6 ms depois dos empurrões, +2,2 ms estável.
+- **Engine:** sair de um loop com SLIP ligado agora volta à posição sem loop (antes só voltava ao desligar o SLIP). Teste do áudio: o trecho do loop de 2 batidas se repete (correlação 0,89 contra 0,06 sem loop).
+- **App:** o pitch bend do prato fora do modo vinil era permanente; agora é temporário (volta ao tempo do fader 150 ms depois do último passo).
+- Limites: o prato no modo vinil (padrão do app) desloca a posição em passos de 5 ms por unidade; o SLIP é ligado pela tela (a DDJ-400 do mapa pinado não tem botão de SLIP). Só simulação.
