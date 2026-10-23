@@ -234,8 +234,6 @@ public:
     void loadDeck(int deck, const float *data, int count, int channels, int rate, float bpm, float cueSeconds,
                   const float *hot, int hotCount, float loopStartSec, float loopEndSec) {
         if (deck < 0 || deck > 1 || data == nullptr) return;
-        // A cópia de dezenas de MB acontece FORA do mutex do callback de áudio; dentro dele só se troca o vetor.
-        // Antes, carregar uma faixa travava o áudio do outro deck pelo tempo da cópia.
         const int ch = channels == 2 ? 2 : 1;
         const int frames = std::max(0, ch == 2 ? count / 2 : count);
         std::vector<float> newLeft(static_cast<size_t>(frames));
@@ -249,6 +247,14 @@ public:
                 newRight[index] = data[index];
             }
         }
+        installDeck(deck, std::move(newLeft), std::move(newRight), rate, bpm, cueSeconds, hot, hotCount, loopStartSec, loopEndSec);
+    }
+
+    // A cópia de dezenas de MB acontece FORA do mutex do callback de áudio; dentro dele só se troca o vetor.
+    // Antes, carregar uma faixa travava o áudio do outro deck pelo tempo da cópia.
+    void installDeck(int deck, std::vector<float> newLeft, std::vector<float> newRight, int rate, float bpm, float cueSeconds,
+                     const float *hot, int hotCount, float loopStartSec, float loopEndSec) {
+        if (deck < 0 || deck > 1) return;
         std::vector<float> oldLeft;
         std::vector<float> oldRight;
         {
@@ -802,6 +808,28 @@ Java_os_deckbridge_android_NativeEngine_nativeLoadDeck(
     engine().loadDeck(deck, data, count, channels, rate, bpm, cueSeconds, hotData, hotCount, loopStart, loopEnd);
     env->ReleaseFloatArrayElements(samples, data, JNI_ABORT);
     if (hotData != nullptr) env->ReleaseFloatArrayElements(hot, hotData, JNI_ABORT);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeLoadDeckStereo(
+        JNIEnv *env, jobject, jint deck, jfloatArray left, jfloatArray right, jint frames, jint rate, jfloat bpm,
+        jfloat cueSeconds, jfloatArray hot, jfloat loopStart, jfloat loopEnd) {
+    if (left == nullptr || right == nullptr || frames <= 0) return;
+    const jsize available = std::min(env->GetArrayLength(left), env->GetArrayLength(right));
+    const int count = std::min<int>(frames, available);
+    // Copia direto do array Java para o vetor do motor, sem um buffer intermediário.
+    std::vector<float> newLeft(static_cast<size_t>(count));
+    std::vector<float> newRight(static_cast<size_t>(count));
+    env->GetFloatArrayRegion(left, 0, count, newLeft.data());
+    env->GetFloatArrayRegion(right, 0, count, newRight.data());
+    std::vector<float> hotValues;
+    if (hot != nullptr) {
+        const jsize hotCount = env->GetArrayLength(hot);
+        hotValues.resize(static_cast<size_t>(hotCount));
+        if (hotCount > 0) env->GetFloatArrayRegion(hot, 0, hotCount, hotValues.data());
+    }
+    engine().installDeck(deck, std::move(newLeft), std::move(newRight), rate, bpm, cueSeconds,
+                         hotValues.empty() ? nullptr : hotValues.data(), static_cast<int>(hotValues.size()), loopStart, loopEnd);
 }
 
 extern "C" JNIEXPORT void JNICALL

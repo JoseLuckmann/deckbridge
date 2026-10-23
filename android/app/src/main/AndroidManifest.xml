@@ -6,6 +6,7 @@
 
     <application
         android:allowBackup="false"
+        android:largeHeap="true"
         android:icon="@android:drawable/ic_media_play"
         android:label="DeckBridge"
         android:supportsRtl="true"

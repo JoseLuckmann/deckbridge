@@ -36,13 +36,8 @@ object NativeEngine {
         loopEndSeconds: Float,
     ) {
         if (!ensureQuiet()) return
-        val frames = minOf(pcm.left.size, pcm.right.size)
-        val interleaved = FloatArray(frames * 2)
-        for (index in 0 until frames) {
-            interleaved[index * 2] = pcm.left[index]
-            interleaved[index * 2 + 1] = pcm.right[index]
-        }
-        nativeLoadDeck(deck, interleaved, 2, pcm.sampleRate, bpm, cueSeconds, hotCueSeconds, loopStartSeconds, loopEndSeconds)
+        // Esquerdo e direito vão direto para o motor, sem o vetor intercalado de mais 130 MB.
+        nativeLoadDeckStereo(deck, pcm.left, pcm.right, pcm.frameCount, pcm.sampleRate, bpm, cueSeconds, hotCueSeconds, loopStartSeconds, loopEndSeconds)
     }
 
     fun transport(deck: Int, playing: Boolean) {
@@ -255,6 +250,18 @@ object NativeEngine {
     private external fun nativeSetBeatFx(effect: Int, on: Boolean, level: Int, channel: Int, bpm: Float, beats: Float)
     private external fun nativeSetFilter(deck: Int, norm: Float)
     private external fun nativeLevels(dest: FloatArray)
+    private external fun nativeLoadDeckStereo(
+        deck: Int,
+        left: FloatArray,
+        right: FloatArray,
+        frames: Int,
+        rate: Int,
+        bpm: Float,
+        cueSeconds: Float,
+        hot: FloatArray,
+        loopStart: Float,
+        loopEnd: Float,
+    )
     private external fun nativeSetEq(deck: Int, low: Float, mid: Float, high: Float)
     private external fun nativeSetTrimKnob(deck: Int, norm: Float)
     private external fun nativeSetHead(mix: Float, level: Float)

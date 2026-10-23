@@ -183,64 +183,70 @@ fun DeckPage(
         history = (listOf(track.id) + history.filter { it != track.id }).take(32)
     }
 
-    fun loadTrack(deck: Int, track: RbTrack, source: ReadableVolume) {
-        val bytes = source.read(track.filePath)
-        if (bytes == null) {
-            note = "Áudio ausente para ${track.title}."
-            return
-        }
-        val pcm = decodeTrackAudio(context, track.fileName.ifBlank { track.filePath }, bytes)
-        if (pcm == null) {
-            note = "Não decodifiquei ${track.fileName}. Nesta versão o deck aceita WAV, MP3, FLAC e AAC."
-            return
-        }
-        val analysis = liveCatalog.value?.analyses?.get(track.id)
-        val hot = FloatArray(8) { -1f }
-        if (settings.hotCueAutoLoad) {
-            analysis?.hotCues?.forEach { cue ->
-                if (cue.index in hot.indices) hot[cue.index] = cue.timeMs / 1000f
+    // Ler e decodificar a faixa leva segundos: roda fora da thread da tela, senão a interface e os comandos
+    // da controladora congelam. O deck que toca não é afetado (o motor só troca o vetor no fim).
+    fun loadTrack(deck: Int, track: RbTrack, source: ReadableVolume): kotlinx.coroutines.Job {
+        note = "Carregando ${track.title}…"
+        return scope.launch {
+            val analysis = liveCatalog.value?.analyses?.get(track.id)
+            val hot = FloatArray(8) { -1f }
+            if (settings.hotCueAutoLoad) {
+                analysis?.hotCues?.forEach { cue ->
+                    if (cue.index in hot.indices) hot[cue.index] = cue.timeMs / 1000f
+                }
             }
+            val loop = activeLoop(analysis)
+            val loadedPcm = withContext(Dispatchers.Default) {
+                val bytes = source.read(track.filePath)
+                if (bytes == null) {
+                    null to "Áudio ausente para ${track.title}."
+                } else {
+                    val decoded = decodeTrackAudio(context, track.fileName.ifBlank { track.filePath }, bytes)
+                    if (decoded == null) {
+                        null to "Não decodifiquei ${track.fileName}. Nesta versão o deck aceita WAV, MP3, FLAC e AAC."
+                    } else {
+                        NativeEngine.loadDeck(deck, decoded, track.bpm.toFloat(), (analysis?.mainCueMs ?: 0) / 1000f, hot, -1f, -1f)
+                        decoded to ""
+                    }
+                }
+            }
+            val pcm = loadedPcm.first
+            if (pcm == null) {
+                note = loadedPcm.second
+                return@launch
+            }
+            onLoaded(deck, track)
+            rememberLoaded(track)
+            val cueSec = if (settings.autoCue) (analysis?.mainCueMs ?: 0) / 1000f else 0f
+            if (cueSec > 0f) NativeEngine.seek(deck, cueSec)
+            val savedGrid = gridEdits[track.id] ?: os.deckbridge.logic.GridEdit()
+            edit(deck) {
+                it.copy(
+                    playing = false,
+                    position = cueSec,
+                    loopStart = -1f,
+                    loopEnd = -1f,
+                    memoryStart = (loop?.first ?: -1) / 1000f,
+                    memoryEnd = (loop?.second ?: -1) / 1000f,
+                    keyLock = settings.keyLock,
+                    keyShift = 0,
+                    slip = false,
+                    cueBank = 0,
+                    emergency = false,
+                    reversed = false,
+                    activeLoopArmed = loop != null,
+                    gridShiftMs = savedGrid.shiftMs,
+                    gridStretch = savedGrid.stretch,
+                )
+            }
+            NativeEngine.setKeyShift(deck, 0)
+            NativeEngine.setSlip(deck, false)
+            NativeEngine.setReverse(deck, false)
+            val loopText = if (loop == null) "" else " Loop armado em ${loop.first}–${loop.second} ms. Entra quando a cabeça chegar."
+            note = "Carregada no deck ${deck + 1}: ${track.title}.$loopText"
+            pushMix()
+            if (pcm.truncated) note = "$note Faixa longa: só os primeiros $MAX_TRACK_MINUTES minutos foram carregados."
         }
-        val loop = activeLoop(analysis)
-        NativeEngine.loadDeck(
-            deck,
-            pcm,
-            track.bpm.toFloat(),
-            (analysis?.mainCueMs ?: 0) / 1000f,
-            hot,
-            -1f,
-            -1f,
-        )
-        onLoaded(deck, track)
-        rememberLoaded(track)
-        val cueSec = if (settings.autoCue) (analysis?.mainCueMs ?: 0) / 1000f else 0f
-        if (cueSec > 0f) NativeEngine.seek(deck, cueSec)
-        val savedGrid = gridEdits[track.id] ?: os.deckbridge.logic.GridEdit()
-        edit(deck) {
-            it.copy(
-                playing = false,
-                position = cueSec,
-                loopStart = -1f,
-                loopEnd = -1f,
-                memoryStart = (loop?.first ?: -1) / 1000f,
-                memoryEnd = (loop?.second ?: -1) / 1000f,
-                keyLock = settings.keyLock,
-                keyShift = 0,
-                slip = false,
-                cueBank = 0,
-                emergency = false,
-                reversed = false,
-                activeLoopArmed = loop != null,
-                gridShiftMs = savedGrid.shiftMs,
-                gridStretch = savedGrid.stretch,
-            )
-        }
-        NativeEngine.setKeyShift(deck, 0)
-        NativeEngine.setSlip(deck, false)
-        NativeEngine.setReverse(deck, false)
-        val loopText = if (loop == null) "" else " Loop armado em ${loop.first}–${loop.second} ms. Entra quando a cabeça chegar."
-        note = "Carregada no deck ${deck + 1}: ${track.title}.$loopText"
-        pushMix()
     }
 
     fun placeNow(): BrowsePlace = browse ?: stored
@@ -930,8 +936,8 @@ fun DeckPage(
         if (!autoplay || started || catalog == null || volume == null) return@LaunchedEffect
         val first = catalog.tracks.getOrNull(0)
         val second = catalog.tracks.getOrNull(1)
-        if (first != null) loadTrack(0, first, volume)
-        if (second != null) loadTrack(1, second, volume)
+        if (first != null) loadTrack(0, first, volume).join()
+        if (second != null) loadTrack(1, second, volume).join()
         cross = 0.5f
         pflB = true
         pushMix()

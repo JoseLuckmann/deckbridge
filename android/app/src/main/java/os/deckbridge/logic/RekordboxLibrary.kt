@@ -341,8 +341,16 @@ private fun emptyCatalog(volume: ReadableVolume, error: String, warnings: List<S
     )
 }
 
-data class DecodedPcm(val left: FloatArray, val right: FloatArray, val sampleRate: Int) {
-    val frameCount: Int get() = minOf(left.size, right.size)
+data class DecodedPcm(
+    val left: FloatArray,
+    val right: FloatArray,
+    val sampleRate: Int,
+    /** Quadros válidos; os vetores podem ter folga no fim (evita uma cópia de dezenas de MB para aparar). */
+    val frames: Int = minOf(left.size, right.size),
+    /** A faixa passou do limite de 15 minutos e foi cortada. */
+    val truncated: Boolean = false,
+) {
+    val frameCount: Int get() = minOf(frames, minOf(left.size, right.size))
     val stereo: Boolean get() = !left.contentEquals(right)
 }
 
