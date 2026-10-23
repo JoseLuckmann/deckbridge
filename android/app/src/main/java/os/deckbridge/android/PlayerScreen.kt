@@ -162,11 +162,13 @@ fun PlayerScreen(
     mixer: os.deckbridge.logic.MixerState = os.deckbridge.logic.MixerState(),
     onMixerKnob: (os.deckbridge.logic.PerformanceAction) -> Unit = {},
     warnings: List<String> = emptyList(),
+    startPopup: String = "",
 ) {
     var info by remember { mutableStateOf(showInfo) }
     var grid by remember { mutableStateOf(false) }
     var fxPanel by remember { mutableStateOf(true) }
     var picked by remember { mutableStateOf("") }
+    var popup by remember { mutableStateOf(startPopup) }
     val shownNav = nav.ifBlank {
         when {
             overlay == "menu" -> "MENU"
@@ -273,12 +275,9 @@ fun PlayerScreen(
                 deck = activeDeck,
                 face = faces.getOrElse(activeDeck) { DeckFace() },
                 compact = compact,
-                loopOn = faces.getOrElse(activeDeck) { DeckFace() }.let { it.loopEnd > it.loopStart },
+                open = popup,
                 modifier = Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 4.dp),
-                onJump = { beats -> onJump(activeDeck, beats) },
-                onLoop = { which -> onLoopButton(activeDeck, which) },
-                onBeatLoop = { beats -> onBeatLoop(activeDeck, beats) },
-                onAction = { onDeckAction(activeDeck, it) },
+                onOpen = { popup = it },
             )
             if (!rmx.full) Row(
                 Modifier.fillMaxWidth().height(if (compact) 118.dp else 176.dp).padding(top = if (compact) 3.dp else 4.dp),
@@ -287,6 +286,22 @@ fun PlayerScreen(
                 DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0), settings.cuePreset), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings)
                 DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1), settings.cuePreset), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings)
             }
+        }
+        if (popup.isNotEmpty() && !rmx.full) {
+            val cards = (if (compact) 118 else 176) + (if (compact) 24 else 30) + 10
+            Box(Modifier.fillMaxSize().clickable { popup = "" })
+            PerformancePopup(
+                kind = popup,
+                deck = activeDeck,
+                face = faces.getOrElse(activeDeck) { DeckFace() },
+                compact = compact,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = cards.dp).fillMaxWidth(0.62f),
+                onJump = { beats -> onJump(activeDeck, beats) },
+                onLoop = { which -> onLoopButton(activeDeck, which) },
+                onBeatLoop = { beats -> onBeatLoop(activeDeck, beats) },
+                onAction = { onDeckAction(activeDeck, it) },
+                onClose = { popup = "" },
+            )
         }
         if (info) {
             InfoCard(
@@ -672,55 +687,116 @@ private fun HotGrid(
     }
 }
 
+/** Linha fina de atalhos: cada botão abre um popup, como a tela de toque do leitor de club. */
 @Composable
 private fun PerformanceStrip(
     deck: Int,
     face: DeckFace,
     compact: Boolean,
-    loopOn: Boolean,
+    open: String,
+    modifier: Modifier,
+    onOpen: (String) -> Unit,
+) {
+    val loopOn = face.loopEnd > face.loopStart
+    Row(modifier.height(if (compact) 24.dp else 30.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        TextInk("D${deck + 1}", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentBlue), modifier = Modifier.width(if (compact) 22.dp else 28.dp))
+        listOf(
+            "JUMP" to false,
+            "LOOP" to loopOn,
+            "KEY" to (face.keyShift != 0),
+            "GRID" to (face.gridShiftMs != 0.0 || face.gridStretch != 1.0),
+            "MAIS" to (face.slip || face.reversed || face.emergency || face.cueBank != 0),
+        ).forEach { (label, lit) ->
+            Choice(label, open == label || lit, compact, Modifier.weight(1f).height(if (compact) 22.dp else 28.dp)) { onOpen(if (open == label) "" else label) }
+        }
+    }
+}
+
+@Composable
+private fun PerformancePopup(
+    kind: String,
+    deck: Int,
+    face: DeckFace,
+    compact: Boolean,
     modifier: Modifier,
     onJump: (Int) -> Unit,
     onLoop: (String) -> Unit,
     onBeatLoop: (Double) -> Unit,
     onAction: (String) -> Unit,
+    onClose: () -> Unit,
 ) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(Modifier.fillMaxWidth().height(if (compact) 22.dp else 28.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextInk("D${deck + 1}", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentBlue), modifier = Modifier.width(if (compact) 22.dp else 28.dp))
-            listOf(-64, -32, -16, -8, -4, -2, -1, 1, 2, 4, 8, 16, 32, 64).forEach { beats ->
-                Choice(if (beats > 0) "+$beats" else "$beats", false, compact, Modifier.weight(1f)) { onJump(beats) }
+    val loopOn = face.loopEnd > face.loopStart
+    Column(
+        modifier.background(Color(StagePalette.panel)).border(1.dp, Color(StagePalette.accentBlue)).clickable(enabled = false) {}.padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextInk("D${deck + 1}  $kind", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentBlue), modifier = Modifier.weight(1f))
+            Box(Modifier.clickable(onClick = onClose).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                TextInk("FECHAR", fontSize = 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
             }
         }
-        Row(Modifier.fillMaxWidth().height(if (compact) 22.dp else 28.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextInk("LOOP", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 36.dp else 44.dp))
-            Choice("4", loopOn, compact, Modifier.weight(1f)) { onLoop("4") }
-            Choice("IN", false, compact, Modifier.weight(1f)) { onLoop("IN") }
-            Choice("OUT", false, compact, Modifier.weight(1f)) { onLoop("OUT") }
-            Choice("1/2", false, compact, Modifier.weight(1f)) { onLoop("HALF") }
-            Choice("x2", false, compact, Modifier.weight(1f)) { onLoop("DOUBLE") }
-            Choice("EXIT", loopOn, compact, Modifier.weight(1f)) { onLoop("RELOOP") }
-            listOf(0.25 to "1/4", 0.5 to "1/2", 1.0 to "1", 2.0 to "2", 8.0 to "8", 16.0 to "16", 32.0 to "32").forEach { (beats, label) ->
-                Choice(label, false, compact, Modifier.weight(1f)) { onBeatLoop(beats) }
+        when (kind) {
+            "JUMP" -> {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf(-64, -32, -16, -8, -4, -2, -1).forEach { b -> PopKey("$b", false, Modifier.weight(1f)) { onJump(b) } }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf(1, 2, 4, 8, 16, 32, 64).forEach { b -> PopKey("+$b", false, Modifier.weight(1f)) { onJump(b) } }
+                }
+            }
+            "LOOP" -> {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PopKey("4 BEAT", loopOn, Modifier.weight(1.4f)) { onLoop("4") }
+                    PopKey("IN", false, Modifier.weight(1f)) { onLoop("IN") }
+                    PopKey("OUT", false, Modifier.weight(1f)) { onLoop("OUT") }
+                    PopKey("1/2X", false, Modifier.weight(1f)) { onLoop("HALF") }
+                    PopKey("2X", false, Modifier.weight(1f)) { onLoop("DOUBLE") }
+                    PopKey("EXIT", loopOn, Modifier.weight(1f)) { onLoop("RELOOP") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf(0.25 to "1/4", 0.5 to "1/2", 1.0 to "1", 2.0 to "2", 4.0 to "4", 8.0 to "8", 16.0 to "16", 32.0 to "32").forEach { (beats, label) ->
+                        PopKey(label, false, Modifier.weight(1f)) { onBeatLoop(beats) }
+                    }
+                }
+            }
+            "KEY" -> {
+                val shiftLabel = if (face.keyShift > 0) "+${face.keyShift}" else face.keyShift.toString()
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PopKey("−", false, Modifier.weight(1f)) { onAction("KEY-") }
+                    PopKey(shiftLabel, face.keyShift != 0, Modifier.weight(1f)) { onAction("KEY0") }
+                    PopKey("+", false, Modifier.weight(1f)) { onAction("KEY+") }
+                    PopKey("KEY SYNC", false, Modifier.weight(2f)) { onAction("SYNC") }
+                }
+            }
+            "GRID" -> {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PopKey("−10 ms", face.gridShiftMs < 0.0, Modifier.weight(1f)) { onAction("G-") }
+                    PopKey("+10 ms", face.gridShiftMs > 0.0, Modifier.weight(1f)) { onAction("G+") }
+                    PopKey("−0,1%", face.gridStretch < 1.0, Modifier.weight(1f)) { onAction("S-") }
+                    PopKey("+0,1%", face.gridStretch > 1.0, Modifier.weight(1f)) { onAction("S+") }
+                    PopKey("RESET", false, Modifier.weight(1f)) { onAction("G0") }
+                }
+            }
+            else -> {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PopKey("SLIP", face.slip, Modifier.weight(1f)) { onAction("SLIP") }
+                    PopKey("REV", face.reversed, Modifier.weight(1f)) { onAction("REV") }
+                    PopKey("EMERG", face.emergency, Modifier.weight(1f)) { onAction("EMERG") }
+                    PopKey("HOT CUE ${cueBankLetter(face.cueBank)}", face.cueBank != 0, Modifier.weight(1.4f)) { onAction("BANK") }
+                }
             }
         }
-        val shiftLabel = if (face.keyShift > 0) "+${face.keyShift}" else face.keyShift.toString()
-        Row(Modifier.fillMaxWidth().height(if (compact) 22.dp else 28.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextInk("KEY", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 28.dp else 36.dp))
-            Choice("−", false, compact, Modifier.weight(1f)) { onAction("KEY-") }
-            Choice(shiftLabel, face.keyShift != 0, compact, Modifier.weight(1f)) { onAction("KEY0") }
-            Choice("+", false, compact, Modifier.weight(1f)) { onAction("KEY+") }
-            Choice("SYNC", false, compact, Modifier.weight(1f)) { onAction("SYNC") }
-            Choice("SLIP", face.slip, compact, Modifier.weight(1f)) { onAction("SLIP") }
-            Choice("EMERG", face.emergency, compact, Modifier.weight(1f)) { onAction("EMERG") }
-            Choice("REV", face.reversed, compact, Modifier.weight(1f)) { onAction("REV") }
-            Choice("−10", face.gridShiftMs < 0.0, compact, Modifier.weight(1f)) { onAction("G-") }
-            Choice("+10", face.gridShiftMs > 0.0, compact, Modifier.weight(1f)) { onAction("G+") }
-            Choice("−0,1%", face.gridStretch < 1.0, compact, Modifier.weight(1.1f)) { onAction("S-") }
-            Choice("+0,1%", face.gridStretch > 1.0, compact, Modifier.weight(1.1f)) { onAction("S+") }
-            Choice("G0", false, compact, Modifier.weight(1f)) { onAction("G0") }
-            Choice("ATIVO", face.activeLoopArmed, compact, Modifier.weight(1.1f)) { }
-            Choice("BANK ${cueBankLetter(face.cueBank)}", face.cueBank != 0, compact, Modifier.weight(1.4f)) { onAction("BANK") }
-        }
+    }
+}
+
+@Composable
+private fun PopKey(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier.height(40.dp).background(Color(StagePalette.bg)).border(if (selected) 1.5.dp else 1.dp, Color(if (selected) StagePalette.accentBlue else StagePalette.line), RoundedCornerShape(2.dp)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        TextInk(label, color = if (selected) Color(StagePalette.accentBlue) else Color(StagePalette.ink), fontSize = 12.sp, weight = FontWeight.Bold, maxLines = 1)
     }
 }
 

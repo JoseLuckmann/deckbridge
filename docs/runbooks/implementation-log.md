@@ -445,3 +445,9 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Comandos para reproduzir: ...
 - Próximo passo: ...
 ```
+
+## 2026-10-23 — Tela principal mais limpa: atalhos em popups
+
+- Mudança: a faixa de ~40 botões (beat jump, loop, KEY, grade, SLIP, REV...) saiu da tela principal. Ficou uma linha fina com JUMP, LOOP, KEY, GRID e MAIS; cada botão abre um popup sobre as ondas (como a tela de toque do leitor de club). Tocar fora ou em FECHAR fecha.
+- Evidência: `docs/ui/compact-player.png`, `compact-popup-loop.png`, `compact-popup-key.png` (Robolectric/Roborazzi, JVM).
+- Status: UI verificada só em simulação; uso no tablet `BLOCKED_HARDWARE`.

@@ -353,6 +353,16 @@ class ScreenShotsCompact {
     }
 
     @Test
+    fun popupsCompact() {
+        val catalog = simulatedCatalog()
+        for (kind in listOf("LOOP", "KEY")) {
+            capture("$PRINTS/compact-popup-${kind.lowercase()}.png") { activity ->
+                activity.setContentView(player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), leftTitle = "Quarto Escuro", posA = 100f, startPopup = kind))
+            }
+        }
+    }
+
+    @Test
     fun rmxDockCompact() {
         val catalog = simulatedCatalog()
         val rmx = RmxState(panel = true, full = true, scene = 1, holding = true, intensity = 0.55f, bars = 8, xOn = true, xMode = 2, drumBuild = 1f)
@@ -396,6 +406,7 @@ private fun player(
     usbLabel: String = "USB simulado",
     historyIds: List<Int> = emptyList(),
     mixer: os.deckbridge.logic.MixerState = os.deckbridge.logic.MixerState(),
+    startPopup: String = "",
 ): ComposeView {
     val left = catalog.tracks.first { it.title == leftTitle }
     val right = catalog.tracks.first { it.title == rightTitle }
@@ -426,6 +437,7 @@ private fun player(
         setContent {
             PlayerScreen(
             mixer = mixer,
+            startPopup = startPopup,
                 catalog = catalog,
                 tracks = listOf(left, right),
                 clock = "21:14",
