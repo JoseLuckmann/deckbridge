@@ -44,6 +44,8 @@ private data class Frame(
     val master: Int,
     val overlay: String,
     val caption: String,
+    val tracks: List<os.deckbridge.logic.RbTrack?>,
+    val browse: os.deckbridge.logic.BrowsePlace?,
 )
 
 @RunWith(RobolectricTestRunner::class)
@@ -62,8 +64,6 @@ class SessionFramesTest {
         val state = mutableStateOf<Frame?>(null)
         val first = runSessionFirstFrame(catalog)
         state.value = first
-        val left = catalog.tracks[0]
-        val right = catalog.tracks[1]
         activity.setContentView(
             ComposeView(activity).apply {
                 setContent {
@@ -73,7 +73,8 @@ class SessionFramesTest {
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             PlayerScreen(
                                 catalog = catalog,
-                                tracks = listOf(left, right),
+                                tracks = f.tracks,
+                                browse = f.browse,
                                 clock = "21:14",
                                 faces = f.faces,
                                 master = f.master,
@@ -112,6 +113,8 @@ class SessionFramesTest {
                 master = model.master,
                 overlay = model.overlay,
                 caption = model.captionNow(),
+                tracks = model.deckTracks(),
+                browse = model.browse,
             )
             repeat(3) { ShadowLooper.idleMainLooper(20, java.util.concurrent.TimeUnit.MILLISECONDS) }
             activity.window.decorView.captureRoboImage(File(outDir, "frame%05d.png".format(frame)).absolutePath)
@@ -122,7 +125,7 @@ class SessionFramesTest {
 
     private fun runSessionFirstFrame(catalog: os.deckbridge.logic.RbCatalog): Frame {
         val model = SessionModel(catalog, doubleArrayOf(-222.0, -123.0))
-        return Frame(model.faces, model.fx, model.rmx, model.mixer(), model.master, "", "")
+        return Frame(model.faces, model.fx, model.rmx, model.mixer(), model.master, "", "", model.deckTracks(), null)
     }
 }
 

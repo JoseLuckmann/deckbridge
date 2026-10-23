@@ -5,6 +5,10 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import os.deckbridge.logic.BeatFxState
+import os.deckbridge.logic.BrowsePlace
+import os.deckbridge.logic.browseRows
+import os.deckbridge.logic.moveBrowse
+import os.deckbridge.logic.quantizeSeconds
 import os.deckbridge.logic.DeckFace
 import os.deckbridge.logic.GridEdit
 import os.deckbridge.logic.MidiMap
@@ -34,10 +38,13 @@ import os.deckbridge.logic.syncPitch
  * A mesma `interpretPerformance` do app traduz os bytes; as ações são aplicadas como em `onPerformance`.
  * Cada efeito sobre o motor vira uma linha do ops.tsv, que o `ddj_session` reexecuta no áudio.
  */
-class SessionModel(catalog: RbCatalog, private val gridShiftMs: DoubleArray) {
+class SessionModel(private val catalog: RbCatalog, private val gridShiftMs: DoubleArray) {
     private val map = MidiMap.loadResource()
     private val tempo = TempoAssembler()
     val tracks: List<RbTrack> = catalog.tracks.take(2)
+    val loaded = booleanArrayOf(false, false)
+    var browse: BrowsePlace? = null
+        private set
     private val beats = tracks.map { catalog.analyses[it.id]?.beats.orEmpty() }
 
     var t = 0.0
@@ -77,6 +84,29 @@ class SessionModel(catalog: RbCatalog, private val gridShiftMs: DoubleArray) {
             val grid = gridOf(deck)
             if (grid != null) ops += "grid\t$deck\t${grid.first}\t${grid.second}"
         }
+    }
+
+    /** Faixas que já estão nos decks (nulo = deck vazio). */
+    fun deckTracks(): List<RbTrack?> = listOf(if (loaded[0]) tracks[0] else null, if (loaded[1]) tracks[1] else null)
+
+    private fun rows() = browse?.let { browseRows(catalog, it, emptyList(), null, false) }.orEmpty()
+
+    /** Toque em BROWSE: abre a lista de ficheiros (a mesma da tela real). */
+    fun openBrowse() {
+        browse = BrowsePlace(inList = true, playlistId = catalog.playlists.first().id, index = 0)
+    }
+
+    /** Índice da faixa do deck na lista aberta. */
+    fun rowIndexOf(deck: Int): Int = rows().indexOfFirst { it.track?.id == tracks[deck].id }
+
+    val browseIndex: Int get() = browse?.index ?: 0
+
+    private fun loadSelected(deck: Int) {
+        val row = rows().getOrNull(browse?.index ?: return) ?: return
+        if (row.track?.id != tracks[deck].id) return
+        load(deck, 0.0)
+        loaded[deck] = true
+        browse = null
     }
 
     fun load(deck: Int, seconds: Double) {
@@ -187,7 +217,7 @@ class SessionModel(catalog: RbCatalog, private val gridShiftMs: DoubleArray) {
     private fun apply(action: PerformanceAction) {
         val deck = action.deck
         when (action.kind) {
-            PerformanceAction.Kind.PLAY -> if (deck in 0..1) {
+            PerformanceAction.Kind.PLAY -> if (deck in 0..1 && loaded[deck]) {
                 val playing = !faces[deck].playing
                 edit(deck) { it.copy(playing = playing) }
                 ops += "%.4f\tplay\t%d\t%d".format(t, deck, if (playing) 1 else 0)
@@ -217,6 +247,8 @@ class SessionModel(catalog: RbCatalog, private val gridShiftMs: DoubleArray) {
                 ops += "%.4f\tfilter\t%d\t%.5f".format(t, deck, value / 127f)
             }
             PerformanceAction.Kind.SYNC -> syncDeck(deck)
+            PerformanceAction.Kind.BROWSE_MOVE -> browse?.let { place -> browse = moveBrowse(place, (action.slider ?: 0.0).toInt(), rows().size) }
+            PerformanceAction.Kind.LOAD -> if (deck in 0..1) loadSelected(deck)
             PerformanceAction.Kind.MASTER -> if (deck in 0..1) master = deck
             PerformanceAction.Kind.BEAT_JUMP_PAGE -> if (deck in 0..1) {
                 jumpScale[deck] = stepJumpScale(jumpScale[deck], action.hotIndex == 1)
@@ -254,8 +286,11 @@ class SessionModel(catalog: RbCatalog, private val gridShiftMs: DoubleArray) {
     }
 
     private fun hotCue(deck: Int, index: Int) {
+        if (!loaded[deck]) return
         val cue = hotCues[deck].firstOrNull { it.first == index } ?: return
-        seekTo(deck, cue.second)
+        // Quantize ligado, como o DeckPage: o ponto salta para a batida mais próxima da grade ajustada.
+        val edit = GridEdit(gridShiftMs[deck], faces[deck].gridStretch)
+        seekTo(deck, quantizeSeconds(cue.second, applyGrid(beats[deck], edit), gridBpm(tracks[deck].bpm, edit)))
     }
 
     /** Hot cues da análise do app, em segundos, por deck. */

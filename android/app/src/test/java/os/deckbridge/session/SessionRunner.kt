@@ -16,9 +16,7 @@ fun runSession(catalog: RbCatalog, fps: Int, maxSeconds: Double = SessionScript.
         val cues = catalog.analyses[catalog.tracks[deck].id]?.hotCues.orEmpty().map { it.index to it.timeMs / 1000.0 }
         model.setHotCues(deck, cues)
     }
-    model.load(0, 0.0)
-    model.load(1, 0.0)
-    val events = SessionScript.events()
+    val events = SessionScript.events(model)
     var next = 0
     val frames = (maxSeconds * fps).toInt()
     for (frame in 0..frames) {

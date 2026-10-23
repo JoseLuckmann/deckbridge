@@ -14,7 +14,7 @@ class SessionOpsTest {
         // Origens reais do bumbo medidas no áudio (não as da análise do app): 0,005 s e 0,0 s.
         val oA = 0.005
         val oB = 0.0
-        val checkpoints = doubleArrayOf(11.0, 14.0, 20.0, 29.0, 31.5, 35.0, 44.0, 50.0, 70.0, 75.0, 80.0)
+        val checkpoints = doubleArrayOf(24.0, 27.0, 33.0, 41.0, 44.0, 48.0, 57.0, 63.0, 82.0, 88.0, 93.0)
         var nextCheck = 0
         val model = runSession(catalog, 10) { m, frame ->
             val t = frame / 10.0
