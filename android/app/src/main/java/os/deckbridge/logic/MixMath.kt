@@ -20,6 +20,28 @@ fun masterGain(volume: Double, crossfader: Double, deckIsB: Boolean): Double {
     return (volume.coerceIn(0.0, 1.0) * side.coerceIn(0.0, 1.0)).coerceIn(0.0, 1.0)
 }
 
+/** Fase de batida, 0 a 1, no ponto da faixa dado a grade (origem em segundos e BPM da grade). */
+fun beatPhase(trackSec: Double, originSec: Double, gridBpm: Double): Double {
+    if (gridBpm <= 1.0) return 0.0
+    val beat = (trackSec - originSec) * gridBpm / 60.0
+    return beat - kotlin.math.floor(beat)
+}
+
+/**
+ * Quanto avançar (positivo) ou recuar (negativo), em segundos da faixa própria, para que a batida dela
+ * caia junto com a do outro deck. Vale o caminho mais curto, no máximo meia batida.
+ */
+fun syncPhaseShiftSeconds(
+    ownSec: Double, ownOrigin: Double, ownBpm: Double,
+    otherSec: Double, otherOrigin: Double, otherBpm: Double,
+): Double {
+    if (ownBpm <= 1.0 || otherBpm <= 1.0) return 0.0
+    var delta = beatPhase(otherSec, otherOrigin, otherBpm) - beatPhase(ownSec, ownOrigin, ownBpm)
+    if (delta > 0.5) delta -= 1.0
+    if (delta < -0.5) delta += 1.0
+    return delta * 60.0 / ownBpm
+}
+
 fun syncPitch(ownBpm: Double, otherBpm: Double, otherPitch: Double): Double? {
     if (ownBpm <= 0.0 || otherBpm <= 0.0) return null
     val target = otherBpm * otherPitch

@@ -441,15 +441,51 @@ fun DeckPage(
         edit(deck) { it.copy(lastJump = beats) }
     }
 
+    // Grade do deck: origem do compasso 1 em segundos e BPM da grade, com os ajustes G+/G- já aplicados.
+    fun gridOf(deck: Int): Pair<Double, Double>? {
+        val track = liveLoaded.value.getOrNull(deck) ?: return null
+        val face = faces[deck]
+        val edit = GridEdit(face.gridShiftMs, face.gridStretch)
+        val beats = applyGrid(liveCatalog.value?.analyses?.get(track.id)?.beats.orEmpty(), edit)
+        val bpm = gridBpm(track.bpm, edit)
+        if (bpm <= 1.0) return null
+        val origin = if (beats.isEmpty()) {
+            0.0
+        } else {
+            val first = beats.first()
+            first.timeMs / 1000.0 - (first.beatInBar.coerceIn(1, 4) - 1) * (60.0 / bpm)
+        }
+        return origin to bpm
+    }
+
+    // SYNC: iguala o tempo ao do deck líder (o master, ou o outro se este for o master), alinha a fase da
+    // batida quando os dois tocam com quantize ligado e passa a seguir o líder. Apertar de novo solta.
     fun syncDeck(deck: Int) {
         if (deck !in 0..1) return
+        if (faces[deck].sync) {
+            edit(deck) { it.copy(sync = false) }
+            return
+        }
+        val lead = if (master != deck) master else 1 - deck
         val own = liveLoaded.value.getOrNull(deck)?.bpm ?: return
-        val other = liveLoaded.value.getOrNull(1 - deck)?.bpm ?: return
-        val otherPitch = if (deck == 0) pitchB.toDouble() else pitchA.toDouble()
-        val synced = syncPitch(own, other, otherPitch) ?: return
+        val other = liveLoaded.value.getOrNull(lead)?.bpm ?: return
+        val leadPitch = if (lead == 0) pitchA.toDouble() else pitchB.toDouble()
+        val synced = syncPitch(own, other, leadPitch) ?: return
         val range = faces[deck].range
         setPitch(deck, synced.toFloat())
         edit(deck) { it.copy(pitch = synced.toFloat(), sync = true, fader = faderFromPitch(synced, range).toFloat()) }
+        if (quantize && faces[deck].playing && faces[lead].playing) {
+            val ownGrid = gridOf(deck)
+            val leadGrid = gridOf(lead)
+            if (ownGrid != null && leadGrid != null) {
+                val ownSec = NativeEngine.position(deck).toDouble()
+                val shift = syncPhaseShiftSeconds(
+                    ownSec, ownGrid.first, ownGrid.second,
+                    NativeEngine.position(lead).toDouble(), leadGrid.first, leadGrid.second,
+                )
+                if (kotlin.math.abs(shift) > 0.002) NativeEngine.seek(deck, (ownSec + shift).toFloat())
+            }
+        }
     }
 
     fun onPerformance(action: PerformanceAction) {
@@ -782,6 +818,22 @@ fun DeckPage(
         }
     }
 
+    // Deck com SYNC ligado segue o tempo do líder enquanto o líder mexe no pitch.
+    LaunchedEffect(pitchA, pitchB, master, faces[0].sync, faces[1].sync) {
+        for (deck in 0..1) {
+            if (!faces[deck].sync || deck == master) continue
+            val own = loaded.getOrNull(deck)?.bpm ?: continue
+            val other = loaded.getOrNull(master)?.bpm ?: continue
+            val leadPitch = if (master == 0) pitchA else pitchB
+            val target = syncPitch(own, other, leadPitch.toDouble()) ?: continue
+            val current = if (deck == 0) pitchA else pitchB
+            if (kotlin.math.abs(current - target.toFloat()) > 1e-5f) {
+                setPitch(deck, target.toFloat())
+                edit(deck) { it.copy(pitch = target.toFloat(), fader = faderFromPitch(target, it.range).toFloat()) }
+            }
+        }
+    }
+
     LaunchedEffect(settings.colorFx) {
         NativeEngine.setColorKind(0, settings.colorFx)
         NativeEngine.setColorKind(1, settings.colorFx)
@@ -842,6 +894,17 @@ fun DeckPage(
     }
 
     PlayerScreen(
+        mixer = os.deckbridge.logic.MixerState(
+            eq = eqKnobs,
+            trim = trimKnobs,
+            volume = listOf(volA, volB),
+            cross = cross,
+            headMix = headMix,
+            headLevel = headLevel,
+            filter = listOf(faces[0].filter, faces[1].filter),
+            colorFx = settings.colorFx,
+        ),
+        onMixerKnob = { action -> onPerformance(action) },
         catalog = catalog,
         tracks = loaded,
         faces = faces,

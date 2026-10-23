@@ -159,6 +159,8 @@ fun PlayerScreen(
     onMatchKey: (String) -> Unit = {},
     onBpmWindow: () -> Unit = {},
     onSort: (os.deckbridge.logic.ListSort) -> Unit = {},
+    mixer: os.deckbridge.logic.MixerState = os.deckbridge.logic.MixerState(),
+    onMixerKnob: (os.deckbridge.logic.PerformanceAction) -> Unit = {},
 ) {
     var info by remember { mutableStateOf(showInfo) }
     var grid by remember { mutableStateOf(false) }
@@ -167,6 +169,7 @@ fun PlayerScreen(
     val shownNav = nav.ifBlank {
         when {
             overlay == "menu" -> "MENU"
+            overlay == "mixer" -> "MIXER"
             overlay == "search" -> "SEARCH"
             overlay == "tags" -> "TAG LIST"
             browse != null -> picked.ifBlank { "BROWSE" }
@@ -208,6 +211,7 @@ fun PlayerScreen(
                         }
                         "SEARCH" -> onOverlay("search")
                         "MENU" -> onOverlay("menu")
+                        "MIXER" -> onOverlay("mixer")
                     }
                 },
                 onInfo = { info = !info },
@@ -292,6 +296,8 @@ fun PlayerScreen(
             MenuScreen(settings, midiLine, onSettings, { onOverlay("") }, onDiagnostics, onTestTone, catalog?.usbWaveNote.orEmpty()) { onOverlay("history") }
         } else if (overlay == "search" && catalog != null) {
             SearchScreen(catalog.tracks, queryText, searchBpm.first, searchBpm.second, searchKey, onQuery, onSearchBpm, onSearchKey, onLoad) { onOverlay("") }
+        } else if (overlay == "mixer") {
+            MixerScreen(mixer, onMixerKnob) { onOverlay("") }
         } else if (overlay == "history") {
             HistoryScreen(historyRows, { onOverlay("") }, { onHistoryExport(historyCsv(historyRows)) }, { onHistoryExport(historyM3u8(historyRows)) })
         } else if (overlay == "tags") {
@@ -371,7 +377,7 @@ private fun TopBar(
             }
         }
         Row(Modifier.fillMaxWidth().height(if (compact) 44.dp else 60.dp).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            listOf("SOURCE", "BROWSE", "TAG LIST", "PLAYLIST", "SEARCH", "MENU").forEach { label ->
+            listOf("SOURCE", "BROWSE", "TAG LIST", "PLAYLIST", "SEARCH", "MIXER", "MENU").forEach { label ->
                 NavButton(label, compact, nav == label, Modifier.weight(1f)) { onNav(label) }
             }
         }

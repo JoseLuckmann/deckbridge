@@ -223,3 +223,33 @@ class PlayerLogicTest {
         before.forEach { (path, bytes) -> assertTrue(volume.read(path)!!.contentEquals(bytes)) }
     }
 }
+
+class MixerViewTest {
+    @org.junit.Test
+    fun eqCurveMatchesTheEngine() {
+        org.junit.Assert.assertEquals(0f, eqGain(0f), 0f)
+        org.junit.Assert.assertEquals(1f, eqGain(0.5f), 1e-6f)
+        org.junit.Assert.assertEquals(1.995f, eqGain(1f), 0.01f)
+        org.junit.Assert.assertEquals("KILL", eqDbLabel(0f))
+        org.junit.Assert.assertEquals("0 dB", eqDbLabel(0.5f))
+        org.junit.Assert.assertEquals("+6 dB", eqDbLabel(1f))
+        org.junit.Assert.assertEquals("−12 dB".replace('−', '-'), trimDbLabel(0f))
+        org.junit.Assert.assertEquals("CUE", headMixLabel(0f))
+        org.junit.Assert.assertEquals("CENTRO", crossfaderLabel(0.5f))
+    }
+}
+
+class SyncPhaseTest {
+    @org.junit.Test
+    fun phaseShiftTakesTheShortestWayToTheOtherBeat() {
+        // 120 BPM, batida a cada 0,5 s. O outro deck está na batida; este está 0,1 s depois dela.
+        val shift = syncPhaseShiftSeconds(10.1, 0.0, 120.0, 20.0, 0.0, 120.0)
+        org.junit.Assert.assertEquals(-0.1, shift, 1e-9)
+        // 0,4 s depois da batida é 0,1 s antes da próxima: avança.
+        org.junit.Assert.assertEquals(0.1, syncPhaseShiftSeconds(10.4, 0.0, 120.0, 20.0, 0.0, 120.0), 1e-9)
+        // A origem da grade conta: com origem 0,2 s a batida do outro cai em 20,2.
+        org.junit.Assert.assertEquals(0.0, syncPhaseShiftSeconds(10.2, 0.0, 120.0, 20.2, 0.2, 120.0), 1e-9)
+        org.junit.Assert.assertEquals(0.0, syncPhaseShiftSeconds(1.0, 0.0, 0.0, 2.0, 0.0, 120.0), 0.0)
+        org.junit.Assert.assertEquals(0.5, beatPhase(0.25, 0.0, 120.0), 1e-9)
+    }
+}
