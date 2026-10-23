@@ -247,8 +247,10 @@ class SyncPhaseTest {
         org.junit.Assert.assertEquals(-0.1, shift, 1e-9)
         // 0,4 s depois da batida é 0,1 s antes da próxima: avança.
         org.junit.Assert.assertEquals(0.1, syncPhaseShiftSeconds(10.4, 0.0, 120.0, 20.0, 0.0, 120.0), 1e-9)
-        // A origem da grade conta: com origem 0,2 s a batida do outro cai em 20,2.
-        org.junit.Assert.assertEquals(0.0, syncPhaseShiftSeconds(10.2, 0.0, 120.0, 20.2, 0.2, 120.0), 1e-9)
+        // A origem da grade conta: este deck tem origem 0,2 s, então 10,2 s já é uma batida; o outro está na batida em 20,0 s.
+        org.junit.Assert.assertEquals(0.0, syncPhaseShiftSeconds(10.2, 0.2, 120.0, 20.0, 0.0, 120.0), 1e-9)
+        // Sem contar a origem este deck estaria 0,2 s fora: recua 0,2 s.
+        org.junit.Assert.assertEquals(-0.2, syncPhaseShiftSeconds(10.2, 0.0, 120.0, 20.0, 0.0, 120.0), 1e-9)
         org.junit.Assert.assertEquals(0.0, syncPhaseShiftSeconds(1.0, 0.0, 0.0, 2.0, 0.0, 120.0), 0.0)
         org.junit.Assert.assertEquals(0.5, beatPhase(0.25, 0.0, 120.0), 1e-9)
     }

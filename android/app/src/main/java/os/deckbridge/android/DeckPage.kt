@@ -70,6 +70,7 @@ import os.deckbridge.logic.pickBrowse
 import os.deckbridge.logic.pitchFromFader
 import os.deckbridge.logic.quantizeSeconds
 import os.deckbridge.logic.reduceBeatFx
+import os.deckbridge.logic.syncPhaseShiftSeconds
 import os.deckbridge.logic.syncPitch
 import kotlin.math.roundToInt
 
