@@ -441,6 +441,8 @@ data class DeckFace(
     val memoryEnd: Float = -1f,
     val jumpScale: Double = 1.0,
     val lastJump: Double = 0.0,
+    /** Valor do BEAT JUMP (as setas ◄ ► do leitor saltam este número de batidas). Padrão 16, como no leitor. */
+    val jumpBeats: Int = 16,
     val reversed: Boolean = false,
     val activeLoopArmed: Boolean = false,
     val gridShiftMs: Double = 0.0,
@@ -723,6 +725,7 @@ data class PlayerSettings(
     val autoCue: Boolean = true,
     val hotCueAutoLoad: Boolean = true,
     val jogVinyl: Boolean = true,
+    val masterLevel: Float = DEFAULT_MASTER_LEVEL,
     val waveColor: String = "RGB",
     val followUsb: Boolean = true,
     val zoomBars: Int = 8,
@@ -878,4 +881,12 @@ fun mergedTagNames(catalog: Map<Int, List<RbTag>>, added: Map<Int, Set<String>>,
         base -= removed[id].orEmpty()
         base.filter { it.isNotBlank() }.sorted()
     }.filterValues { it.isNotEmpty() }
+}
+
+/** Valores do BEAT JUMP em ordem; tocar na caixa passa para o próximo e volta ao primeiro depois do último. */
+val JUMP_SIZES = listOf(1, 2, 4, 8, 16, 32, 64)
+
+fun nextJumpSize(current: Int): Int {
+    val index = JUMP_SIZES.indexOf(current)
+    return if (index < 0) 16 else JUMP_SIZES[(index + 1) % JUMP_SIZES.size]
 }

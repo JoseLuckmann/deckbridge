@@ -70,6 +70,9 @@ struct Deck {
     double rollOrigin = -1.0;
     double rollLength = -1.0;
     double slip = -1.0;
+    // Posição "ao vivo" durante o Roll, para o balanço original/roll; rollMix 1 = só o roll.
+    double shadow = -1.0;
+    float rollMix = 1.f;
     bool keyLock = false;
     int keyShift = 0;
     bool reversed = false;
@@ -141,6 +144,13 @@ struct Deck {
             if (stretch.havePrev || stretch.phase < deckbridge::Wsola::kHop) stretch.reset();
         }
         const double step = deckbridge::directedStep(pitch, rateMul, sampleRate, outputRate, reversed);
+        if (rollLength > 1.0 && rollOrigin >= 0.0 && shadow >= 0.0) {
+            if (rollMix < 0.999f && shadow < frames - 1) {
+                leftOut = deckbridge::rollBalance(leftOut, deckbridge::readInterp(left.data(), frames, shadow), rollMix);
+                rightOut = deckbridge::rollBalance(rightOut, deckbridge::readInterp(right.data(), frames, shadow), rollMix);
+            }
+            shadow += step;
+        }
         if (slip >= 0.0) slip += (pitch * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
         position += step;
         if (rollLength > 1.0 && rollOrigin >= 0.0 && position >= rollOrigin + rollLength) {
@@ -543,6 +553,8 @@ public:
         return result;
     }
 
+    void setMasterGain(float linear) { masterGain_.store(std::clamp(linear, 0.f, 4.f), std::memory_order_relaxed); }
+
     int glitchCount() const { return glitches_.load(std::memory_order_relaxed); }
 
     oboe::DataCallbackResult processAudio(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) {
@@ -591,6 +603,10 @@ public:
                 float masterL = al * sideA * decks_[0].volume + bl * sideB * decks_[1].volume;
                 float masterR = ar * sideA * decks_[0].volume + br * sideB * decks_[1].volume;
                 mixFx_.processMaster(masterL, masterR);
+                // Ganho de saída do app (−12 a +6 dB): o DDJ-400 do mapa pinado não manda um knob de master em MIDI.
+                const float outGain = masterGain_.load(std::memory_order_relaxed);
+                masterL *= outGain;
+                masterR *= outGain;
                 masterLimit_.process(masterL, masterR);
                 peak[0] = std::max(peak[0], std::max(std::fabs(al), std::fabs(ar)));
                 peak[1] = std::max(peak[1], std::max(std::fabs(bl), std::fabs(br)));
@@ -689,13 +705,16 @@ private:
             const double origin = std::floor(target.position / slice) * slice;
             target.rollOrigin = origin;
             target.rollLength = slice;
+            target.shadow = target.position;
             if (mixFx_.slipDeck[deck]) target.slip = target.position;
         }
+        if (want) target.rollMix = mixFx_.rollMix;
         if (!want && target.rollLength > 0.0) {
             if (target.slip >= 0.0) target.position = target.slip;
             target.slip = -1.0;
             target.rollOrigin = -1.0;
             target.rollLength = -1.0;
+            target.shadow = -1.0;
         }
     }
 
@@ -778,6 +797,7 @@ private:
     std::mutex mixMutex_;
     std::shared_ptr<oboe::AudioStream> stream_;
     std::atomic<int> glitches_{0};
+    std::atomic<float> masterGain_{1.f};
     std::atomic<int> route_{0};
     std::atomic<int> openedChannels_{0};
     std::atomic<bool> opened_{false};
@@ -1025,6 +1045,11 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeRecordPoll(JNIEnv *env, jobject) {
     const std::string line = engine().pollRecord();
     return env->NewStringUTF(line.c_str());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetMasterGain(JNIEnv *, jobject, jfloat linear) {
+    engine().setMasterGain(linear);
 }
 
 extern "C" JNIEXPORT jint JNICALL

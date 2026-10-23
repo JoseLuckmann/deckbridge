@@ -36,7 +36,7 @@ class GroundTruthTest {
             if (keyText.isNotBlank()) keyRows += Row(id, family, 0.0, 0.0, normalizeKeyName(keyText), read.keyName)
             println("$id ${"%.2f".format(read.bpm)} ${read.keyName} família $family ${read.elapsedMs}ms")
         }
-        assumeTrue(tempoRows.size >= 30)
+        assumeTrue(tempoRows.size >= 50)
         val text = buildString {
             appendLine("tempo n=${tempoRows.size} acc1=${fmt(ratio(tempoRows) { acc1(it.truthBpm, it.predBpm) })} acc2=${fmt(ratio(tempoRows) { acc2(it.truthBpm, it.predBpm) })}")
             appendLine("octave ${fmt(ratio(tempoRows) { octave(it.truthBpm, it.predBpm) && !acc1(it.truthBpm, it.predBpm) })} triple ${fmt(ratio(tempoRows) { triple(it.truthBpm, it.predBpm) && !acc1(it.truthBpm, it.predBpm) })}")

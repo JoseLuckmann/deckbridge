@@ -206,6 +206,22 @@ internal fun ZoomedWave(
                 drawPath(marker, color)
                 drawLine(color.copy(alpha = 0.7f), Offset(x, waveTop + 12f), Offset(x, waveBot), strokeWidth = 1.1f)
             }
+            // Marcas de frase (INTRO, BUILD, DROP, BREAK, OUTRO): onde cada trecho começa, como a barra de frases do leitor.
+            analysis?.phrases?.forEach { phrase ->
+                val fraction = markerFraction(phrase.startMs / 1000.0, position, window, whole, duration, anchor).toFloat()
+                if (fraction !in 0f..1f) return@forEach
+                val x = fraction * size.width
+                val color = argb(os.deckbridge.logic.phraseKindColor(phrase.kind))
+                drawLine(color.copy(alpha = 0.85f), Offset(x, waveTop), Offset(x, waveBot), strokeWidth = 2f)
+                val style = TextStyle(color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                val laid = measurer.measure(phrase.kind.uppercase(), style)
+                val textX = x + 4f
+                val textY = waveBot - laid.size.height - 3f
+                if (textX + laid.size.width <= size.width && textY > waveTop) {
+                    drawRect(Color(StagePalette.bg).copy(alpha = 0.72f), Offset(textX - 2f, textY - 1f), Size(laid.size.width + 4f, laid.size.height + 2f))
+                    drawText(measurer, phrase.kind.uppercase(), Offset(textX, textY), style)
+                }
+            }
             drawLine(Color(StagePalette.ink), Offset(playX, waveTop), Offset(playX, waveBot), strokeWidth = 1.6f)
             val nextAt = nextCueSeconds(analysis, position)
             if (nextAt != null && bpm > 1.0) {

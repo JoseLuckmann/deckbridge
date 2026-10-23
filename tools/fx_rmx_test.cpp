@@ -417,7 +417,27 @@ void beatFxNew() {
 
 }  // namespace
 
+// Balanço do Roll: esquerda = original, direita = roll; o padrão 0,5 deixa o roll dominar.
+void rollBalanceCurve() {
+    using deckbridge::rollMixFromLevel;
+    check(rollMixFromLevel(0.f) == 0.f, "roll: knob todo a esquerda e so o original");
+    check(rollMixFromLevel(1.f) == 1.f, "roll: knob todo a direita e so o roll");
+    check(std::fabs(rollMixFromLevel(0.5f) - 0.7f) < 1e-6f, "roll: o padrao 0,5 da 70% de roll");
+    float last = -1.f;
+    bool monotonic = true;
+    for (int i = 0; i <= 100; ++i) {
+        const float value = rollMixFromLevel(i / 100.f);
+        if (value + 1e-6f < last) monotonic = false;
+        last = value;
+    }
+    check(monotonic, "roll: o balanco sobe com o knob");
+    check(deckbridge::rollBalance(1.f, -1.f, 0.f) == -1.f && deckbridge::rollBalance(1.f, -1.f, 1.f) == 1.f &&
+              std::fabs(deckbridge::rollBalance(1.f, -1.f, 0.5f)) < 1e-6f,
+          "roll: a mistura vai do ao vivo ao enrolado");
+}
+
 int main() {
+    rollBalanceCurve();
     spiralRises();
     for (int scene : {0, 2, 3, 4, 5, 7}) {
         const char *names[] = {"Echo UP", "", "Spiral UP", "Reverb UP", "Reverb DOWN", "Echo DOWN", "", "Dub ECHO"};

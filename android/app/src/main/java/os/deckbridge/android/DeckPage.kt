@@ -25,11 +25,17 @@ import os.deckbridge.logic.BeatFxState
 import os.deckbridge.logic.BrowseCategory
 import os.deckbridge.logic.BrowsePlace
 import os.deckbridge.logic.DeckFace
+import os.deckbridge.logic.DEFAULT_MASTER_LEVEL
 import os.deckbridge.logic.GlitchWatch
+import os.deckbridge.logic.TracklistLogger
+import os.deckbridge.logic.cueSheet
+import os.deckbridge.logic.tracklistText
+import os.deckbridge.logic.masterGainLinear
 import os.deckbridge.logic.LOOP_ADJUST_STEP
 import os.deckbridge.logic.JOG_BEND_HOLD_MS
 import os.deckbridge.logic.adjustLoopPoint
 import os.deckbridge.logic.jogBentPitch
+import os.deckbridge.logic.nextJumpSize
 import os.deckbridge.logic.PerformanceAction
 import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.RbTrack
@@ -131,6 +137,9 @@ fun DeckPage(
     var historyRows by remember { mutableStateOf(listOf<HistoryRow>()) }
     var sessionId by remember { mutableLongStateOf(-1L) }
     var recording by remember { mutableStateOf(false) }
+    val tracklist = remember { TracklistLogger() }
+    var recStamp by remember { mutableStateOf("") }
+    var recStartMs by remember { mutableStateOf(0L) }
     var recClock by remember { mutableStateOf("00:00") }
     var recLevel by remember { mutableFloatStateOf(0f) }
     var recWarn by remember { mutableStateOf<String?>(null) }
@@ -391,6 +400,7 @@ fun DeckPage(
                 edit(deck) { it.copy(loopStart = range.first, loopEnd = range.second, emergency = true) }
             }
             "BANK" -> edit(deck) { it.copy(cueBank = nextCueBank(it.cueBank)) }
+            "JUMPSIZE" -> edit(deck) { it.copy(jumpBeats = nextJumpSize(it.jumpBeats)) }
         }
     }
 
@@ -408,6 +418,18 @@ fun DeckPage(
             NativeEngine.recordStop()
             recording = false
             recLevel = 0f
+            // Lista das faixas do set, ao lado da gravação: .cue (players e programas de mix) e .txt (capítulos).
+            val entries = tracklist.entries.toList()
+            val stamp = recStamp
+            if (entries.isNotEmpty() && stamp.isNotEmpty()) {
+                val dir = java.io.File(context.filesDir, "recordings")
+                val audioName = if (settings.recordAac) "set-$stamp.m4a" else "set-$stamp.wav"
+                runCatching {
+                    java.io.File(dir, "set-$stamp.cue").writeText(cueSheet(audioName, "Set $stamp", entries))
+                    java.io.File(dir, "set-$stamp.txt").writeText(tracklistText(entries))
+                }
+                note = "Set gravado: ${entries.size} faixa(s) na lista (arquivos .cue e .txt ao lado da gravação)."
+            }
             return
         }
         val dir = java.io.File(context.filesDir, "recordings").apply { mkdirs() }
@@ -425,6 +447,9 @@ fun DeckPage(
         }
         recording = true
         recClock = "00:00"
+        recStamp = stamp
+        recStartMs = System.currentTimeMillis()
+        tracklist.reset()
         if (settings.recordAac) {
             val writer = AacWriter(java.io.File(dir, "set-$stamp.m4a"), 48000) {
                 val buffer = FloatArray(1024)
@@ -459,7 +484,7 @@ fun DeckPage(
             track.durationSeconds.toDouble(),
         )
         seekTo(deck, seconds.toFloat())
-        edit(deck) { it.copy(lastJump = beats) }
+        edit(deck) { it.copy(lastJump = beats, jumpBeats = kotlin.math.abs(beats).toInt().takeIf { size -> size > 0 } ?: it.jumpBeats) }
     }
 
     // Grade do deck: origem do compasso 1 em segundos e BPM da grade, com os ajustes G+/G- já aplicados.
@@ -553,6 +578,11 @@ fun DeckPage(
             PerformanceAction.Kind.HEAD_MIX -> {
                 headMix = action.slider!!.toFloat()
                 NativeEngine.setHead(headMix, headLevel)
+            }
+            PerformanceAction.Kind.MASTER_LEVEL -> {
+                val level = (action.slider ?: DEFAULT_MASTER_LEVEL.toDouble()).toFloat().coerceIn(0f, 1f)
+                NativeEngine.setMasterGain(masterGainLinear(level))
+                persist(settings.copy(masterLevel = level))
             }
             PerformanceAction.Kind.HEAD_GAIN -> {
                 headLevel = action.slider!!.toFloat()
@@ -772,6 +802,7 @@ fun DeckPage(
             quantize = incoming.quantize
             zoom = listOf(zoomFromBars(incoming.zoomBars), zoomFromBars(incoming.zoomBars))
             NativeEngine.setBuffer(incoming.bufferFrames)
+            NativeEngine.setMasterGain(masterGainLinear(incoming.masterLevel))
             NativeEngine.setKeyLock(0, incoming.keyLock)
             NativeEngine.setKeyLock(1, incoming.keyLock)
         }
@@ -915,6 +946,14 @@ fun DeckPage(
         if (restoredAny) note = "Sessão anterior restaurada, parada no ponto em que estava. Aperte PLAY quando quiser."
     }
 
+    // Marca as faixas do set enquanto grava (meio segundo por tick).
+    LaunchedEffect(recording) {
+        while (recording) {
+            val elapsed = System.currentTimeMillis() - recStartMs
+            tracklist.update(elapsed, faces.map { it.playing && it.onAir }, liveLoaded.value)
+            delay(500)
+        }
+    }
     var controllerUp by remember { mutableStateOf(PerformanceHub.controllerConnected) }
     var audioWarning by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
@@ -1073,6 +1112,7 @@ fun DeckPage(
             cross = cross,
             headMix = headMix,
             headLevel = headLevel,
+            masterLevel = settings.masterLevel,
             filter = listOf(faces[0].filter, faces[1].filter),
             colorFx = settings.colorFx,
             levels = levels,

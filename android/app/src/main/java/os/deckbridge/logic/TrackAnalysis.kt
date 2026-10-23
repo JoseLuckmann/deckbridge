@@ -42,8 +42,8 @@ data class TrackRead(
 // EDMA publicado (Faraldo e outros). Índice 0 é a tónica. Não é o código da Essentia.
 private val EDMA_MAJOR = doubleArrayOf(1.00, 0.29, 0.50, 0.40, 0.60, 0.56, 0.32, 0.80, 0.31, 0.45, 0.42, 0.39)
 private val EDMA_MINOR = doubleArrayOf(1.00, 0.31, 0.44, 0.58, 0.33, 0.49, 0.29, 0.78, 0.43, 0.29, 0.53, 0.32)
-private val MAJOR_NAMES = listOf("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
-private val MINOR_NAMES = listOf("Cm", "Dbm", "Dm", "Ebm", "Em", "Fm", "F#m", "Gm", "Abm", "Am", "Bbm", "Bm")
+internal val MAJOR_NAMES = listOf("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
+internal val MINOR_NAMES = listOf("Cm", "Dbm", "Dm", "Ebm", "Em", "Fm", "F#m", "Gm", "Abm", "Am", "Bbm", "Bm")
 private val PITCH_CLASS = listOf("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
 
 /** BPM, tom, grade e pontos de estrutura. Heurística deste app, não análise de um programa comercial. */
@@ -56,7 +56,7 @@ fun analyzeTrack(samples: FloatArray, rate: Int): TrackRead {
     val kick = kickFlux(samples, rate)
     val full = fullBandFlux(samples, rate)
     val peaks = strongPeaks(kick.values, kick.rate)
-    val firstPick = pickBpm(kick.values, kick.rate, peaks)
+    val firstPick = pickBpm(kick.values, kick.rate, peaks, onsetTempo(samples, rate))
     val phaseFix = refineGridPhase(samples, rate, firstPick.bpm, firstPick.phase)
     val bpmPick = if (phaseFix == null) firstPick else firstPick.copy(phase = phaseFix.first)
     // Com a fase corrigida, os picos de referência passam a ser os da figura que escolhemos.
@@ -87,6 +87,14 @@ fun analyzeTrack(samples: FloatArray, rate: Int): TrackRead {
         loudness,
         energy,
     )
+}
+
+/** Só o BPM (sem tom, grade nem estrutura): o que o corpus de tempo mede. */
+internal fun estimateTempo(samples: FloatArray, rate: Int): Double {
+    if (samples.size < rate / 2 || rate < 8000) return 0.0
+    val kick = kickFlux(samples, rate)
+    val peaks = strongPeaks(kick.values, kick.rate)
+    return pickBpm(kick.values, kick.rate, peaks, onsetTempo(samples, rate)).bpm
 }
 
 fun structurePoints(low: DoubleArray, high: DoubleArray, windowSec: Double): StructurePoints {
@@ -429,7 +437,7 @@ private fun structureEnvelope(samples: FloatArray, rate: Int): StructEnv {
     return StructEnv(low, high, window)
 }
 
-private fun pickBpm(env: FloatArray, envRate: Double, peaks: DoubleArray): BpmPick {
+private fun pickBpm(env: FloatArray, envRate: Double, peaks: DoubleArray, forced: Double = 0.0): BpmPick {
     if (env.size < 8) return BpmPick(0.0, 0.0, 0.0)
     val minLag = max(1, (envRate * 60.0 / 190.0).roundToInt())
     val maxLag = min(env.size / 2, (envRate * 60.0 / 80.0).roundToInt())
@@ -461,32 +469,37 @@ private fun pickBpm(env: FloatArray, envRate: Double, peaks: DoubleArray): BpmPi
     // A cobertura dos picos sozinha prefere 3/4 e 3/2 quando há picos entre as batidas.
     // O pente no envelope e a autocorrelação têm de concordar. O prior é largo (cerca de uma oitava)
     // à volta de 124, para house e drum and bass caberem os dois.
-    var chosen = 120.0
-    var best = -1.0
-    var bpm = 70.0
-    while (bpm <= 180.0) {
-        val comb = combScore(env, envRate, bpm)
-        val periodic = interpolatedScore(scores, envRate, bpm).coerceAtLeast(0.0)
-        val score = comb * (periodic + 1e-9) * meterPrior(bpm)
-        if (score > best) {
-            best = score
-            chosen = bpm
-        }
-        bpm += 1.0
-    }
-    var local = chosen
-    var localBest = best
-    var delta = -0.8
-    while (delta <= 0.8) {
-        val candidate = chosen + delta
-        if (candidate in 70.0..180.0) {
-            val score = combScore(env, envRate, candidate) * (interpolatedScore(scores, envRate, candidate).coerceAtLeast(0.0) + 1e-9) * meterPrior(candidate)
-            if (score > localBest) {
-                localBest = score
-                local = candidate
+    // Com andamento vindo do envelope multibanda (onsetTempo), a busca antiga pelo pente do kick não decide o BPM:
+    // o kick só refina a fase e o período (refineTempo).
+    val local = if (forced > 0.0) forced else {
+        var chosen = 120.0
+        var best = -1.0
+        var bpm = 70.0
+        while (bpm <= 180.0) {
+            val comb = combScore(env, envRate, bpm)
+            val periodic = interpolatedScore(scores, envRate, bpm).coerceAtLeast(0.0)
+            val score = comb * (periodic + 1e-9) * meterPrior(bpm)
+            if (score > best) {
+                best = score
+                chosen = bpm
             }
+            bpm += 1.0
         }
-        delta += 0.2
+        var found = chosen
+        var localBest = best
+        var delta = -0.8
+        while (delta <= 0.8) {
+            val candidate = chosen + delta
+            if (candidate in 70.0..180.0) {
+                val score = combScore(env, envRate, candidate) * (interpolatedScore(scores, envRate, candidate).coerceAtLeast(0.0) + 1e-9) * meterPrior(candidate)
+                if (score > localBest) {
+                    localBest = score
+                    found = candidate
+                }
+            }
+            delta += 0.2
+        }
+        found
     }
     val (phase, _) = coverage(peaks, local, duration, 72)
     val refined = refineTempo(peaks, local, phase, duration)
@@ -742,7 +755,7 @@ private class CqtBin(val real: FloatArray, val imag: FloatArray, val freq: Doubl
 // Núcleos fixos a 22050 Hz. O custo de os construir fica fora de cada faixa.
 private val cqtBins: List<CqtBin> by lazy { buildCqtBins() }
 
-private fun detectKey(samples: FloatArray, rate: Int): Pair<String, Double> {
+internal fun detectKey(samples: FloatArray, rate: Int): Pair<String, Double> {
     if (samples.size < 4096 * 2 || rate < 8000) return "—" to 0.0
     if (rate == 22050) return detectKeyAt22050(samples)
     val outCount = (samples.size.toDouble() * 22050.0 / rate).toInt()
@@ -761,7 +774,10 @@ private fun detectKey(samples: FloatArray, rate: Int): Pair<String, Double> {
     return detectKeyAt22050(scaled)
 }
 
-private fun detectKeyAt22050(samples: FloatArray): Pair<String, Double> {
+private fun detectKeyAt22050(samples: FloatArray): Pair<String, Double> = detectKeyPeaks(samples, 22050)
+
+@Suppress("unused")
+private fun detectKeyCqtLegacy(samples: FloatArray): Pair<String, Double> {
     val hop = 4096
     val count = (samples.size - hop) / hop
     if (count < 4) return "—" to 0.0

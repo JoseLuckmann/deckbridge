@@ -278,8 +278,8 @@ fun PlayerScreen(
                 Modifier.fillMaxWidth().height(if (compact) 150.dp else 208.dp).padding(top = if (compact) 3.dp else 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0), settings.cuePreset), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings, popup, popupDeck, togglePopup)
-                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1), settings.cuePreset), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings, popup, popupDeck, togglePopup)
+                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0), settings.cuePreset), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings, popup, popupDeck, togglePopup, onDeckAction)
+                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1), settings.cuePreset), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings, popup, popupDeck, togglePopup, onDeckAction)
             }
         }
         if (popup.isNotEmpty() && !rmx.full) {
@@ -731,6 +731,11 @@ private fun PerformancePopup(
                 }
             }
             "JUMP" -> {
+                // As setas ◄ ► do leitor: saltam o valor do BEAT JUMP (o da caixa do cartão). Os números abaixo escolhem e saltam.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    PopKey("◄  ${face.jumpBeats}", false, Modifier.weight(1f)) { onJump(-face.jumpBeats) }
+                    PopKey("${face.jumpBeats}  ►", false, Modifier.weight(1f)) { onJump(face.jumpBeats) }
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     listOf(-64, -32, -16, -8, -4, -2, -1).forEach { b -> PopKey("$b", false, Modifier.weight(1f)) { onJump(b) } }
                 }
@@ -802,6 +807,7 @@ private fun DeckCard(
     popup: String = "",
     popupDeck: Int = -1,
     onPopup: (Int, String) -> Unit = { _, _ -> },
+    onDeckAction: (Int, String) -> Unit = { _, _ -> },
 ) {
     val duration = (track?.durationSeconds ?: 0).toDouble()
     val shown = if (track == null) {
@@ -843,7 +849,7 @@ private fun DeckCard(
         Row(Modifier.padding(top = if (compact) 2.dp else 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.padding(end = 6.dp).width(if (compact) 50.dp else 64.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 InfoBox("QUANTIZE", if (quantize) quantizeMark(quantizeBeats) else "OFF", if (quantize) Color(StagePalette.onAir) else Color(StagePalette.inkMuted), compact, Modifier.clickable(onClick = onQuantize))
-                InfoBox("BEAT JUMP", if (face.lastJump == 0.0) "1" else "%.0f".format(kotlin.math.abs(face.lastJump)), Color(StagePalette.ink), compact)
+                InfoBox("BEAT JUMP", face.jumpBeats.toString(), Color(StagePalette.ink), compact, Modifier.clickable { onDeckAction(deck, "JUMPSIZE") })
             }
             Column(Modifier.weight(1f).clickable { onRemain(deck) }) {
                 Row {

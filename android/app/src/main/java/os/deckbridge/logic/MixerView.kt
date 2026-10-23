@@ -11,6 +11,8 @@ data class MixerState(
     val cross: Float = 0.5f,
     val headMix: Float = 0f,
     val headLevel: Float = 0.75f,
+    /** Ganho de saída do app, 0..1 sobre −12 a +6 dB (0 dB em 0,667). */
+    val masterLevel: Float = DEFAULT_MASTER_LEVEL,
     val filter: List<Int> = listOf(64, 64),
     val colorFx: Int = 5,
     /** Picos já convertidos para 0..1 da escala do medidor: canal 1, canal 2, master E, master D. */
@@ -72,3 +74,15 @@ fun crossfaderLabel(cross: Float): String = when {
     cross < 0.5f -> "◀ CH 1"
     else -> "CH 2 ▶"
 }
+
+const val MASTER_MIN_DB = -12f
+const val MASTER_MAX_DB = 6f
+
+/** 0 dB: o padrão, para o app não mudar o nível de quem não mexe. */
+const val DEFAULT_MASTER_LEVEL = 12f / 18f
+
+fun masterGainDb(level: Float): Float = MASTER_MIN_DB + level.coerceIn(0f, 1f) * (MASTER_MAX_DB - MASTER_MIN_DB)
+
+fun masterGainLinear(level: Float): Float = Math.pow(10.0, masterGainDb(level) / 20.0).toFloat()
+
+fun masterLabel(level: Float): String = "%+.1f dB".format(masterGainDb(level))

@@ -32,6 +32,7 @@ import os.deckbridge.logic.StagePalette
 import os.deckbridge.logic.crossfaderLabel
 import os.deckbridge.logic.eqDbLabel
 import os.deckbridge.logic.headLevelDbLabel
+import os.deckbridge.logic.masterLabel
 import os.deckbridge.logic.headMixLabel
 import os.deckbridge.logic.trimDbLabel
 
@@ -103,6 +104,9 @@ private fun Center(mixer: MixerState, onKnob: (PerformanceAction) -> Unit, modif
             }
             Bar("HEAD LVL", mixer.headLevel, headLevelDbLabel(mixer.headLevel), false, Modifier.weight(1f)) {
                 onKnob(PerformanceAction(-1, PerformanceAction.Kind.HEAD_GAIN, slider = it.toDouble()))
+            }
+            Bar("OUT", mixer.masterLevel, masterLabel(mixer.masterLevel), false, Modifier.weight(1f)) {
+                onKnob(PerformanceAction(-1, PerformanceAction.Kind.MASTER_LEVEL, slider = it.toDouble()))
             }
         }
         Meter("MASTER", listOf(mixer.levels[2], mixer.levels[3]), Modifier.height(90.dp).fillMaxWidth())

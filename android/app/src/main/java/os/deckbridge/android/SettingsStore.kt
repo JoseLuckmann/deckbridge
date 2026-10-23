@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import os.deckbridge.logic.DEFAULT_MASTER_LEVEL
 import os.deckbridge.logic.PlayerSettings
 
 private val Context.playerStore by preferencesDataStore("deckbridge-player")
@@ -38,6 +39,7 @@ object SettingsStore {
     private val cuePreset = stringPreferencesKey("cue_preset")
     private val colorFx = intPreferencesKey("color_fx")
     private val loadLock = booleanPreferencesKey("load_lock")
+    private val masterLevel = floatPreferencesKey("master_level")
 
     fun flow(context: Context): Flow<PlayerSettings> = context.playerStore.data.map { prefs ->
         PlayerSettings(
@@ -48,6 +50,7 @@ object SettingsStore {
             autoCue = prefs[autoCue] ?: true,
             hotCueAutoLoad = prefs[hotCue] ?: true,
             jogVinyl = prefs[jogVinyl] ?: true,
+            masterLevel = prefs[masterLevel] ?: DEFAULT_MASTER_LEVEL,
             waveColor = prefs[wave] ?: "RGB",
             followUsb = prefs[followUsb] ?: true,
             zoomBars = prefs[zoom] ?: 8,
@@ -76,6 +79,7 @@ object SettingsStore {
             prefs[autoCue] = settings.autoCue
             prefs[hotCue] = settings.hotCueAutoLoad
             prefs[jogVinyl] = settings.jogVinyl
+            prefs[masterLevel] = settings.masterLevel
             prefs[wave] = settings.waveColor
             prefs[zoom] = settings.zoomBars
             prefs[playhead] = settings.playhead

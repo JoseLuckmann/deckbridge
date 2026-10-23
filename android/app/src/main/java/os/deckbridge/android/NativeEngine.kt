@@ -181,6 +181,11 @@ object NativeEngine {
         return nativeRecordPoll()
     }
 
+    fun setMasterGain(linear: Float) {
+        if (!loaded) return
+        nativeSetMasterGain(linear)
+    }
+
     /** Blocos que passaram de 90% do tempo e quedas do stream desde que o motor abriu. */
     fun glitches(): Int = if (loaded) nativeGlitches() else 0
 
@@ -254,6 +259,7 @@ object NativeEngine {
     private external fun nativeSetFilter(deck: Int, norm: Float)
     private external fun nativeLevels(dest: FloatArray)
     private external fun nativeGlitches(): Int
+    private external fun nativeSetMasterGain(linear: Float)
     private external fun nativeLoadDeckStereo(
         deck: Int,
         left: FloatArray,

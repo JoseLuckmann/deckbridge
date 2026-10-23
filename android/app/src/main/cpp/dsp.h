@@ -252,6 +252,17 @@ inline float readPerformance(const float *data, int frames, double position, dou
     return readLooped(data, frames, position, loopStart, loopEnd, fade);
 }
 
+// Balanço do Roll e do Slip Roll: LEVEL/DEPTH vai do som original (esquerda) ao roll (direita), como no mixer de
+// referência. O 0,5 padrão do knob dá 70% de roll para o roll dominar sem o DJ mexer. O original que sobra é a faixa
+// seguindo ao vivo por baixo (posição-sombra).
+inline float rollMixFromLevel(float level) {
+    return std::clamp(1.6f * level - 0.1f, 0.f, 1.f);
+}
+
+inline float rollBalance(float rolled, float live, float mix) {
+    return rolled * mix + live * (1.f - mix);
+}
+
 inline void renderRoll(const float *src, int frames, int slice, float *dst) {
     if (src == nullptr || dst == nullptr || frames <= 0) return;
     if (slice < 1) slice = 1;
@@ -2478,6 +2489,7 @@ struct MixerFx {
     bool slipDeck[2]{};
     double rollOrigin[2]{-1.0, -1.0};
     double rollBeats = 0.25;
+    float rollMix = 1.f;
     int drumDeck = 0;
     float tempo = 120.f;
 
@@ -2518,6 +2530,7 @@ struct MixerFx {
         beat.configure(effect, on && !rmx, level, bpm, beats, sampleRate);
         const bool transport = on && !rmx && (effect == 9 || effect == 10 || effect == 14);
         rollBeats = beats;
+        rollMix = rollMixFromLevel(level);
         for (int deck = 0; deck < 2; ++deck) {
             const bool hit = transport && (channel == 2 || channel == deck) && (effect == 9 || effect == 10);
             rollDeck[deck] = hit;

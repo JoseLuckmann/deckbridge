@@ -44,3 +44,6 @@ target/
 *.ogg
 local-mixes/
 android/.kotlin/
+android/keystore.properties
+*.jks
+*.keystore

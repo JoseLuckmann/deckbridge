@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -41,6 +43,27 @@ android {
         }
     }
 
+    // Assinatura de release: a chave NUNCA entra no repositório. Vem de android/keystore.properties (ignorado pelo git)
+    // ou das variáveis DECKBRIDGE_KEYSTORE, DECKBRIDGE_KEYSTORE_PASSWORD, DECKBRIDGE_KEY_ALIAS, DECKBRIDGE_KEY_PASSWORD.
+    // Sem nenhuma das duas, o release sai sem assinatura (app-release-unsigned.apk), nunca com a chave de debug.
+    val keystoreProps = Properties().apply {
+        val file = rootProject.file("keystore.properties")
+        if (file.isFile) file.inputStream().use { load(it) }
+    }
+    fun secret(property: String, env: String): String? = keystoreProps.getProperty(property) ?: System.getenv(env)
+    val releaseStore = secret("storeFile", "DECKBRIDGE_KEYSTORE")
+    val releaseSigned = releaseStore != null && file(releaseStore).isFile
+    if (releaseSigned) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(releaseStore!!)
+                storePassword = secret("storePassword", "DECKBRIDGE_KEYSTORE_PASSWORD")
+                keyAlias = secret("keyAlias", "DECKBRIDGE_KEY_ALIAS")
+                keyPassword = secret("keyPassword", "DECKBRIDGE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -49,7 +72,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (releaseSigned) signingConfigs.getByName("release") else null
         }
     }
 
