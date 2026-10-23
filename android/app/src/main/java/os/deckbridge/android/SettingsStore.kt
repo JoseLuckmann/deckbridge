@@ -36,6 +36,7 @@ object SettingsStore {
     private val targetLufs = doublePreferencesKey("target_lufs")
     private val gentle = booleanPreferencesKey("gentle_suggest")
     private val cuePreset = stringPreferencesKey("cue_preset")
+    private val colorFx = intPreferencesKey("color_fx")
 
     fun flow(context: Context): Flow<PlayerSettings> = context.playerStore.data.map { prefs ->
         PlayerSettings(
@@ -60,6 +61,7 @@ object SettingsStore {
             targetLufs = prefs[targetLufs] ?: -10.0,
             gentleSuggest = prefs[gentle] ?: true,
             cuePreset = prefs[cuePreset] ?: "drop",
+            colorFx = (prefs[colorFx] ?: 5).coerceIn(0, 5),
         )
     }
 
@@ -86,6 +88,7 @@ object SettingsStore {
             prefs[targetLufs] = settings.targetLufs
             prefs[gentle] = settings.gentleSuggest
             prefs[cuePreset] = settings.cuePreset
+            prefs[colorFx] = settings.colorFx
         }
     }
 }

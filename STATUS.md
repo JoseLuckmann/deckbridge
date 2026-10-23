@@ -1,4 +1,4 @@
-# DeckBridge OS — estado em 0.14.1
+# DeckBridge OS — estado em 0.15.0 (efeitos, sem escuta)
 
 App Android para a DDJ-400. O alvo 1 é o Galaxy Tab S6 Lite. O Raspberry é o alvo 2 e ainda não é um aparelho. Esta página é a leitura única. A spec está em `specs/001-ddj400-standalone/`. A escuta na controladora continua `BLOCKED_HARDWARE`. Simulação não fecha o roteiro.
 
@@ -21,6 +21,7 @@ Cada linha é o que entrou no app. Nenhuma foi ouvida no tablet.
 - **0.13.1.** Tom por CQT e perfil EDMA publicado. MIREX 0,586 nas 58 faixas.
 - **0.14.0.** Knobs que deslizam, de/para com os manuais, drum build sintetizado, mix de demonstração v2.
 - **0.14.1.** One-shots CC0 no drum build, presos à fase da grade. Escolha de som no RMX. Onset medido a 0 ms. versionCode 18.
+- **0.15.0 (host, sem APK novo).** Reverb FDN, deslocador de grão, RMX reescrito com cauda no drop, riser de bumbo (afinação em curva, bombeio, respiro, impacto), seis Sound Color FX. Ver `docs/testing/house-mix.md`.
 
 ## O que funciona, em simulação
 
@@ -40,14 +41,14 @@ Medido no host ou na JVM. Não é o tablet e não é a DDJ-400.
 
 O de/para está em `docs/research/fx-de-para.md`. O manual não publica as curvas. O que o app ainda não faz:
 
-- Spiral não sobe o pitch quando a fração muda.
-- Helix não grava nem trava no máximo do knob.
+- Spiral sobe o pitch por repetição (0.15.0), mas não quando a fração muda.
+- Helix trava no máximo do knob (0.15.0); não grava ao subir o knob.
 - Mobius não tem parâmetro publicado para fechar.
-- Pitch não é um deslocador de grão e não cobre −50% a +100%.
+- Pitch é um deslocador de grão de −1 a +1 oitava (0.15.0), com artefatos em material tonal denso.
 - Roll e slip roll não misturam o seco com o roll pelo LEVEL/DEPTH.
-- O Filter de Beat FX não é o filtro que oscila no tempo.
+- O Filter de Beat FX oscila no ciclo da fração (0.15.0); a curva é nossa.
 - O Vinyl Brake não devolve a velocidade com o knob à esquerda.
-- Não há seletor dos seis Sound Color FX. O Q do FILTER é fixo.
+- Os seis Sound Color FX existem no motor e num chip do menu; não há seletor na tela do deck. O Q do FILTER é fixo.
 - As cenas do RMX usam um knob só. O aparelho de referência tem o knob grande e dois sub-parâmetros.
 - O drum build não usa as fontes internas desse aparelho. Os hits são gravações CC0. A palma é prévia MP3 do Freesound, não o WAV de 24 bit.
 

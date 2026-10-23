@@ -362,6 +362,18 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - HIL executado? não. Os passos 13 a 24 continuam por executar.
 - Busca por voz (A053) e quatro decks (A054) continuam por fazer.
 
+### Efeitos 0.15.0 — RMX, riser de bumbo, Color FX, mix de avaliação
+- Estado: host; escuta BLOCKED_HARDWARE. Kotlin editado sem compilar (sem SDK Android nesta sessão): `COLOR_FX_NAMES`, `PlayerSettings.colorFx`, chip no menu, `NativeEngine.setColorKind`.
+- Commit: ver `git log` da branch `claude/cdj-3000-effects-mixing-8adh3b`.
+- `dsp.h`: reverb FDN de 8 linhas (`Fdn`); `GrainShift` para Spiral, Pitch e Spiral UP (o `PitchShift` antigo não deslocava o tom: +1 oitava saía em 451 Hz); Helix trava de verdade; filtro de Beat FX anda no ciclo da fração; Pitch cobre −1 a +1 oitava.
+- RMX: cenas reescritas (ping-pong pontuado, ruído em faixa com pulso que acelera, spiral com laço que encolhe e sobe, reverb up/down com FDN), grave da música sai nas subidas, soltura na batida da grade e cauda de eco/reverb depois do drop (`SceneFx::tailBeats`, 8 batidas; 0 mantém o comportamento antigo).
+- Drum build: bumbo sobe em curva até +8 semitons (PITCH, agora padrão) ou +2; bombeio por golpe; música cede no último meio tempo; ruído e tom subindo; impacto no drop. `XPad::risers=false` desliga as camadas (o teste de onset usa).
+- Sound Color FX: SPACE, DUB ECHO, SWEEP, NOISE, CRUSH, FILTER por canal (`ColorFilter::kind`, padrão FILTER).
+- Testes: `android/app/src/test/cpp/dsp_test.cpp` ALL PASS; `tools/fx_measure.cpp` FAILS 0; `tools/drum_grid_test.cpp` pior erro 0 ms; `tools/fx_rmx_test.cpp` FAILS 0.
+- Mix: `docs/testing/house-mix.md`, `tools/render_house_mix.sh`. Render com a faixa enviada pelo usuário (130 BPM), fora do git.
+- HIL executado? não
+- Próximo passo: compilar o app (`gradlew testMultiDebugUnitTest`), ouvir no tablet, ajustar níveis das cenas; expor seletor de Color FX na tela do deck; Roll/Slip Roll com balanço seco/roll.
+
 ### Tela 0.14.1
 - Estado: host; escuta BLOCKED_HARDWARE. Não é o tablet e não é a DDJ-400.
 - Commit: `e3c0e84`.

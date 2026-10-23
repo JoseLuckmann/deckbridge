@@ -92,6 +92,12 @@ object NativeEngine {
         nativeSetFilter(deck, norm)
     }
 
+    /** 0 SPACE, 1 DUB ECHO, 2 SWEEP, 3 NOISE, 4 CRUSH, 5 FILTER. */
+    fun setColorKind(deck: Int, kind: Int) {
+        if (!loaded) return
+        nativeSetColorKind(deck, kind)
+    }
+
     fun setKeyLock(deck: Int, enabled: Boolean) {
         if (!loaded) return
         nativeSetKeyLock(deck, enabled)
@@ -224,6 +230,7 @@ object NativeEngine {
     private external fun nativeNudge(deck: Int, seconds: Float)
     private external fun nativeSetBeatFx(effect: Int, on: Boolean, level: Int, channel: Int, bpm: Float, beats: Float)
     private external fun nativeSetFilter(deck: Int, norm: Float)
+    private external fun nativeSetColorKind(deck: Int, kind: Int)
     private external fun nativeSetKeyLock(deck: Int, enabled: Boolean)
     private external fun nativeSetKeyShift(deck: Int, semitones: Int)
     private external fun nativeSetSlip(deck: Int, enabled: Boolean)

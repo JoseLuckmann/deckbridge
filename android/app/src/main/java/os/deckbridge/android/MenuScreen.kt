@@ -284,6 +284,12 @@ private fun PlayerPane(settings: PlayerSettings, wide: Boolean, usbWaveNote: Str
                             onSettings(settings.copy(targetLufs = marks[it], autoGain = true))
                         }
                     }
+                    Line("Color FX") {
+                        val names = os.deckbridge.logic.COLOR_FX_NAMES
+                        Chips(listOf(names[settings.colorFx.coerceIn(0, names.lastIndex)] to true)) {
+                            onSettings(settings.copy(colorFx = (settings.colorFx + 1) % names.size))
+                        }
+                    }
                     Line("Sugestão") {
                         Chips(listOf(true to "SUAVE", false to "SOBE").map { it.second to (settings.gentleSuggest == it.first) }) {
                             onSettings(settings.copy(gentleSuggest = it == 0))

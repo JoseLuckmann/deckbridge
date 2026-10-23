@@ -735,7 +735,11 @@ data class PlayerSettings(
     val targetLufs: Double = -10.0,
     val gentleSuggest: Boolean = true,
     val cuePreset: String = "drop",
+    val colorFx: Int = 5,
 )
+
+/** Ordem do motor: SPACE, DUB ECHO, SWEEP, NOISE, CRUSH, FILTER. */
+val COLOR_FX_NAMES = listOf("SPACE", "DUB ECHO", "SWEEP", "NOISE", "CRUSH", "FILTER")
 
 fun zoomFromBars(bars: Int): WaveZoom = WaveZoom.entries.firstOrNull { it.bars == bars } ?: WaveZoom.BARS_8
 
@@ -781,7 +785,7 @@ data class RmxState(
     val drumVoice: Int = 3,
     val drumBars: Int = 8,
     val drumGap: Boolean = true,
-    val drumPitch: Boolean = false,
+    val drumPitch: Boolean = true,
 ) {
     fun sceneName(): String = SCENE_NAMES[scene.coerceIn(0, SCENE_NAMES.lastIndex)]
 }

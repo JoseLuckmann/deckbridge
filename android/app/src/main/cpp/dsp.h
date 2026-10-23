@@ -472,6 +472,13 @@ struct PitchShift {
     float readA = 0.f;
     float readB = static_cast<float>(kSize / 2);
 
+    void reset() {
+        std::fill(std::begin(buffer), std::end(buffer), 0.f);
+        write = 0;
+        readA = 0.f;
+        readB = static_cast<float>(kSize / 2);
+    }
+
     float process(float x, float ratio) {
         ratio = std::clamp(ratio, 0.25f, 4.f);
         buffer[write] = x;
@@ -491,6 +498,160 @@ struct PitchShift {
         const float mix = std::clamp(window, 0.f, 1.f);
         write = (write + 1) % kSize;
         return sanitize(a * (1.f - mix) + b * mix);
+    }
+};
+
+// Deslocador de tom por dois grãos (atraso que varre uma janela, cruzados por Hann).
+// ratio > 1 sobe, < 1 desce. O PitchShift acima serve ao key lock; este vai nos efeitos.
+struct GrainShift {
+    static constexpr int kWindow = 2048;
+    static constexpr int kSize = 4096;
+    float buffer[kSize]{};
+    int write = 0;
+    float phase = 0.f;
+
+    void reset() {
+        std::fill(std::begin(buffer), std::end(buffer), 0.f);
+        write = 0;
+        phase = 0.f;
+    }
+
+    float tap(float delay) const {
+        float at = static_cast<float>(write) - delay;
+        while (at < 0.f) at += static_cast<float>(kSize);
+        const int i0 = static_cast<int>(at) % kSize;
+        const int i1 = (i0 + 1) % kSize;
+        const float frac = at - std::floor(at);
+        return buffer[i0] * (1.f - frac) + buffer[i1] * frac;
+    }
+
+    float process(float x, float ratio) {
+        ratio = std::clamp(ratio, 0.25f, 4.f);
+        buffer[write] = x;
+        phase += (1.f - ratio) / static_cast<float>(kWindow);
+        phase -= std::floor(phase);
+        const float other = phase + 0.5f - std::floor(phase + 0.5f);
+        const float w1 = 0.5f - 0.5f * std::cos(6.2831853f * phase);
+        const float w2 = 0.5f - 0.5f * std::cos(6.2831853f * other);
+        const float y = tap(1.f + phase * kWindow) * w1 + tap(1.f + other * kWindow) * w2;
+        write = (write + 1) % kSize;
+        return sanitize(y);
+    }
+};
+
+// Reverb de oito linhas com matriz de Hadamard (FDN). Linhas moduladas devagar,
+// amortecimento por linha, difusão na entrada. Comprimentos nossos, não de um aparelho.
+struct Fdn {
+    static constexpr int kLines = 8;
+    std::vector<float> line[kLines];
+    int pos[kLines]{};
+    int len[kLines]{};
+    float lp[kLines]{};
+    float gain[kLines]{};
+    float phase[kLines]{};
+    float lastRt = -1.f;
+    std::vector<float> diffA;
+    std::vector<float> diffB;
+    int diffPosA = 0;
+    int diffPosB = 0;
+    int sampleRate = 48000;
+
+    void prepare(int rate) {
+        sampleRate = rate > 0 ? rate : 48000;
+        static const int base[kLines] = {1327, 1613, 1913, 2269, 2677, 3121, 3557, 4001};
+        for (int index = 0; index < kLines; ++index) {
+            len[index] = std::max(64, base[index] * sampleRate / 48000);
+            line[index].assign(static_cast<size_t>(len[index] + 24), 0.f);
+            pos[index] = 0;
+            lp[index] = 0.f;
+            phase[index] = 0.37f * static_cast<float>(index);
+        }
+        diffA.assign(static_cast<size_t>(std::max(16, 142 * sampleRate / 48000)), 0.f);
+        diffB.assign(static_cast<size_t>(std::max(16, 107 * sampleRate / 48000)), 0.f);
+        diffPosA = diffPosB = 0;
+        lastRt = -1.f;
+        setRt60(1.5f);
+    }
+
+    void clear() {
+        for (int index = 0; index < kLines; ++index) {
+            std::fill(line[index].begin(), line[index].end(), 0.f);
+            lp[index] = 0.f;
+        }
+        std::fill(diffA.begin(), diffA.end(), 0.f);
+        std::fill(diffB.begin(), diffB.end(), 0.f);
+    }
+
+    bool ready() const { return !diffA.empty(); }
+
+    void setRt60(float seconds) {
+        seconds = std::clamp(seconds, 0.15f, 12.f);
+        if (std::fabs(seconds - lastRt) < 0.01f) return;
+        lastRt = seconds;
+        for (int index = 0; index < kLines; ++index) {
+            const float exponent = -3.f * static_cast<float>(len[index]) / (static_cast<float>(sampleRate) * seconds);
+            gain[index] = std::pow(10.f, exponent);
+        }
+    }
+
+    static float allpass(std::vector<float> &buf, int &at, float in) {
+        const float delayed = buf[static_cast<size_t>(at)];
+        const float write = in + delayed * 0.6f;
+        buf[static_cast<size_t>(at)] = write;
+        at = (at + 1) % static_cast<int>(buf.size());
+        return delayed - write * 0.6f;
+    }
+
+    // damp: 1 = sem amortecimento; 0,2 = escuro.
+    void process(float inL, float inR, float damp, float &outL, float &outR) {
+        if (!ready()) {
+            outL = outR = 0.f;
+            return;
+        }
+        const float mono = allpass(diffB, diffPosB, allpass(diffA, diffPosA, (inL + inR) * 0.5f));
+        float x[kLines];
+        float tapL = 0.f;
+        float tapR = 0.f;
+        const float inc = 6.2831853f * 0.45f / static_cast<float>(sampleRate);
+        for (int index = 0; index < kLines; ++index) {
+            phase[index] += inc * (0.6f + 0.13f * static_cast<float>(index));
+            if (phase[index] > 6.2831853f) phase[index] -= 6.2831853f;
+            const auto &buf = line[index];
+            const int size = static_cast<int>(buf.size());
+            const float back = static_cast<float>(len[index]) + 6.f * std::sin(phase[index]);
+            const float at = static_cast<float>(pos[index]) - back;
+            float wrapped = at;
+            while (wrapped < 0.f) wrapped += static_cast<float>(size);
+            const int i0 = static_cast<int>(wrapped) % size;
+            const int i1 = (i0 + 1) % size;
+            const float frac = wrapped - std::floor(wrapped);
+            const float value = buf[static_cast<size_t>(i0)] * (1.f - frac) + buf[static_cast<size_t>(i1)] * frac;
+            if (index & 1) tapR += value;
+            else tapL += value;
+            lp[index] += (value - lp[index]) * damp;
+            flushDenorm(lp[index]);
+            x[index] = lp[index] * gain[index];
+        }
+        // Hadamard 8x8 normalizada.
+        for (int step = 1; step < kLines; step <<= 1) {
+            for (int base = 0; base < kLines; base += step << 1) {
+                for (int k = base; k < base + step; ++k) {
+                    const float a = x[k];
+                    const float b = x[k + step];
+                    x[k] = a + b;
+                    x[k + step] = a - b;
+                }
+            }
+        }
+        const float norm = 0.35355339f;
+        for (int index = 0; index < kLines; ++index) {
+            float write = x[index] * norm + ((index & 2) ? -mono : mono) * 0.5f;
+            if (!std::isfinite(write) || std::fabs(write) > 8.f) write = 0.f;
+            line[index][static_cast<size_t>(pos[index])] = write;
+            pos[index] = (pos[index] + 1) % static_cast<int>(line[index].size());
+        }
+        outL = sanitize(tapL * 0.42f);
+        outR = sanitize(tapR * 0.42f);
     }
 };
 
@@ -535,13 +696,14 @@ struct BeatInsert {
     Svf fbL;
     Svf fbR;
     Biquad ap[8];
-    std::vector<float> combL[4];
-    std::vector<float> combR[4];
-    float combDampL[4]{};
-    float combDampR[4]{};
-    int combPosL[4]{};
-    int combPosR[4]{};
-    int lengths[4] = {1301, 1571, 1861, 2113};
+    Fdn verbTank;
+    GrainShift spiralL;
+    GrainShift spiralR;
+    GrainShift pitchL;
+    GrainShift pitchR;
+    float freezeMix = 0.f;
+    float verbHpL = 0.f;
+    float verbHpR = 0.f;
 
     void prepare() {
         left.prepare(96000);
@@ -549,15 +711,11 @@ struct BeatInsert {
         const int pre = std::max(32, sampleRate / 40);
         preL.prepare(pre + 8);
         preR.prepare(pre + 8);
-        for (int index = 0; index < 4; ++index) {
-            const int n = std::max(32, lengths[index] * sampleRate / 48000);
-            combL[index].assign(n, 0.f);
-            combR[index].assign(n, 0.f);
-            combDampL[index] = 0.f;
-            combDampR[index] = 0.f;
-            combPosL[index] = 0;
-            combPosR[index] = 0;
-        }
+        verbTank.prepare(sampleRate);
+        spiralL.reset();
+        spiralR.reset();
+        pitchL.reset();
+        pitchR.reset();
         for (auto &item : ap) item.reset();
         toneL.reset();
         toneR.reset();
@@ -577,14 +735,13 @@ struct BeatInsert {
         right.clear();
         preL.clear();
         preR.clear();
-        for (int index = 0; index < 4; ++index) {
-            std::fill(combL[index].begin(), combL[index].end(), 0.f);
-            std::fill(combR[index].begin(), combR[index].end(), 0.f);
-            combDampL[index] = 0.f;
-            combDampR[index] = 0.f;
-            combPosL[index] = 0;
-            combPosR[index] = 0;
-        }
+        verbTank.clear();
+        spiralL.reset();
+        spiralR.reset();
+        pitchL.reset();
+        pitchR.reset();
+        freezeMix = 0.f;
+        verbHpL = verbHpR = 0.f;
         clock = 0;
         lfo = 0.f;
         tailMix = 0.f;
@@ -710,11 +867,13 @@ struct BeatInsert {
                 break;
             }
             case 8: {
-                const float semis = (amount * 2.f - 1.f) * 5.f;
-                const float ratio = std::pow(2.f, semis / 12.f);
-                const float wet = 0.35f + 0.4f * std::fabs(amount - 0.5f) * 2.f;
-                wetL = dryL * (1.f - wet) + pitchOne(left, dryL, ratio) * wet * 1.2f;
-                wetR = dryR * (1.f - wet) + pitchOne(right, dryR, ratio) * wet * 1.2f;
+                // Deslocador de grão: −1 oitava à esquerda, +1 à direita, original no centro.
+                const float travel = (amount - 0.5f) * 2.f;
+                const float ratio = std::pow(2.f, freqSm.next(travel, snapNow));
+                const float far = std::clamp(std::fabs(travel) * 6.f, 0.f, 1.f);
+                const float wet = 0.85f * far;
+                wetL = dryL * (1.f - wet) + pitchL.process(dryL, ratio) * wet;
+                wetR = dryR * (1.f - wet) + pitchR.process(dryR, ratio) * wet;
                 break;
             }
             case 13: {
@@ -722,6 +881,8 @@ struct BeatInsert {
                 float freq = 1000.f;
                 float mix = 0.f;
                 mapFilterKnob(amount, sr, mode, freq, mix);
+                // O corte anda no ciclo da fração: até ±1,3 oitava em torno do ponto do knob.
+                freq *= std::pow(2.f, 1.3f * std::sin(lfo) * std::min(1.f, mix * 1.6f));
                 const float smoothFreq = freqSm.next(freq, snapNow);
                 const float smoothMix = wetSm.next(mix, snapNow);
                 toneL.set(smoothFreq, sr, 0.95f, mode);
@@ -756,7 +917,8 @@ private:
             tailMix *= 0.99986f;
             if (tailMix < 1e-5f) tailMix = 0.f;
         }
-        const float fb = std::min(0.82f, fbTarget) * (on ? 1.f : 0.92f);
+        float fbBoost = 0.f;
+        float fb = std::min(0.82f, fbTarget) * (on ? 1.f : 0.92f);
         const float delay = std::max(1.f, delaySm);
         float echoL = 0.f;
         float echoR = 0.f;
@@ -777,15 +939,26 @@ private:
             pushL = dryR * send;
             pushR = dryL * send;
         } else if (effect == 3) {
-            const float spiral = std::max(8.f, delay * (1.f - 0.62f * (0.5f + 0.5f * std::sin(lfo))));
-            echoL = darken(fbL, left.readAt(spiral));
-            echoR = darken(fbR, right.readAt(spiral));
+            // Cada repetição volta mais aguda: deslocador de grão dentro do laço de feedback.
+            const float semis = 0.5f + 3.f * amount;
+            const float ratio = std::pow(2.f, semis / 12.f);
+            echoL = spiralL.process(darken(fbL, left.readAt(delay)), ratio);
+            echoR = spiralR.process(darken(fbR, right.readAt(delay * 1.04f)), ratio);
         } else if (effect == 11) {
             const float helix = std::max(16.f, delay * (0.62f + 0.38f * (0.5f + 0.5f * std::sin(lfo * 0.5f))));
-            echoL = darken(fbL, left.readAt(helix));
-            echoR = darken(fbR, right.readAt(std::max(8.f, helix * 0.5f)));
+            // Knob todo à direita trava o que está no laço: sem entrada nova, sem escurecer, feedback quase unitário.
+            freezeMix += ((amount > 0.94f ? 1.f : 0.f) - freezeMix) * 0.002f;
+            // Travado, o atraso deixa de oscilar: um laço de tamanho fixo não perde energia.
+            const float lockedL = helix * (1.f - freezeMix) + delay * freezeMix;
+            const float rawL = left.readAt(lockedL);
+            const float rawR = right.readAt(std::max(8.f, lockedL * 0.5f));
+            echoL = darken(fbL, rawL) * (1.f - freezeMix) + rawL * freezeMix;
+            echoR = darken(fbR, rawR) * (1.f - freezeMix) + rawR * freezeMix;
             pushL = dryR * send;
             pushR = dryL * send;
+            pushL *= (1.f - freezeMix);
+            pushR *= (1.f - freezeMix);
+            fbBoost = freezeMix;
         } else if (effect == 12) {
             echoL = darken(fbL, left.readAt(delay));
             echoR = darken(fbR, right.readAt(std::max(8.f, delay * 1.5f)));
@@ -801,6 +974,7 @@ private:
             echoL = darken(fbL, left.readAt(delay));
             echoR = darken(fbR, right.readAt(delay));
         }
+        fb = fb + (0.995f - fb) * fbBoost;
         left.push(pushL + echoL * fb);
         right.push(pushR + echoR * fb);
         const float duck = on ? tailMix * 0.42f : 0.f;
@@ -821,38 +995,18 @@ private:
         const float inR = preR.read(pre);
         preL.push(dryL * send);
         preR.push(dryR * send);
-        const float bodyL = reverb(inL, combL, combDampL, combPosL, 0, amount);
-        const float bodyR = reverb(inR, combR, combDampR, combPosR, 1, amount);
+        verbTank.setRt60(0.7f + 2.6f * amount);
+        float bodyL = 0.f;
+        float bodyR = 0.f;
+        verbTank.process(inL, inR, 0.22f + 0.5f * amount, bodyL, bodyR);
+        const float hpCoef = 1.f - std::exp(-6.2831853f * 180.f / static_cast<float>(sampleRate));
+        verbHpL += (bodyL - verbHpL) * hpCoef;
+        verbHpR += (bodyR - verbHpR) * hpCoef;
+        bodyL -= verbHpL;
+        bodyR -= verbHpR;
         const float duck = on ? tailMix * 0.35f : 0.f;
         wetL = dryL * (1.f - duck) + bodyL * tailMix;
         wetR = dryR * (1.f - duck) + bodyR * tailMix;
-    }
-
-    float reverb(float in, std::vector<float> *combs, float *damp, int *posns, int channel, float amount) {
-        float sum = 0.f;
-        const float fb = 0.55f + 0.3f * amount;
-        const float dampCoef = 0.16f + 0.2f * amount;
-        for (int index = 0; index < 4; ++index) {
-            auto &buf = combs[index];
-            if (buf.empty()) continue;
-            int &pos = posns[index];
-            const float delayed = buf[static_cast<size_t>(pos)];
-            damp[index] += (delayed - damp[index]) * dampCoef;
-            flushDenorm(damp[index]);
-            float write = in + damp[index] * fb;
-            if (!std::isfinite(write) || std::fabs(write) > 4.f) write = 0.f;
-            buf[static_cast<size_t>(pos)] = write;
-            pos = (pos + 1) % static_cast<int>(buf.size());
-            sum += delayed;
-        }
-        sum *= 0.22f;
-        Biquad &first = ap[channel];
-        Biquad &second = ap[channel + 2];
-        if (clock % 64 == 0) {
-            first.setAllpass(740.f, static_cast<float>(sampleRate), 0.6f);
-            second.setAllpass(1280.f, static_cast<float>(sampleRate), 0.6f);
-        }
-        return second.process(first.process(sum));
     }
 
     float pitchOne(DelayLine &line, float in, float ratio) {
@@ -871,29 +1025,42 @@ struct SceneFx {
     float bpm = 120.f;
     float intensity = 0.f;
     float ceiling = 1.f;
+    // 0 = comportamento antigo (corta no downbeat). > 0: a cauda do eco ou da reverb continua por esses tempos.
+    float tailBeats = 0.f;
     bool holding = false;
     bool releasing = false;
     bool armSnap = false;
+    bool tailing = false;
     int snapLeft = -1;
     int clock = 0;
     int sampleRate = 48000;
+    float frozen = 0.f;
+    float relMix = 0.f;
+    float tailGain = 1.f;
+    float tailT = 0.f;
+    float tremPhase = 0.f;
+    float delaySm = 0.f;
+    // Fase de batida do deck de referência. Com ela a soltura cai na batida da faixa, não no relógio interno.
+    double gridBeat = 0.0;
+    double prevGridBeat = 0.0;
+    bool gridValid = false;
+    bool prevGridValid = false;
     DelayLine left;
     DelayLine right;
-    Svf hpL, hpR, lpL, lpR, noiseF;
+    Svf hpL, hpR, lpL, lpR, thinL, thinR, loopL, loopR, noiseL, noiseR;
+    GrainShift shiftL;
+    GrainShift shiftR;
+    Fdn tank;
     uint32_t noise = 0x1234567u;
-    std::vector<float> comb[4];
-    float damp[4]{};
-    int combPos[4]{};
+    uint32_t noiseB = 0x9e3779b9u;
 
     void prepare() {
         left.prepare(96000);
         right.prepare(96000);
-        const int base[4] = {1327, 1499, 1741, 1987};
-        for (int index = 0; index < 4; ++index) {
-            comb[index].assign(std::max(32, base[index] * sampleRate / 48000), 0.f);
-            damp[index] = 0.f;
-            combPos[index] = 0;
-        }
+        tank.prepare(sampleRate);
+        shiftL.reset();
+        shiftR.reset();
+        delaySm = 0.f;
     }
 
     void setHold(bool down) {
@@ -902,6 +1069,10 @@ struct SceneFx {
             releasing = false;
             armSnap = false;
             snapLeft = -1;
+            tailing = false;
+            tailGain = 1.f;
+            tailT = 0.f;
+            relMix = 0.f;
         } else if (holding || intensity > 0.f) {
             holding = false;
             releasing = intensity > 0.f;
@@ -911,9 +1082,32 @@ struct SceneFx {
 
     void setCeiling(float value) { ceiling = std::clamp(value, 0.f, 1.f); }
 
+    void setGrid(double beat, bool valid) {
+        gridBeat = beat;
+        gridValid = valid;
+    }
+
     float pitchMul() const {
         if (scene == 6) return std::clamp(1.f - intensity, 0.f, 1.f);
         return 1.f;
+    }
+
+    bool useTail() const { return tailBeats > 0.f && scene != 1 && scene != 6; }
+
+    void finishRelease() {
+        intensity = 0.f;
+        releasing = false;
+        tailing = false;
+        tailGain = 1.f;
+        tailT = 0.f;
+        relMix = 0.f;
+        if (useTail()) {
+            left.clear();
+            right.clear();
+            tank.clear();
+            shiftL.reset();
+            shiftR.reset();
+        }
     }
 
     void process(float &inL, float &inR) {
@@ -923,13 +1117,33 @@ struct SceneFx {
         const float beat = static_cast<float>(samplesPerBeat(bpm, sampleRate));
         const float ramp = std::max(1.f, bars * 4.f * beat);
         const int beatN = std::max(1, static_cast<int>(beat));
+        const float sr = static_cast<float>(sampleRate);
+        const bool crossed = gridValid && prevGridValid && gridBeat >= prevGridBeat &&
+                             std::floor(gridBeat + 1e-9) > std::floor(prevGridBeat + 1e-9);
+        const bool onBeat = gridValid ? crossed : (clock % beatN) == 0;
+        prevGridBeat = gridBeat;
+        prevGridValid = gridValid;
         if (holding) intensity = std::min(ceiling, intensity + 1.f / ramp);
         else if (releasing) {
-            if (armSnap && (clock % beatN) == 0) {
+            if (armSnap && onBeat) {
                 armSnap = false;
-                snapLeft = std::max(1, static_cast<int>(0.018f * sampleRate));
+                snapLeft = std::max(1, static_cast<int>(0.018f * sr));
+                if (useTail()) {
+                    tailing = true;
+                    frozen = intensity;
+                    relMix = 0.f;
+                    tailGain = 1.f;
+                    tailT = 0.f;
+                }
             }
-            if (!armSnap && snapLeft > 0) {
+            if (!armSnap && tailing) {
+                relMix = std::min(1.f, relMix + 1.f / std::max(1.f, 0.018f * sr));
+                // A cauda segue o decaimento natural do eco ou da reverb; o fade só aperta perto do fim (−40 dB em tailBeats).
+                tailT += 1.f / std::max(1.f, beat);
+                const float x = tailT / std::max(0.5f, tailBeats);
+                tailGain = std::exp(-4.6f * x * x);
+                if (x >= 1.f) finishRelease();
+            } else if (!armSnap && snapLeft > 0) {
                 intensity = std::max(0.f, intensity - std::max(intensity, 0.001f) / static_cast<float>(snapLeft));
                 snapLeft -= 1;
                 if (snapLeft == 0 || intensity <= 0.0008f) {
@@ -944,61 +1158,120 @@ struct SceneFx {
             clock += 1;
             return;
         }
-        const float t = intensity;
+        const float t = tailing ? frozen : intensity;
         const float curve = std::pow(std::clamp(t, 0.f, 1.f), 1.35f);
+        const float feed = tailing ? 0.f : 1.f;
+        const float inputL = dryL * feed;
+        const float inputR = dryR * feed;
         const int delay = std::clamp(static_cast<int>(beat), 1, 95999);
-        const float sr = static_cast<float>(sampleRate);
-        float wetL = dryL;
-        float wetR = dryR;
+        const float dotted = std::clamp(beat * 0.75f, 1.f, 95999.f);
+        // Parte seca da cena (filtrada, abaixada) e parte do efeito (retornos, ruído).
+        float partL = dryL;
+        float partR = dryR;
+        float fxL = 0.f;
+        float fxR = 0.f;
+        // Nas subidas o grave da música sai de cena; é o que um DJ faz com o EQ.
+        auto thin = [&](float amount) {
+            const float mix = std::clamp(amount * 2.5f, 0.f, 1.f);
+            const float cut = 28.f * std::pow(9.f, amount);
+            thinL.set(cut, sr, 0.7f, 1);
+            thinR.set(cut, sr, 0.7f, 1);
+            partL = dryL * (1.f - mix) + thinL.process(dryL) * mix;
+            partR = dryR * (1.f - mix) + thinR.process(dryR) * mix;
+        };
+        auto riseNoise = [&](float level, float centre, float &outL, float &outR) {
+            noiseL.set(std::min(centre, sr * 0.42f), sr, 1.05f, 2);
+            noiseR.set(std::min(centre * 1.04f, sr * 0.42f), sr, 1.05f, 2);
+            outL = noiseL.process(noiseSample(noise)) * level;
+            outR = noiseR.process(noiseSample(noiseB)) * level;
+        };
         switch (scene) {
             case 0: {
+                thin(curve * 0.8f);
                 const float cut = 140.f * std::pow(48.f, curve);
-                hpL.set(std::min(cut, sr * 0.4f), sr, 0.9f, 1);
-                hpR.set(std::min(cut, sr * 0.4f), sr, 0.9f, 1);
+                loopL.set(std::min(cut, sr * 0.4f), sr, 0.9f, 1);
+                loopR.set(std::min(cut, sr * 0.4f), sr, 0.9f, 1);
                 const float fb = std::min(0.84f, 0.18f + 0.62f * curve);
-                float eL = hpL.process(fbL(left.read(delay)));
-                float eR = hpR.process(fbR(right.read(delay)));
-                left.push(dryL + eL * fb);
-                right.push(dryR + eR * fb);
-                const float rise = noiseF.process(noiseSample(noise)) * curve * curve * 0.07f;
-                noiseF.set(400.f * std::pow(18.f, curve), sr, 0.9f, 2);
-                wetL = dryL * (1.f - curve * 0.35f) + eL * (0.15f + 0.7f * curve) + rise;
-                wetR = dryR * (1.f - curve * 0.35f) + eR * (0.15f + 0.7f * curve) + rise;
+                const float eL = loopL.process(fbL(left.readAt(dotted)));
+                const float eR = loopR.process(fbR(right.readAt(dotted)));
+                // Ping-pong: a entrada vai à esquerda, cada repetição muda de lado.
+                left.push((inputL + inputR) * 0.5f + eR * fb);
+                right.push(eL * fb);
+                float rL = 0.f;
+                float rR = 0.f;
+                riseNoise(curve * curve * 0.05f, 400.f * std::pow(18.f, curve), rL, rR);
+                partL *= 1.f - curve * 0.3f;
+                partR *= 1.f - curve * 0.3f;
+                fxL = eL * (0.15f + 0.75f * curve) + rL;
+                fxR = eR * (0.15f + 0.75f * curve) + rR;
                 break;
             }
             case 1: {
-                const float cut = 180.f * std::pow(40.f, curve);
-                noiseF.set(std::min(cut, sr * 0.42f), sr, 1.05f, 2);
-                const float colored = noiseF.process(noiseSample(noise)) * (0.045f + 0.16f * curve);
-                wetL = dryL * (1.f - curve * 0.28f) + colored;
-                wetR = dryR * (1.f - curve * 0.28f) + colored;
+                thin(curve * 0.9f);
+                // Subida de ruído: faixa que abre em oitavas, pulso que acelera de 1/4 até 1/32.
+                const float rate = std::max(0.05f, bpm / 60.f) * (1.f + 7.f * curve);
+                tremPhase += static_cast<float>(kTwoPi) * rate / sr;
+                if (tremPhase > static_cast<float>(kTwoPi)) tremPhase -= static_cast<float>(kTwoPi);
+                const float gate = 1.f - 0.4f * curve * (0.5f + 0.5f * std::sin(tremPhase));
+                const float level = (0.02f + 0.2f * std::pow(curve, 1.4f)) * gate;
+                riseNoise(level, 220.f * std::pow(45.f, curve), fxL, fxR);
+                partL *= 1.f - curve * 0.28f;
+                partR *= 1.f - curve * 0.28f;
                 break;
             }
             case 2: {
-                const int spiral = std::max(8, static_cast<int>(delay * (1.f - 0.78f * curve)));
-                const float fb = std::min(0.86f, 0.22f + 0.58f * curve);
-                const float eL = left.read(spiral);
-                const float eR = right.read(spiral);
-                left.push(dryL + fbL(eL) * fb);
-                right.push(dryR + fbR(eR) * fb);
-                wetL = dryL * (1.f - curve * 0.7f) + eL * curve;
-                wetR = dryR * (1.f - curve * 0.7f) + eR * curve;
+                thin(curve * 0.8f);
+                // O laço encolhe e cada volta sobe um intervalo: o parafuso do SPIRAL UP.
+                const float target = std::max(8.f, beat * (0.75f - 0.5f * curve));
+                if (delaySm <= 0.f) delaySm = target;
+                delaySm += (target - delaySm) * (1.f - std::exp(-1.f / std::max(1.f, 0.08f * sr)));
+                const float ratio = std::pow(2.f, (1.5f + 5.5f * curve) / 12.f);
+                const float fb = std::min(0.88f, 0.3f + 0.55f * curve);
+                const float eL = shiftL.process(fbL(left.readAt(delaySm)), ratio);
+                const float eR = shiftR.process(fbR(right.readAt(delaySm * 1.05f)), ratio);
+                left.push(inputL + eL * fb);
+                right.push(inputR + eR * fb);
+                tank.setRt60(1.2f + 1.8f * curve);
+                float vL = 0.f;
+                float vR = 0.f;
+                tank.process(eL * 0.5f, eR * 0.5f, 0.4f, vL, vR);
+                partL *= 1.f - curve * 0.55f;
+                partR *= 1.f - curve * 0.55f;
+                fxL = eL * curve * 1.0f + vL * curve * 1.1f;
+                fxR = eR * curve * 1.0f + vR * curve * 1.1f;
                 break;
             }
             case 3: {
                 const float cut = 90.f * std::pow(30.f, curve);
                 hpL.set(std::min(cut, sr * 0.4f), sr, 0.85f, 1);
                 hpR.set(std::min(cut, sr * 0.4f), sr, 0.85f, 1);
-                wetL = hpL.process(dryL) * (1.f - curve * 0.25f) + verb(dryL, 0, curve) * (0.15f + 0.75f * curve);
-                wetR = hpR.process(dryR) * (1.f - curve * 0.25f) + verb(dryR, 1, curve) * (0.15f + 0.75f * curve);
+                const float highL = hpL.process(dryL);
+                const float highR = hpR.process(dryR);
+                partL = highL * (1.f - curve * 0.25f);
+                partR = highR * (1.f - curve * 0.25f);
+                tank.setRt60(1.3f + 3.2f * curve);
+                float vL = 0.f;
+                float vR = 0.f;
+                tank.process(highL * feed, highR * feed, 0.6f, vL, vR);
+                float rL = 0.f;
+                float rR = 0.f;
+                riseNoise(curve * curve * 0.04f, 700.f * std::pow(14.f, curve), rL, rR);
+                fxL = vL * (0.25f + 1.5f * curve) + rL;
+                fxR = vR * (0.25f + 1.5f * curve) + rR;
                 break;
             }
             case 4: {
                 const float cut = 9000.f * std::pow(0.08f, curve);
                 lpL.set(std::max(80.f, cut), sr, 0.85f, 0);
                 lpR.set(std::max(80.f, cut), sr, 0.85f, 0);
-                wetL = lpL.process(dryL) * (1.f - curve * 0.4f) + verb(dryL, 0, curve) * (0.1f + 0.7f * curve);
-                wetR = lpR.process(dryR) * (1.f - curve * 0.4f) + verb(dryR, 1, curve) * (0.1f + 0.7f * curve);
+                partL = lpL.process(dryL) * (1.f - curve * 0.4f);
+                partR = lpR.process(dryR) * (1.f - curve * 0.4f);
+                tank.setRt60(1.0f + 3.4f * curve);
+                float vL = 0.f;
+                float vR = 0.f;
+                tank.process(inputL, inputR, 0.3f, vL, vR);
+                fxL = vL * (0.16f + 1.45f * curve);
+                fxR = vR * (0.16f + 1.45f * curve);
                 break;
             }
             case 5: {
@@ -1006,20 +1279,22 @@ struct SceneFx {
                 lpL.set(std::max(70.f, cut), sr, 0.9f, 0);
                 lpR.set(std::max(70.f, cut), sr, 0.9f, 0);
                 const float fb = std::min(0.84f, 0.16f + 0.6f * curve);
-                const float eL = lpL.process(fbL(left.read(delay)));
-                const float eR = lpR.process(fbR(right.read(delay)));
-                left.push(dryL + eL * fb);
-                right.push(dryR + eR * fb);
-                wetL = dryL * (1.f - curve * 0.55f) + eL * curve;
-                wetR = dryR * (1.f - curve * 0.55f) + eR * curve;
+                const float eL = lpL.process(fbL(left.readAt(dotted)));
+                const float eR = lpR.process(fbR(right.readAt(dotted)));
+                left.push((inputL + inputR) * 0.5f + eR * fb);
+                right.push(eL * fb);
+                partL *= 1.f - curve * 0.55f;
+                partR *= 1.f - curve * 0.55f;
+                fxL = eL * curve * 1.15f;
+                fxR = eR * curve * 1.15f;
                 break;
             }
             case 6: {
                 const float cut = 7000.f * std::pow(0.12f, curve);
                 lpL.set(std::max(90.f, cut), sr, 0.8f, 0);
                 lpR.set(std::max(90.f, cut), sr, 0.8f, 0);
-                wetL = lpL.process(dryL);
-                wetR = lpR.process(dryR);
+                partL = lpL.process(dryL);
+                partR = lpR.process(dryR);
                 break;
             }
             default: {
@@ -1029,15 +1304,19 @@ struct SceneFx {
                 const float eR = right.read(dub);
                 lpL.set(5200.f * std::pow(0.35f, curve), sr, 0.8f, 0);
                 lpR.set(5200.f * std::pow(0.35f, curve), sr, 0.8f, 0);
-                left.push(lpL.process(dryL + eL * fb));
-                right.push(lpR.process(dryR + eR * fb));
-                wetL = dryL * (1.f - curve * 0.35f) + eL * (0.2f + 0.7f * curve);
-                wetR = dryR * (1.f - curve * 0.35f) + eR * (0.2f + 0.7f * curve);
+                left.push(lpL.process(inputL + eL * fb));
+                right.push(lpR.process(inputR + eR * fb));
+                partL *= 1.f - curve * 0.35f;
+                partR *= 1.f - curve * 0.35f;
+                fxL = eL * (0.2f + 0.7f * curve);
+                fxR = eR * (0.2f + 0.7f * curve);
                 break;
             }
         }
-        inL = sanitize(wetL);
-        inR = sanitize(wetR);
+        const float rel = tailing ? relMix : 0.f;
+        const float scale = tailing ? tailGain : 1.f;
+        inL = sanitize(partL * (1.f - rel) + dryL * rel + fxL * scale);
+        inR = sanitize(partR * (1.f - rel) + dryR * rel + fxR * scale);
         clock += 1;
     }
 
@@ -1054,26 +1333,6 @@ private:
 
     float fbL(float sample) { return dark(sample, fbStateL); }
     float fbR(float sample) { return dark(sample, fbStateR); }
-
-    float verb(float in, int channel, float curve) {
-        float sum = 0.f;
-        const float fb = 0.4f + 0.42f * curve;
-        for (int index = 0; index < 2; ++index) {
-            const int slot = channel * 2 + index;
-            auto &buf = comb[slot];
-            if (buf.empty()) continue;
-            int &pos = combPos[slot];
-            const float y = buf[static_cast<size_t>(pos)];
-            damp[slot] += (y - damp[slot]) * 0.35f;
-            flushDenorm(damp[slot]);
-            float write = in + damp[slot] * fb;
-            if (!std::isfinite(write) || std::fabs(write) > 4.f) write = 0.f;
-            buf[static_cast<size_t>(pos)] = write;
-            pos = (pos + 1) % static_cast<int>(buf.size());
-            sum += y;
-        }
-        return sum * 0.45f;
-    }
 };
 
 struct DrumBank {
@@ -1217,6 +1476,8 @@ struct XPad {
     bool hats = true;
     bool layerHits = true;
     bool followGrid = false;
+    // Camadas de subida (ruído, tom, impacto no drop). Os testes de onset as desligam para ouvir só os golpes.
+    bool risers = true;
     bool phaseValid = false;
     double phaseBeat = 0.0;
     bool live = false;
@@ -1230,6 +1491,16 @@ struct XPad {
     int latchedBars = 8;
     bool wasRequested = false;
     Svf drumHp;
+    // Camadas da subida: ruído em faixa que abre, tom que sobe, grave da música que sai, bombeio por golpe, silêncio e impacto no drop.
+    Svf riseL, riseR, musicHpL, musicHpR, impactHp;
+    uint32_t riseSeedA = 0xA5A5A5u;
+    uint32_t riseSeedB = 0x5A5A5A5u;
+    float risePhase = 0.f;
+    float duckEnv = 0.f;
+    float musicGain = 1.f;
+    double curBeat = 0.0;
+    int impactAge = -1;
+    float impactPhase = 0.f;
     struct Shot {
         int id = 0;
         double cursor = 0.0;
@@ -1351,8 +1622,17 @@ struct XPad {
         if (env > 0) env -= 1;
     }
 
+    void startImpact() {
+        if (build > 0.04f && risers) {
+            impactAge = 0;
+            impactPhase = 0.f;
+            impactHp.reset();
+        }
+    }
+
     void renderGrid(float &inL, float &inR) {
         const double beat = phaseBeat;
+        curBeat = beat;
         if (!phaseValid) {
             if (!requested) {
                 live = false;
@@ -1399,6 +1679,7 @@ struct XPad {
                 if (beat >= endBeat) {
                     live = false;
                     finished = true;
+                    startImpact();
                 }
             }
         }
@@ -1413,6 +1694,7 @@ struct XPad {
         if (live && beat >= endBeat) {
             live = false;
             finished = true;
+            startImpact();
         }
         if (live && prevBeat < nextHit && beat >= nextHit) {
             fire(nextHit);
@@ -1480,7 +1762,10 @@ struct XPad {
         const int section = sectionOf(hitBeat);
         const float prog = progress(hitBeat);
         const float vel = (0.45f + 0.55f * prog) * (0.62f + 0.38f * build);
-        const float rate = drumPitch ? (1.f + 0.10f * prog * build) : 1.f;
+        // O bumbo sobe devagar e em curva: o começo quase não muda, o fim chega a +8 semitons com PITCH (+2 sem).
+        const float semis = (drumPitch ? 8.f : 2.f) * std::pow(prog, 1.3f) * build;
+        const float rate = std::pow(2.f, semis / 12.f);
+        duckEnv = 1.f;
         if (drumVoice == 3) {
             trigger(0, vel, rate);
             trigger(1, vel * 0.92f, rate);
@@ -1553,9 +1838,62 @@ struct XPad {
         } else if (prog < 0.001f) {
             drumHp.reset();
         }
-        const float duck = live ? (0.08f + 0.16f * build) : 0.f;
-        inL = sanitize(inL * (1.f - duck) + drum);
-        inR = sanitize(inR * (1.f - duck) + drum);
+        const float sr = static_cast<float>(sampleRate > 0 ? sampleRate : 48000);
+        const float p = std::clamp(prog, 0.f, 1.f);
+        float extraL = 0.f;
+        float extraR = 0.f;
+        float musL = inL;
+        float musR = inR;
+        if (live && build > 0.04f && risers) {
+            const float centre = 300.f * std::pow(28.f, p);
+            riseL.set(std::min(centre, sr * 0.42f), sr, 1.0f, 2);
+            riseR.set(std::min(centre * 1.03f, sr * 0.42f), sr, 1.0f, 2);
+            const float noiseLevel = (0.015f + 0.16f * p * p) * build;
+            extraL = riseL.process(noiseSample(riseSeedA)) * noiseLevel;
+            extraR = riseR.process(noiseSample(riseSeedB)) * noiseLevel;
+            const float freq = 110.f * std::pow(17.f, std::pow(p, 1.15f));
+            risePhase += static_cast<float>(kTwoPi) * freq / sr;
+            if (risePhase > static_cast<float>(kTwoPi)) risePhase -= static_cast<float>(kTwoPi);
+            const float tone = (std::sin(risePhase) + 0.35f * std::sin(2.f * risePhase + 0.6f)) * (0.05f * p * p * build);
+            extraL += tone;
+            extraR += tone * 0.9f;
+            const float cut = 30.f * std::pow(9.f, p * build);
+            musicHpL.set(cut, sr, 0.7f, 1);
+            musicHpR.set(cut, sr, 0.7f, 1);
+            const float thin = std::min(1.f, p * 2.5f);
+            musL = inL * (1.f - thin) + musicHpL.process(inL) * thin;
+            musR = inR * (1.f - thin) + musicHpR.process(inR) * thin;
+        } else {
+            musicHpL.reset();
+            musicHpR.reset();
+            riseL.reset();
+            riseR.reset();
+        }
+        duckEnv *= std::exp(-1.f / (0.12f * sr));
+        if (duckEnv < 1e-4f) duckEnv = 0.f;
+        const float depth = (live && build > 0.04f && risers) ? (0.10f + 0.38f * p * build) : 0.f;
+        float gainTarget = 1.f - depth * duckEnv;
+        // Último meio tempo antes do drop: a música some e só o ruído e o tom seguram a tensão.
+        if (live && risers && drumGap && curBeat >= endBeat - 0.5) gainTarget = 0.03f;
+        const float coef = 1.f - std::exp(-1.f / ((gainTarget < musicGain ? 0.004f : 0.003f) * sr));
+        musicGain += (gainTarget - musicGain) * coef;
+        flushDenorm(musicGain);
+        if (impactAge >= 0) {
+            const float t = static_cast<float>(impactAge) / sr;
+            const float freq = 38.f + 42.f * std::exp(-t * 9.f);
+            impactPhase += static_cast<float>(kTwoPi) * freq / sr;
+            if (impactPhase > static_cast<float>(kTwoPi)) impactPhase -= static_cast<float>(kTwoPi);
+            const float level = 0.5f + 0.5f * build;
+            const float boom = std::sin(impactPhase) * std::exp(-t * 3.2f) * 0.38f * level;
+            impactHp.set(5200.f, sr, 0.8f, 1);
+            const float crash = impactHp.process(noiseSample(riseSeedA)) * std::exp(-t * 2.6f) * 0.12f * level;
+            extraL += boom + crash;
+            extraR += boom + crash;
+            impactAge += 1;
+            if (t > 1.8f) impactAge = -1;
+        }
+        inL = sanitize(musL * musicGain + drum + extraL);
+        inR = sanitize(musR * musicGain + drum + extraR);
     }
 
     float drum() {
@@ -1728,15 +2066,70 @@ struct ReleaseFx {
     }
 };
 
+// Seis cores do Sound Color FX por canal: SPACE, DUB ECHO, SWEEP, NOISE, CRUSH, FILTER.
+// O centro do knob deixa o som original em todas. As curvas são nossas; o manual não as publica.
+enum ColorKind { kColorSpace = 0, kColorDubEcho = 1, kColorSweep = 2, kColorNoise = 3, kColorCrush = 4, kColorFilter = 5 };
+
 struct ColorFilter {
     float norm = 0.5f;
     int sampleRate = 48000;
     bool snap = true;
+    int kind = kColorFilter;
+    float bpm = 120.f;
+    bool ready = false;
     ParamSmooth freqSm;
     ParamSmooth mixSm;
+    ParamSmooth travelSm;
     Svf left;
     Svf right;
+    Svf lowL, lowR, highL, highR;
     int mode = 0;
+    Fdn tank;
+    DelayLine dubL;
+    DelayLine dubR;
+    float dubDelay = 0.f;
+    float dubWet = 0.f;
+    float dubSend = 0.f;
+    float dubFb = 0.4f;
+    uint32_t seedA = 0x2468ACEu;
+    uint32_t seedB = 0x13579BDu;
+    float holdL = 0.f;
+    float holdR = 0.f;
+    float holdCount = 0.f;
+
+    void prepare(int rate) {
+        sampleRate = rate > 0 ? rate : 48000;
+        tank.prepare(sampleRate);
+        dubL.prepare(sampleRate * 2);
+        dubR.prepare(sampleRate * 2);
+        travelSm.setMs(30.f, sampleRate);
+        clearKind();
+        ready = true;
+    }
+
+    void clearKind() {
+        tank.clear();
+        dubL.clear();
+        dubR.clear();
+        dubDelay = 0.f;
+        dubWet = 0.f;
+        dubSend = 0.f;
+        holdL = holdR = holdCount = 0.f;
+        lowL.reset();
+        lowR.reset();
+        highL.reset();
+        highR.reset();
+        left.reset();
+        right.reset();
+    }
+
+    void setKind(int next) {
+        next = std::clamp(next, 0, 5);
+        if (next == kind) return;
+        kind = next;
+        if (ready) clearKind();
+        snap = true;
+    }
 
     void set(float value, int rate) {
         const float next = std::clamp(value, 0.f, 1.f);
@@ -1747,11 +2140,39 @@ struct ColorFilter {
             sampleRate = nextRate;
             freqSm.setMs(32.f, sampleRate);
             mixSm.setMs(28.f, sampleRate);
+            travelSm.setMs(30.f, sampleRate);
         }
         sampleRate = nextRate;
     }
 
     void process(float &inL, float &inR) {
+        if (kind == kColorFilter) {
+            processFilter(inL, inR);
+            return;
+        }
+        if (!ready) return;
+        // Deslocamento com sinal: esquerda negativa, direita positiva, zona morta no centro.
+        float target = 0.f;
+        if (norm <= 0.47f) target = -(0.47f - norm) / 0.47f;
+        else if (norm >= 0.53f) target = (norm - 0.53f) / 0.47f;
+        const float signedTravel = travelSm.next(target, !travelSm.primed);
+        const float mag = std::clamp(std::fabs(signedTravel), 0.f, 1.f);
+        const float lean = signedTravel;
+        const float sr = static_cast<float>(sampleRate);
+        switch (kind) {
+            case kColorSpace: spaceFx(inL, inR, mag, lean, sr); break;
+            case kColorDubEcho: dubFx(inL, inR, mag, lean, sr); break;
+            case kColorSweep: sweepFx(inL, inR, mag, sr); break;
+            case kColorNoise: noiseFx(inL, inR, mag, lean, sr); break;
+            default: crushFx(inL, inR, mag, lean, sr); break;
+        }
+        snap = false;
+        inL = sanitize(inL);
+        inR = sanitize(inR);
+    }
+
+private:
+    void processFilter(float &inL, float &inR) {
         int targetMode = 0;
         float freq = 1000.f;
         float mix = 0.f;
@@ -1767,6 +2188,109 @@ struct ColorFilter {
         right.set(smoothFreq, sr, 0.95f, mode);
         inL = sanitize(inL * (1.f - smoothMix) + left.process(inL) * smoothMix);
         inR = sanitize(inR * (1.f - smoothMix) + right.process(inR) * smoothMix);
+    }
+
+    // SPACE: reverb longa. Esquerda escurece o retorno, direita tira o grave dele.
+    void spaceFx(float &inL, float &inR, float mag, float lean, float sr) {
+        if (mag < 0.002f && tank.lastRt > 0.f && dubWet < 1e-5f) return;
+        tank.setRt60(1.0f + 3.4f * mag);
+        float vL = 0.f;
+        float vR = 0.f;
+        const float send = mag > 0.004f ? 1.f : 0.f;
+        tank.process(inL * send, inR * send, 0.55f, vL, vR);
+        const float lowCut = 14000.f * std::pow(0.1f, std::max(0.f, -lean));
+        const float highCut = 40.f * std::pow(14.f, std::max(0.f, lean));
+        lowL.set(lowCut, sr, 0.7f, 0);
+        lowR.set(lowCut, sr, 0.7f, 0);
+        highL.set(highCut, sr, 0.7f, 1);
+        highR.set(highCut, sr, 0.7f, 1);
+        vL = highL.process(lowL.process(vL));
+        vR = highR.process(lowR.process(vR));
+        const float targetWet = std::pow(mag, 0.8f) * 1.5f;
+        // A cauda sobe depressa e desce devagar quando o knob volta ao centro.
+        if (targetWet > dubWet) dubWet += (targetWet - dubWet) * (1.f - std::exp(-1.f / (0.03f * sr)));
+        else dubWet += (targetWet - dubWet) * (1.f - std::exp(-1.f / (0.9f * sr)));
+        flushDenorm(dubWet);
+        inL = inL * (1.f - 0.12f * std::min(1.f, dubWet)) + vL * dubWet;
+        inR = inR * (1.f - 0.12f * std::min(1.f, dubWet)) + vR * dubWet;
+    }
+
+    // DUB ECHO: 3/4 de tempo. Esquerda escurece as repetições, direita as afina.
+    void dubFx(float &inL, float &inR, float mag, float lean, float sr) {
+        const float beat = static_cast<float>(samplesPerBeat(bpm, sampleRate));
+        const float want = std::clamp(beat * 0.75f, 16.f, static_cast<float>(sampleRate) * 2.f - 8.f);
+        if (dubDelay <= 0.f) dubDelay = want;
+        dubDelay += (want - dubDelay) * (1.f - std::exp(-1.f / (0.15f * sr)));
+        const bool active = mag > 0.004f;
+        if (active) dubFb = 0.3f + 0.5f * mag;
+        dubSend += ((active ? 1.f : 0.f) - dubSend) * (1.f - std::exp(-1.f / (0.01f * sr)));
+        const float targetWet = std::pow(mag, 0.7f) * 1.0f;
+        if (targetWet > dubWet) dubWet += (targetWet - dubWet) * (1.f - std::exp(-1.f / (0.02f * sr)));
+        else dubWet += (targetWet - dubWet) * (1.f - std::exp(-1.f / (1.1f * sr)));
+        flushDenorm(dubWet);
+        const float lowCut = 9000.f * std::pow(0.18f, std::max(0.f, -lean));
+        const float highCut = 80.f * std::pow(9.f, std::max(0.f, lean));
+        lowL.set(lowCut, sr, 0.7f, 0);
+        lowR.set(lowCut, sr, 0.7f, 0);
+        highL.set(highCut, sr, 0.7f, 1);
+        highR.set(highCut, sr, 0.7f, 1);
+        const float eL = highL.process(lowL.process(dubL.readAt(dubDelay)));
+        const float eR = highR.process(lowR.process(dubR.readAt(dubDelay * 1.01f)));
+        dubL.push(inL * dubSend + eL * dubFb);
+        dubR.push(inR * dubSend + eR * dubFb);
+        inL += eL * dubWet;
+        inR += eR * dubWet;
+    }
+
+    // SWEEP: passa-faixa ressonante que anda com o knob inteiro, de 90 Hz a 12 kHz.
+    void sweepFx(float &inL, float &inR, float mag, float sr) {
+        const float depth = std::clamp(mag * 3.2f, 0.f, 1.f);
+        const float freq = freqSm.next(90.f * std::pow(130.f, norm), !freqSm.primed);
+        const float amount = mixSm.next(depth, !mixSm.primed);
+        if (amount < 0.001f) return;
+        left.set(freq, sr, 1.8f, 2);
+        right.set(freq, sr, 1.8f, 2);
+        const float bandL = left.process(inL) * 0.8f;
+        const float bandR = right.process(inR) * 0.8f;
+        inL = inL * (1.f - amount * 0.88f) + bandL * amount * 1.15f;
+        inR = inR * (1.f - amount * 0.88f) + bandR * amount * 1.15f;
+    }
+
+    // NOISE: ruído em faixa por cima da música. Esquerda é um sopro grave, direita um chiado agudo.
+    void noiseFx(float &inL, float &inR, float mag, float lean, float sr) {
+        const float centre = lean >= 0.f ? 1200.f * std::pow(8.f, mag) : 900.f * std::pow(0.3f, mag);
+        left.set(std::min(centre, sr * 0.42f), sr, 0.9f, 2);
+        right.set(std::min(centre * 1.03f, sr * 0.42f), sr, 0.9f, 2);
+        const float level = std::pow(mag, 1.2f) * 0.3f;
+        const float nL = left.process(noiseSample(seedA)) * level;
+        const float nR = right.process(noiseSample(seedB)) * level;
+        const float keep = 1.f - 0.25f * mag;
+        inL = inL * keep + nL;
+        inR = inR * keep + nR;
+    }
+
+    // CRUSH: menos bits nos dois lados, mais redução de taxa à direita.
+    void crushFx(float &inL, float &inR, float mag, float lean, float sr) {
+        const float mix = std::clamp(mag * 4.f, 0.f, 1.f) * 0.9f;
+        if (mix < 0.001f) {
+            holdCount = 0.f;
+            return;
+        }
+        const float bits = 16.f - 13.f * std::pow(mag, 0.8f);
+        const float levels = std::pow(2.f, bits - 1.f);
+        const float hold = 1.f + (lean > 0.f ? 14.f * std::pow(mag, 1.5f) : 4.f * mag);
+        holdCount += 1.f;
+        if (holdCount >= hold) {
+            holdCount -= hold;
+            holdL = std::floor(inL * levels + 0.5f) / levels;
+            holdR = std::floor(inR * levels + 0.5f) / levels;
+        }
+        lowL.set(11000.f, sr, 0.7f, 0);
+        lowR.set(11000.f, sr, 0.7f, 0);
+        const float cL = lowL.process(holdL);
+        const float cR = lowR.process(holdR);
+        inL = inL * (1.f - mix) + cL * mix;
+        inR = inR * (1.f - mix) + cR * mix;
     }
 };
 
@@ -1785,21 +2309,34 @@ struct MixerFx {
     double rollOrigin[2]{-1.0, -1.0};
     double rollBeats = 0.25;
     int drumDeck = 0;
+    float tempo = 120.f;
 
     void setSampleRate(int rate) {
-        sampleRate = rate > 0 ? rate : 48000;
+        const int next = rate > 0 ? rate : 48000;
+        const bool changed = next != sampleRate || !color[0].ready;
+        sampleRate = next;
         xpad.sampleRate = sampleRate;
         iso[0].prepare(sampleRate);
         iso[1].prepare(sampleRate);
+        if (changed) {
+            for (auto &item : color) item.prepare(sampleRate);
+        }
+    }
+
+    void setColorKind(int deck, int kind) {
+        if (deck < 0 || deck > 1) return;
+        color[deck].setKind(kind);
     }
 
     void setDrumPhase(double beat, bool valid, bool follow) {
         xpad.followGrid = follow;
         xpad.setPhase(beat, valid);
+        scene.setGrid(beat, valid && follow);
     }
 
     void setBeat(int effect, bool on, float level, int nextChannel, float bpm, float beats) {
         channel = std::clamp(nextChannel, 0, 2);
+        noteTempo(bpm);
         beat.configure(effect, on && !rmx, level, bpm, beats, sampleRate);
         const bool transport = on && !rmx && (effect == 9 || effect == 10 || effect == 14);
         rollBeats = beats;
@@ -1816,7 +2353,9 @@ struct MixerFx {
                 int nextChannel, float bpm, float drumBuild = 0.f, int drumVoice = 0, int drumBars = 8, bool drumGap = true,
                 bool drumPitch = false, int gridDeck = -1) {
         const bool was = rmx;
+        noteTempo(bpm);
         rmx = armed;
+        scene.tailBeats = 8.f;
         if (armed) beat.on = false;
         channel = std::clamp(nextChannel, 0, 2);
         scene.scene = std::clamp(sceneId, 0, 7);
@@ -1860,6 +2399,13 @@ struct MixerFx {
     void setFilter(int deck, float norm) {
         if (deck < 0 || deck > 1) return;
         color[deck].set(norm, sampleRate);
+    }
+
+    void noteTempo(float bpm) {
+        if (!(bpm > 1.f)) return;
+        tempo = bpm;
+        color[0].bpm = bpm;
+        color[1].bpm = bpm;
     }
 
     double rateFor(int deck) {

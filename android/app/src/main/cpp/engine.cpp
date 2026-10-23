@@ -347,6 +347,12 @@ public:
         mixFx_.setFilter(deck, norm);
     }
 
+    void setColorKind(int deck, int kind) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        mixFx_.setSampleRate(48000);
+        mixFx_.setColorKind(deck, kind);
+    }
+
     void setKeyLock(int deck, bool enabled) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
@@ -756,6 +762,11 @@ Java_os_deckbridge_android_NativeEngine_nativeSetBeatFx(
 extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeSetFilter(JNIEnv *, jobject, jint deck, jfloat norm) {
     engine().setFilter(deck, norm);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetColorKind(JNIEnv *, jobject, jint deck, jint kind) {
+    engine().setColorKind(deck, kind);
 }
 
 extern "C" JNIEXPORT void JNICALL

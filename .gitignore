@@ -42,3 +42,4 @@ target/
 !android/app/src/main/assets/drums/*.flac
 *.m4a
 *.ogg
+local-mixes/

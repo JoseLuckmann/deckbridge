@@ -757,6 +757,11 @@ fun DeckPage(
         }
     }
 
+    LaunchedEffect(settings.colorFx) {
+        NativeEngine.setColorKind(0, settings.colorFx)
+        NativeEngine.setColorKind(1, settings.colorFx)
+    }
+
     LaunchedEffect(settings.tempoRange) {
         applyRange(0, settings.tempoRange, faces[0].fader)
         applyRange(1, settings.tempoRange, faces[1].fader)

@@ -42,6 +42,7 @@ void render(double bpm, double pitch, double startBeat, int block, int bars, boo
     deckbridge::XPad pad;
     pad.hats = false;
     pad.layerHits = false;
+    pad.risers = false;  // o teste mede só o agendador dos golpes
     pad.followGrid = true;
     pad.set(2, 1.f, true, static_cast<float>(bpm), rate, 1.f, 0, bars, gap, false);
     for (int frame = 0; frame < total;) {
