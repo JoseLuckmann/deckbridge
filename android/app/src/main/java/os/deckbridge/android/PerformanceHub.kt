@@ -16,6 +16,10 @@ object PerformanceHub {
     @Volatile
     var ledEpoch = 0
 
+    /** Há uma controladora MIDI aberta. */
+    @Volatile
+    var controllerConnected = false
+
     fun sendMidi(bytes: ByteArray) {
         val port = ledPort ?: return
         runCatching { port.send(bytes, 0, bytes.size) }

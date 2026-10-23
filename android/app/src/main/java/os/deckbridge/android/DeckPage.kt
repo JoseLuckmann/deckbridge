@@ -185,7 +185,11 @@ fun DeckPage(
 
     // Ler e decodificar a faixa leva segundos: roda fora da thread da tela, senão a interface e os comandos
     // da controladora congelam. O deck que toca não é afetado (o motor só troca o vetor no fim).
-    fun loadTrack(deck: Int, track: RbTrack, source: ReadableVolume): kotlinx.coroutines.Job {
+    fun loadTrack(deck: Int, track: RbTrack, source: ReadableVolume, force: Boolean = false): kotlinx.coroutines.Job {
+        if (settings.loadLock && !force && faces[deck].playing) {
+            // Carregar num deck que toca derrubaria a música do público. O leitor de club recusa o mesmo gesto.
+            return scope.launch { note = "Deck ${deck + 1} está tocando: pare para carregar (bloqueio de carga)." }
+        }
         note = "Carregando ${track.title}…"
         return scope.launch {
             val analysis = liveCatalog.value?.analyses?.get(track.id)
@@ -835,6 +839,50 @@ fun DeckPage(
         }
     }
 
+    // Sessão: grava o que está nos decks a cada 4 s e restaura (parado) se o app reabrir com os mesmos arquivos.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(4_000)
+            val tracks = liveLoaded.value
+            if (tracks.any { it != null }) {
+                SessionStore.save(
+                    context,
+                    (0..1).map { deck ->
+                        tracks.getOrNull(deck)?.let { track ->
+                            SessionStore.Deck(track.filePath, NativeEngine.position(deck), faces[deck].pitch)
+                        }
+                    },
+                )
+            }
+        }
+    }
+    var sessionRestored by remember { mutableStateOf(false) }
+    LaunchedEffect(catalog, volume) {
+        val source = volume ?: return@LaunchedEffect
+        val library = catalog ?: return@LaunchedEffect
+        if (sessionRestored || loaded.any { it != null }) return@LaunchedEffect
+        sessionRestored = true
+        val saved = SessionStore.read(context)
+        var restoredAny = false
+        saved.forEachIndexed { deck, item ->
+            val track = item?.let { entry -> library.tracks.firstOrNull { it.filePath == entry.path } } ?: return@forEachIndexed
+            loadTrack(deck, track, source, force = true).join()
+            seekTo(deck, item.position)
+            setPitch(deck, item.pitch)
+            edit(deck) { it.copy(pitch = item.pitch, fader = faderFromPitch(item.pitch.toDouble(), it.range).toFloat()) }
+            restoredAny = true
+        }
+        if (restoredAny) note = "Sessão anterior restaurada, parada no ponto em que estava. Aperte PLAY quando quiser."
+    }
+
+    var controllerUp by remember { mutableStateOf(PerformanceHub.controllerConnected) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            controllerUp = PerformanceHub.controllerConnected
+            delay(1_000)
+        }
+    }
+
     // Um só leitor dos picos do motor (o contador zera ao ler): alimenta os medidores da mesa e o VU da controladora.
     LaunchedEffect(Unit) {
         val raw = FloatArray(4)
@@ -991,6 +1039,10 @@ fun DeckPage(
         clock = clock,
         activeDeck = active,
         status = note,
+        warnings = buildList {
+            if (!controllerUp && jvmBanner.isNullOrBlank()) add("SEM DDJ-400 (MIDI)")
+            if (deviceId <= 0 && jvmBanner.isNullOrBlank()) add("SAÍDA: TABLET, SEM USB")
+        },
         onPage = onPage,
         onBrowse = { browse = stored },
         onBrowseClose = {

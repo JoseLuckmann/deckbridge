@@ -194,6 +194,7 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
             manager?.openDevice(info, { device ->
                 if (device == null) return@openDevice
                 opened[info.id] = device
+                PerformanceHub.controllerConnected = true
                 // Porta de saída do app: acende os LEDs da controladora.
                 inputs.firstOrNull()?.let { index ->
                     PerformanceHub.ledPort = runCatching { device.openInputPort(index) }.getOrNull()
@@ -221,6 +222,7 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
             override fun onDeviceRemoved(info: MidiDeviceInfo) {
                 opened.remove(info.id)?.let {
                     PerformanceHub.ledPort = null
+                    PerformanceHub.controllerConnected = opened.isNotEmpty()
                     runCatching { it.close() }
                 }
                 handler.post { notice = "Controladora MIDI desconectada. A música continua; ao religar o cabo ela volta sozinha." }

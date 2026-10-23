@@ -285,6 +285,9 @@ private fun PlayerPane(settings: PlayerSettings, wide: Boolean, usbWaveNote: Str
                             onSettings(settings.copy(targetLufs = marks[it], autoGain = true))
                         }
                     }
+                    Line("Bloqueio de carga") {
+                        Chips(listOf("OFF" to !settings.loadLock, "ON" to settings.loadLock)) { onSettings(settings.copy(loadLock = it == 1)) }
+                    }
                     Line("Color FX") {
                         val names = os.deckbridge.logic.COLOR_FX_NAMES
                         Chips(listOf(names[settings.colorFx.coerceIn(0, names.lastIndex)] to true)) {

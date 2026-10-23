@@ -37,6 +37,7 @@ object SettingsStore {
     private val gentle = booleanPreferencesKey("gentle_suggest")
     private val cuePreset = stringPreferencesKey("cue_preset")
     private val colorFx = intPreferencesKey("color_fx")
+    private val loadLock = booleanPreferencesKey("load_lock")
 
     fun flow(context: Context): Flow<PlayerSettings> = context.playerStore.data.map { prefs ->
         PlayerSettings(
@@ -62,6 +63,7 @@ object SettingsStore {
             gentleSuggest = prefs[gentle] ?: true,
             cuePreset = prefs[cuePreset] ?: "drop",
             colorFx = (prefs[colorFx] ?: 5).coerceIn(0, 5),
+            loadLock = prefs[loadLock] ?: true,
         )
     }
 
@@ -89,6 +91,7 @@ object SettingsStore {
             prefs[gentle] = settings.gentleSuggest
             prefs[cuePreset] = settings.cuePreset
             prefs[colorFx] = settings.colorFx
+            prefs[loadLock] = settings.loadLock
         }
     }
 }

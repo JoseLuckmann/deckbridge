@@ -161,6 +161,7 @@ fun PlayerScreen(
     onSort: (os.deckbridge.logic.ListSort) -> Unit = {},
     mixer: os.deckbridge.logic.MixerState = os.deckbridge.logic.MixerState(),
     onMixerKnob: (os.deckbridge.logic.PerformanceAction) -> Unit = {},
+    warnings: List<String> = emptyList(),
 ) {
     var info by remember { mutableStateOf(showInfo) }
     var grid by remember { mutableStateOf(false) }
@@ -194,6 +195,7 @@ fun PlayerScreen(
             TopBar(
                 compact = compact,
                 note = note,
+                warnings = warnings,
                 clock = clock,
                 remain = setRemain,
                 nav = shownNav,
@@ -340,6 +342,7 @@ fun PlayerScreen(
 private fun TopBar(
     compact: Boolean,
     note: String?,
+    warnings: List<String>,
     clock: String,
     remain: String,
     nav: String,
@@ -355,6 +358,10 @@ private fun TopBar(
         Row(Modifier.fillMaxWidth().height(if (compact) 22.dp else 26.dp), verticalAlignment = Alignment.CenterVertically) {
             if (note != null) {
                 TextInk(note, color = Color(StagePalette.simInk), fontSize = if (compact) 9.sp else 11.sp, maxLines = 1, modifier = Modifier.widthIn(max = if (compact) 150.dp else 240.dp))
+            }
+            // Avisos só aparecem quando algo está errado (sem controladora, sem saída USB).
+            warnings.forEach { warning ->
+                TextInk(warning, color = Color(StagePalette.accentOrange), fontSize = if (compact) 10.sp else 12.sp, weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(start = 10.dp))
             }
             Spacer(Modifier.weight(1f))
             if (recWarn != null) {

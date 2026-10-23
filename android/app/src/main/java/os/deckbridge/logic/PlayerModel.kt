@@ -736,6 +736,8 @@ data class PlayerSettings(
     val gentleSuggest: Boolean = true,
     val cuePreset: String = "drop",
     val colorFx: Int = 5,
+    /** Bloqueia carregar uma faixa num deck que está tocando, como o leitor de club faz por padrão. */
+    val loadLock: Boolean = true,
 )
 
 /** Ordem do motor: SPACE, DUB ECHO, SWEEP, NOISE, CRUSH, FILTER. */
