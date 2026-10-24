@@ -95,3 +95,13 @@ fun keepReadPermission(context: Context, uri: Uri) {
     val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
     context.contentResolver.takePersistableUriPermission(uri, flags)
 }
+
+/** O destino de uma exportação está num pendrive de biblioteca autorizado (ver `exportTargetOnLibraryVolume`). */
+fun exportTouchesLibraryVolume(context: Context, target: Uri): Boolean {
+    val targetId = runCatching { DocumentsContract.getDocumentId(target) }.getOrNull() ?: return false
+    val libraries = context.contentResolver.persistedUriPermissions.mapNotNull { permission ->
+        val tree = runCatching { DocumentsContract.getTreeDocumentId(permission.uri) }.getOrNull() ?: return@mapNotNull null
+        (permission.uri.authority ?: "") to tree
+    }
+    return os.deckbridge.logic.exportTargetOnLibraryVolume(target.authority ?: "", targetId, libraries)
+}

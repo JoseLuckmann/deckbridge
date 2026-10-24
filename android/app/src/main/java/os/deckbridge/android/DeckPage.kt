@@ -170,7 +170,13 @@ fun DeckPage(
     val exportDoc = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         val text = pendingExport
         if (uri != null && text != null) {
-            context.contentResolver.openOutputStream(uri)?.use { stream -> stream.write(text.toByteArray(Charsets.UTF_8)) }
+            if (exportTouchesLibraryVolume(context, uri)) {
+                // O seletor já criou o arquivo vazio: remove para o pendrive ficar como estava e não grava nada nele.
+                runCatching { android.provider.DocumentsContract.deleteDocument(context.contentResolver, uri) }
+                note = "Exportação recusada: o destino é o pendrive da biblioteca (só leitura). Escolha outro lugar."
+            } else {
+                context.contentResolver.openOutputStream(uri)?.use { stream -> stream.write(text.toByteArray(Charsets.UTF_8)) }
+            }
         }
     }
     var rmx by remember { mutableStateOf(RmxState()) }

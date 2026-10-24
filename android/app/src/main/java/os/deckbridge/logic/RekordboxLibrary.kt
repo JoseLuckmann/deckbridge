@@ -107,6 +107,17 @@ data class MemoryVolume(
     override fun listAudio(): List<String> = files.keys.filter { isPlainAudioName(it.substringAfterLast('/')) }.sorted()
 }
 
+/**
+ * Política só-leitura do pendrive: o seletor do sistema (exportar lista do set) deixa o usuário escolher qualquer
+ * lugar, inclusive o pendrive da biblioteca. Bloqueia quando o destino está no mesmo armazenamento (mesmo provedor e
+ * mesmo id de volume antes do ':' no id do documento) de um volume de biblioteca autorizado.
+ */
+fun exportTargetOnLibraryVolume(targetAuthority: String, targetDocId: String, libraries: List<Pair<String, String>>): Boolean {
+    val storage = targetDocId.substringBefore(':', "")
+    if (storage.isEmpty()) return false
+    return libraries.any { (authority, treeDocId) -> authority == targetAuthority && treeDocId.substringBefore(':', "") == storage }
+}
+
 fun artworkCandidates(path: String): List<String> {
     val norm = normalizeRekordboxPath(path)
     if (norm.isBlank()) return emptyList()

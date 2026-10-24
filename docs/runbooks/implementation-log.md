@@ -582,3 +582,23 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   2. **System common virava running status** (`MidiAssembler`): um 0xF2/0xF3/0xF6 fazia os bytes seguintes saírem como mensagens com status 0xF2. Agora cancela o running status, como manda a especificação MIDI.
 - Evidência: suíte com 135 testes, 0 falhas.
 - Não verificado: tráfego real da DDJ-400 (`BLOCKED_HARDWARE`).
+
+## 2026-10-24 — Fuzz dos parsers da biblioteca e garantia de só leitura
+
+- `LibraryFuzzTest`:
+  - Fuzz de 600 rodadas em `parseExportPdb`, `parseExportExt`, `parseAnlz`, `decodeWav`, `decodeWavSegment` e `decodeWavMono`.
+  - Mais 150 cargas da biblioteca inteira com vários arquivos estragados ao mesmo tempo.
+  - Mutações usadas: bits trocados, cortes, campos de 32 bits com -1, `Int.MAX_VALUE` e 0x7FFF0000, lixo e apêndices.
+  - Resultado: nenhuma exceção e nenhum laço preso.
+- Só leitura em disco:
+  - O volume sintético e uma faixa solta vão para uma pasta sem permissão de escrita.
+  - Depois do `loadRekordbox` e do `loadPlainFolder`, o SHA-256, o tamanho e o mtime de todos os arquivos ficam iguais, e nenhum arquivo novo aparece.
+  - O cache fica fora do volume.
+- **Achado: a exportação da lista do set podia gravar no pendrive.**
+  - O seletor do sistema (`CreateDocument`) aceita qualquer destino, inclusive o pendrive da biblioteca.
+  - Agora `exportTargetOnLibraryVolume` recusa um destino no mesmo armazenamento de um volume autorizado. O app não grava nada e remove o arquivo vazio que o seletor criou.
+  - Teste: `exportToTheLibraryStickIsRefused`.
+- Evidência: suíte com 138 testes, 0 falhas.
+- Não verificado:
+  - Ids de documento do provedor de armazenamento externo num tablet real (`BLOCKED_HARDWARE`). O formato `XXXX-XXXX:caminho` é o do AOSP.
+  - Remover o arquivo vazio é a única escrita possível no pendrive, e só acontece depois que o próprio seletor criou o arquivo.
