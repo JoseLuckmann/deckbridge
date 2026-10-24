@@ -121,6 +121,8 @@ fun DeckPage(
     var cross by remember { mutableFloatStateOf(0.5f) }
     // COMP, isolador do master, Send/Return e FX FREQUENCY (na tela, a DDJ-400 não tem esses controles).
     var console by remember { mutableStateOf(os.deckbridge.logic.ConsoleState()) }
+    // Touch Preview: a faixa da lista que está soando no fone (só no fone; não passa pelos canais).
+    var previewId by remember { mutableStateOf<Int?>(null) }
     // Estado do mixer da controladora (EQ, TRIM, fones), 0..1 com o centro em 0,5.
     var eqKnobs by remember { mutableStateOf(listOf(listOf(0.5f, 0.5f, 0.5f), listOf(0.5f, 0.5f, 0.5f))) }
     var trimKnobs by remember { mutableStateOf(listOf(0.5f, 0.5f)) }
@@ -1107,6 +1109,14 @@ fun DeckPage(
         NativeEngine.setConsole(console.copy(fxBands = fx.bands).toArray(settings.chFaderCurve, settings.crossCurve))
     }
 
+    LaunchedEffect(previewId) {
+        // O trecho para sozinho no fim; a borda da onda na lista some junto.
+        while (previewId != null) {
+            delay(300)
+            if (!NativeEngine.previewPlaying()) previewId = null
+        }
+    }
+
     LaunchedEffect(console, settings.chFaderCurve, settings.crossCurve, fx.bands) {
         NativeEngine.setConsole(console.copy(fxBands = fx.bands).toArray(settings.chFaderCurve, settings.crossCurve))
     }
@@ -1183,6 +1193,29 @@ fun DeckPage(
         onBrowseClose = {
             browse?.let { stored = it }
             browse = null
+            if (previewId != null) NativeEngine.previewStop()
+            previewId = null
+        },
+        previewId = previewId,
+        onPreview = { track, fraction ->
+            val source = volume
+            if (source != null) {
+                scope.launch {
+                    val start = fraction.toDouble() * track.durationSeconds.coerceAtLeast(0)
+                    val pcm = withContext(Dispatchers.Default) {
+                        source.read(track.filePath)?.let { bytes ->
+                            decodeTrackSegment(context, track.fileName.ifBlank { track.filePath }, bytes, start, PREVIEW_SECONDS)
+                        }
+                    }
+                    if (pcm == null) {
+                        note = "Pré-escuta: não decodifiquei ${track.title}."
+                    } else {
+                        NativeEngine.previewLoad(pcm)
+                        previewId = track.id
+                        note = "PRÉ-ESCUTA no fone: ${track.title} a partir de %d:%02d.".format(start.toInt() / 60, start.toInt() % 60)
+                    }
+                }
+            }
         },
         onZoom = { deck, next ->
             zoom = if (zoomLink) listOf(next, next) else zoom.mapIndexed { index, item -> if (index == deck) next else item }
@@ -1336,6 +1369,8 @@ fun DeckPage(
         onLoad = { track, deck ->
             val source = volume
             if (source != null) {
+                if (previewId != null) NativeEngine.previewStop()
+                previewId = null
                 loadTrack(deck, track, source)
                 browse?.let { stored = it }
                 browse = null

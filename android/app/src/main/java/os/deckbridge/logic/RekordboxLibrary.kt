@@ -402,6 +402,58 @@ fun decodeWav(bytes: ByteArray): DecodedPcm? {
     return DecodedPcm(left, right, rate)
 }
 
+/**
+ * Só um trecho de um WAV PCM de 16 bits: `seconds` a partir de `startSec` (o fim da faixa corta antes). Para a
+ * pré-escuta no fone: decodificar a faixa inteira custaria centenas de MB com os dois decks já carregados.
+ */
+fun decodeWavSegment(bytes: ByteArray, startSec: Double, seconds: Double): DecodedPcm? {
+    if (bytes.size < 44 || seconds <= 0.0) return null
+    if (bytes.copyOfRange(0, 4).toString(Charsets.US_ASCII) != "RIFF") return null
+    if (bytes.copyOfRange(8, 12).toString(Charsets.US_ASCII) != "WAVE") return null
+    var channels = 0
+    var rate = 0
+    var bits = 0
+    var dataAt = -1
+    var dataLen = 0
+    var cursor = 12
+    while (cursor + 8 <= bytes.size) {
+        val id = bytes.copyOfRange(cursor, cursor + 4).toString(Charsets.US_ASCII)
+        val size = bytes.u32le(cursor + 4).toInt()
+        if (size < 0 || cursor + 8 + size > bytes.size) return null
+        val body = cursor + 8
+        if (id == "fmt " && size >= 16) {
+            if (bytes.u16le(body) != 1) return null
+            channels = bytes.u16le(body + 2)
+            rate = bytes.u32le(body + 4).toInt()
+            bits = bytes.u16le(body + 14)
+        } else if (id == "data") {
+            dataAt = body
+            dataLen = size
+        }
+        cursor += 8 + size + (size and 1)
+    }
+    if (channels !in 1..2 || rate <= 0 || bits != 16 || dataAt < 0) return null
+    val total = dataLen / (channels * 2)
+    val first = (startSec.coerceAtLeast(0.0) * rate).toInt().coerceIn(0, total)
+    val frames = minOf((seconds * rate).toInt(), total - first)
+    if (frames <= 0) return null
+    val left = FloatArray(frames)
+    val right = FloatArray(frames)
+    var sample = dataAt + first * channels * 2
+    for (frame in 0 until frames) {
+        val a = bytes.u16le(sample).toShort().toInt() / 32768f
+        sample += 2
+        left[frame] = a
+        if (channels == 1) {
+            right[frame] = a
+        } else {
+            right[frame] = bytes.u16le(sample).toShort().toInt() / 32768f
+            sample += 2
+        }
+    }
+    return DecodedPcm(left, right, rate)
+}
+
 fun encodeWavMono16(samples: FloatArray, rate: Int): ByteArray {
     val dataBytes = samples.size * 2
     val out = ByteArray(44 + dataBytes)

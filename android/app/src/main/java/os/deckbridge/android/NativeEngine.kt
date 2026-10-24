@@ -193,6 +193,19 @@ object NativeEngine {
         return nativeRecordPoll()
     }
 
+    /** Pré-escuta só no fone: o trecho toca do começo e para sozinho no fim. */
+    fun previewLoad(pcm: os.deckbridge.logic.DecodedPcm) {
+        if (!loaded) return
+        runCatching { nativePreviewLoad(pcm.left, pcm.right, pcm.frameCount, pcm.sampleRate) }
+    }
+
+    fun previewStop() {
+        if (!loaded) return
+        runCatching { nativePreviewStop() }
+    }
+
+    fun previewPlaying(): Boolean = loaded && runCatching { nativePreviewPlaying() }.getOrDefault(false)
+
     /** Estado do console (curvas, COMP, isolador, Send, FX FREQUENCY): ver ConsoleState.toArray. */
     fun setConsole(values: FloatArray) {
         if (!loaded) return
@@ -281,6 +294,9 @@ object NativeEngine {
     private external fun nativeGlitches(): Int
     private external fun nativeSetMasterGain(linear: Float)
     private external fun nativeSetConsole(values: FloatArray)
+    private external fun nativePreviewLoad(left: FloatArray, right: FloatArray, frames: Int, rate: Int)
+    private external fun nativePreviewStop()
+    private external fun nativePreviewPlaying(): Boolean
     private external fun nativeLoadDeckStereo(
         deck: Int,
         left: FloatArray,

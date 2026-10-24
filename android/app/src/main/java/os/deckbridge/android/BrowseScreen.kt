@@ -38,6 +38,8 @@ import os.deckbridge.logic.BrowseRow
 import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.StagePalette
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import os.deckbridge.logic.browseRows
 import os.deckbridge.logic.keysCompatible
 
@@ -69,6 +71,8 @@ fun BrowseScreen(
     onMatchKey: (String) -> Unit = {},
     onBpmWindow: () -> Unit = {},
     onSort: (os.deckbridge.logic.ListSort) -> Unit = {},
+    previewId: Int? = null,
+    onPreview: (RbTrack, Float) -> Unit = { _, _ -> },
 ) {
     val rows = browseRows(catalog, place, historyIds, masterTrack, gentle)
     val safeIndex = if (rows.isEmpty()) 0 else place.index.coerceIn(0, rows.lastIndex)
@@ -153,7 +157,7 @@ fun BrowseScreen(
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     rows.forEachIndexed { index, row ->
-                        BrowseLine(row, index, index == safeIndex, catalog, focusKey, artworkOf) { onPick(index) }
+                        BrowseLine(row, index, index == safeIndex, catalog, focusKey, artworkOf, previewId, onPreview) { onPick(index) }
                     }
                 }
                 Row(Modifier.fillMaxWidth().height(22.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -173,6 +177,8 @@ private fun BrowseLine(
     catalog: RbCatalog,
     focusKey: String,
     artworkOf: (RbTrack?) -> ByteArray?,
+    previewId: Int?,
+    onPreview: (RbTrack, Float) -> Unit,
     onClick: () -> Unit,
 ) {
     val fill = if (selected) selectedRow else Color.Transparent
@@ -186,7 +192,17 @@ private fun BrowseLine(
         TextInk((index + 1).toString(), Modifier.width(36.dp), color = muted, fontSize = 12.sp, mono = true, maxLines = 1)
         if (row.track != null) {
             CoverTile(artworkOf(row.track), row.title, Modifier.padding(end = 6.dp).size(32.dp))
-            MiniWave(catalog.analyses[row.track.id], Modifier.width(64.dp).height(28.dp).padding(end = 8.dp))
+            // Touch Preview: tocar na onda toca a faixa no fone a partir daquele ponto (a borda laranja marca a que soa).
+            val track = row.track
+            val previewing = previewId == track.id
+            MiniWave(
+                catalog.analyses[track.id],
+                Modifier.padding(end = 8.dp).width(64.dp).height(28.dp)
+                    .border(if (previewing) 2.dp else 0.dp, if (previewing) Color(StagePalette.accentOrange) else Color.Transparent)
+                    .pointerInput(track.id) {
+                        detectTapGestures { offset -> onPreview(track, (offset.x / size.width).coerceIn(0f, 1f)) }
+                    },
+            )
         } else {
             Box(Modifier.width(78.dp).height(28.dp), contentAlignment = Alignment.Center) {
                 TextInk(if (row.folder) "▸" else "·", color = Color(StagePalette.accentBlue), fontSize = 14.sp)

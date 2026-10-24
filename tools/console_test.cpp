@@ -403,6 +403,41 @@ void sendReturn() {
         check(rms(b) < rms(a) * 0.2f, "TONE à esquerda: o passa-baixas tira o agudo do retorno");
     }
 }
+
+void previewVoice() {
+    // Um segundo de 440 Hz a 44,1 kHz tocado a 48 kHz: soa, entra sem degrau e para sozinho no fim.
+    const int src = 44100;
+    std::vector<float> l(src), r(src);
+    for (int i = 0; i < src; ++i) l[i] = r[i] = 0.5f * static_cast<float>(std::sin(2.0 * kPi * 440.0 * i / src));
+    deckbridge::PreviewVoice voice;
+    voice.load(l.data(), r.data(), src, src);
+    std::vector<float> out;
+    for (int i = 0; i < kRate * 2; ++i) {
+        float a = 0.f, b = 0.f;
+        voice.read(kRate, a, b);
+        out.push_back(a);
+    }
+    check(std::fabs(out[0]) < 0.01f, "pré-escuta: entra em rampa, sem estalo");
+    std::vector<float> body(out.begin() + kRate / 4, out.begin() + kRate / 2);
+    check(std::fabs(db(rms(body)) - db(0.5f / std::sqrt(2.f))) < 0.5f, "pré-escuta: no meio sai no nível da faixa");
+    // Na taxa de saída o trecho de 1 s dura 1 s; depois disso, silêncio e a voz para.
+    std::vector<float> after(out.begin() + kRate + kRate / 50, out.end());
+    check(rms(after) == 0.f && !voice.playing, "pré-escuta: para sozinha no fim do trecho");
+    deckbridge::PreviewVoice stopped;
+    stopped.load(l.data(), r.data(), src, src);
+    for (int i = 0; i < kRate / 10; ++i) {
+        float a = 0.f, b = 0.f;
+        stopped.read(kRate, a, b);
+    }
+    stopped.stop();
+    float tail = 0.f;
+    for (int i = 0; i < kRate / 50; ++i) {
+        float a = 0.f, b = 0.f;
+        stopped.read(kRate, a, b);
+        if (i > kRate / 80) tail = std::max(tail, std::fabs(a));
+    }
+    check(tail == 0.f && !stopped.audible(), "pré-escuta: parar sai em rampa de 10 ms e cala");
+}
 }  // namespace
 
 int main() {
@@ -414,6 +449,7 @@ int main() {
     spiralBendsWithTempo();
     fxFrequencyBands();
     sendReturn();
+    previewVoice();
     std::printf("FAILS %d\n", fails);
     return fails == 0 ? 0 : 1;
 }

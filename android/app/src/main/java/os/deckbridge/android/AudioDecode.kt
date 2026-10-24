@@ -32,10 +32,29 @@ fun decodeTrackAudio(context: Context, name: String, bytes: ByteArray): DecodedP
     return decodeCompressed(context, bytes, suffix)
 }
 
+/** Duração do trecho da pré-escuta: toca daí e para sozinho. */
+const val PREVIEW_SECONDS = 30.0
+
+/** Só um trecho da faixa, para a pré-escuta: WAV pela fatia de bytes; MP3/FLAC/AAC com seek e limite de amostras. */
+fun decodeTrackSegment(context: Context, name: String, bytes: ByteArray, startSec: Double, seconds: Double): DecodedPcm? {
+    val lower = name.lowercase()
+    if (lower.endsWith(".wav") || (bytes.size > 12 && bytes.copyOfRange(0, 4).decodeToString() == "RIFF")) {
+        return os.deckbridge.logic.decodeWavSegment(bytes, startSec, seconds)
+    }
+    val suffix = when {
+        lower.endsWith(".mp3") -> ".mp3"
+        lower.endsWith(".flac") -> ".flac"
+        lower.endsWith(".aac") -> ".aac"
+        lower.endsWith(".m4a") || lower.endsWith(".mp4") -> ".m4a"
+        else -> return null
+    }
+    return decodeCompressed(context, bytes, suffix, (startSec * 1_000_000).toLong().coerceAtLeast(0L), seconds)
+}
+
 /** Limite de uma faixa na memória: 15 minutos (cerca de 330 MB de decodificação estéreo a 48 kHz). */
 const val MAX_TRACK_MINUTES = 15
 
-private fun decodeCompressed(context: Context, bytes: ByteArray, suffix: String): DecodedPcm? {
+private fun decodeCompressed(context: Context, bytes: ByteArray, suffix: String, startUs: Long = 0L, seconds: Double = 0.0): DecodedPcm? {
     val file = File.createTempFile("deckbridge-", suffix, context.cacheDir)
     return try {
         file.writeBytes(bytes)
@@ -54,6 +73,7 @@ private fun decodeCompressed(context: Context, bytes: ByteArray, suffix: String)
         }
         if (track < 0 || format == null) return null
         extractor.selectTrack(track)
+        if (startUs > 0L) extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
         val mime = format.getString(MediaFormat.KEY_MIME) ?: return null
         val decoder = MediaCodec.createDecoderByType(mime)
         decoder.configure(format, null, null, 0)
@@ -63,8 +83,8 @@ private fun decodeCompressed(context: Context, bytes: ByteArray, suffix: String)
         // Buffers primitivos, pré-dimensionados pela duração do arquivo. Um ArrayList<Float> por amostra
         // custava ~700 MB de objetos numa faixa de 6 min e estourava a memória.
         val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
-        val cap = rate * 60 * MAX_TRACK_MINUTES
-        val estimate = ((durationUs * rate) / 1_000_000L).toInt().coerceIn(rate * 10, cap)
+        val cap = if (seconds > 0.0) (rate * seconds).toInt().coerceAtLeast(rate) else rate * 60 * MAX_TRACK_MINUTES
+        val estimate = if (seconds > 0.0) cap else ((durationUs * rate) / 1_000_000L).toInt().coerceIn(rate * 10, cap)
         val sink = os.deckbridge.logic.PcmAccumulator(rate, channels, estimate, cap)
         val info = MediaCodec.BufferInfo()
         var inputDone = false

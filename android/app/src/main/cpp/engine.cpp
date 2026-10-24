@@ -555,6 +555,24 @@ public:
         mixFx_.setConsole(values, count);
     }
 
+    void previewLoad(const float *left, const float *right, int frames, int rate) {
+        // A cópia (alguns MB) fica fora do lock; o áudio só espera a troca dos vetores.
+        deckbridge::PreviewVoice next;
+        next.load(left, right, frames, rate);
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        std::swap(preview_, next);
+    }
+
+    void previewStop() {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        preview_.stop();
+    }
+
+    bool previewPlaying() {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        return preview_.playing;
+    }
+
     void setGrid(int deck, float originSec, float bpm) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
@@ -599,7 +617,7 @@ public:
         if (route == 3) {
             std::lock_guard<std::mutex> lock(mixMutex_);
             const bool phonesOpen = channels >= 4;
-            phonesAudible_.store(phonesOpen && (decks_[0].pfl || decks_[1].pfl));
+            phonesAudible_.store(phonesOpen && (decks_[0].pfl || decks_[1].pfl || preview_.audible()));
             mixFx_.setSampleRate(rate);
             float peak[4] = {0.f, 0.f, 0.f, 0.f};
             for (int frame = 0; frame < numFrames; ++frame) {
@@ -668,6 +686,12 @@ public:
                         phoneL *= 0.5f;
                         phoneR *= 0.5f;
                     }
+                    // Pré-escuta da lista: entra no lado CUE do fone, por cima do que estiver no CUE.
+                    float previewL = 0.f;
+                    float previewR = 0.f;
+                    preview_.read(rate, previewL, previewR);
+                    phoneL += previewL;
+                    phoneR += previewR;
                     phoneL = (phoneL * (1.f - headMix_) + masterL * headMix_) * headGain_;
                     phoneR = (phoneR * (1.f - headMix_) + masterR * headMix_) * headGain_;
                 }
@@ -848,6 +872,7 @@ private:
     deckbridge::PeakLimiter masterLimit_;
     float trim_[2]{1.f, 1.f};
     float trimKnob_[2]{1.f, 1.f};
+    deckbridge::PreviewVoice preview_;
     float headMix_ = 0.f;
     float headGain_ = 1.f;
     deckbridge::MasterRecorder recorder_;
@@ -1074,6 +1099,27 @@ Java_os_deckbridge_android_NativeEngine_nativeSetRmx(JNIEnv *env, jobject, jfloa
     jfloat *data = env->GetFloatArrayElements(values, nullptr);
     engine().setRmx(data, count);
     env->ReleaseFloatArrayElements(values, data, JNI_ABORT);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativePreviewLoad(JNIEnv *env, jobject, jfloatArray left, jfloatArray right, jint frames, jint rate) {
+    if (left == nullptr || right == nullptr) return;
+    const jsize count = std::min(std::min(env->GetArrayLength(left), env->GetArrayLength(right)), frames);
+    jfloat *l = env->GetFloatArrayElements(left, nullptr);
+    jfloat *r = env->GetFloatArrayElements(right, nullptr);
+    engine().previewLoad(l, r, count, rate);
+    env->ReleaseFloatArrayElements(left, l, JNI_ABORT);
+    env->ReleaseFloatArrayElements(right, r, JNI_ABORT);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativePreviewStop(JNIEnv *, jobject) {
+    engine().previewStop();
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_os_deckbridge_android_NativeEngine_nativePreviewPlaying(JNIEnv *, jobject) {
+    return engine().previewPlaying() ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL

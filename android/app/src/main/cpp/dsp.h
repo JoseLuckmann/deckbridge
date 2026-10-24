@@ -2714,6 +2714,49 @@ struct SendReturn {
     }
 };
 
+// Pré-escuta (Touch Preview do leitor de club): um trecho curto da faixa que só soa no fone, sem passar pelos canais.
+// Entra e sai com rampa de 10 ms para não estalar; para sozinha no fim do trecho.
+struct PreviewVoice {
+    std::vector<float> left;
+    std::vector<float> right;
+    int rate = 48000;
+    double position = 0.0;
+    bool playing = false;
+    float gain = 0.f;
+
+    void load(const float *l, const float *r, int frames, int sourceRate) {
+        left.assign(l, l + std::max(0, frames));
+        right.assign(r, r + std::max(0, frames));
+        rate = sourceRate > 0 ? sourceRate : 48000;
+        position = 0.0;
+        playing = frames > 1;
+        gain = 0.f;
+    }
+
+    void stop() { playing = false; }
+
+    bool audible() const { return playing || gain > 1e-4f; }
+
+    void read(int outputRate, float &outL, float &outR) {
+        outL = 0.f;
+        outR = 0.f;
+        const int frames = static_cast<int>(left.size());
+        if (frames < 2 || outputRate <= 0) return;
+        const float ramp = 1.f / (0.01f * static_cast<float>(outputRate));
+        const double fadeAt = static_cast<double>(frames - 2) - 0.01 * rate;
+        const bool on = playing && position < fadeAt;
+        gain = on ? std::min(1.f, gain + ramp) : std::max(0.f, gain - ramp);
+        if (gain <= 0.f) {
+            if (position >= fadeAt) playing = false;
+            return;
+        }
+        const double at = std::min(position, static_cast<double>(frames - 2));
+        outL = readInterp(left.data(), frames, at) * gain;
+        outR = readInterp(right.data(), frames, at) * gain;
+        position += static_cast<double>(rate) / static_cast<double>(outputRate);
+    }
+};
+
 // Curvas do fader de canal (manual do DJM-V10, p. 30): 0 sobe forte perto do topo, 1 sobe aos poucos, 2 linear.
 // As formas exatas não são publicadas; estas são nossas, com os mesmos extremos (0 embaixo, 1 em cima).
 inline float channelFaderGain(float fader, int curve) {

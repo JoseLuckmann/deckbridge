@@ -123,6 +123,19 @@ class ScreenShotsTablet {
     }
 
     @Test
+    fun browsePreview() {
+        // Touch Preview: a quinta faixa toca no fone; a borda laranja na onda da lista marca qual.
+        val catalog = simulatedCatalog()
+        val playlist = catalog.playlists.first { it.name == "Todas" }.id
+        val place = BrowsePlace(inList = true, playlistId = playlist, index = 4)
+        val rows = os.deckbridge.logic.browseRows(catalog, place, emptyList(), null, true)
+        val previewId = rows.getOrNull(4)?.track?.id
+        capture("$PRINTS/browse-preview.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), place, previewId = previewId))
+        }
+    }
+
+    @Test
     fun beatFxZoom() {
         val catalog = simulatedCatalog()
         val fx = BeatFxState(effect = 1, fraction = 5, channel = 0, on = true, level = 96)
@@ -418,6 +431,7 @@ private fun player(
     mixer: os.deckbridge.logic.MixerState = os.deckbridge.logic.MixerState(),
     startPopup: String = "",
     console: os.deckbridge.logic.ConsoleState = os.deckbridge.logic.ConsoleState(),
+    previewId: Int? = null,
 ): ComposeView {
     val left = catalog.tracks.first { it.title == leftTitle }
     val right = catalog.tracks.first { it.title == rightTitle }
@@ -450,6 +464,7 @@ private fun player(
             mixer = mixer,
             startPopup = startPopup,
             console = console,
+            previewId = previewId,
                 catalog = catalog,
                 tracks = listOf(left, right),
                 clock = "21:14",

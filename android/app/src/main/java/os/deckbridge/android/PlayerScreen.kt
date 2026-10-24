@@ -163,6 +163,8 @@ fun PlayerScreen(
     mixer: os.deckbridge.logic.MixerState = os.deckbridge.logic.MixerState(),
     onMixerKnob: (os.deckbridge.logic.PerformanceAction) -> Unit = {},
     console: os.deckbridge.logic.ConsoleState = os.deckbridge.logic.ConsoleState(),
+    previewId: Int? = null,
+    onPreview: (RbTrack, Float) -> Unit = { _, _ -> },
     onConsole: (os.deckbridge.logic.ConsoleState) -> Unit = {},
     warnings: List<String> = emptyList(),
     startPopup: String = "",
@@ -355,6 +357,8 @@ fun PlayerScreen(
                 onMatchKey = onMatchKey,
                 onBpmWindow = onBpmWindow,
                 onSort = onSort,
+                previewId = previewId,
+                onPreview = onPreview,
             )
         }
     }
