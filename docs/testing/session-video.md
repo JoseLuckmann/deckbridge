@@ -94,3 +94,25 @@ Erros corrigidos no caminho:
 Limites:
 - Só simulação no host, sem audição na DDJ-400.
 - O scratch usa passos fixos de 5 ms por unidade de giro, sem medir a velocidade real do prato da DDJ-400 (`BLOCKED_HARDWARE`).
+
+## DDJ-400 virtual embaixo da tela (24/10/2026)
+
+O vídeo passa a ter duas telas em 1280 × 1200: em cima, o app; embaixo, uma DDJ-400 desenhada (`DdjPanel`). O painel junta duas fontes:
+
+- **Controles físicos (`DdjSurface`):** faders, botões giratórios, ângulo e toque do prato, botões e pads apertados e modo de pad. Saem só dos bytes MIDI que a "mão" manda, decodificados com as notas do mapa pinado do Mixxx 2.5.6, sem passar pelo app.
+- **LEDs (PLAY, CUE, SYNC, CUE de canal, pads, VU, Beat FX ON):** vêm de `ledTargets`, os mesmos bytes que o app mandaria à controladora (regra do DeckPage, refeita em `SetModel.leds`).
+
+Uma linha embaixo mostra as três últimas mensagens MIDI (hora, bytes e descrição do mapa).
+
+A diferença entre as duas telas é o que se valida. Exemplos:
+- Depois do SYNC, o fader de tempo físico continua onde estava, enquanto o app mostra +0,78%. É o comportamento esperado: o DDJ-400 não tem fader motorizado.
+- O modo de pad é do próprio hardware; o mapa não tem os botões de modo. O painel mostra o modo pela faixa de notas que os pads mandam.
+
+Limites:
+- O desenho segue a disposição da controladora, mas as medidas não são as do desenho técnico da Pioneer.
+- MASTER LEVEL não aparece: não manda MIDI no mapa pinado.
+- O ângulo do prato usa 720 passos por volta, a conta do script oficial (`scratchEnable 720`), não medido no prato real.
+
+Erro corrigido junto: os quadros liam os picos de `mix.wav.levels.tsv` da pasta do set de seis faixas. No vídeo de mixagem anterior, os medidores da tela mostravam o áudio do set, não o da mixagem. Agora `SET_LEVELS` aponta os picos do áudio deste roteiro.
+
+`docs/ui/ddj-virtual-rmx.png` (a gravar no fim do render): o buildup do RMX, com o deck 1 em SAMPLER, os pads 2 (Noise UP segurado) e 7 (roll de bateria) acesos e o LOW do deck 1 fechado.

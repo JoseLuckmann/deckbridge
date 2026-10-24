@@ -64,6 +64,8 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
     private val shadow = doubleArrayOf(0.0, 0.0)
     /** Prato tocado (scratch): a faixa não anda sozinha, só com o giro. */
     val scratching = booleanArrayOf(false, false)
+    /** A DDJ-400 simulada: só o que a mão mandou por MIDI. */
+    val surface = DdjSurface()
     // Espelho do giro solto do motor (ScratchFollower.coasting): velocidade em x da normal, NaN fora do giro.
     private val coast = doubleArrayOf(Double.NaN, Double.NaN)
     private val lastMove = doubleArrayOf(-1.0, -1.0)
@@ -228,6 +230,7 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
     /** Uma mensagem MIDI como se viesse da controladora. */
     fun midi(status: Int, data1: Int, data2: Int) {
         val hit = map.lookup(status, data1)
+        surface.feed(t, status, data1, data2, if (hit.mapped) hit.description.substringBefore(" - ").trim() else "")
         val action = tempo.interpret(hit, data2) ?: interpretPerformance(hit, data2, tempo)
         if (hit.mapped && data2 > 0 && !hit.description.contains("rotate") && !hit.description.contains("fader") && !hit.description.contains("slider")) {
             say("DDJ-400  ·  ${hit.description.substringBefore(" - ").trim()}")
@@ -403,6 +406,29 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
         val edit = GridEdit(0.0, faces[deck].gridStretch)
         seekTo(deck, quantizeSeconds(cue.second, applyGrid(beatsOf(deck), edit), gridBpm(trk(deck).bpm, edit)))
     }
+
+    /** LEDs que o app mandaria à controladora agora (mesma regra do DeckPage), com o pico de cada canal. */
+    fun leds(peaks: List<Float>): os.deckbridge.logic.LedState = os.deckbridge.logic.LedState(
+        decks = (0..1).map { deck ->
+            val face = faces[deck]
+            val track = trkOrNull(deck)
+            val bpm = track?.bpm ?: 0.0
+            val loopBeats = if (face.loopEnd > face.loopStart && bpm > 1.0) (face.loopEnd - face.loopStart) * bpm / 60.0 else 0.0
+            os.deckbridge.logic.DeckLed(
+                loaded = track != null,
+                playing = face.playing,
+                sync = face.sync,
+                hotCues = if (isLoaded(deck)) hotCueTimes(deckIdx[deck]).map { it.first }.filter { it in 0..7 }.toSet() else emptySet(),
+                beatLoop = os.deckbridge.logic.beatLoopIndex(loopBeats),
+                peak = peaks.getOrElse(deck) { 0f },
+            )
+        },
+        beatFxOn = fx.on && !rmx.panel,
+        samplerPads = buildSet {
+            if (rmx.panel && rmx.holding) add(rmx.scene.coerceIn(0, 7))
+            if (rmx.panel && rmx.xOn) add((4 + rmx.xMode).coerceIn(0, 7))
+        },
+    )
 
     /** Hot cues da análise do app, em segundos, por faixa. */
     private fun hotCueTimes(trackIndex: Int): List<Pair<Int, Double>> =

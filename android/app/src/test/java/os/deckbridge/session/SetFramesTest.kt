@@ -47,11 +47,12 @@ private data class SetFrame(
     val tracks: List<os.deckbridge.logic.RbTrack?>,
     val browse: os.deckbridge.logic.BrowsePlace?,
     val colorFx: Int,
+    val ddj: DdjFrame? = null,
 )
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [33], qualifiers = "w1280dp-h720dp-mdpi")
+@Config(sdk = [33], qualifiers = "w1280dp-h1200dp-mdpi")
 class SetFramesTest {
     @Test
     fun renderSetFrames() {
@@ -69,7 +70,8 @@ class SetFramesTest {
             "t6" to "Michael Mind Project - How Does It Feel (Club Mix)",
         )
         val shown = catalog.copy(tracks = catalog.tracks.map { it.copy(title = names[it.title] ?: it.title) })
-        val levels = loadSetLevels(File(SessionAssets.dir, "mix.wav.levels.tsv"))
+        // SET_LEVELS aponta os picos do áudio renderizado deste roteiro (o padrão é o do set de seis faixas).
+        val levels = loadSetLevels(System.getenv("SET_LEVELS")?.let(::File) ?: File(SessionAssets.dir, "mix.wav.levels.tsv"))
         val activity = Robolectric.buildActivity(ScreenshotActivity::class.java).setup().get()
         val state = mutableStateOf<SetFrame?>(null)
         state.value = SetFrame(listOf(DeckFace(), DeckFace()), BeatFxState(), RmxState(), MixerState(), 0, "", "", listOf(null, null), null, 5)
@@ -79,7 +81,7 @@ class SetFramesTest {
                     val frame by state
                     val f = frame ?: return@setContent
                     Column(Modifier.fillMaxSize().background(Color.Black)) {
-                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                        Box(Modifier.height(680.dp).fillMaxWidth()) {
                             PlayerScreen(
                                 catalog = shown,
                                 tracks = f.tracks,
@@ -105,6 +107,10 @@ class SetFramesTest {
                         Box(Modifier.fillMaxWidth().height(40.dp).background(Color(0xFF101820)).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
                             TextInk(f.caption, color = Color(0xFFF4F7FB), fontSize = 18.sp, maxLines = 1)
                         }
+                        // Segunda tela: a DDJ-400 simulada (controles pelo MIDI da mão, LEDs pelo que o app mandaria).
+                        Box(Modifier.fillMaxWidth().height(480.dp).background(Color(0xFF0B0C0E))) {
+                            f.ddj?.let { DdjPanel(it) }
+                        }
                     }
                 }
             },
@@ -129,6 +135,7 @@ class SetFramesTest {
                 tracks = model.deckTracks().map { t -> t?.let { x -> shown.tracks.first { it.id == x.id } } },
                 browse = model.browse,
                 colorFx = model.colorFx,
+                ddj = DdjFrame(model.surface, os.deckbridge.logic.ledTargets(model.leds(listOf(held[0], held[1]))), model.t),
             )
             repeat(3) { ShadowLooper.idleMainLooper(20, java.util.concurrent.TimeUnit.MILLISECONDS) }
             activity.window.decorView.captureRoboImage(File(outDir, "frame%05d.png".format(frame)).absolutePath)

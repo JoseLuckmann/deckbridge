@@ -499,3 +499,13 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Mudança: `ScratchFollower` ganhou o giro solto (`coasting`). Ao soltar o topo do prato em movimento, a faixa segue com a velocidade da mão. Ela freia 5x/s até o passo normal do deck (zero se parado) e parte a 8x/s. Tocar de novo para o giro na hora, e `nudge` é ignorado durante o giro solto. O mesmo vale em `ddj_session` e no `SetModel` (espelho para a tela). O vídeo de mixagem termina com um backspin manual.
 - Evidência: `fx_rmx_test` backspinCoasts (6 checagens: entra no giro a mais de 4x para trás, termina sozinho em 1,03 s, volta mais de 1,5 s da faixa, para em zero com o deck parado, segurar o prato para o giro). Quadros do vídeo: deck 2 de 71,9 a 67,1 compassos durante o giro.
 - Não verificado: as constantes de freio e partida são nossas, não medidas num CDJ ou na DDJ-400. Também não foi verificado se o prato solto da DDJ-400 manda mensagens que conflitem (`BLOCKED_HARDWARE`).
+
+## 2026-10-24 — DDJ-400 virtual no vídeo de sessão
+
+- Mudança:
+  - `DdjSurface`: estado físico só pelo MIDI cru, com os bytes do mapa pinado.
+  - `DdjPanel`: desenho da controladora; os LEDs vêm de `ledTargets` (`SetModel.leds`).
+  - Quadros em 1280 × 1200: app em cima, DDJ embaixo, mais o log MIDI.
+  - `SET_LEVELS` corrige os medidores que liam os picos do set de seis faixas.
+- Evidência: `DdjSurfaceTest` (faders, tempo de 14 bits, prato e toque, modos de pad, log); `docs/ui/ddj-virtual-rmx.png`; vídeo de 3,4 min fora do git.
+- Risco: o painel não é captura da DDJ-400 real; ele mostra o que o roteiro manda e o que o app acenderia (`BLOCKED_HARDWARE` para conferir com o equipamento).
