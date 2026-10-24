@@ -743,6 +743,10 @@ data class PlayerSettings(
     val colorFx: Int = 5,
     /** Bloqueia carregar uma faixa num deck que está tocando, como o leitor de club faz por padrão. */
     val loadLock: Boolean = true,
+    /** Curva do fader de canal: 0 topo, 1 gradual, 2 linear (padrão, o comportamento de antes). */
+    val chFaderCurve: Int = 2,
+    /** Curva do crossfader: 0 lenta (padrão), 1 média, 2 corte. */
+    val crossCurve: Int = 0,
 )
 
 /** Ordem do motor: SPACE, DUB ECHO, SWEEP, NOISE, CRUSH, FILTER. */

@@ -41,6 +41,7 @@ import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.ReadableVolume
 import os.deckbridge.logic.WaveZoom
+import os.deckbridge.logic.toArray
 import os.deckbridge.logic.lacksDetail
 import os.deckbridge.logic.withDetail
 import os.deckbridge.logic.GridEdit
@@ -118,6 +119,8 @@ fun DeckPage(
     var volA by remember { mutableFloatStateOf(0.8f) }
     var volB by remember { mutableFloatStateOf(0.8f) }
     var cross by remember { mutableFloatStateOf(0.5f) }
+    // COMP, isolador do master, Send/Return e FX FREQUENCY (na tela, a DDJ-400 não tem esses controles).
+    var console by remember { mutableStateOf(os.deckbridge.logic.ConsoleState()) }
     // Estado do mixer da controladora (EQ, TRIM, fones), 0..1 com o centro em 0,5.
     var eqKnobs by remember { mutableStateOf(listOf(listOf(0.5f, 0.5f, 0.5f), listOf(0.5f, 0.5f, 0.5f))) }
     var trimKnobs by remember { mutableStateOf(listOf(0.5f, 0.5f)) }
@@ -1101,6 +1104,11 @@ fun DeckPage(
 
     LaunchedEffect(deviceId) {
         withContext(Dispatchers.IO) { NativeEngine.start(deviceId, 3) }
+        NativeEngine.setConsole(console.toArray(settings.chFaderCurve, settings.crossCurve))
+    }
+
+    LaunchedEffect(console, settings.chFaderCurve, settings.crossCurve) {
+        NativeEngine.setConsole(console.toArray(settings.chFaderCurve, settings.crossCurve))
     }
 
     LaunchedEffect(autoplay, catalog, volume) {
@@ -1148,6 +1156,8 @@ fun DeckPage(
             pfl = listOf(pflA, pflB),
         ),
         onMixerKnob = { action -> onPerformance(action) },
+        console = console,
+        onConsole = { console = it },
         catalog = shownCatalog,
         tracks = loaded,
         faces = faces,

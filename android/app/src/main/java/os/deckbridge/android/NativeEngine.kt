@@ -193,6 +193,12 @@ object NativeEngine {
         return nativeRecordPoll()
     }
 
+    /** Estado do console (curvas, COMP, isolador, Send, FX FREQUENCY): ver ConsoleState.toArray. */
+    fun setConsole(values: FloatArray) {
+        if (!loaded) return
+        runCatching { nativeSetConsole(values) }
+    }
+
     fun setMasterGain(linear: Float) {
         if (!loaded) return
         nativeSetMasterGain(linear)
@@ -274,6 +280,7 @@ object NativeEngine {
     private external fun nativeLevels(dest: FloatArray)
     private external fun nativeGlitches(): Int
     private external fun nativeSetMasterGain(linear: Float)
+    private external fun nativeSetConsole(values: FloatArray)
     private external fun nativeLoadDeckStereo(
         deck: Int,
         left: FloatArray,

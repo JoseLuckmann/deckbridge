@@ -2190,9 +2190,9 @@ struct Isolator {
     }
 
     void set(float nextLow, float nextMid, float nextHigh, bool nextGate) {
-        low = std::clamp(nextLow, 0.f, 2.f);
-        mid = std::clamp(nextMid, 0.f, 2.f);
-        high = std::clamp(nextHigh, 0.f, 2.f);
+        low = std::clamp(nextLow, 0.f, 3.f);
+        mid = std::clamp(nextMid, 0.f, 3.f);
+        high = std::clamp(nextHigh, 0.f, 3.f);
         gate = nextGate;
     }
 
@@ -2536,6 +2536,80 @@ inline float eqGainFromKnob(float knob) {
     return std::pow(10.f, (k - 0.5f) * 2.f * 6.f / 20.f);
 }
 
+// Curvas do fader de canal (manual do DJM-V10, p. 30): 0 sobe forte perto do topo, 1 sobe aos poucos, 2 linear.
+// As formas exatas não são publicadas; estas são nossas, com os mesmos extremos (0 embaixo, 1 em cima).
+inline float channelFaderGain(float fader, int curve) {
+    const float v = std::clamp(fader, 0.f, 1.f);
+    switch (curve) {
+        case 0: return v * v * v;
+        case 1: return 1.f - (1.f - v) * (1.f - v);
+        default: return v;
+    }
+}
+
+// Curvas do crossfader: 0 lenta (aditiva, os dois inteiros no centro, a de sempre do app), 1 média, 2 corte (os dois
+// inteiros até perto da ponta, como o "sharp" dos mixers de club). 0 no crossfader é só o deck 1.
+inline void crossfaderSides(float cross, int curve, float &sideA, float &sideB) {
+    const float x = std::clamp(cross, 0.f, 1.f);
+    const float slope = curve == 2 ? 32.f : (curve == 1 ? 5.f : 2.f);
+    sideA = std::min(1.f, slope * (1.f - x));
+    sideB = std::min(1.f, slope * x);
+}
+
+// Knob do isolador do master (manual do DJM-V10, p. 33): todo à esquerda corta a banda (−∞), centro 0 dB, todo à
+// direita +9 dB. Corte em curva de potência, como o EQ de canal.
+inline float isolatorGainFromKnob(float knob) {
+    const float k = std::clamp(knob, 0.f, 1.f);
+    if (k <= 0.03f) return 0.f;
+    if (k < 0.5f) return std::pow((k - 0.03f) / 0.47f, 1.6f);
+    return std::pow(10.f, (k - 0.5f) * 2.f * 9.f / 20.f);
+}
+
+// COMP de um knob por canal (manual do DJM-V10, p. 27): todo à esquerda sai o som original; girando, comprime mais.
+// Limiar de −6 a −30 dBFS, razão de 1,5:1 a 6:1, joelho de 6 dB, ataque de 4 ms, soltura de 160 ms, e metade da
+// redução no limiar devolvida como ganho. Os valores são nossos; o manual não publica a curva.
+struct ChannelComp {
+    float knob = 0.f;
+    float envDb = -120.f;
+    float gainDb = 0.f;
+    int sampleRate = 48000;
+
+    void set(float next, int rate) {
+        knob = std::clamp(next, 0.f, 1.f);
+        sampleRate = rate > 0 ? rate : 48000;
+    }
+
+    static float curveDb(float levelDb, float threshold, float ratio, float knee) {
+        const float over = levelDb - threshold;
+        if (over <= -knee / 2.f) return 0.f;
+        if (over >= knee / 2.f) return -(over - over / ratio);
+        const float x = over + knee / 2.f;
+        return -(1.f - 1.f / ratio) * x * x / (2.f * knee);
+    }
+
+    void process(float &left, float &right) {
+        if (knob < 0.01f && std::fabs(gainDb) < 0.01f) {
+            envDb = -120.f;
+            return;
+        }
+        const float threshold = -6.f - 24.f * knob;
+        const float ratio = 1.5f + 4.5f * knob;
+        const float makeup = 0.5f * -curveDb(0.f, threshold, ratio, 6.f) * std::min(1.f, knob * 4.f);
+        const float peak = std::max(std::fabs(left), std::fabs(right));
+        const float levelDb = 20.f * std::log10(std::max(peak, 1e-6f));
+        const float attack = 1.f - std::exp(-1.f / (0.004f * sampleRate));
+        const float release = 1.f - std::exp(-1.f / (0.160f * sampleRate));
+        envDb += (levelDb - envDb) * (levelDb > envDb ? attack : release);
+        const float target = knob < 0.01f ? 0.f : curveDb(envDb, threshold, ratio, 6.f) + makeup;
+        // Ao zerar o knob o ganho volta suave, sem degrau.
+        const float glide = 1.f - std::exp(-1.f / (0.02f * sampleRate));
+        gainDb += (target - gainDb) * glide;
+        const float gain = std::pow(10.f, gainDb / 20.f);
+        left = sanitize(left * gain);
+        right = sanitize(right * gain);
+    }
+};
+
 struct MixerFx {
     BeatInsert beat;
     SceneFx scene;
@@ -2544,6 +2618,11 @@ struct MixerFx {
     Isolator eq[2];
     ReleaseFx release;
     ColorFilter color[2];
+    ChannelComp comp[2];
+    Isolator masterIso;
+    bool masterIsoOn = false;
+    int chCurve = 2;
+    int crossCurve = 0;
     bool rmx = false;
     int channel = 0;
     int sampleRate = 48000;
@@ -2563,6 +2642,7 @@ struct MixerFx {
         iso[0].prepare(sampleRate);
         iso[1].prepare(sampleRate);
         if (changed) {
+            masterIso.prepare(sampleRate);
             eq[0].prepare(sampleRate);
             eq[1].prepare(sampleRate);
             for (auto &item : color) item.prepare(sampleRate);
@@ -2671,8 +2751,38 @@ struct MixerFx {
         return mul;
     }
 
+    // Estado do console vindo do app num vetor (ConsoleState.toArray no Kotlin):
+    // 0 curva do fader de canal, 1 curva do crossfader, 2–3 COMP dos canais, 4 isolador ligado, 5–7 LOW/MID/HI do
+    // isolador. Índices que faltam ficam como estão.
+    void setConsole(const float *values, int count) {
+        if (values == nullptr) return;
+        auto at = [&](int index, float fallback) { return index < count ? values[index] : fallback; };
+        chCurve = std::clamp(static_cast<int>(at(0, 2.f)), 0, 2);
+        crossCurve = std::clamp(static_cast<int>(at(1, 0.f)), 0, 2);
+        setComp(0, at(2, 0.f));
+        setComp(1, at(3, 0.f));
+        setMasterIsolator(at(4, 0.f) > 0.5f, at(5, 0.5f), at(6, 0.5f), at(7, 0.5f));
+    }
+
+    float faderGain(float fader) const { return channelFaderGain(fader, chCurve); }
+
+    void sides(float cross, float &a, float &b) const { crossfaderSides(cross, crossCurve, a, b); }
+
+    void setComp(int deck, float knob) {
+        if (deck < 0 || deck > 1) return;
+        comp[deck].set(knob, sampleRate);
+    }
+
+    void setMasterIsolator(bool on, float low, float mid, float high) {
+        masterIsoOn = on;
+        if (on) masterIso.set(isolatorGainFromKnob(low), isolatorGainFromKnob(mid), isolatorGainFromKnob(high), false);
+        else masterIso.set(1.f, 1.f, 1.f, false);
+    }
+
+    // Ordem do canal, como num mixer: (TRIM antes, no motor) COMP, EQ, Color FX, isolador do RMX e o insert.
     void processDeck(int deck, float &left, float &right) {
         if (deck < 0 || deck > 1) return;
+        comp[deck].process(left, right);
         eq[deck].process(left, right);
         color[deck].process(left, right);
         iso[deck].process(left, right);
@@ -2682,6 +2792,8 @@ struct MixerFx {
     void processMaster(float &left, float &right) {
         if (channel == 2) applyInsert(left, right);
         if (release.active() && release.kind == 1 && channel == 2) release.process(left, right);
+        // Desligado, o isolador volta suave a 0 dB e depois fica de fora (unity).
+        masterIso.process(left, right);
     }
 
 private:

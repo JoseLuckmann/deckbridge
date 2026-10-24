@@ -162,6 +162,8 @@ fun PlayerScreen(
     onSort: (os.deckbridge.logic.ListSort) -> Unit = {},
     mixer: os.deckbridge.logic.MixerState = os.deckbridge.logic.MixerState(),
     onMixerKnob: (os.deckbridge.logic.PerformanceAction) -> Unit = {},
+    console: os.deckbridge.logic.ConsoleState = os.deckbridge.logic.ConsoleState(),
+    onConsole: (os.deckbridge.logic.ConsoleState) -> Unit = {},
     warnings: List<String> = emptyList(),
     startPopup: String = "",
 ) {
@@ -315,7 +317,14 @@ fun PlayerScreen(
         } else if (overlay == "search" && catalog != null) {
             SearchScreen(catalog.tracks, queryText, searchBpm.first, searchBpm.second, searchKey, onQuery, onSearchBpm, onSearchKey, onLoad) { onOverlay("") }
         } else if (overlay == "mixer") {
-            MixerScreen(mixer, onMixerKnob, { onSettings(settings.copy(colorFx = it)) }) { onOverlay("") }
+            MixerScreen(
+                mixer, onMixerKnob, { onSettings(settings.copy(colorFx = it)) },
+                console = console,
+                chCurve = settings.chFaderCurve,
+                crossCurve = settings.crossCurve,
+                onConsole = onConsole,
+                onCurves = { ch, x -> onSettings(settings.copy(chFaderCurve = ch, crossCurve = x)) },
+            ) { onOverlay("") }
         } else if (overlay == "history") {
             HistoryScreen(historyRows, { onOverlay("") }, { onHistoryExport(historyCsv(historyRows)) }, { onHistoryExport(historyM3u8(historyRows)) })
         } else if (overlay == "tags") {

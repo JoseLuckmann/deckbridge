@@ -40,6 +40,8 @@ object SettingsStore {
     private val colorFx = intPreferencesKey("color_fx")
     private val loadLock = booleanPreferencesKey("load_lock")
     private val masterLevel = floatPreferencesKey("master_level")
+    private val chFaderCurve = intPreferencesKey("ch_fader_curve")
+    private val crossCurve = intPreferencesKey("cross_curve")
 
     fun flow(context: Context): Flow<PlayerSettings> = context.playerStore.data.map { prefs ->
         PlayerSettings(
@@ -67,6 +69,8 @@ object SettingsStore {
             cuePreset = prefs[cuePreset] ?: "drop",
             colorFx = (prefs[colorFx] ?: 5).coerceIn(0, 5),
             loadLock = prefs[loadLock] ?: true,
+            chFaderCurve = (prefs[chFaderCurve] ?: 2).coerceIn(0, 2),
+            crossCurve = (prefs[crossCurve] ?: 0).coerceIn(0, 2),
         )
     }
 
@@ -96,6 +100,8 @@ object SettingsStore {
             prefs[cuePreset] = settings.cuePreset
             prefs[colorFx] = settings.colorFx
             prefs[loadLock] = settings.loadLock
+            prefs[chFaderCurve] = settings.chFaderCurve
+            prefs[crossCurve] = settings.crossCurve
         }
     }
 }

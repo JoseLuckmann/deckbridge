@@ -145,8 +145,15 @@ class ScreenShotsTablet {
             colorFx = 1,
             levels = listOf(0.82f, 0.55f, 0.78f, 0.74f),
         )
+        // COMP no canal 1, isolador do master ligado com o grave cortado e o agudo para cima, curva de corte no crossfader.
+        val console = os.deckbridge.logic.ConsoleState(comp = listOf(0.6f, 0f), isolatorOn = true, isolator = listOf(0f, 0.5f, 0.75f))
         capture("$PRINTS/mixer.png") { activity ->
-            activity.setContentView(player(activity, catalog, WaveZoom.BARS_4, BeatFxState(), overlay = "mixer", nav = "MIXER", mixer = mixer))
+            activity.setContentView(
+                player(
+                    activity, catalog, WaveZoom.BARS_4, BeatFxState(), overlay = "mixer", nav = "MIXER", mixer = mixer,
+                    settings = PlayerSettings(chFaderCurve = 1, crossCurve = 2), console = console,
+                ),
+            )
         }
     }
 
@@ -407,6 +414,7 @@ private fun player(
     historyIds: List<Int> = emptyList(),
     mixer: os.deckbridge.logic.MixerState = os.deckbridge.logic.MixerState(),
     startPopup: String = "",
+    console: os.deckbridge.logic.ConsoleState = os.deckbridge.logic.ConsoleState(),
 ): ComposeView {
     val left = catalog.tracks.first { it.title == leftTitle }
     val right = catalog.tracks.first { it.title == rightTitle }
@@ -438,6 +446,7 @@ private fun player(
             PlayerScreen(
             mixer = mixer,
             startPopup = startPopup,
+            console = console,
                 catalog = catalog,
                 tracks = listOf(left, right),
                 clock = "21:14",

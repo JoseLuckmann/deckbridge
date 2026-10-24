@@ -550,6 +550,11 @@ public:
                       gridDeck);
     }
 
+    void setConsole(const float *values, int count) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        mixFx_.setConsole(values, count);
+    }
+
     void setGrid(int deck, float originSec, float bpm) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
@@ -619,17 +624,21 @@ public:
                 const bool gridLive = grid.playing && grid.sampleRate > 0 && gridBpm > 1.0;
                 mixFx_.setDrumPhase(deckbridge::musicalBeat(grid.lastEmitted, grid.sampleRate, gridBpm, grid.gridOriginSec),
                                     gridLive, true);
-                mixFx_.processDeck(0, al, ar);
-                mixFx_.processDeck(1, bl, br);
+                // TRIM antes do canal, como num mixer: o COMP e o EQ veem o nível já ajustado.
                 al *= trim_[0] * trimKnob_[0];
                 ar *= trim_[0] * trimKnob_[0];
                 bl *= trim_[1] * trimKnob_[1];
                 br *= trim_[1] * trimKnob_[1];
-                // Crossfader aditivo (slow fade): os dois canais ficam inteiros no centro, como num mixer.
-                const float sideA = std::min(1.f, 2.f * (1.f - cross_));
-                const float sideB = std::min(1.f, 2.f * cross_);
-                float masterL = al * sideA * decks_[0].volume + bl * sideB * decks_[1].volume;
-                float masterR = ar * sideA * decks_[0].volume + br * sideB * decks_[1].volume;
+                mixFx_.processDeck(0, al, ar);
+                mixFx_.processDeck(1, bl, br);
+                // Crossfader e faders pelas curvas escolhidas (a lenta é aditiva: os dois inteiros no centro).
+                float sideA = 1.f;
+                float sideB = 1.f;
+                mixFx_.sides(cross_, sideA, sideB);
+                const float faderA = mixFx_.faderGain(decks_[0].volume);
+                const float faderB = mixFx_.faderGain(decks_[1].volume);
+                float masterL = al * sideA * faderA + bl * sideB * faderB;
+                float masterR = ar * sideA * faderA + br * sideB * faderB;
                 mixFx_.processMaster(masterL, masterR);
                 // Ganho de saída do app (−12 a +6 dB): o DDJ-400 do mapa pinado não manda um knob de master em MIDI.
                 const float outGain = masterGain_.load(std::memory_order_relaxed);
@@ -645,13 +654,14 @@ public:
                 float phoneL = 0.f;
                 float phoneR = 0.f;
                 if (phonesOpen) {
+                    // CUE antes do fader, como num mixer: com o fader embaixo a próxima faixa se ouve no fone.
                     if (decks_[0].pfl) {
-                        phoneL += al * decks_[0].volume;
-                        phoneR += ar * decks_[0].volume;
+                        phoneL += al;
+                        phoneR += ar;
                     }
                     if (decks_[1].pfl) {
-                        phoneL += bl * decks_[1].volume;
-                        phoneR += br * decks_[1].volume;
+                        phoneL += bl;
+                        phoneR += br;
                     }
                     if (decks_[0].pfl && decks_[1].pfl) {
                         phoneL *= 0.5f;
@@ -1062,6 +1072,15 @@ Java_os_deckbridge_android_NativeEngine_nativeSetRmx(JNIEnv *env, jobject, jfloa
     const jsize count = env->GetArrayLength(values);
     jfloat *data = env->GetFloatArrayElements(values, nullptr);
     engine().setRmx(data, count);
+    env->ReleaseFloatArrayElements(values, data, JNI_ABORT);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetConsole(JNIEnv *env, jobject, jfloatArray values) {
+    if (values == nullptr) return;
+    const jsize count = env->GetArrayLength(values);
+    jfloat *data = env->GetFloatArrayElements(values, nullptr);
+    engine().setConsole(data, count);
     env->ReleaseFloatArrayElements(values, data, JNI_ABORT);
 }
 

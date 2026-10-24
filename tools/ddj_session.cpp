@@ -21,6 +21,7 @@
 //   <t>   pitch <deck> <mult>
 //   <t>   vol <deck> <0..1>
 //   <t>   cross <0..1>
+//   <t>   console <v0> <v1> ...         estado do console (ConsoleState.toArray: curvas, COMP, isolador, Send, FX FREQ)
 //   <t>   eq <deck> <low> <mid> <high>
 //   <t>   filter <deck> <0..1>
 //   <t>   beatfx <efeito> <on> <nivel0-127> <canal> <bpm> <batidas>
@@ -315,6 +316,9 @@ int main(int argc, char **argv) {
                 decks[deckOf()].pitch = a[1];
             } else if (op.name == "vol" && a.size() >= 2) {
                 decks[deckOf()].volume = static_cast<float>(a[1]);
+            } else if (op.name == "console" && !a.empty()) {
+                std::vector<float> values(a.begin(), a.end());
+                mix.setConsole(values.data(), static_cast<int>(values.size()));
             } else if (op.name == "cross" && !a.empty()) {
                 cross = std::clamp(static_cast<float>(a[0]), 0.f, 1.f);
             } else if (op.name == "eq" && a.size() >= 4) {
@@ -350,10 +354,13 @@ int main(int argc, char **argv) {
         mix.setDrumPhase(deckbridge::musicalBeat(grid.lastEmitted, kRate, grid.gridBpm, grid.gridOrigin), gridLive, true);
         mix.processDeck(0, al, ar);
         mix.processDeck(1, bl, br);
-        const float sideA = std::min(1.f, 2.f * (1.f - cross));
-        const float sideB = std::min(1.f, 2.f * cross);
-        float masterL = al * sideA * decks[0].volume + bl * sideB * decks[1].volume;
-        float masterR = ar * sideA * decks[0].volume + br * sideB * decks[1].volume;
+        float sideA = 1.f;
+        float sideB = 1.f;
+        mix.sides(cross, sideA, sideB);
+        const float faderA = mix.faderGain(decks[0].volume);
+        const float faderB = mix.faderGain(decks[1].volume);
+        float masterL = al * sideA * faderA + bl * sideB * faderB;
+        float masterR = ar * sideA * faderA + br * sideB * faderB;
         mix.processMaster(masterL, masterR);
         limit.process(masterL, masterR);
         if (!std::isfinite(masterL) || !std::isfinite(masterR)) {
