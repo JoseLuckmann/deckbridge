@@ -274,6 +274,135 @@ void fxFrequencyBands() {
     }
     check(std::fabs(db(rms(body)) - db(0.4f / std::sqrt(2.f))) < 1.f, "FX FREQUENCY: TRANS só no HI não corta o grave");
 }
+
+// Console com o Send: canal 1 manda `send1`, efeito `type`, SIZE, TIME, TONE e MASTER MIX LEVEL 1.
+deckbridge::MixerFx sendMixer(float send1, int type, float size, float time, float tone = 0.5f) {
+    deckbridge::MixerFx mix;
+    mix.setSampleRate(kRate);
+    const float console[] = {2.f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.5f, 0.5f, send1, 0.f, static_cast<float>(type), size, time, tone,
+                             1.f, 1.f, 1.f, 1.f};
+    mix.setConsole(console, 18);
+    return mix;
+}
+
+// Só o retorno do Send (o master começa vazio): um clique no canal 1 em t = 0.
+std::vector<float> sendImpulse(deckbridge::MixerFx &mix, int samples) {
+    std::vector<float> out;
+    for (int i = 0; i < samples; ++i) {
+        const float in = i == 0 ? 1.f : 0.f;
+        float l = 0.f, r = 0.f;
+        mix.addSend(in, in, 0.f, 0.f, l, r);
+        out.push_back(l);
+    }
+    return out;
+}
+
+int firstPeak(const std::vector<float> &x, float above, int from = 1) {
+    for (size_t i = from; i < x.size(); ++i) if (std::fabs(x[i]) > above) return static_cast<int>(i);
+    return -1;
+}
+
+void sendReturn() {
+    // Desligado e SEND 0: o master não muda.
+    {
+        auto mix = sendMixer(0.f, -1, 0.5f, 0.5f);
+        float l = 0.3f, r = 0.3f;
+        mix.addSend(0.5f, 0.5f, 0.5f, 0.5f, l, r);
+        check(l == 0.3f && r == 0.3f, "SEND desligado: o master sai igual");
+    }
+    // SHORT DELAY com TIME todo à esquerda: 20 ms.
+    {
+        auto mix = sendMixer(1.f, 0, 0.f, 0.f);
+        auto out = sendImpulse(mix, kRate / 2);
+        const int at = firstPeak(out, 0.2f);
+        check(std::abs(at - kRate / 50) < 30, "SHORT DELAY: TIME no mínimo repete em 20 ms (" + std::to_string(at) + " amostras)");
+    }
+    // LONG DELAY com TIME todo à direita: 1,2 s; sem feedback, uma repetição só.
+    {
+        auto mix = sendMixer(1.f, 1, 0.f, 1.f);
+        auto out = sendImpulse(mix, kRate * 3);
+        const int at = firstPeak(out, 0.2f);
+        check(std::abs(at - static_cast<int>(kRate * 1.2f)) < 30, "LONG DELAY: TIME no máximo repete em 1,2 s (" + std::to_string(at) + ")");
+        check(firstPeak(out, 0.05f, at + 200) < 0, "LONG DELAY: SIZE/FEEDBACK em zero, uma repetição só");
+    }
+    // SIZE/FEEDBACK no máximo: várias repetições, cada uma menor.
+    {
+        auto mix = sendMixer(1.f, 0, 1.f, 0.5f);
+        auto out = sendImpulse(mix, kRate);
+        const int step = static_cast<int>(kRate * (0.02f + 0.18f * 0.5f));
+        float a = 0.f, b = 0.f;
+        for (int i = step - 50; i < step + 50; ++i) a = std::max(a, std::fabs(out[i]));
+        for (int i = 3 * step - 50; i < 3 * step + 50; ++i) b = std::max(b, std::fabs(out[i]));
+        check(b > 0.2f && b < a, "SHORT DELAY com feedback: a terceira repetição existe e é menor que a primeira");
+    }
+    // DUB ECHO: as repetições escurecem (menos agudo na quarta que na primeira).
+    {
+        auto mix = sendMixer(1.f, 2, 0.9f, 0.f);
+        std::vector<float> out;
+        for (int i = 0; i < kRate * 2; ++i) {
+            const float in = i < kRate / 20 ? sine(i, 6000.f, 0.5f) + sine(i, 300.f, 0.5f) : 0.f;
+            float l = 0.f, r = 0.f;
+            mix.addSend(in, in, 0.f, 0.f, l, r);
+            out.push_back(l);
+        }
+        const int step = static_cast<int>(kRate * 0.12f);
+        auto slice = [&](int k) { return std::vector<float>(out.begin() + k * step, out.begin() + k * step + kRate / 20); };
+        const auto first = slice(1);
+        const auto fourth = slice(4);
+        const float brightFirst = toneEnergy(first, 6000.f) / std::max(1e-12f, toneEnergy(first, 300.f));
+        const float brightFourth = toneEnergy(fourth, 6000.f) / std::max(1e-12f, toneEnergy(fourth, 300.f));
+        check(brightFourth < brightFirst * 0.3f, "DUB ECHO: cada repetição mais escura (agudo/grave " + std::to_string(brightFirst) +
+                                                     " → " + std::to_string(brightFourth) + ")");
+    }
+    // REVERB: TIME maior, cauda mais longa.
+    {
+        float tails[2];
+        const float times[2] = {0.f, 1.f};
+        for (int k = 0; k < 2; ++k) {
+            auto mix = sendMixer(1.f, 3, 0.5f, times[k]);
+            std::vector<float> out;
+            for (int i = 0; i < kRate * 3; ++i) {
+                const float in = i < kRate / 10 ? sine(i, 500.f, 0.5f) : 0.f;
+                float l = 0.f, r = 0.f;
+                mix.addSend(in, in, 0.f, 0.f, l, r);
+                if (i > kRate * 2) out.push_back(l);
+            }
+            tails[k] = rms(out);
+        }
+        check(tails[1] > tails[0] * 10.f, "REVERB: TIME no máximo deixa a cauda bem mais longa (" + std::to_string(tails[0]) + " → " +
+                                               std::to_string(tails[1]) + ")");
+    }
+    // Desligar o SEND não corta a cauda do eco que já estava no laço.
+    {
+        auto mix = sendMixer(1.f, 1, 0.7f, 0.3f);
+        std::vector<float> out = sendImpulse(mix, kRate / 10);
+        const float off[] = {2.f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.5f, 0.5f, 1.f, 0.f, -1.f, 0.7f, 0.3f, 0.5f, 1.f, 1.f, 1.f, 1.f};
+        mix.setConsole(off, 18);
+        float later = 0.f;
+        for (int i = 0; i < kRate * 2; ++i) {
+            float l = 0.f, r = 0.f;
+            mix.addSend(0.f, 0.f, 0.f, 0.f, l, r);
+            later = std::max(later, std::fabs(l));
+        }
+        check(later > 0.2f, "SEND desligado no meio: a cauda do LONG DELAY termina de soar");
+    }
+    // TONE todo à esquerda: o retorno perde o agudo.
+    {
+        auto bright = sendMixer(1.f, 0, 0.f, 0.f, 0.5f);
+        auto dark = sendMixer(1.f, 0, 0.f, 0.f, 0.f);
+        std::vector<float> a, b;
+        for (int i = 0; i < kRate / 2; ++i) {
+            const float in = sine(i, 8000.f, 0.3f);
+            float l = 0.f, r = 0.f;
+            bright.addSend(in, in, 0.f, 0.f, l, r);
+            if (i > kRate / 10) a.push_back(l);
+            l = r = 0.f;
+            dark.addSend(in, in, 0.f, 0.f, l, r);
+            if (i > kRate / 10) b.push_back(l);
+        }
+        check(rms(b) < rms(a) * 0.2f, "TONE à esquerda: o passa-baixas tira o agudo do retorno");
+    }
+}
 }  // namespace
 
 int main() {
@@ -284,6 +413,7 @@ int main() {
     shimmerSparkles();
     spiralBendsWithTempo();
     fxFrequencyBands();
+    sendReturn();
     std::printf("FAILS %d\n", fails);
     return fails == 0 ? 0 : 1;
 }

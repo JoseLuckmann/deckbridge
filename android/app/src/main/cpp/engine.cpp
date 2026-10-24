@@ -639,6 +639,7 @@ public:
                 const float faderB = mixFx_.faderGain(decks_[1].volume);
                 float masterL = al * sideA * faderA + bl * sideB * faderB;
                 float masterR = ar * sideA * faderA + br * sideB * faderB;
+                mixFx_.addSend(al * faderA, ar * faderA, bl * faderB, br * faderB, masterL, masterR);
                 mixFx_.processMaster(masterL, masterR);
                 // Ganho de saída do app (−12 a +6 dB): o DDJ-400 do mapa pinado não manda um knob de master em MIDI.
                 const float outGain = masterGain_.load(std::memory_order_relaxed);

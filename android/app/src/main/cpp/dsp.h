@@ -2599,6 +2599,121 @@ struct BandSplit3 {
     }
 };
 
+// SEND interno do DJM-V10 (manual, p. 43–48): SHORT DELAY, LONG DELAY, DUB ECHO e REVERB, com SIZE/FEEDBACK, TIME
+// e TONE; o retorno vai ao master (MASTER MIX) no volume do MASTER MIX LEVEL. Faixas de tempo, feedback e o filtro
+// do TONE são nossas: o manual só diz o sentido de cada knob.
+struct SendReturn {
+    int type = -1;
+    // O último efeito ligado: com o SEND desligado, a cauda dele termina de soar.
+    int lastType = -1;
+    float size = 0.5f;
+    float time = 0.5f;
+    float tone = 0.5f;
+    int sampleRate = 48000;
+    bool ready = false;
+    DelayLine lineL;
+    DelayLine lineR;
+    Fdn tank;
+    Svf toneL;
+    Svf toneR;
+    Svf darkL;
+    Svf darkR;
+    ParamSmooth delaySm;
+    float hpL = 0.f;
+    float hpR = 0.f;
+
+    void prepare(int rate) {
+        sampleRate = rate > 0 ? rate : 48000;
+        lineL.prepare(sampleRate * 2 + 8);
+        lineR.prepare(sampleRate * 2 + 8);
+        tank.prepare(sampleRate);
+        delaySm.setMs(120.f, sampleRate);
+        const float sr = static_cast<float>(sampleRate);
+        darkL.set(3200.f, sr, 0.707f, 0);
+        darkR.set(3200.f, sr, 0.707f, 0);
+        ready = true;
+    }
+
+    void configure(int nextType, float nextSize, float nextTime, float nextTone) {
+        if (nextType != type && nextType >= 0) {
+            // Trocar de efeito limpa a cauda do anterior, como trocar o botão SEND.
+            lineL.clear();
+            lineR.clear();
+            tank.clear();
+        }
+        type = nextType;
+        if (type >= 0) lastType = type;
+        size = std::clamp(nextSize, 0.f, 1.f);
+        time = std::clamp(nextTime, 0.f, 1.f);
+        tone = std::clamp(nextTone, 0.f, 1.f);
+    }
+
+    /** Tempo do atraso em segundos pelo knob TIME. */
+    float delaySeconds() const {
+        switch (lastType) {
+            case 0: return 0.02f + 0.18f * time;    // SHORT DELAY: 20–200 ms
+            case 1: return 0.15f + 1.05f * time;    // LONG DELAY: 150–1200 ms
+            case 2: return 0.12f + 0.68f * time;    // DUB ECHO: 120–800 ms
+            default: return 0.f;
+        }
+    }
+
+    void process(float inL, float inR, float &outL, float &outR) {
+        if (!ready) prepare(sampleRate);
+        outL = 0.f;
+        outR = 0.f;
+        if (type < 0) {
+            // SEND desligado: nada entra; o que já está no laço termina de soar.
+            inL = 0.f;
+            inR = 0.f;
+        }
+        const float sr = static_cast<float>(sampleRate);
+        const int active = lastType;
+        if (active < 0) return;
+        if (active == 3) {
+            // REVERB: SIZE muda o tamanho da sala (pré-atraso e difusão), TIME o tempo de reverberação.
+            tank.setRt60(0.4f + 5.6f * time);
+            float l = 0.f;
+            float r = 0.f;
+            tank.process(inL, inR, 0.25f + 0.55f * size, l, r);
+            const float hp = 1.f - std::exp(-6.2831853f * 120.f / sr);
+            hpL += (l - hpL) * hp;
+            hpR += (r - hpR) * hp;
+            outL = l - hpL;
+            outR = r - hpR;
+        }
+        if (active <= 2) {
+            const float target = delaySeconds() * sr;
+            const float delay = std::clamp(delaySm.next(target, false), 1.f, static_cast<float>(sampleRate * 2));
+            float echoL = lineL.readAt(delay);
+            float echoR = lineR.readAt(active == 0 ? delay * 1.07f : delay);
+            // SIZE/FEEDBACK: até 0,85 nos delays; o DUB ECHO escurece e satura cada repetição.
+            const float fb = 0.85f * size;
+            if (active == 2) {
+                echoL = std::tanh(darkL.process(echoL) * 1.4f) / 1.4f;
+                echoR = std::tanh(darkR.process(echoR) * 1.4f) / 1.4f;
+            }
+            lineL.push(inL + echoL * fb);
+            lineR.push(inR + echoR * fb);
+            outL += echoL;
+            outR += echoR;
+        }
+        // TONE: centro sem filtro; à esquerda o passa-baixas desce, à direita o passa-altas sobe.
+        if (std::fabs(tone - 0.5f) > 0.02f) {
+            int mode = 0;
+            float freq = 1000.f;
+            float mix = 0.f;
+            mapFilterKnob(tone, sr, mode, freq, mix);
+            toneL.set(freq, sr, 0.8f, mode);
+            toneR.set(freq, sr, 0.8f, mode);
+            outL = outL * (1.f - mix) + toneL.process(outL) * mix;
+            outR = outR * (1.f - mix) + toneR.process(outR) * mix;
+        }
+        outL = sanitize(outL);
+        outR = sanitize(outR);
+    }
+};
+
 // Curvas do fader de canal (manual do DJM-V10, p. 30): 0 sobe forte perto do topo, 1 sobe aos poucos, 2 linear.
 // As formas exatas não são publicadas; estas são nossas, com os mesmos extremos (0 embaixo, 1 em cima).
 inline float channelFaderGain(float fader, int curve) {
@@ -2689,6 +2804,9 @@ struct MixerFx {
     // FX FREQUENCY do Beat FX (DJM-V10): LOW, MID, HI. As bandas apagadas saem sem efeito.
     bool fxBand[3]{true, true, true};
     BandSplit3 dryBandsL, dryBandsR, wetBandsL, wetBandsR;
+    SendReturn sendFx;
+    float sendLevel[2]{0.f, 0.f};
+    float returnLevel = 0.7f;
     bool rmx = false;
     int channel = 0;
     int sampleRate = 48000;
@@ -2708,6 +2826,7 @@ struct MixerFx {
         iso[0].prepare(sampleRate);
         iso[1].prepare(sampleRate);
         if (changed) {
+            sendFx.prepare(sampleRate);
             masterIso.prepare(sampleRate);
             dryBandsL.prepare(sampleRate);
             dryBandsR.prepare(sampleRate);
@@ -2832,7 +2951,22 @@ struct MixerFx {
         setComp(0, at(2, 0.f));
         setComp(1, at(3, 0.f));
         setMasterIsolator(at(4, 0.f) > 0.5f, at(5, 0.5f), at(6, 0.5f), at(7, 0.5f));
+        sendLevel[0] = std::clamp(at(8, 0.f), 0.f, 1.f);
+        sendLevel[1] = std::clamp(at(9, 0.f), 0.f, 1.f);
+        sendFx.configure(static_cast<int>(std::lround(at(10, -1.f))), at(11, 0.5f), at(12, 0.5f), at(13, 0.5f));
+        returnLevel = std::clamp(at(14, 0.7f), 0.f, 1.f);
         for (int band = 0; band < 3; ++band) fxBand[band] = at(15 + band, 1.f) > 0.5f;
+    }
+
+    // SEND: cada canal manda o som já depois do fader (antes do crossfader) ao efeito; o retorno soma no master.
+    void addSend(float aL, float aR, float bL, float bR, float &masterL, float &masterR) {
+        const float inL = aL * sendLevel[0] + bL * sendLevel[1];
+        const float inR = aR * sendLevel[0] + bR * sendLevel[1];
+        float outL = 0.f;
+        float outR = 0.f;
+        sendFx.process(inL, inR, outL, outR);
+        masterL += outL * returnLevel;
+        masterR += outR * returnLevel;
     }
 
     float faderGain(float fader) const { return channelFaderGain(fader, chCurve); }

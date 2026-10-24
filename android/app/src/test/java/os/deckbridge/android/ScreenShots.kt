@@ -145,8 +145,11 @@ class ScreenShotsTablet {
             colorFx = 1,
             levels = listOf(0.82f, 0.55f, 0.78f, 0.74f),
         )
-        // COMP no canal 1, isolador do master ligado com o grave cortado e o agudo para cima, curva de corte no crossfader.
-        val console = os.deckbridge.logic.ConsoleState(comp = listOf(0.6f, 0f), isolatorOn = true, isolator = listOf(0f, 0.5f, 0.75f))
+        // COMP no canal 1, isolador do master com o grave cortado, Send de REVERB no canal 2 e curva de corte no crossfader.
+        val console = os.deckbridge.logic.ConsoleState(
+            comp = listOf(0.6f, 0f), isolatorOn = true, isolator = listOf(0f, 0.5f, 0.75f),
+            send = listOf(0f, 0.45f), sendType = 3, sendSize = 0.6f, sendTime = 0.4f, sendTone = 0.62f,
+        )
         capture("$PRINTS/mixer.png") { activity ->
             activity.setContentView(
                 player(

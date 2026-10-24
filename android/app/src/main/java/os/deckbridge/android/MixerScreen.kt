@@ -28,6 +28,7 @@ import os.deckbridge.logic.CH_FADER_CURVES
 import os.deckbridge.logic.COLOR_FX_NAMES
 import os.deckbridge.logic.CROSS_CURVES
 import os.deckbridge.logic.ConsoleState
+import os.deckbridge.logic.SEND_TYPES
 import os.deckbridge.logic.EQ_BAND_NAMES
 import os.deckbridge.logic.MixerState
 import os.deckbridge.logic.PerformanceAction
@@ -79,6 +80,13 @@ fun MixerScreen(
                 UtilityButton(name, { onCurves(chCurve, index) }, selected = crossCurve == index, modifier = Modifier.weight(1f))
             }
         }
+        // SEND (DJM-V10, p. 43–48): o efeito interno escolhido; tocar de novo desliga. O retorno vai ao master.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextInk("SEND", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted), modifier = Modifier.width(84.dp))
+            SEND_TYPES.forEachIndexed { index, name ->
+                UtilityButton(name, { onConsole(console.copy(sendType = if (console.sendType == index) -1 else index)) }, selected = console.sendType == index, modifier = Modifier.weight(1f))
+            }
+        }
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Channel(0, mixer, console, onKnob, onConsole, Modifier.weight(1f))
             Center(mixer, console, onKnob, onConsole, Modifier.width(260.dp))
@@ -116,6 +124,10 @@ private fun Channel(deck: Int, mixer: MixerState, console: ConsoleState, onKnob:
             Bar("FILTER", filter, filterLabel(mixer.filter[deck]), true, Modifier.weight(1f)) {
                 onKnob(PerformanceAction(deck, PerformanceAction.Kind.FILTER, slider = it.toDouble()))
             }
+            val send = console.send[deck]
+            Bar("SEND", send, if (send < 0.01f) "OFF" else "%d%%".format((send * 100).toInt()), false, Modifier.weight(1f)) {
+                onConsole(console.copy(send = console.send.mapIndexed { index, value -> if (index == deck) it else value }))
+            }
             Bar("FADER", mixer.volume[deck], "%d%%".format((mixer.volume[deck] * 100).toInt()), false, Modifier.weight(1f)) {
                 onKnob(PerformanceAction(deck, PerformanceAction.Kind.VOLUME, slider = it.toDouble()))
             }
@@ -141,6 +153,20 @@ private fun Center(mixer: MixerState, console: ConsoleState, onKnob: (Performanc
                 }
             }
         }
+        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Bar(if (console.sendType == 3) "SIZE" else "FEEDBACK", console.sendSize, "%d".format((console.sendSize * 10).toInt()), false, Modifier.weight(1f)) {
+                onConsole(console.copy(sendSize = it))
+            }
+            Bar("TIME", console.sendTime, sendTimeLabel(console.sendType, console.sendTime), false, Modifier.weight(1f)) {
+                onConsole(console.copy(sendTime = it))
+            }
+            Bar("TONE", console.sendTone, filterLabel((console.sendTone * 127).toInt()), true, Modifier.weight(1f)) {
+                onConsole(console.copy(sendTone = it))
+            }
+            Bar("RETURN", console.sendReturn, "%d%%".format((console.sendReturn * 100).toInt()), false, Modifier.weight(1f)) {
+                onConsole(console.copy(sendReturn = it))
+            }
+        }
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Bar("HEAD MIX", mixer.headMix, headMixLabel(mixer.headMix), false, Modifier.weight(1f)) {
                 onKnob(PerformanceAction(-1, PerformanceAction.Kind.HEAD_MIX, slider = it.toDouble()))
@@ -161,6 +187,15 @@ private fun Center(mixer: MixerState, console: ConsoleState, onKnob: (Performanc
             drawRect(Color(StagePalette.accentBlue), Offset((x - 5f).coerceAtLeast(0f), 0f), Size(10f, size.height))
         }
     }
+}
+
+/** TIME do Send em ms (mesmas faixas de `SendReturn::delaySeconds`) ou o tempo de reverberação. */
+private fun sendTimeLabel(type: Int, time: Float): String = when (type) {
+    0 -> "%d ms".format((20 + 180 * time).toInt())
+    1 -> "%d ms".format((150 + 1050 * time).toInt())
+    2 -> "%d ms".format((120 + 680 * time).toInt())
+    3 -> "%.1f s".format(0.4f + 5.6f * time)
+    else -> "—"
 }
 
 private fun filterLabel(value: Int): String = when {

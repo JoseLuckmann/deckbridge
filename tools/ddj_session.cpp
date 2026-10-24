@@ -361,6 +361,7 @@ int main(int argc, char **argv) {
         const float faderB = mix.faderGain(decks[1].volume);
         float masterL = al * sideA * faderA + bl * sideB * faderB;
         float masterR = ar * sideA * faderA + br * sideB * faderB;
+        mix.addSend(al * faderA, ar * faderA, bl * faderB, br * faderB, masterL, masterR);
         mix.processMaster(masterL, masterR);
         limit.process(masterL, masterR);
         if (!std::isfinite(masterL) || !std::isfinite(masterR)) {
