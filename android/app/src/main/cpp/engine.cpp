@@ -19,7 +19,39 @@
 #include <thread>
 #include <vector>
 
+#if defined(__x86_64__) || defined(__i386__)
+#include <xmmintrin.h>
+#endif
+
 namespace {
+
+// Liga flush-to-zero (e denormals-are-zero / default-NaN onde existe) na thread de áudio pelo tempo do callback.
+// Caudas de reverb e eco decaindo em silêncio viram subnormais; no ARMv6/VFP11 cada operação com subnormal cai no
+// código de suporte do kernel (muito lento), no x86 custa dezenas de ciclos. Restaura o estado ao sair.
+struct DenormalGuard {
+#if defined(__aarch64__)
+    uint64_t saved = 0;
+    DenormalGuard() {
+        asm volatile("mrs %0, fpcr" : "=r"(saved));
+        asm volatile("msr fpcr, %0" : : "r"(saved | (1ull << 24)));
+    }
+    ~DenormalGuard() { asm volatile("msr fpcr, %0" : : "r"(saved)); }
+#elif defined(__arm__) && defined(__ARM_FP)
+    uint32_t saved = 0;
+    DenormalGuard() {
+        asm volatile("vmrs %0, fpscr" : "=r"(saved));
+        asm volatile("vmsr fpscr, %0" : : "r"(saved | (1u << 24) | (1u << 25)));
+    }
+    ~DenormalGuard() { asm volatile("vmsr fpscr, %0" : : "r"(saved)); }
+#elif defined(__x86_64__) || defined(__i386__)
+    unsigned saved = 0;
+    DenormalGuard() {
+        saved = _mm_getcsr();
+        _mm_setcsr(saved | 0x8040u);
+    }
+    ~DenormalGuard() { _mm_setcsr(saved); }
+#endif
+};
 
 // Tudo que chega do Kotlin passa por aqui: um NaN ou um valor enorme que viesse de uma conta errada de lá entraria nos
 // filtros e nos atrasos e deixaria o áudio morto (ou com estouro de índice) até reiniciar o app. Não finito vira o
@@ -633,6 +665,7 @@ public:
     /** Conta uma falha quando o bloco demora mais que 90% do tempo que ele toca (o próximo bloco chegaria atrasado). */
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) override {
         const auto began = std::chrono::steady_clock::now();
+        DenormalGuard denormals;
         const auto result = processAudio(audioStream, audioData, numFrames);
         const int rate = audioStream->getSampleRate();
         if (rate > 0 && numFrames > 0) {

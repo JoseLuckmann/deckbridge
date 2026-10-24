@@ -415,6 +415,56 @@ void beatFxNew() {
     check(db(held) > -50.0, "Helix: knob a direita trava o som no laco");
 }
 
+// Beat FX dorme quando está desligado e a cauda já sumiu; ao religar, o eco tem de voltar com a força de um efeito novo.
+void beatFxSleepsAndWakes() {
+    deckbridge::BeatInsert fx;
+    fx.configure(1, true, 0.8f, 120.f, 0.5f, kRate);
+    for (long i = 0; i < kRate; ++i) {
+        float l = tonePulse(i, 120.0);
+        float r = l;
+        fx.process(l, r);
+    }
+    fx.configure(1, false, 0.8f, 120.f, 0.5f, kRate);
+    bool slept = false;
+    for (long i = 0; i < kRate * 12; ++i) {
+        float l = 0.f;
+        float r = 0.f;
+        fx.process(l, r);
+        slept = slept || fx.sleeping;
+    }
+    check(slept, "Beat FX desligado e com a cauda zerada dorme");
+    deckbridge::BeatInsert fresh;
+    fresh.configure(1, true, 0.8f, 120.f, 0.5f, kRate);
+    fx.configure(1, true, 0.8f, 120.f, 0.5f, kRate);
+    std::vector<float> a;
+    std::vector<float> b;
+    bool finite = true;
+    for (long i = 0; i < kRate * 2; ++i) {
+        float l = i < kRate / 4 ? tonePulse(i, 120.0) : 0.f;
+        float r = l;
+        float fl = l;
+        float fr = r;
+        fx.process(l, r);
+        fresh.process(fl, fr);
+        finite = finite && std::isfinite(l) && std::isfinite(r);
+        a.push_back(l);
+        b.push_back(fl);
+    }
+    double diff = 0.0;
+    double ref = 0.0;
+    for (size_t i = 0; i < a.size(); ++i) {
+        diff += (a[i] - b[i]) * (a[i] - b[i]);
+        ref += b[i] * b[i];
+    }
+    const double rel = 10.0 * std::log10((diff + 1e-30) / (ref + 1e-30));
+    const double tail = rms(a, static_cast<size_t>(kRate * 0.3), static_cast<size_t>(kRate * 1.2));
+    std::printf("INFO Beat FX religado depois de dormir: %.1f dB do efeito novo, cauda %.1f dB\n", rel, db(tail));
+    const double freshTail = rms(b, static_cast<size_t>(kRate * 0.3), static_cast<size_t>(kRate * 1.2));
+    // O eco volta com a força de um efeito novo. A diferença amostra a amostra (~−22 dB) vem dos alisadores de
+    // parâmetro e já era a mesma antes de o efeito poder dormir (medido com o dsp.h anterior).
+    check(finite && db(tail) > -40.0 && std::fabs(db(tail) - db(freshTail)) < 1.5, "Beat FX acordado: o eco volta igual");
+}
+
 }  // namespace
 
 // Balanço do Roll: esquerda = original, direita = roll; o padrão 0,5 deixa o roll dominar.
@@ -588,6 +638,7 @@ int main() {
     kickRiser();
     colorKinds();
     beatFxNew();
+    beatFxSleepsAndWakes();
     std::printf("FAILS %d\n", failures);
     return failures == 0 ? 0 : 1;
 }
