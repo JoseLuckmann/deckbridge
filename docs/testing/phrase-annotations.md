@@ -66,3 +66,43 @@ O que isto não fecha:
 - Ocean não tem break: a descida do meio fica perto de 18% e não foi marcada.
 - Um seno de 1 kHz a −20 dBFS (amplitude 0,1) mede cerca de −23,7 LUFS, com tolerância de 2 LU no teste. O trim é (alvo − LUFS), preso a ±12 dB. O alvo de fábrica é −10 LUFS. Não se leu auto gain do export: a linha de conteúdo que este parser conhece não tem um campo publicado para isso. O limiter do master segura o pico em 0,98. Um par já baixo passa intacto.
 - Os cues automáticos (A no primeiro downbeat, B no drop, C no break, D no outro; o preset INTRO troca a ordem) ficam na análise do app. O USB não é escrito.
+
+
+## Frases no estilo do rekordbox — 24/10/2026
+
+O detector de quatro pontos (um build, um drop, um break, um outro) foi trocado por uma análise de frases inteira (`PhraseAnalysis.kt`). Ela usa o humor "high" do rekordbox: Intro, Up, Down, Chorus e Outro, e marca fill-in no fim da frase.
+
+- **Nomes:** os rótulos e a ideia (frases de 8 a 32 compassos, presas à grade) vêm da descrição pública do rekordbox. O algoritmo é nosso; o do rekordbox não é publicado.
+- **Medidas por compasso:** presas à primeira batida 1 da grade, não a 0 s. São o grave, o médio e o agudo em dB e a pulsação do grave (pico contra mediana do envelope de 5 ms).
+  - A medida antiga do bumbo, "ataque na batida", escorregava com a grade: um BPM 0,1 fora fazia a janela passar ao lado do bumbo, num ciclo de cerca de 64 compassos.
+- **Cortes:** programação dinâmica em blocos de 4 compassos, com frases de 8, 16, 24 ou 32 compassos (4 só nas pontas). Cada corte pode andar até 2 compassos para o maior degrau do grave.
+- **Rótulos:** pelo grave de cada frase contra o patamar da faixa (o grave das frases mais fortes):
+  - **Chorus:** no patamar, a até 2 dB dele.
+  - **Down:** 3,5 dB ou mais abaixo. Isso segue a regra das marcas acima ("cerca de metade"). Entre dois Chorus, uma frase com o agudo 6 dB abaixo também é Down.
+  - **Up:** no meio.
+  - **Intro e Outro:** antes do primeiro Chorus é Intro, e o trecho logo antes dele que já subiu é Up. Depois do último Chorus é Outro, e a faixa fecha com Outro.
+- **Pontos de estrutura e cues automáticos:** saem das frases.
+  - **build:** o Up antes do primeiro Chorus.
+  - **drop:** o primeiro Chorus.
+  - **break:** o primeiro Down depois dele.
+  - **outro:** o Outro.
+- **Cache:** a versão do cache da pasta passou a "0140", então as faixas são analisadas de novo.
+
+### Resultado no mesmo corpus e nas mesmas marcas
+
+| | 1 compasso | 4 compassos |
+|---|---|---|
+| Detector antigo, medido hoje (grade 0.14) | 13/26 | — |
+| Detector antigo, medido em 22/10 | 16/26 | 20/26 |
+| Frases (24/10) | 17/26 (0,65) | 22/26 (0,85) |
+
+O teste compara a k-ésima marca de break com o k-ésimo Down depois do primeiro Chorus, porque agora há vários. Os pisos do `PhraseHitRateTest` subiram para 17 e 22. O corpus foi baixado de novo com `tools/fetch_real_corpus.py` (SHA-256 conferidos) e convertido para WAV mono com ffmpeg.
+
+`PhraseAnalysisTest` cobre uma faixa sintética de 128 BPM com Intro 16, Up 8, Chorus 32, Down 16, Chorus 32 e Outro 16 compassos. As seções saem nessa ordem, cada início a até 1 compasso, sem o corpus.
+
+O que continua errado:
+- **Ecosystem:** o drop sai 3 compassos depois do anotado. O break de 175 s e o outro de 183 s viram um Outro só.
+- **At The Count:** o break de 152 s não cai abaixo de −3,5 dB no grave e fica Up.
+- **Caught In The Beat:** o primeiro break (66 s) fica dentro de um Chorus longo; o segundo (132 s) acerta.
+- **Wrist watch:** o outro sai 5 compassos antes do anotado.
+- **Faixas da sessão:** as frases das seis faixas do usuário (fora do git) foram listadas, mas ninguém conferiu de ouvido. Os humores "mid" e "low" (Verse, Bridge) não existem aqui.

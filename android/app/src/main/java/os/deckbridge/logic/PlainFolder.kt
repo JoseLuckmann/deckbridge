@@ -33,7 +33,7 @@ fun plainAudioFiles(root: File, limit: Int = 300): List<File> {
     return out
 }
 
-private const val PLAIN_ALGO = "0132"
+private const val PLAIN_ALGO = "0140"
 
 fun analyzePlainPcm(samples: FloatArray, rate: Int): Pair<TrackRead, PcmWaves> {
     return analyzeTrack(samples, rate) to wavesFromPcm(samples, rate)

@@ -18,6 +18,7 @@ class PhraseHitRateTest {
         var total = 0
         var withinOne = 0
         var withinFour = 0
+        val report = StringBuilder()
         annotations.forEach { (stem, rows) ->
             val file = File(dir, "$stem.wav")
             assumeTrue(file.isFile)
@@ -25,22 +26,31 @@ class PhraseHitRateTest {
             assumeTrue(pcm != null)
             val read = analyzeTrack(pcm!!.samples, pcm.rate)
             val bar = 240.0 / read.bpm
+            report.append("$stem  %.2f BPM\n".format(read.bpm))
+            report.append("  " + read.phrases.joinToString("  ") { "%s@%.1f".format(it.kind, it.startMs / 1000.0) } + "\n")
+            // A k-ésima marca de break vai contra o k-ésimo Down depois do primeiro Chorus (o detector agora tem vários).
+            val chorusMs = read.phrases.firstOrNull { it.kind == "Chorus" }?.startMs ?: -1
+            val downs = read.phrases.filter { it.kind == "Down" && it.startMs > chorusMs }.map { it.startMs / 1000.0 }
+            var breakIndex = 0
             rows.forEach { (kind, sec) ->
                 val got = when (kind) {
                     "build" -> read.structure.buildSec
                     "drop" -> read.structure.dropSec
-                    "break" -> read.structure.breakSec
+                    "break" -> downs.getOrNull(breakIndex++) ?: read.structure.breakSec
                     else -> read.structure.outroSec
                 }
                 val delta = kotlin.math.abs(got - sec) / bar
                 total += 1
                 if (delta <= 1.0 + 1e-6) withinOne += 1
                 if (delta <= 4.0 + 1e-6) withinFour += 1
+                report.append("  %-6s anotado %7.2f  detector %7.2f  %5.1f compassos\n".format(kind, sec, got, delta))
             }
         }
+        report.append("1 compasso: $withinOne/$total   4 compassos: $withinFour/$total\n")
+        File("build/phrase-report.txt").writeText(report.toString())
         assertEquals(26, total)
-        assertTrue("1 compasso: $withinOne/26", withinOne >= 16)
-        assertTrue("4 compassos: $withinFour/26", withinFour >= 20)
+        assertTrue("1 compasso: $withinOne/26", withinOne >= 17)
+        assertTrue("4 compassos: $withinFour/26", withinFour >= 22)
     }
 
     private val annotations = mapOf(

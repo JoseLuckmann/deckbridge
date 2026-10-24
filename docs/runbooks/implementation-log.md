@@ -509,3 +509,29 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - `SET_LEVELS` corrige os medidores que liam os picos do set de seis faixas.
 - Evidência: `DdjSurfaceTest` (faders, tempo de 14 bits, prato e toque, modos de pad, log); `docs/ui/ddj-virtual-rmx.png`; vídeo de 3,4 min fora do git.
 - Risco: o painel não é captura da DDJ-400 real; ele mostra o que o roteiro manda e o que o app acenderia (`BLOCKED_HARDWARE` para conferir com o equipamento).
+
+## 2026-10-24 — Recursos de pista e efeitos do DJM-V10, Touch Preview e frases
+
+- **Console:**
+  - Curvas do fader de canal (topo, gradual, linear) e do crossfader (lenta, média, corte).
+  - COMP de um knob por canal e isolador do master (−∞ a +9 dB).
+  - O TRIM passou para antes do canal, e o CUE do fone para antes do fader. Antes, com o fader embaixo, não se ouvia a próxima faixa no fone.
+  - Tudo segue o manual do DJM-V10 (p. 27–33); as curvas e os valores são nossos.
+- **Beat FX:**
+  - DELAY: uma repetição.
+  - SHIMMER: cauda uma oitava acima.
+  - FX FREQUENCY LOW/MID/HI: bandas LR4 em 200 Hz e 2 kHz.
+  - Spiral e Helix: o atraso desliza em 0,45 s, e o tom das repetições muda com o tempo.
+- **Send/Return interno:**
+  - Efeitos SHORT DELAY, LONG DELAY, DUB ECHO e REVERB, com SIZE/FEEDBACK, TIME, TONE e MASTER MIX LEVEL.
+  - O envio sai depois do fader de canal; essa escolha é nossa.
+- **Touch Preview:** tocar na onda da lista toca 30 s só no fone. Só o trecho é decodificado.
+- **Frases no estilo rekordbox:** ver `docs/testing/phrase-annotations.md`. Faz 17/26 a 1 compasso e 22/26 a 4 no corpus anotado; antes eram 13/26.
+- **Evidência:**
+  - `tools/console_test.cpp`: curvas, COMP, isolador, DELAY, SHIMMER, Spiral, FX FREQUENCY, Send e pré-escuta.
+  - `ConsoleTest`, `WavSegmentTest`, `PhraseAnalysisTest`, `PhraseHitRateTest`.
+  - Suíte completa: 131 testes, 0 falhas.
+  - Prints: `docs/ui/mixer-console.png`, `docs/ui/browse-preview.png`.
+- **Não verificado:**
+  - Nada foi ouvido na DDJ-400 nem no tablet (`BLOCKED_HARDWARE`), inclusive o fone da pré-escuta.
+  - As curvas, o COMP e os tempos do Send não foram medidos num DJM.

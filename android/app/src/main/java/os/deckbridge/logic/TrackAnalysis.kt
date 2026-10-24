@@ -67,7 +67,10 @@ fun analyzeTrack(samples: FloatArray, rate: Int): TrackRead {
     val fullError = fullBandGridError(full.values, full.rate, beats)
     val key = detectKey(samples, rate)
     val duration = samples.size.toDouble() / rate
-    val sections = detectSections(structureEnv.low, structureEnv.high, structureEnv.windowSec, bpmPick.bpm, duration)
+    // Frases presas à grade (primeira batida 1); sem grade, o detector antigo por janelas.
+    val downbeat = beats.firstOrNull { it.beatInBar == 1 }?.timeMs?.div(1000.0)
+    val sections = (if (downbeat != null) phraseSections(samples, rate, bpmPick.bpm, downbeat) else null)
+        ?: detectSections(structureEnv.low, structureEnv.high, structureEnv.windowSec, bpmPick.bpm, duration)
     val loudness = integratedLufs(samples, rate)
     val energy = energyLevel(samples)
     val elapsed = (System.nanoTime() - started) / 1_000_000
