@@ -145,6 +145,23 @@ private data class PackedPlain(
     val analysis: RbAnalysis,
 )
 
+/** O cache da pasta guarda grade, tom e prévia; o detalhe de 150 colunas/s fica de fora (centenas de kB por faixa). */
+fun RbAnalysis.lacksDetail(): Boolean = rgbDetail == null && bandDetail == null && blueDetail.isEmpty()
+
+/** Repõe o detalhe a partir do PCM já decodificado para tocar, sem nova leitura da pasta. */
+fun RbAnalysis.withDetail(waves: PcmWaves): RbAnalysis = copy(
+    rgbDetail = rgbDetail ?: waves.rgbDetail,
+    rgbPreview = rgbPreview ?: waves.rgbPreview,
+    bandDetail = bandDetail ?: waves.bandDetail,
+    bandPreview = bandPreview ?: waves.bandPreview,
+    bands = bands ?: waves.bandPreview,
+    blueDetail = if (blueDetail.isEmpty()) waves.blueDetail else blueDetail,
+    bluePreview = if (bluePreview.isEmpty()) waves.bluePreview else bluePreview,
+    waveform = if (waveform.isEmpty()) waves.bluePreview else waveform,
+    bandApp = true,
+    blueApp = true,
+)
+
 private fun packed(read: TrackRead, waves: PcmWaves, rate: Int, cuePreset: String): PackedPlain {
     val seconds = if (waves.rgbDetail.perSecond > 0.0) {
         (waves.rgbDetail.columns / waves.rgbDetail.perSecond).toInt().coerceAtLeast(1)

@@ -80,6 +80,7 @@ struct Deck {
     double slipAnchor = -1.0;
     bool holdingCue = false;
     deckbridge::Wsola stretch;
+    deckbridge::ScratchFollower scratch;
     double expectedPos = -1.0;
     int shiftCached = 999;
     double shiftFactor = 1.0;
@@ -95,9 +96,20 @@ struct Deck {
     void read(int outputRate, float &leftOut, float &rightOut) {
         leftOut = 0.f;
         rightOut = 0.f;
-        if (!playing || left.empty() || sampleRate <= 0 || outputRate <= 0) return;
+        if ((!playing && !scratch.active) || left.empty() || sampleRate <= 0 || outputRate <= 0) return;
         if (position < 0.0) position = 0.0;
         wrapLoop();
+        if (scratch.active) {
+            // Prato tocado: leitura direta na posição que o prato manda, sem Master Tempo.
+            const int total = static_cast<int>(left.size());
+            leftOut = deckbridge::readInterp(left.data(), total, position);
+            rightOut = deckbridge::readInterp(right.data(), total, position);
+            position = std::min(std::max(0.0, position + scratch.step(outputRate)), static_cast<double>(total - 2));
+            lastEmitted = position;
+            expectedPos = position;
+            stretch.reset();
+            return;
+        }
         const int frames = static_cast<int>(left.size());
         const int index = static_cast<int>(position);
         if (index >= frames) {
@@ -381,6 +393,18 @@ public:
     void seekSeconds(int deck, double seconds) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         placeSeconds(deck, seconds, false);
+    }
+
+    void scratchTouch(int deck, bool on) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1) return;
+        decks_[deck].scratch.touch(on);
+    }
+
+    void scratchMove(int deck, double seconds) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
+        decks_[deck].scratch.move(seconds * decks_[deck].sampleRate);
     }
 
     void nudge(int deck, double seconds) {
@@ -935,6 +959,16 @@ Java_os_deckbridge_android_NativeEngine_nativePosition(JNIEnv *, jobject, jint d
 extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeSeek(JNIEnv *, jobject, jint deck, jfloat seconds) {
     engine().seekSeconds(deck, seconds);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeScratchTouch(JNIEnv *, jobject, jint deck, jboolean on) {
+    engine().scratchTouch(deck, on == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeScratchMove(JNIEnv *, jobject, jint deck, jfloat seconds) {
+    engine().scratchMove(deck, seconds);
 }
 
 extern "C" JNIEXPORT void JNICALL

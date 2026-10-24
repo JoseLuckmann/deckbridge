@@ -436,7 +436,35 @@ void rollBalanceCurve() {
           "roll: a mistura vai do ao vivo ao enrolado");
 }
 
+// Scratch: o deslocamento total é a soma dos giros, para a frente e para trás, e a velocidade troca de sinal.
+void scratchFollows() {
+    deckbridge::ScratchFollower follower;
+    follower.touch(true);
+    double position = 0.0;
+    double minRate = 0.0;
+    double maxRate = 0.0;
+    const int rate = 48000;
+    for (int stroke = 0; stroke < 4; ++stroke) {
+        const double dir = stroke % 2 == 0 ? 1.0 : -1.0;
+        for (int message = 0; message < 12; ++message) {
+            follower.move(dir * 0.015 * rate);
+            for (int i = 0; i < rate / 100; ++i) {
+                const double step = follower.step(rate);
+                position += step;
+                minRate = std::min(minRate, step);
+                maxRate = std::max(maxRate, step);
+            }
+        }
+    }
+    for (int i = 0; i < rate / 5; ++i) position += follower.step(rate);
+    check(std::fabs(position) < 1.0, "scratch: dois vai e vem voltam ao ponto de partida");
+    check(maxRate > 1.0 && minRate < -1.0, "scratch: a velocidade passa de 1x para a frente e para trás");
+    follower.touch(false);
+    check(follower.step(rate) == 0.0, "scratch: solto, o prato não move a faixa");
+}
+
 int main() {
+    scratchFollows();
     rollBalanceCurve();
     spiralRises();
     for (int scene : {0, 2, 3, 4, 5, 7}) {

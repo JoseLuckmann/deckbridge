@@ -85,4 +85,15 @@ class ShowControlsTest {
         val beatsFromStart = (position - start) / beat
         assertEquals(0.0, beatsFromStart - Math.round(beatsFromStart), 1e-6)
     }
+
+    @Test
+    fun touchingTheJogTopStartsAndStopsTheScratch() {
+        val touch = action(144, 54, 127)!!
+        assertEquals(PerformanceAction.Kind.JOG_TOUCH, touch.kind)
+        assertEquals(1, touch.hotIndex)
+        assertEquals(0, action(145, 54, 0)!!.hotIndex)
+        assertEquals(1, action(145, 54, 0)!!.deck)
+        // O giro do topo com o modo vinil chega como jogTurn (nota 34).
+        assertEquals(PerformanceAction.Kind.JOG, action(176, 34, 67)!!.kind)
+    }
 }

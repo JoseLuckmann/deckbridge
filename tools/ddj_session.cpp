@@ -11,6 +11,8 @@
 //   <t>   load <deck> <arquivo>       troca a faixa do deck (índice na linha de comando, modo set)
 //   <t>   gridat <deck> <origem> <bpm>
 //   <t>   trim <deck> <linear>
+//   <t>   scratch <deck> <0|1>         prato tocado (scratch) ou solto
+//   <t>   scratchmove <deck> <seg>     giro do prato durante o scratch
 //   <t>   colorfx <deck> <tipo>
 //   <t>   pos <deck> <seg>            posição inicial do deck
 //   <t>   play <deck> <0|1>
@@ -59,12 +61,22 @@ struct Deck {
     double loopStart = -1.0;
     double loopEnd = -1.0;
     float trim = 1.f;  // ganho automático por faixa (o trim da análise de loudness)
+    deckbridge::ScratchFollower scratch;
 
     void read(double rateMul, float &l, float &r) {
         l = r = 0.f;
         if (leftData == nullptr || rightData == nullptr) return;
         const int frames = static_cast<int>(leftData->size());
-        if (!playing || frames < 4) return;
+        if ((!playing && !scratch.active) || frames < 4) return;
+        if (scratch.active) {
+            // Prato tocado: o mesmo seguidor do motor do app (dsp.h).
+            if (position < 0.0) position = 0.0;
+            lastEmitted = position;
+            l = deckbridge::readInterp(leftData->data(), frames, position) * trim;
+            r = deckbridge::readInterp(rightData->data(), frames, position) * trim;
+            position = std::min(std::max(0.0, position + scratch.step(kRate)), static_cast<double>(frames - 2));
+            return;
+        }
         if (position < 0.0) position = 0.0;
         if (position >= frames - 2) {
             playing = false;
@@ -283,6 +295,10 @@ int main(int argc, char **argv) {
                     target.pitch = 1.0;
                     target.loopStart = target.loopEnd = -1.0;
                 }
+            } else if (op.name == "scratch" && a.size() >= 2) {
+                decks[deckOf()].scratch.touch(a[1] > 0.5);
+            } else if (op.name == "scratchmove" && a.size() >= 2) {
+                decks[deckOf()].scratch.move(a[1] * kRate);
             } else if (op.name == "trim" && a.size() >= 2) {
                 decks[deckOf()].trim = static_cast<float>(a[1]);
             } else if (op.name == "gridat" && a.size() >= 3) {
@@ -291,8 +307,10 @@ int main(int argc, char **argv) {
             } else if (op.name == "colorfx" && a.size() >= 2) {
                 mix.setColorKind(deckOf(), static_cast<int>(a[1]));
             } else if (op.name == "loop" && a.size() >= 3) {
-                decks[deckOf()].loopStart = a[1] * kRate;
-                decks[deckOf()].loopEnd = a[2] > a[1] ? a[2] * kRate : -1.0;
+                // "loop d -1 -1" sai do loop: sem isso o loop virava [-1 s, -1 amostra) e o deck calava.
+                const bool on = a[1] >= 0.0 && a[2] > a[1];
+                decks[deckOf()].loopStart = on ? a[1] * kRate : -1.0;
+                decks[deckOf()].loopEnd = on ? a[2] * kRate : -1.0;
             } else if (op.name == "pitch" && a.size() >= 2) {
                 decks[deckOf()].pitch = a[1];
             } else if (op.name == "vol" && a.size() >= 2) {

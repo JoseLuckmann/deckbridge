@@ -551,6 +551,39 @@ struct GrainShift {
     }
 };
 
+// Scratch: com o prato tocado, a faixa para de andar sozinha e segue o prato. Cada passo do prato soma um trecho
+// (em amostras da faixa) a percorrer; a velocidade vai até esse trecho em cerca de 10 ms, com um polo de 3 ms, e pode
+// ser negativa (para trás). Soltar o prato zera o que falta. O deslocamento total é a soma dos passos.
+struct ScratchFollower {
+    bool active = false;
+    double pending = 0.0;
+    double rate = 0.0;
+
+    void touch(bool on) {
+        active = on;
+        if (!on) {
+            pending = 0.0;
+            rate = 0.0;
+        }
+    }
+
+    void move(double frames) {
+        if (active) pending += frames;
+    }
+
+    // Quanto andar nesta amostra de saída (em amostras da faixa, com sinal).
+    double step(int outputRate) {
+        if (!active || outputRate <= 0) return 0.0;
+        const double target = pending / (0.010 * outputRate);
+        const double coef = 1.0 - std::exp(-1.0 / (0.003 * outputRate));
+        rate += (target - rate) * coef;
+        if ((pending >= 0.0 && rate > pending) || (pending <= 0.0 && rate < pending)) rate = pending;
+        pending -= rate;
+        if (std::fabs(pending) < 1e-6 && std::fabs(rate) < 1e-6) rate = 0.0;
+        return rate;
+    }
+};
+
 // Master Tempo por WSOLA (sobreposição e soma com busca de correlação), lendo direto da faixa.
 // A faixa tem acesso aleatório, então não há latência: o grão que começa na posição de análise `position` é
 // emendado ao anterior no deslocamento (±kSearch amostras) que melhor continua a forma de onda. A taxa de

@@ -11,7 +11,7 @@ data class PerformanceAction(
         BROWSE_MOVE, BROWSE_ENTER, BROWSE_BACK, LOAD,
         BEAT_FX, FILTER, QUANTIZE, SYNC, MASTER,
         BEAT_JUMP, BEAT_JUMP_PAGE, LOOP_IN, LOOP_OUT, RELOOP, LOOP_SCALE, BEAT_LOOP, RMX,
-        EQ, TRIM, HEAD_MIX, HEAD_GAIN, PFL, START, REVERSE_HOLD, LOOP_ADJUST, MASTER_LEVEL,
+        EQ, TRIM, HEAD_MIX, HEAD_GAIN, PFL, START, REVERSE_HOLD, LOOP_ADJUST, MASTER_LEVEL, JOG_TOUCH,
     }
 }
 
@@ -86,6 +86,8 @@ fun performanceAction(hit: ControlHit, value: Int): PerformanceAction? {
         hit.key == "pregain" && deck >= 0 && hit.midino < 32 -> PerformanceAction(deck, PerformanceAction.Kind.TRIM, slider = slider)
         hit.group == "[Master]" && hit.key == "headMix" && hit.midino < 32 -> PerformanceAction(-1, PerformanceAction.Kind.HEAD_MIX, slider = slider)
         hit.group == "[Master]" && hit.key == "headGain" && hit.midino < 32 -> PerformanceAction(-1, PerformanceAction.Kind.HEAD_GAIN, slider = slider)
+        // Toque no topo do prato: 127 tocado, 0 solto (no modo vinil, tocado é scratch).
+        hit.key == "PioneerDDJ400.jogTouch" && deck >= 0 -> PerformanceAction(deck, PerformanceAction.Kind.JOG_TOUCH, hotIndex = if (value > 0) 1 else 0)
         hit.key == "PioneerDDJ400.jogTurn" && deck >= 0 -> {
             PerformanceAction(deck, PerformanceAction.Kind.JOG, slider = (value - 64) * JOG_BEND_SCALE)
         }

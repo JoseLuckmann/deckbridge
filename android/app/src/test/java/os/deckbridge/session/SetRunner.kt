@@ -21,9 +21,15 @@ object SetAssets {
  * Roda o set inteiro em passos de 20 ms. O DJ automático planeja quando a agenda esvazia; os quadros saem em
  * `fps` (múltiplo exato do passo). Mesma sequência a cada execução: o ops.tsv e os quadros vêm da mesma simulação.
  */
-fun runSet(catalog: RbCatalog, fps: Int, stopAt: Double = Double.MAX_VALUE, onFrame: (SetModel, Int) -> Unit = { _, _ -> }): Pair<SetModel, SetAgent> {
+fun runSet(
+    catalog: RbCatalog,
+    fps: Int,
+    stopAt: Double = Double.MAX_VALUE,
+    agentOf: (SetModel) -> DjAgent = { model -> agentFromEnv(model, catalog) },
+    onFrame: (SetModel, Int) -> Unit = { _, _ -> },
+): Pair<SetModel, DjAgent> {
     val model = SetModel(catalog, SetAssets.durations(catalog))
-    val agent = SetAgent(model, SetAssets.orderIndices(catalog), SessionAssets.dir)
+    val agent = agentOf(model)
     var frame = 0
     var tick = 0L
     while (true) {
@@ -40,4 +46,10 @@ fun runSet(catalog: RbCatalog, fps: Int, stopAt: Double = Double.MAX_VALUE, onFr
         check(tick < 400_000L) { "o set não terminou" }
     }
     return model to agent
+}
+
+/** SET_AGENT=mix escolhe a mixagem de duas faixas com truques; o padrão é o set completo. */
+fun agentFromEnv(model: SetModel, catalog: RbCatalog): DjAgent = when (System.getenv("SET_AGENT")) {
+    "mix" -> MixShowAgent(model, catalog.tracks.indexOfFirst { it.title == "t1" }, catalog.tracks.indexOfFirst { it.title == "t2" }, SessionAssets.dir)
+    else -> SetAgent(model, SetAssets.orderIndices(catalog), SessionAssets.dir)
 }

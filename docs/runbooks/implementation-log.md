@@ -479,3 +479,17 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Mudança: 150 colunas por segundo exatas, janela de 10 ms centrada, referência no percentil 97–98,5; coluna que contém o instante (não a mais próxima); `waveStrip`: uma coluna por pixel com o pico das entradas que o pixel cobre (ou interpolação, quando ampliado), sem suavizar; linhas cheias por pixel no RGB; detalhe de 3 bandas mapeado a 150 por segundo. Cache da análise de pasta passou a "0132".
 - Evidência: `WaveDetailTest` (cada clique na sua coluna, no máximo 6,7 ms; faixa de 10 min com 150 colunas/s; um pico aparece no pixel certo em janelas de 1 a 60 s); `docs/ui/onda-antes-depois.png` (mesmo instante do set, antes em cima e depois embaixo).
 - Não verificado contra a tela de um CDJ de verdade nem no tablet (`BLOCKED_HARDWARE`).
+
+## 2026-10-24 — Scratch no motor e vídeo de mixagem-show com SYNC
+
+- Mudança:
+  - **Scratch real:** `ScratchFollower` em `dsp.h`; `scratchTouch`/`scratchMove` no motor e no JNI. O toque no topo do prato (`JOG_TOUCH`) no modo vinil liga o scratch, e o giro move a cabeça.
+  - **Roteiro do vídeo:** `MixShowAgent` (loop roll, scratch, cortes de crossfader, SYNC, buildup RMX, backspin), com a base `DjHands` extraída do `SetAgent`.
+  - **`ddj_session`:** novas ops `scratch`/`scratchmove`; a saída de loop ("-1 -1") deixava o deck mudo e foi corrigida.
+  - **Onda ampliada:** o detalhe de onda que o cache da pasta não guarda é refeito na carga do deck (`lacksDetail`/`withDetail`).
+- Evidência:
+  - `fx_rmx_test` (scratchFollows) e `ShowControlsTest` (toque no prato liga e desliga o scratch).
+  - `PlainFolderTest` (o cache volta sem detalhe; `withDetail` o repõe com as mesmas colunas).
+  - `checks.txt`: fase +0,0 ms com SYNC.
+  - Vídeo de 3,3 min fora do git, só com as faixas do usuário.
+- Risco / não verificado: a sensação do scratch no prato da DDJ-400 e o backspin no tablet (`BLOCKED_HARDWARE`). Os passos de 5 ms por unidade são nossos e não foram medidos.

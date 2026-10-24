@@ -62,6 +62,8 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
     val pos = doubleArrayOf(0.0, 0.0)
     /** Posição "sem loop" enquanto o SLIP está ligado (o que o slipAnchor do motor acompanha). */
     private val shadow = doubleArrayOf(0.0, 0.0)
+    /** Prato tocado (scratch): a faixa não anda sozinha, só com o giro. */
+    val scratching = booleanArrayOf(false, false)
     var faces = listOf(DeckFace(playing = false, onAir = false), DeckFace(playing = false, onAir = false))
         private set
     private val volume = floatArrayOf(0f, 0f)
@@ -156,7 +158,7 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
     fun advance(dt: Double) {
         t += dt
         for (deck in 0..1) {
-            if (faces[deck].playing) {
+            if (faces[deck].playing && !scratching[deck]) {
                 val face = faces[deck]
                 pos[deck] = advancePlayhead(pos[deck], dt * face.pitch, face.loopStart.toDouble(), face.loopEnd.toDouble())
                 if (face.slip) shadow[deck] += dt * face.pitch
@@ -239,6 +241,11 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
         rmx = rmx.copy(panel = false, full = false)
     }
 
+    /** Release FX do RMX (2 = backspin); -1 desarma. */
+    fun setRelease(kind: Int) {
+        rmx = rmx.copy(release = kind, panel = kind >= 0 || rmx.panel)
+    }
+
     private fun slider(action: PerformanceAction) = (action.slider ?: 0.0).toFloat()
 
     private fun apply(action: PerformanceAction) {
@@ -288,9 +295,20 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
                 if (face.loopEnd > face.loopStart) setLoop(deck, null)
             }
             // Prato no modo vinil (padrão do app): cada passo desloca o ponto, como o DeckPage.
+            PerformanceAction.Kind.JOG_TOUCH -> if (deck in 0..1) {
+                scratching[deck] = action.hotIndex == 1
+                ops += "%.4f\tscratch\t%d\t%d".format(t, deck, if (scratching[deck]) 1 else 0)
+            }
             PerformanceAction.Kind.JOG -> if (deck in 0..1 && isLoaded(deck)) {
                 val seconds = jogSeconds((action.slider ?: 0.0))
-                seekTo(deck, pos[deck] + seconds)
+                if (scratching[deck]) {
+                    // Scratch: a posição segue o prato (o motor alcança em ~10 ms).
+                    pos[deck] = max(0.0, pos[deck] + seconds)
+                    ops += "%.4f\tscratchmove\t%d\t%.6f".format(t, deck, seconds)
+                    syncFace(deck)
+                } else {
+                    seekTo(deck, pos[deck] + seconds)
+                }
             }
             PerformanceAction.Kind.BROWSE_MOVE -> browse?.let { place -> browse = moveBrowse(place, (action.slider ?: 0.0).toInt(), rows().size) }
             PerformanceAction.Kind.LOAD -> if (deck in 0..1) loadSelected(deck)

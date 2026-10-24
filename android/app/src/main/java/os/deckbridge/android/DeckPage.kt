@@ -41,6 +41,8 @@ import os.deckbridge.logic.RbCatalog
 import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.ReadableVolume
 import os.deckbridge.logic.WaveZoom
+import os.deckbridge.logic.lacksDetail
+import os.deckbridge.logic.withDetail
 import os.deckbridge.logic.GridEdit
 import os.deckbridge.logic.ListSort
 import os.deckbridge.logic.activeLoop
@@ -102,6 +104,13 @@ fun DeckPage(
 ) {
     val context = LocalContext.current
     val liveCatalog = rememberUpdatedState(catalog)
+    // Detalhe de onda refeito na carga quando o cache da pasta só trouxe a prévia (ver lacksDetail).
+    val detailWaves = remember { androidx.compose.runtime.mutableStateMapOf<Int, os.deckbridge.logic.RbAnalysis>() }
+    val shownCatalog by remember(catalog) {
+        androidx.compose.runtime.derivedStateOf {
+            if (detailWaves.isEmpty() || catalog == null) catalog else catalog.copy(analyses = catalog.analyses + detailWaves)
+        }
+    }
     val liveVolume = rememberUpdatedState(volume)
     val liveLoaded = rememberUpdatedState(loaded)
     var pitchA by remember { mutableFloatStateOf(1f) }
@@ -224,6 +233,12 @@ fun DeckPage(
                         null to "Não decodifiquei ${track.fileName}. Nesta versão o deck aceita WAV, MP3, FLAC e AAC."
                     } else {
                         NativeEngine.loadDeck(deck, decoded, track.bpm.toFloat(), (analysis?.mainCueMs ?: 0) / 1000f, hot, -1f, -1f)
+                        if (analysis != null && analysis.lacksDetail() && track.id !in detailWaves) {
+                            // Canal esquerdo basta para a onda e evita alocar outro vetor do tamanho da faixa.
+                            val left = if (decoded.left.size == decoded.frames) decoded.left else decoded.left.copyOf(decoded.frames)
+                            val filled = analysis.withDetail(os.deckbridge.logic.wavesFromPcm(left, decoded.sampleRate))
+                            withContext(Dispatchers.Main) { detailWaves[track.id] = filled }
+                        }
                         decoded to ""
                     }
                 }
@@ -342,6 +357,7 @@ fun DeckPage(
 
     val reverseHoldWasSlip = remember { BooleanArray(2) }
     val jogBendUntil = remember { LongArray(2) }
+    val scratching = remember { BooleanArray(2) }
 
     fun deckAction(deck: Int, action: String) {
         val face = faces.getOrElse(deck) { DeckFace() }
@@ -597,8 +613,21 @@ fun DeckPage(
                     it.copy(pitch = pitch, range = range, fader = faderFromPitch(pitch.toDouble(), range).toFloat(), sync = false)
                 }
             }
+            PerformanceAction.Kind.JOG_TOUCH -> {
+                if (deck !in 0..1) return
+                // Modo vinil: tocar no topo do prato segura a faixa e o giro faz scratch; soltar devolve o prato.
+                val on = action.hotIndex == 1 && settings.jogVinyl
+                scratching[deck] = on
+                NativeEngine.scratchTouch(deck, on)
+            }
             PerformanceAction.Kind.JOG -> {
                 if (deck !in 0..1) return
+                if (scratching[deck]) {
+                    val seconds = jogSeconds((action.slider ?: 0.0) * settings.jogSensitivity).toFloat()
+                    NativeEngine.scratchMove(deck, seconds)
+                    edit(deck) { it.copy(position = (it.position + seconds).coerceAtLeast(0f)) }
+                    return
+                }
                 if (faces[deck].loopAdjust != 0) {
                     val face = faces[deck]
                     val duration = liveLoaded.value.getOrNull(deck)?.durationSeconds?.toDouble() ?: 0.0
@@ -1119,7 +1148,7 @@ fun DeckPage(
             pfl = listOf(pflA, pflB),
         ),
         onMixerKnob = { action -> onPerformance(action) },
-        catalog = catalog,
+        catalog = shownCatalog,
         tracks = loaded,
         faces = faces,
         master = master,

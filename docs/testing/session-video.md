@@ -70,3 +70,26 @@ O final repete o roll com slip, mais o eco Spiral e o fader fechando. Cada faixa
 `checks.txt`: a fase entre os decks seis compassos depois de cada entrada ficou entre −2,0 e +0,1 ms (grade do analisador mais o desvio medido; não é medida independente do áudio).
 
 Limites: o roteiro não olha para a estrutura musical das faixas (o analisador só marca intro e fim), só para a grade; o Color FX e o EQ são o modelo de estudo do app. Só simulação no host.
+
+## Mixagem-show de duas faixas com SYNC (24/10/2026)
+
+`SET_AGENT=mix` troca o DJ do set pelo `MixShowAgent` (base comum em `DjHands`): t1 (130 BPM) e t2 (129 BPM), 3,3 min, com tudo pela DDJ-400 e pela tela.
+
+1. LOAD de t1 no deck 1 e PLAY; filtro varrendo nos compassos 4–6 e ECHO no 8.
+2. Loop roll no deck 1 (compassos 12–16): pads de 8, 4, 2, 1 batida e CUE/LOOP CALL para 1/2 e 1/4, com SLIP.
+3. LOAD de t2 no deck 2. **Scratch** no deck 2 nos compassos 20–24 de t1: toque no topo do prato (vinil), giros para frente e para trás. Nos compassos 22–24 entram **cortes de crossfader** a cada meia batida.
+4. **SYNC** no deck 2 (129 → 130 BPM) no compasso 28 e PLAY no compasso 32 de t1. Fader e filtro abrem, o grave troca no compasso 16 de t2 e o deck 2 vira master.
+5. **Buildup com RMX** no deck 1: Noise UP segurado por 8 compassos (24–32 de t2) e roll de bumbo no último. **BACKSPIN** (release FX do RMX) na meia batida antes do compasso 32 de t2. O deck 1 para e o fader fecha.
+6. O backspin cai no breakdown de t2. Um loop roll com SLIP (compassos 48–52) solta no drop, seguido de 16 compassos de drop e saída com eco e fader.
+
+Para o scratch, o motor ganhou `ScratchFollower` (`dsp.h`). Com o topo do prato tocado (nota 54), a cabeça segue o prato: cada passo de giro move 5 ms e a resposta é suavizada em ~10 ms. Ao soltar, o deck volta a tocar ou fica parado, como estava. Antes, o prato no modo vinil só empurrava a posição.
+
+`checks.txt`: fase entre os decks seis compassos depois da entrada com SYNC: +0,0 ms.
+
+Erros corrigidos no caminho:
+- `ddj_session` tratava "loop d -1 -1" como um loop em posições negativas, e o deck calava depois de um loop roll. O set de seis faixas não foi afetado (sem silêncio fora do começo e do fim).
+- A onda ampliada ficava plana quando a pasta vinha do cache, porque o cache não guarda o detalhe de 150 colunas/s. O app agora refaz o detalhe a partir do PCM decodificado para tocar, na carga do deck e fora da thread da tela.
+
+Limites:
+- Só simulação no host, sem audição na DDJ-400.
+- O scratch usa passos fixos de 5 ms por unidade de giro, sem medir a velocidade real do prato da DDJ-400 (`BLOCKED_HARDWARE`).

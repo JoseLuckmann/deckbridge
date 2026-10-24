@@ -72,6 +72,18 @@ object NativeEngine {
         nativeSeek(deck, seconds)
     }
 
+    /** Prato tocado (true) ou solto: tocado, a faixa segue o prato (scratch). */
+    fun scratchTouch(deck: Int, on: Boolean) {
+        if (!loaded) return
+        nativeScratchTouch(deck, on)
+    }
+
+    /** Giro do prato durante o scratch, em segundos da faixa (com sinal). */
+    fun scratchMove(deck: Int, seconds: Float) {
+        if (!loaded) return
+        nativeScratchMove(deck, seconds)
+    }
+
     fun nudge(deck: Int, seconds: Float) {
         if (!loaded) return
         nativeNudge(deck, seconds)
@@ -255,6 +267,8 @@ object NativeEngine {
     private external fun nativePosition(deck: Int): Float
     private external fun nativeSeek(deck: Int, seconds: Float)
     private external fun nativeNudge(deck: Int, seconds: Float)
+    private external fun nativeScratchTouch(deck: Int, on: Boolean)
+    private external fun nativeScratchMove(deck: Int, seconds: Float)
     private external fun nativeSetBeatFx(effect: Int, on: Boolean, level: Int, channel: Int, bpm: Float, beats: Float)
     private external fun nativeSetFilter(deck: Int, norm: Float)
     private external fun nativeLevels(dest: FloatArray)
