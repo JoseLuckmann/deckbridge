@@ -76,6 +76,13 @@ class ScreenShotsWide {
                         onHeard = {},
                         onShare = {},
                         usbReport = usbVariantReport(),
+                        bringUp = BringUpView(
+                            summary = "Mapa: 97/121 mensagens vistas · 1 desconhecida(s)",
+                            missing = listOf("BEAT FX ON/OFF", "SAMPLER pad 5 (DECK2)", "LOOP OUT (DECK2)", "TEMPO RANGE (DECK2)", "HEADPHONES MIX", "MASTER LEVEL"),
+                            unknown = listOf("0x9F:0x10 ×2"),
+                            learning = "BEAT FX ON/OFF",
+                            remap = "0x9E:0x01=0x94:0x47",
+                        ),
                     )
                 }
             })

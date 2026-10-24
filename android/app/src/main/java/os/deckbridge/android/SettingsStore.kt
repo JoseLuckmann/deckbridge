@@ -43,6 +43,15 @@ object SettingsStore {
     private val chFaderCurve = intPreferencesKey("ch_fader_curve")
     private val crossCurve = intPreferencesKey("cross_curve")
 
+    private val midiRemap = stringPreferencesKey("midi_remap")
+
+    /** Remapeamento de bytes da controladora (ver `MidiRemap`); fica fora de `PlayerSettings` e de `save`. */
+    fun remapFlow(context: Context): Flow<String> = context.playerStore.data.map { it[midiRemap].orEmpty() }
+
+    suspend fun saveRemap(context: Context, text: String) {
+        context.playerStore.edit { it[midiRemap] = text }
+    }
+
     fun flow(context: Context): Flow<PlayerSettings> = context.playerStore.data.map { prefs ->
         PlayerSettings(
             tempoRange = prefs[range] ?: PlayerSettings().tempoRange,

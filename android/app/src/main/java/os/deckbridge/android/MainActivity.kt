@@ -1,5 +1,9 @@
 package os.deckbridge.android
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -114,9 +118,19 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
     var notice by remember { mutableStateOf("Só leitura. Permissão persistente depois de autorizar o pendrive.") }
     var usbLabel by remember { mutableStateOf(removableVolumeLabel(context)) }
     var deckTracks by remember { mutableStateOf(listOf<RbTrack?>(null, null)) }
-    var midiLines by remember { mutableStateOf(listOf<String>()) }
+    // As últimas mensagens ficam cruas num anel; o texto só é montado com o diagnóstico aberto. Antes cada giro do
+    // prato formatava texto e mudava um estado na raiz, o que recompunha a tela dos decks a cada mensagem.
+    val recentMidi = remember { ArrayDeque<IntArray>() }
+    var midiTick by remember { mutableIntStateOf(0) }
     val map = remember { MidiMap.loadResource() }
     val assembler = remember { MidiAssembler() }
+    val bringUp = remember { os.deckbridge.logic.BringUpChecklist(map) }
+    var remap by remember { mutableStateOf(os.deckbridge.logic.MidiRemap.NONE) }
+    var learning by remember { mutableStateOf<os.deckbridge.logic.ControlHit?>(null) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        remap = os.deckbridge.logic.MidiRemap.parse(SettingsStore.remapFlow(context).first())
+    }
     val tempo = remember { TempoAssembler() }
     PerformanceHub.tempo = tempo
     val handler = remember { Handler(Looper.getMainLooper()) }
@@ -125,19 +139,33 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
     fun describe(bytes: ByteArray, simulated: Boolean) {
         val parsed = assembler.push(bytes)
         if (parsed.isEmpty()) return
-        val prefix = if (simulated) "SIMULADO " else ""
-        val lines = parsed.map { message ->
-            val hit = map.lookup(message.status, message.data1)
+        for (message in parsed) {
+            var (status, data1) = remap.apply(message.status, message.data1)
+            var hit = map.lookup(status, data1)
+            val unknown = bringUp.observe(status, data1, hit.mapped)
+            val target = learning
+            if (unknown && target != null && !simulated) {
+                // Aprender: a próxima mensagem fora do mapa passa a valer pelo controle escolhido na lista.
+                remap = remap.with(message.status, message.data1, target.status, target.midino)
+                val saved = remap.serialize()
+                scope.launch { SettingsStore.saveRemap(context, saved) }
+                bringUp.forget(message.status, message.data1)
+                learning = null
+                status = target.status
+                data1 = target.midino
+                hit = map.lookup(status, data1)
+                bringUp.observe(status, data1, true)
+            }
             interpretPerformance(hit, message.data2, tempo)?.let { PerformanceHub.onAction?.invoke(it) }
-            "$prefix status=0x%02X nota=0x%02X valor=%d | %s | %s".format(
-                message.status,
-                message.data1,
-                message.data2,
-                hit.key.ifBlank { "—" },
-                hit.description,
-            )
+            recentMidi.addFirst(intArrayOf(status, data1, message.data2, if (simulated) 1 else 0))
+            while (recentMidi.size > 12) recentMidi.removeLast()
         }
-        midiLines = (lines + midiLines).take(12)
+        if (page == 0) midiTick += 1
+    }
+
+    fun midiLines(): List<String> = recentMidi.map { (status, data1, value, simulated) ->
+        val hit = map.lookup(status, data1)
+        "${if (simulated == 1) "SIMULADO " else ""} status=0x%02X nota=0x%02X valor=%d | %s | %s".format(status, data1, value, hit.key.ifBlank { "—" }, hit.description)
     }
 
     fun openVolume(next: ReadableVolume) {
@@ -278,8 +306,30 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
 
     Box(Modifier.fillMaxSize()) {
         when (page) {
-            0 -> DiagnosticPage(midiLines, null, libraryReport = catalog?.let { os.deckbridge.logic.inspectText(it) }.orEmpty(), onPage = { page = it }) {
-                describe(byteArrayOf(0x90.toByte(), 0x0B, 0x7F), true)
+            0 -> {
+                @Suppress("UNUSED_EXPRESSION") midiTick
+                DiagnosticPage(
+                    midiLines(),
+                    null,
+                    libraryReport = catalog?.let { os.deckbridge.logic.inspectText(it) }.orEmpty(),
+                    onPage = { page = it },
+                    bringUp = BringUpView(
+                        summary = bringUp.summary(),
+                        missing = bringUp.missing.take(24).map { it.description.substringBefore(" - ") },
+                        unknown = bringUp.unknown.take(8).map { (st, d1, n) -> "${os.deckbridge.logic.midiPair(st, d1)} ×$n" },
+                        learning = learning?.description?.substringBefore(" - "),
+                        remap = remap.serialize(),
+                        report = bringUp.report(remap),
+                    ),
+                    onLearn = { index -> learning = bringUp.missing.getOrNull(index) },
+                    onClearRemap = {
+                        remap = os.deckbridge.logic.MidiRemap.NONE
+                        learning = null
+                        scope.launch { SettingsStore.saveRemap(context, "") }
+                    },
+                ) {
+                    describe(byteArrayOf(0x90.toByte(), 0x0B, 0x7F), true)
+                }
             }
             else -> DeckPage(
                 catalog = catalog,
@@ -323,6 +373,9 @@ internal fun DiagnosticPage(
     jvmBanner: String?,
     libraryReport: String = "",
     onPage: (Int) -> Unit = {},
+    bringUp: BringUpView = BringUpView(),
+    onLearn: (Int) -> Unit = {},
+    onClearRemap: () -> Unit = {},
     onSimulate: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -359,7 +412,7 @@ internal fun DiagnosticPage(
         batteryTemperatureC = battery.second,
         heard = heard,
         selectedDeviceId = deviceId.takeIf { it > 0 },
-    )
+    ) + if (bringUp.report.isNotBlank()) "\n\nBring-up da controladora\n${bringUp.report}" else ""
 
     DiagnosticScreen(
         headline = "Prova A0. O som desta tela ainda não é prova até você mandar o relatório.",
@@ -379,6 +432,9 @@ internal fun DiagnosticPage(
         onHeard = { heard = it },
         usbReport = usbReport,
         libraryReport = libraryReport,
+        bringUp = bringUp,
+        onLearn = onLearn,
+        onClearRemap = onClearRemap,
         onShare = {
             val send = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
@@ -410,6 +466,9 @@ fun DiagnosticScreen(
     onShare: () -> Unit,
     usbReport: String = "",
     libraryReport: String = "",
+    bringUp: BringUpView = BringUpView(),
+    onLearn: (Int) -> Unit = {},
+    onClearRemap: () -> Unit = {},
 ) {
     StageScaffold(page = 0, onPage = onPage, simulationNote = simulationNote(jvmBanner, jvmBanner != null)) {
         Row(
@@ -457,6 +516,31 @@ fun DiagnosticScreen(
                 Panel {
                     TextInk("Motor", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
                     TextInk(engineLine, fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+                Panel {
+                    TextInk("Bring-up da controladora", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+                    TextInk(bringUp.summary, fontSize = 15.sp, weight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+                    if (bringUp.learning != null) {
+                        TextInk("APRENDENDO: mexa agora no controle \"${bringUp.learning}\" da DDJ-400.", fontSize = 14.sp, color = Color(StagePalette.accentOrange), modifier = Modifier.padding(top = 4.dp))
+                    }
+                    if (bringUp.unknown.isNotEmpty()) {
+                        TextInk("Fora do mapa: " + bringUp.unknown.joinToString("  "), fontSize = 13.sp, color = Color(StagePalette.accentOrange), modifier = Modifier.padding(top = 4.dp))
+                    }
+                    if (bringUp.missing.isNotEmpty()) {
+                        TextInk("Ainda não vistos (toque para aprender):", fontSize = 12.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp))
+                        bringUp.missing.chunked(3).forEachIndexed { row, labels ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
+                                labels.forEachIndexed { col, label ->
+                                    StageButton(label, { onLearn(row * 3 + col) }, Modifier.weight(1f), fontSize = 11.sp)
+                                }
+                                repeat(3 - labels.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
+                    }
+                    if (bringUp.remap.isNotBlank()) {
+                        TextInk("Remapeado: ${bringUp.remap}", fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                        StageButton("Limpar remapeamento", onClearRemap, Modifier.fillMaxWidth().padding(top = 4.dp), fontSize = 12.sp)
+                    }
                 }
                 if (events.isNotEmpty()) {
                     Panel {
@@ -510,3 +594,13 @@ private fun heardLabel(heard: Heard): String = when (heard) {
     Heard.MESMO_LUGAR -> "Saiu tudo no mesmo lugar"
     Heard.SEM_SOM -> "Não saiu som"
 }
+
+/** O que a tela de diagnóstico mostra do bring-up (ver `BringUpChecklist`). */
+data class BringUpView(
+    val summary: String = "Mapa: nenhuma mensagem da controladora ainda",
+    val missing: List<String> = emptyList(),
+    val unknown: List<String> = emptyList(),
+    val learning: String? = null,
+    val remap: String = "",
+    val report: String = "",
+)

@@ -12,6 +12,9 @@ data class ControlHit(
 data class MidiMessage(val status: Int, val data1: Int, val data2: Int)
 
 class MidiMap(private val controls: List<ControlHit>) {
+    /** Todos os controles do mapa oficial, na ordem do arquivo. */
+    val all: List<ControlHit> get() = controls
+
     fun find(group: String, key: String, descriptionContains: String): ControlHit {
         return controls.first { it.group == group && it.key == key && it.description.contains(descriptionContains) }
     }
@@ -122,7 +125,8 @@ class MidiAssembler {
             val needed = if (status in 0xC0..0xDF) 2 else 3
             if (pending.size >= needed) {
                 val data2 = if (needed == 3) pending[2] else 0
-                messages += MidiMessage(pending[0], pending[1], data2)
+                // Note-off (0x8n) vira note-on com velocidade 0, que é como o mapa oficial descreve o soltar.
+                messages += if (pending[0] in 0x80..0x8F) MidiMessage(pending[0] + 0x10, pending[1], 0) else MidiMessage(pending[0], pending[1], data2)
                 pending.clear()
             }
         }

@@ -602,3 +602,19 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Não verificado:
   - Ids de documento do provedor de armazenamento externo num tablet real (`BLOCKED_HARDWARE`). O formato `XXXX-XXXX:caminho` é o do AOSP.
   - Remover o arquivo vazio é a única escrita possível no pendrive, e só acontece depois que o próprio seletor criou o arquivo.
+
+## 2026-10-24 — Bring-up da controladora e remapeamento sem recompilar
+
+- Mudança:
+  - `BringUpChecklist`: são 121 mensagens do mapa oficial, sem SHIFT e sem o byte baixo dos controles de 14 bits. Cada uma é marcada quando chega. As mensagens fora do mapa ficam listadas com a contagem.
+  - Na tela de diagnóstico: um painel com o progresso e os controles ainda não vistos. Tocar num deles e mexer no controle físico grava o remapeamento (`MidiRemap`, `0x9F:0x10=0x90:0x0B`). O remapeamento fica salvo e pode ser limpo.
+  - O relatório compartilhado leva o checklist.
+  - Note-off (0x8n) chega como note-on com velocidade 0.
+- Desempenho:
+  - O monitor MIDI deixou de formatar texto e de mudar o estado na raiz a cada mensagem. Antes, cada passo do prato recompunha a tela dos decks.
+  - Agora as mensagens ficam cruas num anel e o texto só sai com o diagnóstico aberto.
+- Evidência:
+  - `BringUpTest`: checklist, desconhecidas, remapeamento e note-off.
+  - Suíte com 141 testes, 0 falhas.
+  - Print: `docs/ui/diagnostico-bringup.png`, com dados de exemplo.
+- Não verificado: a DDJ-400 real (`BLOCKED_HARDWARE`). O primeiro uso com ela deve ser exatamente esse checklist.
