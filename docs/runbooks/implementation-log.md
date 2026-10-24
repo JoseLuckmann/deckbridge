@@ -505,7 +505,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Mudança:
   - `DdjSurface`: estado físico só pelo MIDI cru, com os bytes do mapa pinado.
   - `DdjPanel`: desenho da controladora; os LEDs vêm de `ledTargets` (`SetModel.leds`).
-  - Quadros em 1280 × 1200: app em cima, DDJ embaixo, mais o log MIDI.
+  - Segunda tela separada: janela própria de 1280 × 480 (`frames-ddj/`), desenhada direto num bitmap. A tela do app segue em 1280 × 720, sem mudança de layout, e o vídeo empilha as duas no ffmpeg.
   - `SET_LEVELS` corrige os medidores que liam os picos do set de seis faixas.
 - Evidência: `DdjSurfaceTest` (faders, tempo de 14 bits, prato e toque, modos de pad, log); `docs/ui/ddj-virtual-rmx.png`; vídeo de 3,4 min fora do git.
 - Risco: o painel não é captura da DDJ-400 real; ele mostra o que o roteiro manda e o que o app acenderia (`BLOCKED_HARDWARE` para conferir com o equipamento).

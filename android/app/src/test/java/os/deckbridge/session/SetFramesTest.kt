@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
@@ -47,12 +48,11 @@ private data class SetFrame(
     val tracks: List<os.deckbridge.logic.RbTrack?>,
     val browse: os.deckbridge.logic.BrowsePlace?,
     val colorFx: Int,
-    val ddj: DdjFrame? = null,
 )
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [33], qualifiers = "w1280dp-h1200dp-mdpi")
+@Config(sdk = [33], qualifiers = "w1280dp-h720dp-mdpi")
 class SetFramesTest {
     @Test
     fun renderSetFrames() {
@@ -72,6 +72,21 @@ class SetFramesTest {
         val shown = catalog.copy(tracks = catalog.tracks.map { it.copy(title = names[it.title] ?: it.title) })
         // SET_LEVELS aponta os picos do áudio renderizado deste roteiro (o padrão é o do set de seis faixas).
         val levels = loadSetLevels(System.getenv("SET_LEVELS")?.let(::File) ?: File(SessionAssets.dir, "mix.wav.levels.tsv"))
+        // Segunda tela, em janela própria: a DDJ-400 simulada (controles pelo MIDI da mão, LEDs pelo que o app
+        // mandaria). Não entra no layout do app; o vídeo empilha as duas telas no ffmpeg. Criada antes da janela do
+        // app, que fica em primeiro plano (a captura do app passa pelo Espresso); esta é desenhada direto num bitmap.
+        val ddjDir = File(SessionAssets.dir, "frames-ddj").apply { deleteRecursively(); mkdirs() }
+        val ddjActivity = Robolectric.buildActivity(ScreenshotActivity::class.java).setup().get()
+        val ddjState = mutableStateOf<DdjFrame?>(null)
+        val ddjView = ComposeView(ddjActivity).apply {
+            setContent {
+                val frame by ddjState
+                Box(Modifier.width(1280.dp).height(480.dp).background(Color(0xFF0B0C0E))) {
+                    frame?.let { DdjPanel(it) }
+                }
+            }
+        }
+        ddjActivity.setContentView(ddjView, android.view.ViewGroup.LayoutParams(1280, 480))
         val activity = Robolectric.buildActivity(ScreenshotActivity::class.java).setup().get()
         val state = mutableStateOf<SetFrame?>(null)
         state.value = SetFrame(listOf(DeckFace(), DeckFace()), BeatFxState(), RmxState(), MixerState(), 0, "", "", listOf(null, null), null, 5)
@@ -81,7 +96,7 @@ class SetFramesTest {
                     val frame by state
                     val f = frame ?: return@setContent
                     Column(Modifier.fillMaxSize().background(Color.Black)) {
-                        Box(Modifier.height(680.dp).fillMaxWidth()) {
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
                             PlayerScreen(
                                 catalog = shown,
                                 tracks = f.tracks,
@@ -107,10 +122,6 @@ class SetFramesTest {
                         Box(Modifier.fillMaxWidth().height(40.dp).background(Color(0xFF101820)).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
                             TextInk(f.caption, color = Color(0xFFF4F7FB), fontSize = 18.sp, maxLines = 1)
                         }
-                        // Segunda tela: a DDJ-400 simulada (controles pelo MIDI da mão, LEDs pelo que o app mandaria).
-                        Box(Modifier.fillMaxWidth().height(480.dp).background(Color(0xFF0B0C0E))) {
-                            f.ddj?.let { DdjPanel(it) }
-                        }
                     }
                 }
             },
@@ -135,10 +146,15 @@ class SetFramesTest {
                 tracks = model.deckTracks().map { t -> t?.let { x -> shown.tracks.first { it.id == x.id } } },
                 browse = model.browse,
                 colorFx = model.colorFx,
-                ddj = DdjFrame(model.surface, os.deckbridge.logic.ledTargets(model.leds(listOf(held[0], held[1]))), model.t),
             )
             repeat(3) { ShadowLooper.idleMainLooper(20, java.util.concurrent.TimeUnit.MILLISECONDS) }
             activity.window.decorView.captureRoboImage(File(outDir, "frame%05d.png".format(frame)).absolutePath)
+            ddjState.value = DdjFrame(model.surface, os.deckbridge.logic.ledTargets(model.leds(listOf(held[0], held[1]))), model.t)
+            repeat(2) { ShadowLooper.idleMainLooper(20, java.util.concurrent.TimeUnit.MILLISECONDS) }
+            val bitmap = android.graphics.Bitmap.createBitmap(ddjView.width, ddjView.height, android.graphics.Bitmap.Config.ARGB_8888)
+            ddjView.draw(android.graphics.Canvas(bitmap))
+            File(ddjDir, "ddj%05d.png".format(frame)).outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
             if (frame % 200 == 0) println("frame $frame  ${(System.currentTimeMillis() - started) / 1000} s")
         }
         println("frames em ${(System.currentTimeMillis() - started) / 1000} s")

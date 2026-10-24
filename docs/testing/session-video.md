@@ -97,7 +97,7 @@ Limites:
 
 ## DDJ-400 virtual embaixo da tela (24/10/2026)
 
-O vídeo passa a ter duas telas em 1280 × 1200: em cima, o app; embaixo, uma DDJ-400 desenhada (`DdjPanel`). O painel junta duas fontes:
+A DDJ-400 desenhada (`DdjPanel`) é uma segunda tela, renderizada à parte: janela própria de 1280 × 480 com quadros em `frames-ddj/`. A tela do app continua com o layout oficial, em 1280 × 720, sem nada a mais. Só o vídeo junta as duas (`ffmpeg ... vstack`): o app em cima, a DDJ embaixo. O painel junta duas fontes:
 
 - **Controles físicos (`DdjSurface`):** faders, botões giratórios, ângulo e toque do prato, botões e pads apertados e modo de pad. Saem só dos bytes MIDI que a "mão" manda, decodificados com as notas do mapa pinado do Mixxx 2.5.6, sem passar pelo app.
 - **LEDs (PLAY, CUE, SYNC, CUE de canal, pads, VU, Beat FX ON):** vêm de `ledTargets`, os mesmos bytes que o app mandaria à controladora (regra do DeckPage, refeita em `SetModel.leds`).
@@ -115,4 +115,4 @@ Limites:
 
 Erro corrigido junto: os quadros liam os picos de `mix.wav.levels.tsv` da pasta do set de seis faixas. No vídeo de mixagem anterior, os medidores da tela mostravam o áudio do set, não o da mixagem. Agora `SET_LEVELS` aponta os picos do áudio deste roteiro.
 
-`docs/ui/ddj-virtual-rmx.png` (a gravar no fim do render): o buildup do RMX, com o deck 1 em SAMPLER, os pads 2 (Noise UP segurado) e 7 (roll de bateria) acesos e o LOW do deck 1 fechado.
+`docs/ui/ddj-virtual-rmx.png`: o buildup do RMX, com o deck 1 em SAMPLER, os pads 2 (Noise UP segurado) e 7 (roll de bateria) acesos e o LOW do deck 1 fechado.
