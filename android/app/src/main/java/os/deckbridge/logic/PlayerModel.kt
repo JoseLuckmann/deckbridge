@@ -156,6 +156,9 @@ val BEAT_FX_NAMES = listOf(
     "Mobius",
     "Filter",
     "Vinyl Brake",
+    // Do DJM-V10 (manual, p. 60–61): reverb com brilho e eco de uma repetição.
+    "Shimmer",
+    "Delay",
 )
 val BEAT_FX_FRACTIONS = listOf("1/16", "1/8", "1/4", "1/2", "3/4", "1/1", "2/1", "4/1", "8/1")
 
@@ -165,6 +168,8 @@ data class BeatFxState(
     val channel: Int = 0,
     val on: Boolean = false,
     val level: Int = 64,
+    /** FX FREQUENCY (DJM-V10): LOW, MID, HI. A banda apagada sai sem efeito. */
+    val bands: List<Boolean> = listOf(true, true, true),
 ) {
     fun name(): String = BEAT_FX_NAMES[effect.coerceIn(0, BEAT_FX_NAMES.lastIndex)]
 

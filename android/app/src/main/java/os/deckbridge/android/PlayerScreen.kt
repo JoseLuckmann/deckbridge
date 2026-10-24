@@ -617,6 +617,15 @@ private fun FxBody(fx: BeatFxState, bpm: Double, compact: Boolean, list: Boolean
             Choice(label, fx.channel == channel, compact, Modifier.weight(1f)) { onFxChange(fx.copy(channel = channel)) }
         }
     }
+    // FX FREQUENCY (DJM-V10): a banda apagada passa sem efeito.
+    TextInk("FX FREQUENCY", fontSize = 9.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(top = 6.dp))
+    Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        listOf("LOW", "MID", "HI").forEachIndexed { band, label ->
+            Choice(label, fx.bands.getOrElse(band) { true }, compact, Modifier.weight(1f)) {
+                onFxChange(fx.copy(bands = fx.bands.mapIndexed { index, value -> if (index == band) !value else value }))
+            }
+        }
+    }
 }
 
 @Composable

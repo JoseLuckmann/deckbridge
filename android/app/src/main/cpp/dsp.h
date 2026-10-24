@@ -890,6 +890,10 @@ struct BeatInsert {
     GrainShift spiralR;
     GrainShift pitchL;
     GrainShift pitchR;
+    GrainShift shimmerL;
+    GrainShift shimmerR;
+    float shimmerFbL = 0.f;
+    float shimmerFbR = 0.f;
     float freezeMix = 0.f;
     float verbHpL = 0.f;
     float verbHpR = 0.f;
@@ -905,6 +909,9 @@ struct BeatInsert {
         spiralR.reset();
         pitchL.reset();
         pitchR.reset();
+        shimmerL.reset();
+        shimmerR.reset();
+        shimmerFbL = shimmerFbR = 0.f;
         for (auto &item : ap) item.reset();
         toneL.reset();
         toneR.reset();
@@ -929,6 +936,9 @@ struct BeatInsert {
         spiralR.reset();
         pitchL.reset();
         pitchR.reset();
+        shimmerL.reset();
+        shimmerR.reset();
+        shimmerFbL = shimmerFbR = 0.f;
         freezeMix = 0.f;
         verbHpL = verbHpR = 0.f;
         clock = 0;
@@ -967,8 +977,13 @@ struct BeatInsert {
     bool transportEffect() const { return effect == 9 || effect == 10 || effect == 14; }
 
     bool tailEffect() const {
-        return effect == 0 || effect == 1 || effect == 2 || effect == 3 || effect == 4 || effect == 11 || effect == 12;
+        return effect == 0 || effect == 1 || effect == 2 || effect == 3 || effect == 4 || effect == 11 || effect == 12 ||
+               effect == 15 || effect == 16;
     }
+
+    // Spiral e Helix (manual do DJM-V10: "ao mudar o tempo, o pitch muda junto"): o atraso desliza devagar até o novo
+    // tempo, como fita, e as repetições sobem ou descem de tom enquanto isso. Nos outros o deslize é curto.
+    float glideSeconds() const { return (effect == 3 || effect == 11) ? 0.45f : 0.05f; }
 
     float brakeMul() {
         if (!brake) return 1.f;
@@ -987,7 +1002,7 @@ struct BeatInsert {
         const float targetDelay = static_cast<float>(delaySamples());
         if (snapNow) delaySm = targetDelay;
         else {
-            const float glide = 1.f - std::exp(-1.f / std::max(1.f, 0.05f * static_cast<float>(sampleRate)));
+            const float glide = 1.f - std::exp(-1.f / std::max(1.f, glideSeconds() * static_cast<float>(sampleRate)));
             delaySm += (targetDelay - delaySm) * glide;
         }
         if (transportEffect()) {
@@ -1010,9 +1025,11 @@ struct BeatInsert {
             case 3:
             case 11:
             case 12:
+            case 16:
                 echoFamily(dryL, dryR, amount, snapNow, wetL, wetR);
                 break;
             case 4:
+            case 15:
                 reverbPair(dryL, dryR, amount, snapNow, wetL, wetR);
                 break;
             case 5: {
@@ -1159,6 +1176,11 @@ private:
             wetL = dryL * (1.f - duck) + echoL * tailMix;
             wetR = dryR * (1.f - duck) + echoR * tailMix;
             return;
+        } else if (effect == 16) {
+            // DELAY (DJM-V10): uma repetição só, sem feedback. LEVEL é o balanço original/efeito.
+            echoL = left.readAt(delay);
+            echoR = right.readAt(delay);
+            fb = 0.f;
         } else {
             echoL = darken(fbL, left.readAt(delay));
             echoR = darken(fbR, right.readAt(delay));
@@ -1184,10 +1206,26 @@ private:
         const float inR = preR.read(pre);
         preL.push(dryL * send);
         preR.push(dryR * send);
-        verbTank.setRt60(0.7f + 2.6f * amount);
+        float tankL = inL;
+        float tankR = inR;
+        float octaveL = 0.f;
+        float octaveR = 0.f;
+        if (effect == 15) {
+            // SHIMMER (DJM-V10): reverberação com brilho. A cauda, uma oitava acima, sai junto com o reverb e volta ao
+            // tanque, então cada volta sobe mais; o passa-baixas do tanque quase aberto deixa o agudo.
+            octaveL = shimmerL.process(shimmerFbL, 2.f);
+            octaveR = shimmerR.process(shimmerFbR, 2.f);
+            tankL += octaveL * (0.25f + 0.25f * amount);
+            tankR += octaveR * (0.25f + 0.25f * amount);
+        }
+        verbTank.setRt60(effect == 15 ? 1.6f + 3.f * amount : 0.7f + 2.6f * amount);
         float bodyL = 0.f;
         float bodyR = 0.f;
-        verbTank.process(inL, inR, 0.22f + 0.5f * amount, bodyL, bodyR);
+        verbTank.process(tankL, tankR, effect == 15 ? 0.92f : 0.22f + 0.5f * amount, bodyL, bodyR);
+        shimmerFbL = bodyL;
+        shimmerFbR = bodyR;
+        bodyL += octaveL * (0.5f + 0.6f * amount);
+        bodyR += octaveR * (0.5f + 0.6f * amount);
         const float hpCoef = 1.f - std::exp(-6.2831853f * 180.f / static_cast<float>(sampleRate));
         verbHpL += (bodyL - verbHpL) * hpCoef;
         verbHpR += (bodyR - verbHpR) * hpCoef;
@@ -2536,6 +2574,31 @@ inline float eqGainFromKnob(float knob) {
     return std::pow(10.f, (k - 0.5f) * 2.f * 6.f / 20.f);
 }
 
+// Três bandas por Linkwitz-Riley de 4ª ordem em 200 Hz e 2 kHz (os cortes do isolador). LOW + MID + HIGH soma um
+// passa-tudo: o módulo fica plano.
+struct BandSplit3 {
+    Biquad lp1, lp2, hp1, hp2, m1, m2, h1, h2;
+
+    void prepare(int rate) {
+        const float sr = static_cast<float>(rate > 0 ? rate : 48000);
+        lp1.setLowpass(200.f, sr, 0.7071f);
+        lp2.setLowpass(200.f, sr, 0.7071f);
+        hp1.setHighpass(200.f, sr, 0.7071f);
+        hp2.setHighpass(200.f, sr, 0.7071f);
+        m1.setLowpass(2000.f, sr, 0.7071f);
+        m2.setLowpass(2000.f, sr, 0.7071f);
+        h1.setHighpass(2000.f, sr, 0.7071f);
+        h2.setHighpass(2000.f, sr, 0.7071f);
+    }
+
+    void split(float in, float &low, float &mid, float &high) {
+        low = lp2.process(lp1.process(in));
+        const float rest = hp2.process(hp1.process(in));
+        mid = m2.process(m1.process(rest));
+        high = h2.process(h1.process(rest));
+    }
+};
+
 // Curvas do fader de canal (manual do DJM-V10, p. 30): 0 sobe forte perto do topo, 1 sobe aos poucos, 2 linear.
 // As formas exatas não são publicadas; estas são nossas, com os mesmos extremos (0 embaixo, 1 em cima).
 inline float channelFaderGain(float fader, int curve) {
@@ -2623,6 +2686,9 @@ struct MixerFx {
     bool masterIsoOn = false;
     int chCurve = 2;
     int crossCurve = 0;
+    // FX FREQUENCY do Beat FX (DJM-V10): LOW, MID, HI. As bandas apagadas saem sem efeito.
+    bool fxBand[3]{true, true, true};
+    BandSplit3 dryBandsL, dryBandsR, wetBandsL, wetBandsR;
     bool rmx = false;
     int channel = 0;
     int sampleRate = 48000;
@@ -2643,6 +2709,10 @@ struct MixerFx {
         iso[1].prepare(sampleRate);
         if (changed) {
             masterIso.prepare(sampleRate);
+            dryBandsL.prepare(sampleRate);
+            dryBandsR.prepare(sampleRate);
+            wetBandsL.prepare(sampleRate);
+            wetBandsR.prepare(sampleRate);
             eq[0].prepare(sampleRate);
             eq[1].prepare(sampleRate);
             for (auto &item : color) item.prepare(sampleRate);
@@ -2762,6 +2832,7 @@ struct MixerFx {
         setComp(0, at(2, 0.f));
         setComp(1, at(3, 0.f));
         setMasterIsolator(at(4, 0.f) > 0.5f, at(5, 0.5f), at(6, 0.5f), at(7, 0.5f));
+        for (int band = 0; band < 3; ++band) fxBand[band] = at(15 + band, 1.f) > 0.5f;
     }
 
     float faderGain(float fader) const { return channelFaderGain(fader, chCurve); }
@@ -2802,8 +2873,22 @@ private:
             scene.process(left, right);
             xpad.process(left, right);
             if (release.active() && release.kind == 1 && channel != 2) release.process(left, right);
-        } else {
+        } else if ((fxBand[0] && fxBand[1] && fxBand[2]) || beat.transportEffect()) {
             beat.process(left, right);
+        } else {
+            float dry[2][3];
+            dryBandsL.split(left, dry[0][0], dry[0][1], dry[0][2]);
+            dryBandsR.split(right, dry[1][0], dry[1][1], dry[1][2]);
+            beat.process(left, right);
+            float wet[2][3];
+            wetBandsL.split(left, wet[0][0], wet[0][1], wet[0][2]);
+            wetBandsR.split(right, wet[1][0], wet[1][1], wet[1][2]);
+            left = 0.f;
+            right = 0.f;
+            for (int band = 0; band < 3; ++band) {
+                left += fxBand[band] ? wet[0][band] : dry[0][band];
+                right += fxBand[band] ? wet[1][band] : dry[1][band];
+            }
         }
     }
 };

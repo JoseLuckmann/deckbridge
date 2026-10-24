@@ -1104,11 +1104,11 @@ fun DeckPage(
 
     LaunchedEffect(deviceId) {
         withContext(Dispatchers.IO) { NativeEngine.start(deviceId, 3) }
-        NativeEngine.setConsole(console.toArray(settings.chFaderCurve, settings.crossCurve))
+        NativeEngine.setConsole(console.copy(fxBands = fx.bands).toArray(settings.chFaderCurve, settings.crossCurve))
     }
 
-    LaunchedEffect(console, settings.chFaderCurve, settings.crossCurve) {
-        NativeEngine.setConsole(console.toArray(settings.chFaderCurve, settings.crossCurve))
+    LaunchedEffect(console, settings.chFaderCurve, settings.crossCurve, fx.bands) {
+        NativeEngine.setConsole(console.copy(fxBands = fx.bands).toArray(settings.chFaderCurve, settings.crossCurve))
     }
 
     LaunchedEffect(autoplay, catalog, volume) {
