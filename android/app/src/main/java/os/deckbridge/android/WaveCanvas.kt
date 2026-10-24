@@ -29,7 +29,9 @@ import os.deckbridge.logic.MarkerKind
 import os.deckbridge.logic.RbAnalysis
 import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.StagePalette
+import os.deckbridge.logic.WaveStrip
 import os.deckbridge.logic.WaveZoom
+import os.deckbridge.logic.waveStrip
 import os.deckbridge.logic.activeLoop
 import os.deckbridge.logic.barsFromSeconds
 import os.deckbridge.logic.GridEdit
@@ -90,35 +92,29 @@ internal fun ZoomedWave(
             val botG = (size.height * 0.18f).coerceAtLeast(30f)
             val waveTop = topG
             val waveBot = size.height - botG
-            val count = (size.width / 3f).toInt().coerceIn(160, 520)
-            val low = FloatArray(count)
-            val mid = FloatArray(count)
-            val high = FloatArray(count)
-            val rgbHeights = FloatArray(count)
-            val rgbColors = IntArray(count)
-            var rgbColumns = 0
-            for (index in 0 until count) {
-                val time = if (whole) duration * index / (count - 1).coerceAtLeast(1) else start + window * index / (count - 1).coerceAtLeast(1)
-                if (waveMode == 0) {
-                    val packed = rgbSample(analysis, "RGB", false, time, duration)
-                    if (packed >= 0) {
-                        rgbHeights[index] = ((packed ushr 32).toInt() and 0xFF) / 255f
-                        rgbColors[index] = (packed and 0xFFFFFF).toInt()
-                        rgbColumns += 1
-                    }
-                } else if (waveMode == 2) {
-                    low[index] = monoSample(analysis, false, time, duration)
-                } else {
+            // Uma coluna por pixel, direto dos dados de 150 por segundo (ver `waveStrip`): sem amostrar de sete em
+            // sete colunas nem suavizar, que era o que deixava a onda em bolhas e os ataques fora da grade.
+            val pixels = size.width.toInt().coerceIn(64, 2400)
+            val viewStart = if (whole) 0.0 else start
+            val viewWindow = if (whole) duration else window
+            val strip = zoomStrip(analysis, waveMode, viewStart, viewWindow, pixels, duration)
+            if (waveMode == 0 && strip != null && strip.heights.any { it > 0f }) {
+                drawRgbColumns(strip.heights, strip.colors, waveTop, waveBot)
+            } else if (strip != null) {
+                val lowSide = if (waveMode == 2) strip.heights else strip.low
+                drawMirroredBands(lowSide, strip.mid, strip.high, waveTop, waveBot, lowGain = 0.98f, midGain = 0.58f, highGain = 0.32f, waveMode = waveMode)
+            } else {
+                val low = FloatArray(pixels)
+                val mid = FloatArray(pixels)
+                val high = FloatArray(pixels)
+                for (index in 0 until pixels) {
+                    val time = viewStart + viewWindow * (index + 0.5) / pixels
                     val sample = bandAt(analysis, duration, time, overview = false)
                     low[index] = sample.first
                     mid[index] = sample.second
                     high[index] = sample.third
                 }
-            }
-            if (waveMode == 0 && rgbColumns > 0) {
-                drawRgbColumns(smooth(rgbHeights), smoothRgb(rgbColors), waveTop, waveBot)
-            } else {
-                drawMirroredBands(smooth(low), smooth(mid), smooth(high), waveTop, waveBot, lowGain = 0.98f, midGain = 0.58f, highGain = 0.32f, waveMode = waveMode)
+                drawMirroredBands(low, mid, high, waveTop, waveBot, lowGain = 0.98f, midGain = 0.58f, highGain = 0.32f, waveMode = waveMode)
             }
             drawLine(
                 Color.Black.copy(alpha = 0.55f),
@@ -407,12 +403,38 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawOverview(
     drawMirroredBands(columns.first, columns.second, columns.third, top, bottom, lowGain = 0.9f, midGain = 0.7f, highGain = 0.45f, waveMode = 1)
 }
 
+/** Dados de detalhe (150 por segundo) do modo pedido, em uma coluna por pixel; null se a faixa não tem detalhe. */
+internal fun zoomStrip(analysis: RbAnalysis?, waveMode: Int, start: Double, window: Double, pixels: Int, duration: Double): WaveStrip? {
+    if (analysis == null) return null
+    val rgb = analysis.rgbDetail
+    if (waveMode == 0 && rgb != null && rgb.columns > 1 && rgb.perSecond > 0.0) {
+        return waveStrip(start, window, pixels, rgb.perSecond, rgb.columns, { rgb.height[it].toInt() and 0xFF }, { rgb.rgb[it] })
+    }
+    val bands = analysis.bandDetail
+    if (waveMode != 2 && bands != null && bands.columns > 1) {
+        return waveStrip(
+            start, window, pixels, 150.0, bands.columns,
+            { maxOf(bands.low[it].toInt() and 0xFF, bands.mid[it].toInt() and 0xFF, bands.high[it].toInt() and 0xFF) },
+            { 0 },
+            { bands.low[it].toInt() and 0xFF },
+            { bands.mid[it].toInt() and 0xFF },
+            { bands.high[it].toInt() and 0xFF },
+        )
+    }
+    val blue = analysis.blueDetail
+    if (blue.isNotEmpty()) {
+        return waveStrip(start, window, pixels, 150.0, blue.size, { blue[it].toInt() and 0xFF }, { 0 }, { blue[it].toInt() and 0xFF })
+    }
+    return null
+}
+
 internal fun bandAt(analysis: RbAnalysis?, duration: Double, time: Double, overview: Boolean = false): Triple<Float, Float, Float> {
     if (duration <= 0.0 || time < 0.0 || time > duration) return Triple(0f, 0f, 0f)
     val bands = if (overview) analysis?.bandPreview ?: analysis?.bands else analysis?.bandDetail ?: analysis?.bands
     if (bands != null && bands.columns > 1) {
-        val pos = (time / duration).coerceIn(0.0, 1.0)
-        val scaled = pos * (bands.columns - 1)
+        // O detalhe tem 150 colunas por segundo. Mapear pela duração (inteira, truncada) escorregava até meio segundo.
+        val detail = !overview && bands === analysis?.bandDetail
+        val scaled = if (detail) (time * 150.0 - 0.5).coerceIn(0.0, bands.columns - 1.0) else (time / duration).coerceIn(0.0, 1.0) * (bands.columns - 1)
         val index = scaled.toInt().coerceIn(0, bands.columns - 1)
         val next = (index + 1).coerceAtMost(bands.columns - 1)
         val mix = (scaled - index).toFloat()
@@ -511,21 +533,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRgbColumns(
         val red = ((color shr 16) and 0xFF) / 255f
         val green = ((color shr 8) and 0xFF) / 255f
         val blue = (color and 0xFF) / 255f
-        val bright = Color(red, green, blue)
-        val shade = Color(red * 0.42f, green * 0.42f, blue * 0.42f)
         val reach = height * amp
-        val x = index * slot
-        drawRect(
-            brush = Brush.verticalGradient(listOf(bright, shade), startY = mid - reach, endY = mid),
-            topLeft = Offset(x, mid - reach),
-            size = Size(slot + 0.6f, reach),
-        )
-        val lower = reach * 0.92f
-        drawRect(
-            brush = Brush.verticalGradient(listOf(shade, bright.copy(alpha = 0.72f)), startY = mid, endY = mid + lower),
-            topLeft = Offset(x, mid),
-            size = Size(slot + 0.6f, lower),
-        )
+        val x = index * slot + slot / 2f
+        // Uma linha por pixel, cor cheia em cima e um pouco mais escura embaixo, como a onda do leitor.
+        drawLine(Color(red, green, blue), Offset(x, mid - reach), Offset(x, mid), strokeWidth = slot + 0.4f)
+        drawLine(Color(red * 0.72f, green * 0.72f, blue * 0.72f), Offset(x, mid), Offset(x, mid + reach * 0.92f), strokeWidth = slot + 0.4f)
     }
 }
 

@@ -198,13 +198,9 @@ fun decodeMonoByte(raw: Int): Int = scale5(raw and 0x1F)
 
 fun colorIndex(wave: ColorWave, time: Double, duration: Double): Int {
     if (wave.columns <= 1) return 0
-    val pos = if (wave.perSecond > 0.0) {
-        time * wave.perSecond
-    } else if (duration > 0.0) {
-        (time / duration) * (wave.columns - 1)
-    } else {
-        0.0
-    }
+    // Com taxa fixa, a coluna que contém o instante (não a mais próxima pelo centro: isso puxava meia coluna).
+    if (wave.perSecond > 0.0) return Math.floor(time * wave.perSecond).toInt().coerceIn(0, wave.columns - 1)
+    val pos = if (duration > 0.0) (time / duration) * (wave.columns - 1) else 0.0
     return pos.roundToInt().coerceIn(0, wave.columns - 1)
 }
 
@@ -370,7 +366,9 @@ fun decodeWavMono(bytes: ByteArray): WavPcm? {
 
 fun wavesFromPcm(samples: FloatArray, rate: Int): PcmWaves {
     val seconds = if (rate > 0) samples.size.toDouble() / rate else 0.0
-    val detailCount = (seconds * 150.0).roundToInt().coerceIn(2, 80_000)
+    // 150 colunas por segundo, exatas (como o detalhe do rekordbox). Sem teto baixo: com o teto de 80 000 uma faixa
+    // de mais de 8 min 53 s tinha menos colunas por segundo do que a leitura supunha e a onda escorregava da grade.
+    val detailCount = Math.ceil(seconds * 150.0).toInt().coerceIn(2, 150 * 1500)
     val bands = splitBands(samples, rate, detailCount)
     val preview = downsampleBands(bands, 1200)
     val rgbDetail = colorWave(bands, 150.0, "APP")
@@ -419,8 +417,10 @@ private fun splitBands(samples: FloatArray, rate: Int, columns: Int): WaveBands 
         // agudo são mais pontudos. O percentil de cada uma compensa isso.
         val lowBand = zeroPhaseButterworth(samples, rate, 200.0)
         val belowHigh = zeroPhaseButterworth(samples, rate, 2200.0)
-        val per = samples.size.toDouble() / columns
-        val window = (rate * 0.032).roundToInt().coerceIn(32, rate)
+        // Uma coluna = 1/150 s. A janela é de uma coluna e meia (10 ms), centrada: os ataques ficam numa coluna só.
+        // A janela antiga, de 32 ms, espalhava cada bumbo por cinco colunas e a onda ficava em bolhas.
+        val per = if (columns >= 2 && samples.size.toDouble() / columns > rate / 150.0 * 1.5) samples.size.toDouble() / columns else rate / 150.0
+        val window = (per * 1.5).roundToInt().coerceIn(8, rate)
         val half = window / 2
         for (column in 0 until columns) {
             val center = ((column + 0.5) * per).roundToInt().coerceIn(0, samples.lastIndex)
@@ -450,19 +450,19 @@ private fun splitBands(samples: FloatArray, rate: Int, columns: Int): WaveBands 
             }
         }
     }
-    // Grave e agudo usam um percentil mais baixo: o corpo da linha e o padrão do
-    // chimbal chegam no teto, não só o pico. O médio usa um percentil alto para
-    // não pintar a faixa inteira de verde.
-    val lowRef = percentile(low, 0.58)
-    val midRef = percentile(mid, 0.94)
-    val highRef = percentile(high, 0.55)
-    val loudRef = percentile(loud, 0.72)
+    // Referência perto do topo (percentil 97 a 98,5): os picos chegam ao teto e o resto fica proporcional, então um
+    // breakdown fica baixo e cada batida aparece separada. Com percentis de 55 a 72 % e colunas de 1/150 s, o fundo
+    // também batia no teto e a onda virava um bloco cheio.
+    val lowRef = percentile(low, 0.97)
+    val midRef = percentile(mid, 0.97)
+    val highRef = percentile(high, 0.97)
+    val loudRef = percentile(loud, 0.985)
     val floor = max(lowRef, max(midRef, highRef)) * 0.12
     return WaveBands(
-        shapeBand(low, max(lowRef, floor), 1.15, 1.25),
-        shapeBand(mid, max(midRef, floor), 0.88, 1.25),
-        shapeBand(high, max(highRef, floor), 1.20, 1.25),
-        shapeBand(loud, loudRef, 1.0, 1.15),
+        shapeBand(low, max(lowRef, floor), 1.0, 0.85),
+        shapeBand(mid, max(midRef, floor), 0.9, 0.85),
+        shapeBand(high, max(highRef, floor), 1.0, 0.85),
+        shapeBand(loud, loudRef, 1.0, 0.9),
     )
 }
 
@@ -569,4 +569,81 @@ fun devSettingBytes(color: Int, position: Int): ByteArray {
     file.putU32le(100, 32)
     data.copyInto(file, 104)
     return file
+}
+
+
+/** Onda ampliada pronta para desenhar: uma coluna por pixel, altura 0..1 e cor 0xRRGGBB (ou três bandas 0..1). */
+class WaveStrip(val heights: FloatArray, val colors: IntArray, val low: FloatArray, val mid: FloatArray, val high: FloatArray)
+
+/**
+ * Uma coluna por pixel a partir de dados de taxa fixa (`perSecond` entradas por segundo). Quando um pixel cobre várias
+ * entradas, fica com a maior (o pico de um bumbo nunca some entre dois pixels, como na tela do leitor); quando cobre
+ * menos de uma, interpola entre os centros das entradas. Nada de suavizar: a forma de cada batida aparece.
+ */
+fun waveStrip(
+    start: Double,
+    window: Double,
+    pixels: Int,
+    perSecond: Double,
+    count: Int,
+    height: (Int) -> Int,
+    color: (Int) -> Int,
+    low: (Int) -> Int = { 0 },
+    mid: (Int) -> Int = { 0 },
+    high: (Int) -> Int = { 0 },
+): WaveStrip {
+    val heights = FloatArray(pixels)
+    val colors = IntArray(pixels)
+    val lows = FloatArray(pixels)
+    val mids = FloatArray(pixels)
+    val highs = FloatArray(pixels)
+    if (pixels <= 0 || count <= 0 || perSecond <= 0.0 || window <= 0.0) return WaveStrip(heights, colors, lows, mids, highs)
+    for (pixel in 0 until pixels) {
+        val a = (start + window * pixel / pixels) * perSecond
+        val b = (start + window * (pixel + 1) / pixels) * perSecond
+        val first = Math.floor(a).toInt()
+        val last = Math.ceil(b).toInt() - 1
+        if (last >= 0 && first < count && last > first) {
+            var best = -1
+            var bestHeight = -1
+            var l = 0
+            var m = 0
+            var h = 0
+            for (index in first.coerceAtLeast(0)..last.coerceAtMost(count - 1)) {
+                val value = height(index)
+                if (value > bestHeight) {
+                    bestHeight = value
+                    best = index
+                }
+                l = maxOf(l, low(index))
+                m = maxOf(m, mid(index))
+                h = maxOf(h, high(index))
+            }
+            if (best >= 0) {
+                heights[pixel] = bestHeight / 255f
+                colors[pixel] = color(best)
+                lows[pixel] = l / 255f
+                mids[pixel] = m / 255f
+                highs[pixel] = h / 255f
+            }
+        } else {
+            // Menos de uma entrada por pixel: interpolação entre os centros das entradas vizinhas.
+            val centre = (a + b) / 2.0 - 0.5
+            val i0 = Math.floor(centre).toInt()
+            val frac = (centre - i0).toFloat()
+            fun lerp(read: (Int) -> Int): Float {
+                val x0 = if (i0 in 0 until count) read(i0) else 0
+                val x1 = if (i0 + 1 in 0 until count) read(i0 + 1) else 0
+                return (x0 * (1f - frac) + x1 * frac) / 255f
+            }
+            if (i0 + 1 >= 0 && i0 < count) {
+                heights[pixel] = lerp(height)
+                colors[pixel] = color((if (frac < 0.5f) i0 else i0 + 1).coerceIn(0, count - 1))
+                lows[pixel] = lerp(low)
+                mids[pixel] = lerp(mid)
+                highs[pixel] = lerp(high)
+            }
+        }
+    }
+    return WaveStrip(heights, colors, lows, mids, highs)
 }

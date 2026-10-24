@@ -471,3 +471,11 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Cartão do deck mais próximo do leitor de club: caixas QUANTIZE e BEAT JUMP à esquerda do tempo, "SINGLE", marcas de tempo restante sob a onda geral; JUMP e Q saíram da coluna da esquerda.
 - Evidência: `ShowControlsTest` (4 testes), suíte completa e `assembleMultiDebug` (compila o C++) passam; `docs/ui/compact-player.png`.
 - Não verificado: reverso, ajuste de loop e contador de falhas no tablet e na DDJ-400 (`BLOCKED_HARDWARE`). O limiar de 90% do contador é nosso, não medido em hardware. O LED do SHIFT+PLAY não foi mapeado.
+
+## 2026-10-24 — Onda ampliada com a resolução do leitor e presa à grade
+
+- Problema relatado: a onda não batia com a referência (rekordbox/CDJ), as batidas pareciam fora da grade e faltava detalhe.
+- Causas medidas no código: (1) cada coluna de 1/150 s era a média de 32 ms, então um bumbo se espalhava por cinco colunas; (2) a tela desenhava uma amostra a cada ~7 colunas (largura/3 pontos para 8 compassos) e ainda suavizava, então os ataques caíam entre pontos e a forma virava bolha; (3) o modo de 3 bandas mapeava o tempo pela duração inteira truncada (até meio segundo de desvio no fim); (4) o teto de 80 000 colunas deixava faixas de mais de 8 min 53 s com menos de 150 colunas por segundo, e a onda escorregava; (5) a normalização por percentil baixo saturava o fundo.
+- Mudança: 150 colunas por segundo exatas, janela de 10 ms centrada, referência no percentil 97–98,5; coluna que contém o instante (não a mais próxima); `waveStrip`: uma coluna por pixel com o pico das entradas que o pixel cobre (ou interpolação, quando ampliado), sem suavizar; linhas cheias por pixel no RGB; detalhe de 3 bandas mapeado a 150 por segundo. Cache da análise de pasta passou a "0132".
+- Evidência: `WaveDetailTest` (cada clique na sua coluna, no máximo 6,7 ms; faixa de 10 min com 150 colunas/s; um pico aparece no pixel certo em janelas de 1 a 60 s); `docs/ui/onda-antes-depois.png` (mesmo instante do set, antes em cima e depois embaixo).
+- Não verificado contra a tela de um CDJ de verdade nem no tablet (`BLOCKED_HARDWARE`).
