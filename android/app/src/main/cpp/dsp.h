@@ -555,28 +555,57 @@ struct GrainShift {
 // (em amostras da faixa) a percorrer; a velocidade vai até esse trecho em cerca de 10 ms, com um polo de 3 ms, e pode
 // ser negativa (para trás). Soltar o prato zera o que falta. O deslocamento total é a soma dos passos.
 struct ScratchFollower {
+    // Freio do prato solto (velocidade normal por segundo): um backspin de 6x leva ~1,2 s para parar.
+    static constexpr double kBrake = 5.0;
+    // Partida depois de soltar parado ou depois do backspin: de 0 a 1x em ~0,12 s.
+    static constexpr double kStart = 8.0;
     bool active = false;
+    // Solto com o prato ainda girando (backspin, empurrão): a faixa segue a inércia até a velocidade normal.
+    bool coasting = false;
     double pending = 0.0;
     double rate = 0.0;
 
     void touch(bool on) {
-        active = on;
-        if (!on) {
+        if (on) {
+            // A mão segura o prato: o giro solto para ali.
+            active = true;
+            coasting = false;
             pending = 0.0;
             rate = 0.0;
+            return;
         }
+        coasting = active && std::fabs(rate) > 1e-9;
+        active = false;
+        pending = 0.0;
+        if (!coasting) rate = 0.0;
     }
 
     void move(double frames) {
         if (active) pending += frames;
     }
 
-    // Quanto andar nesta amostra de saída (em amostras da faixa, com sinal).
-    double step(int outputRate) {
-        if (!active || outputRate <= 0) return 0.0;
-        const double target = pending / (0.010 * outputRate);
+    bool driving() const { return active || coasting; }
+
+    // Quanto andar nesta amostra de saída (em amostras da faixa, com sinal). `target` é o passo normal do deck
+    // (0 parado) e `unit` o passo de 1x, ambos por amostra de saída; só valem no giro solto.
+    double step(int outputRate, double target = 0.0, double unit = 1.0) {
+        if (outputRate <= 0) return 0.0;
+        if (coasting) {
+            const bool braking = (rate < 0.0 && target >= 0.0) || (rate > 0.0 && target <= 0.0) || std::fabs(rate) > std::fabs(target);
+            const double delta = (braking ? kBrake : kStart) * unit / outputRate;
+            if (rate < target) rate = std::min(target, rate + delta);
+            else rate = std::max(target, rate - delta);
+            const double out = rate;
+            if (rate == target) {
+                coasting = false;
+                rate = 0.0;
+            }
+            return out;
+        }
+        if (!active) return 0.0;
+        const double follow = pending / (0.010 * outputRate);
         const double coef = 1.0 - std::exp(-1.0 / (0.003 * outputRate));
-        rate += (target - rate) * coef;
+        rate += (follow - rate) * coef;
         if ((pending >= 0.0 && rate > pending) || (pending <= 0.0 && rate < pending)) rate = pending;
         pending -= rate;
         if (std::fabs(pending) < 1e-6 && std::fabs(rate) < 1e-6) rate = 0.0;

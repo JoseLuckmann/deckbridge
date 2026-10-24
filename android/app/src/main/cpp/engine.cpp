@@ -96,15 +96,17 @@ struct Deck {
     void read(int outputRate, float &leftOut, float &rightOut) {
         leftOut = 0.f;
         rightOut = 0.f;
-        if ((!playing && !scratch.active) || left.empty() || sampleRate <= 0 || outputRate <= 0) return;
+        if ((!playing && !scratch.driving()) || left.empty() || sampleRate <= 0 || outputRate <= 0) return;
         if (position < 0.0) position = 0.0;
         wrapLoop();
-        if (scratch.active) {
-            // Prato tocado: leitura direta na posição que o prato manda, sem Master Tempo.
+        if (scratch.driving()) {
+            // Prato tocado ou solto girando (backspin): leitura direta na posição que o prato manda, sem Master Tempo.
             const int total = static_cast<int>(left.size());
             leftOut = deckbridge::readInterp(left.data(), total, position);
             rightOut = deckbridge::readInterp(right.data(), total, position);
-            position = std::min(std::max(0.0, position + scratch.step(outputRate)), static_cast<double>(total - 2));
+            const double unit = rateMul * static_cast<double>(sampleRate) / static_cast<double>(outputRate);
+            const double normal = playing ? deckbridge::directedStep(pitch, rateMul, sampleRate, outputRate, reversed) : 0.0;
+            position = std::min(std::max(0.0, position + scratch.step(outputRate, normal, unit)), static_cast<double>(total - 2));
             lastEmitted = position;
             expectedPos = position;
             stretch.reset();
@@ -410,6 +412,8 @@ public:
     void nudge(int deck, double seconds) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
+        // Prato solto ainda girando depois do backspin: o giro já é a inércia, não um empurrão.
+        if (decks_[deck].scratch.coasting) return;
         if (seconds == 0.0 && decks_[deck].userSlip && decks_[deck].slipAnchor >= 0.0) {
             decks_[deck].position = clampFrame(decks_[deck], decks_[deck].slipAnchor);
             return;

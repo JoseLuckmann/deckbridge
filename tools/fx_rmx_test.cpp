@@ -463,8 +463,55 @@ void scratchFollows() {
     check(follower.step(rate) == 0.0, "scratch: solto, o prato não move a faixa");
 }
 
+// Backspin pelo prato: giro rápido para trás e soltar. A faixa segue para trás pela inércia, freia, passa por zero
+// e volta a 1x sozinha; o prato seguro de novo para o giro solto na hora.
+void backspinCoasts() {
+    const int rate = 48000;
+    deckbridge::ScratchFollower follower;
+    follower.touch(true);
+    double position = 0.0;
+    for (int message = 0; message < 15; ++message) {
+        follower.move(-0.06 * rate);  // 60 ms para trás a cada 10 ms: 6x em reverso
+        for (int i = 0; i < rate / 100; ++i) position += follower.step(rate, 1.0, 1.0);
+    }
+    const double atRelease = follower.rate;
+    follower.touch(false);
+    check(follower.coasting && atRelease < -4.0, "backspin: solto girando a mais de 4x para trás, entra no giro solto");
+    double minRate = 0.0;
+    double back = 0.0;
+    int samples = 0;
+    while (follower.driving() && samples < rate * 3) {
+        const double step = follower.step(rate, 1.0, 1.0);
+        minRate = std::min(minRate, step);
+        if (step < 0.0) back -= step;
+        position += step;
+        ++samples;
+    }
+    const double seconds = static_cast<double>(samples) / rate;
+    check(!follower.driving(), "backspin: o giro solto termina sozinho");
+    check(seconds > 0.8 && seconds < 2.0, "backspin: freia em 0,8 a 2 s (" + std::to_string(seconds) + " s)");
+    check(back > 1.5 * rate, "backspin: depois de soltar ainda volta mais de 1,5 s da faixa");
+    // Deck parado: o giro solto termina em zero.
+    follower.touch(true);
+    follower.move(-0.06 * rate);
+    for (int i = 0; i < rate / 100; ++i) follower.step(rate, 0.0, 1.0);
+    follower.touch(false);
+    double last = -1.0;
+    for (int i = 0; i < rate * 2; ++i) last = follower.step(rate, 0.0, 1.0);
+    check(!follower.driving() && last == 0.0, "backspin: com o deck parado, para em zero");
+    // Agarrar o prato no meio do giro solto para a faixa.
+    follower.touch(true);
+    follower.move(-0.06 * rate);
+    for (int i = 0; i < rate / 100; ++i) follower.step(rate, 1.0, 1.0);
+    follower.touch(false);
+    follower.step(rate, 1.0, 1.0);
+    follower.touch(true);
+    check(follower.active && !follower.coasting && follower.step(rate, 1.0, 1.0) == 0.0, "backspin: segurar o prato para o giro solto");
+}
+
 int main() {
     scratchFollows();
+    backspinCoasts();
     rollBalanceCurve();
     spiralRises();
     for (int scene : {0, 2, 3, 4, 5, 7}) {

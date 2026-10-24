@@ -493,3 +493,9 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - `checks.txt`: fase +0,0 ms com SYNC.
   - Vídeo de 3,3 min fora do git, só com as faixas do usuário.
 - Risco / não verificado: a sensação do scratch no prato da DDJ-400 e o backspin no tablet (`BLOCKED_HARDWARE`). Os passos de 5 ms por unidade são nossos e não foram medidos.
+
+## 2026-10-24 — Backspin manual pelo prato
+
+- Mudança: `ScratchFollower` ganhou o giro solto (`coasting`). Ao soltar o topo do prato em movimento, a faixa segue com a velocidade da mão. Ela freia 5x/s até o passo normal do deck (zero se parado) e parte a 8x/s. Tocar de novo para o giro na hora, e `nudge` é ignorado durante o giro solto. O mesmo vale em `ddj_session` e no `SetModel` (espelho para a tela). O vídeo de mixagem termina com um backspin manual.
+- Evidência: `fx_rmx_test` backspinCoasts (6 checagens: entra no giro a mais de 4x para trás, termina sozinho em 1,03 s, volta mais de 1,5 s da faixa, para em zero com o deck parado, segurar o prato para o giro). Quadros do vídeo: deck 2 de 71,9 a 67,1 compassos durante o giro.
+- Não verificado: as constantes de freio e partida são nossas, não medidas num CDJ ou na DDJ-400. Também não foi verificado se o prato solto da DDJ-400 manda mensagens que conflitem (`BLOCKED_HARDWARE`).

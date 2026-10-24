@@ -80,9 +80,10 @@ Limites: o roteiro não olha para a estrutura musical das faixas (o analisador s
 3. LOAD de t2 no deck 2. **Scratch** no deck 2 nos compassos 20–24 de t1: toque no topo do prato (vinil), giros para frente e para trás. Nos compassos 22–24 entram **cortes de crossfader** a cada meia batida.
 4. **SYNC** no deck 2 (129 → 130 BPM) no compasso 28 e PLAY no compasso 32 de t1. Fader e filtro abrem, o grave troca no compasso 16 de t2 e o deck 2 vira master.
 5. **Buildup com RMX** no deck 1: Noise UP segurado por 8 compassos (24–32 de t2) e roll de bumbo no último. **BACKSPIN** (release FX do RMX) na meia batida antes do compasso 32 de t2. O deck 1 para e o fader fecha.
-6. O backspin cai no breakdown de t2. Um loop roll com SLIP (compassos 48–52) solta no drop, seguido de 16 compassos de drop e saída com eco e fader.
+6. O backspin cai no breakdown de t2. Um loop roll com SLIP (compassos 48–52) solta no drop. Depois vêm 16 compassos de drop com eco.
+7. **Backspin manual pelo prato** no compasso 72: a mão toca o topo, gira para trás com força (0,15 s, ~9x em reverso) e solta. A faixa volta uns 4 compassos pela inércia e freia; PLAY para o deck e o fader fecha.
 
-Para o scratch, o motor ganhou `ScratchFollower` (`dsp.h`). Com o topo do prato tocado (nota 54), a cabeça segue o prato: cada passo de giro move 5 ms e a resposta é suavizada em ~10 ms. Ao soltar, o deck volta a tocar ou fica parado, como estava. Antes, o prato no modo vinil só empurrava a posição.
+Para o scratch, o motor ganhou `ScratchFollower` (`dsp.h`). Com o topo do prato tocado (nota 54), a cabeça segue o prato: cada passo de giro move 5 ms e a resposta é suavizada em ~10 ms. Ao soltar com o prato girando, a faixa segue pela inércia: freia 5x por segundo até a velocidade normal (ou zero, com o deck parado) e parte de 0 a 1x em ~0,12 s. É o backspin manual: um giro de 9x para trás leva ~1,8 s para parar. Agarrar o prato de novo para o giro na hora. Durante o giro solto, os giros do prato sem toque não empurram a faixa. Antes, o prato no modo vinil só empurrava a posição.
 
 `checks.txt`: fase entre os decks seis compassos depois da entrada com SYNC: +0,0 ms.
 

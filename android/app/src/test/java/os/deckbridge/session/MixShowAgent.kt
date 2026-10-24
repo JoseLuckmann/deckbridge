@@ -5,8 +5,8 @@ import kotlin.math.max
 import os.deckbridge.logic.beatPhase
 
 /**
- * Mixagem de duas faixas com os truques: loop roll com slip, scratch com cortes no crossfader, SYNC, troca de grave,
- * buildup com RMX e saída da primeira faixa com BACKSPIN. Tudo em compassos da faixa A (que toca do começo) e da B.
+ * Mixagem de duas faixas com os truques: loop roll com slip, scratch com cortes no crossfader, backspin manual pelo prato, SYNC, troca de grave,
+ * buildup com RMX, saída da primeira faixa com o BACKSPIN do RMX e final com backspin pelo prato. Tudo em compassos da faixa A (que toca do começo) e da B.
  */
 class MixShowAgent(model: SetModel, private val a: Int, private val b: Int, offsetsDir: File) : DjHands(model, offsetsDir) {
     val notes = ArrayList<String>()
@@ -129,8 +129,17 @@ class MixShowAgent(model: SetModel, private val a: Int, private val b: Int, offs
         m(barB(52.0), 145, 77, 127)
         ui(barB(52.0) + 0.4, "SLIP desligado") { toggleSlip(1) }
         beatFxOn(barB(68.0), 4, 1, 100)
-        ramp(barB(68.0), barB(72.0), 177, 19, 127, 0, 0.1)
-        beatFxOff(barB(72.0))
+
+        // Final com BACKSPIN manual pelo prato: no compasso 72 a mão toca o topo, gira para trás com força
+        // (0,15 s de giro, ~9x em reverso) e solta. A faixa segue para trás pela inércia e freia; PLAY para o deck
+        // antes de a faixa voltar a andar, e o eco segura a cauda.
+        val spin = barB(72.0)
+        m(spin - 0.02, 145, 54, 127)
+        for (n in 0 until 30) m(spin + n * 0.005, 177, 34, 20)
+        m(spin + 0.15, 145, 54, 0)
+        play(spin + 1.5, 1)
+        ramp(spin + 2.2, spin + 2.6, 177, 19, 127, 0, 0.05)
+        beatFxOff(spin + 4.5)
 
         model.at(barB(6.0)) {
             val pa = beatPhase(pos[0], ga.origin + offA, ga.bpm)
@@ -140,6 +149,6 @@ class MixShowAgent(model: SetModel, private val a: Int, private val b: Int, offs
             if (d < -0.5) d += 1.0
             checks += PhaseCheck("${all[a].title}→${all[b].title}", t, d * barReal / 4 * 1000.0)
         }
-        return max(barB(73.0), start + 1.0)
+        return max(barB(72.0) + 5.0, start + 1.0)
     }
 }

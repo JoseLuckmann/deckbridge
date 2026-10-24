@@ -67,14 +67,14 @@ struct Deck {
         l = r = 0.f;
         if (leftData == nullptr || rightData == nullptr) return;
         const int frames = static_cast<int>(leftData->size());
-        if ((!playing && !scratch.active) || frames < 4) return;
-        if (scratch.active) {
+        if ((!playing && !scratch.driving()) || frames < 4) return;
+        if (scratch.driving()) {
             // Prato tocado: o mesmo seguidor do motor do app (dsp.h).
             if (position < 0.0) position = 0.0;
             lastEmitted = position;
             l = deckbridge::readInterp(leftData->data(), frames, position) * trim;
             r = deckbridge::readInterp(rightData->data(), frames, position) * trim;
-            position = std::min(std::max(0.0, position + scratch.step(kRate)), static_cast<double>(frames - 2));
+            position = std::min(std::max(0.0, position + scratch.step(kRate, playing ? pitch * rateMul : 0.0, rateMul)), static_cast<double>(frames - 2));
             return;
         }
         if (position < 0.0) position = 0.0;

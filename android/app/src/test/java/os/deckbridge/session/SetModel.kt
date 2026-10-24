@@ -64,6 +64,11 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
     private val shadow = doubleArrayOf(0.0, 0.0)
     /** Prato tocado (scratch): a faixa não anda sozinha, só com o giro. */
     val scratching = booleanArrayOf(false, false)
+    // Espelho do giro solto do motor (ScratchFollower.coasting): velocidade em x da normal, NaN fora do giro.
+    private val coast = doubleArrayOf(Double.NaN, Double.NaN)
+    private val lastMove = doubleArrayOf(-1.0, -1.0)
+    private val moveGap = doubleArrayOf(1.0, 1.0)
+    private val moveSize = doubleArrayOf(0.0, 0.0)
     var faces = listOf(DeckFace(playing = false, onAir = false), DeckFace(playing = false, onAir = false))
         private set
     private val volume = floatArrayOf(0f, 0f)
@@ -158,7 +163,16 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
     fun advance(dt: Double) {
         t += dt
         for (deck in 0..1) {
-            if (faces[deck].playing && !scratching[deck]) {
+            if (!coast[deck].isNaN()) {
+                // Mesmo freio do dsp.h: 5x/s freando, 8x/s partindo.
+                val target = if (faces[deck].playing) faces[deck].pitch.toDouble() else 0.0
+                val v = coast[deck]
+                val braking = (v < 0 && target >= 0) || (v > 0 && target <= 0) || kotlin.math.abs(v) > kotlin.math.abs(target)
+                val delta = (if (braking) 5.0 else 8.0) * dt
+                val next = if (v < target) min(target, v + delta) else max(target, v - delta)
+                pos[deck] = max(0.0, pos[deck] + (v + next) * 0.5 * dt)
+                coast[deck] = if (next == target) Double.NaN else next
+            } else if (faces[deck].playing && !scratching[deck]) {
                 val face = faces[deck]
                 pos[deck] = advancePlayhead(pos[deck], dt * face.pitch, face.loopStart.toDouble(), face.loopEnd.toDouble())
                 if (face.slip) shadow[deck] += dt * face.pitch
@@ -296,17 +310,23 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
             }
             // Prato no modo vinil (padrão do app): cada passo desloca o ponto, como o DeckPage.
             PerformanceAction.Kind.JOG_TOUCH -> if (deck in 0..1) {
+                val was = scratching[deck]
                 scratching[deck] = action.hotIndex == 1
                 ops += "%.4f\tscratch\t%d\t%d".format(t, deck, if (scratching[deck]) 1 else 0)
+                // Soltar com o prato girando: a faixa segue pela inércia (backspin), como o motor.
+                coast[deck] = if (was && !scratching[deck] && t - lastMove[deck] < 0.02) moveSize[deck] / moveGap[deck] else Double.NaN
             }
             PerformanceAction.Kind.JOG -> if (deck in 0..1 && isLoaded(deck)) {
                 val seconds = jogSeconds((action.slider ?: 0.0))
                 if (scratching[deck]) {
                     // Scratch: a posição segue o prato (o motor alcança em ~10 ms).
                     pos[deck] = max(0.0, pos[deck] + seconds)
+                    moveGap[deck] = (t - lastMove[deck]).coerceIn(0.001, 0.05)
+                    moveSize[deck] = seconds
+                    lastMove[deck] = t
                     ops += "%.4f\tscratchmove\t%d\t%.6f".format(t, deck, seconds)
                     syncFace(deck)
-                } else {
+                } else if (coast[deck].isNaN()) {
                     seekTo(deck, pos[deck] + seconds)
                 }
             }
