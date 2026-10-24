@@ -549,3 +549,24 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - Áudio do roteiro: o trecho depois do Tape STOP volta a 0,44 RMS (antes 0,75, com o deck parado). O BRAKE final cai a 0,00 (antes 0,79 constante).
 - Risco: nada ouvido no hardware (`BLOCKED_HARDWARE`). O limiar de 15% do `MotorGain` é nosso.
 - O painel virtual pegou um erro de LED, que também estava no app (DeckPage). Ao segurar pela tela uma cena sem pad (Reverb DOWN, Echo DOWN, Tape STOP ou Dub ECHO), acendia o pad do X-PAD de mesmo número: o Tape STOP acendia DRUM. A regra agora fica em `rmxSamplerPads` (`DdjLeds.kt`), usada pelo app e pela simulação. Teste: `DdjLedsTest` (`rmxScenesWithoutPadDoNotLightPads`).
+
+## 2026-10-24 — Motor real testado no desktop (sem tablet)
+
+- Mudança:
+  - `tools/engine_host_test.cpp` compila o `engine.cpp` de verdade contra stubs do Oboe e do log (`tools/host_stubs/`).
+  - O stub `FakeDevice` simula canais, modo exclusivo, falha de abertura e desconexão.
+- Endurecimento do motor:
+  - Entradas da JNI saneadas: NaN e infinito caem no padrão, os valores fora da faixa são presos.
+  - Saída protegida por `safeOut`.
+  - Limitador novo no fone.
+  - Correção no release do `PeakLimiter`: ele passava do teto, chegando a 0,9857.
+- Evidência (`./engine_host_test [basics|blocks|channels|disconnect|fuzz|threads]`), tudo PASS:
+  - Blocos de 64 a 4096 dão saída idêntica bit a bit.
+  - Funciona com 1, 2, 3, 6 e 8 canais e com o fallback de 2 canais; taxas de 44,1/48/96 kHz contra arquivos de 22,05 a 96 kHz.
+  - Desconexão: refaz o stream e desiste depois de 6 tentativas.
+  - Fuzz com NaN, infinito e 1e30: saída finita, master e fone ≤ 0,9801.
+  - Quatro threads por 10 s: 55 635 blocos sem NaN.
+  - ASan e UBSan limpos.
+  - TSan sem nenhum aviso; o limiar caiu para 100 blocos porque o TSan roda cerca de 10× mais lento.
+  - `console_test`, `fx_rmx_test` e a suíte Gradle passam; `assembleMultiDebug` compila.
+- Não verificado: Oboe real, AAudio e USB do tablet (`BLOCKED_HARDWARE`).

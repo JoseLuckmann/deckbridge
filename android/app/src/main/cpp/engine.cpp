@@ -21,6 +21,14 @@
 
 namespace {
 
+// Tudo que chega do Kotlin passa por aqui: um NaN ou um valor enorme que viesse de uma conta errada de lá entraria nos
+// filtros e nos atrasos e deixaria o áudio morto (ou com estouro de índice) até reiniciar o app. Não finito vira o
+// padrão; o resto é preso à faixa útil.
+// Guarda de saída: remove o não finito sem cortar o sinal (quem limita é o limiter, não esta função).
+inline float safeOut(float x) { return std::isfinite(x) ? std::clamp(x, -16.f, 16.f) : 0.f; }
+inline float fin(float v, float lo, float hi, float fallback) { return std::isfinite(v) ? std::clamp(v, lo, hi) : fallback; }
+inline double finD(double v, double lo, double hi, double fallback) { return std::isfinite(v) ? std::clamp(v, lo, hi) : fallback; }
+
 constexpr double kHz[4] = {440.0, 554.0, 659.0, 880.0};
 constexpr float kAmplitude = 0.2f;
 constexpr int kMaxHot = 8;
@@ -324,14 +332,14 @@ public:
         // oldLeft/oldRight liberam a memória da faixa antiga aqui, fora do lock.
         std::lock_guard<std::mutex> lock(mixMutex_);
         Deck &target = decks_[deck];
-        target.sampleRate = rate > 0 ? rate : 48000;
-        target.bpm = bpm;
+        target.sampleRate = rate > 0 ? std::min(rate, 384000) : 48000;
+        target.bpm = fin(bpm, 0.f, 400.f, 0.f);
         target.position = 0.0;
         target.playing = false;
         target.reversed = false;
-        target.cue = std::max(0.0, static_cast<double>(cueSeconds) * target.sampleRate);
-        const double start = static_cast<double>(loopStartSec) * target.sampleRate;
-        const double end = static_cast<double>(loopEndSec) * target.sampleRate;
+        target.cue = finD(static_cast<double>(cueSeconds), 0.0, 36000.0, 0.0) * target.sampleRate;
+        const double start = finD(static_cast<double>(loopStartSec), -1.0, 36000.0, -1.0) * target.sampleRate;
+        const double end = finD(static_cast<double>(loopEndSec), -1.0, 36000.0, -1.0) * target.sampleRate;
         if (end > start && start >= 0.0) {
             target.loopStart = start;
             target.loopEnd = end;
@@ -342,7 +350,9 @@ public:
         for (double &item : target.hot) item = -1.0;
         int limit = std::min(hotCount, kMaxHot);
         for (int index = 0; index < limit; ++index) {
-            if (hot != nullptr && hot[index] >= 0.f) target.hot[index] = static_cast<double>(hot[index]) * target.sampleRate;
+            if (hot != nullptr && std::isfinite(hot[index]) && hot[index] >= 0.f && hot[index] < 36000.f) {
+                target.hot[index] = static_cast<double>(hot[index]) * target.sampleRate;
+            }
         }
     }
 
@@ -385,11 +395,11 @@ public:
 
     void setMix(float volA, float volB, float pitchA, float pitchB, float cross, bool pflA, bool pflB) {
         std::lock_guard<std::mutex> lock(mixMutex_);
-        decks_[0].volume = std::clamp(volA, 0.f, 1.f);
-        decks_[1].volume = std::clamp(volB, 0.f, 1.f);
-        decks_[0].pitch = std::clamp(static_cast<double>(pitchA), 0.5, 2.0);
-        decks_[1].pitch = std::clamp(static_cast<double>(pitchB), 0.5, 2.0);
-        cross_ = std::clamp(cross, 0.f, 1.f);
+        decks_[0].volume = fin(volA, 0.f, 1.f, 0.f);
+        decks_[1].volume = fin(volB, 0.f, 1.f, 0.f);
+        decks_[0].pitch = finD(static_cast<double>(pitchA), 0.5, 2.0, 1.0);
+        decks_[1].pitch = finD(static_cast<double>(pitchB), 0.5, 2.0, 1.0);
+        cross_ = fin(cross, 0.f, 1.f, 0.5f);
         decks_[0].pfl = pflA;
         decks_[1].pfl = pflB;
     }
@@ -397,10 +407,11 @@ public:
     void setTrim(int deck, float linear) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
-        trim_[deck] = std::clamp(linear, 0.05f, 4.f);
+        trim_[deck] = fin(linear, 0.05f, 4.f, 1.f);
     }
 
     void seekSeconds(int deck, double seconds) {
+        if (!std::isfinite(seconds)) return;
         std::lock_guard<std::mutex> lock(mixMutex_);
         placeSeconds(deck, seconds, false);
     }
@@ -412,12 +423,15 @@ public:
     }
 
     void scratchMove(int deck, double seconds) {
+        if (!std::isfinite(seconds)) return;
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
-        decks_[deck].scratch.move(seconds * decks_[deck].sampleRate);
+        // Um passo de prato nunca passa de 2 s de faixa; mais que isso é lixo.
+        decks_[deck].scratch.move(finD(seconds, -2.0, 2.0, 0.0) * decks_[deck].sampleRate);
     }
 
     void nudge(int deck, double seconds) {
+        if (!std::isfinite(seconds)) return;
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
         // Prato solto ainda girando depois do backspin: o giro já é a inércia, não um empurrão.
@@ -433,34 +447,35 @@ public:
     void setBeatFx(int effect, bool on, int level, int channel, float bpm, float beats) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         mixFx_.setSampleRate(rateForFx());
-        mixFx_.setBeat(effect, on, std::clamp(level / 127.f, 0.f, 1.f), channel, bpm, beats);
+        mixFx_.setBeat(std::clamp(effect, 0, 64), on, std::clamp(level / 127.f, 0.f, 1.f), channel, fin(bpm, 20.f, 400.f, 120.f),
+                       fin(beats, 0.0625f, 64.f, 1.f));
     }
 
     void setFilter(int deck, float norm) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         mixFx_.setSampleRate(rateForFx());
-        mixFx_.setFilter(deck, norm);
+        mixFx_.setFilter(deck, fin(norm, 0.f, 1.f, 0.5f));
     }
 
     void setEq(int deck, float low, float mid, float high) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         mixFx_.setSampleRate(rateForFx());
-        mixFx_.setEq(deck, low, mid, high);
+        mixFx_.setEq(deck, fin(low, 0.f, 1.f, 0.5f), fin(mid, 0.f, 1.f, 0.5f), fin(high, 0.f, 1.f, 0.5f));
     }
 
     // TRIM do canal, 0..1: −12 dB à esquerda, 0 dB no centro, +12 dB à direita.
     void setTrimKnob(int deck, float norm) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
-        const float k = std::clamp(norm, 0.f, 1.f);
+        const float k = fin(norm, 0.f, 1.f, 0.5f);
         trimKnob_[deck] = std::pow(10.f, (k - 0.5f) * 2.f * 12.f / 20.f);
     }
 
     // HEADPHONES MIX (0 = só cue, 1 = só master) e LEVEL (0..1, 0 dB em 0,75).
     void setHead(float mix, float level) {
         std::lock_guard<std::mutex> lock(mixMutex_);
-        headMix_ = std::clamp(mix, 0.f, 1.f);
-        const float k = std::clamp(level, 0.f, 1.f);
+        headMix_ = fin(mix, 0.f, 1.f, 0.f);
+        const float k = fin(level, 0.f, 1.f, 0.75f);
         headGain_ = k <= 0.01f ? 0.f : std::pow(10.f, (k - 0.75f) * 2.f * 12.f / 20.f);
     }
 
@@ -520,6 +535,10 @@ public:
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
         Deck &target = decks_[deck];
+        if (!std::isfinite(startSec) || !std::isfinite(endSec) || endSec > 36000.f) {
+            startSec = -1.f;
+            endSec = -1.f;
+        }
         if (endSec > startSec && startSec >= 0.f) {
             target.loopStart = static_cast<double>(startSec) * target.sampleRate;
             target.loopEnd = static_cast<double>(endSec) * target.sampleRate;
@@ -541,8 +560,14 @@ public:
     // senão o MixerFx realocaria buffers dentro do áudio.
     int rateForFx() const { return sampleRate_ > 0 ? sampleRate_ : 48000; }
 
-    void setRmx(const float *values, int count) {
-        if (values == nullptr || count < 18) return;
+    void setRmx(const float *raw, int count) {
+        if (raw == nullptr || count < 18) return;
+        // Cópia limpa: o índice 17 é o BPM (120 se vier lixo), os demais 0; tudo preso a ±1000.
+        float values[32];
+        const int used = std::min(count, 32);
+        for (int index = 0; index < used; ++index) values[index] = fin(raw[index], -1000.f, 1000.f, index == 17 ? 120.f : 0.f);
+        values[17] = fin(values[17], 20.f, 400.f, 120.f);
+        count = used;
         std::lock_guard<std::mutex> lock(mixMutex_);
         mixFx_.setSampleRate(rateForFx());
         const float drumBuild = count >= 19 ? values[18] : 0.f;
@@ -558,9 +583,13 @@ public:
                       gridDeck);
     }
 
-    void setConsole(const float *values, int count) {
+    void setConsole(const float *raw, int count) {
+        if (raw == nullptr || count <= 0) return;
+        float values[32];
+        const int used = std::min(count, 32);
+        for (int index = 0; index < used; ++index) values[index] = fin(raw[index], -1000.f, 1000.f, std::nanf(""));
         std::lock_guard<std::mutex> lock(mixMutex_);
-        mixFx_.setConsole(values, count);
+        mixFx_.setConsole(values, used);
     }
 
     void previewLoad(const float *left, const float *right, int frames, int rate) {
@@ -584,8 +613,9 @@ public:
     void setGrid(int deck, float originSec, float bpm) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
-        decks_[deck].gridOriginSec = static_cast<double>(originSec);
-        decks_[deck].gridBpm = bpm > 1.f ? static_cast<double>(bpm) : 0.0;
+        decks_[deck].gridOriginSec = finD(static_cast<double>(originSec), -3600.0, 36000.0, 0.0);
+        const float clean = fin(bpm, 0.f, 400.f, 0.f);
+        decks_[deck].gridBpm = clean > 1.f ? static_cast<double>(clean) : 0.0;
     }
 
     void loadDrum(int voice, const uint8_t *data, int size) {
@@ -612,7 +642,7 @@ public:
         return result;
     }
 
-    void setMasterGain(float linear) { masterGain_.store(std::clamp(linear, 0.f, 4.f), std::memory_order_relaxed); }
+    void setMasterGain(float linear) { masterGain_.store(fin(linear, 0.f, 4.f, 1.f), std::memory_order_relaxed); }
 
     int glitchCount() const { return glitches_.load(std::memory_order_relaxed); }
 
@@ -669,8 +699,9 @@ public:
                 mixFx_.processMaster(masterL, masterR);
                 // Ganho de saída do app (−12 a +6 dB): o DDJ-400 do mapa pinado não manda um knob de master em MIDI.
                 const float outGain = masterGain_.load(std::memory_order_relaxed);
-                masterL *= outGain;
-                masterR *= outGain;
+                // Última defesa: um NaN que passasse pelas guardas de entrada não pode chegar ao DAC nem ao limiter.
+                masterL = safeOut(masterL * outGain);
+                masterR = safeOut(masterR * outGain);
                 masterLimit_.process(masterL, masterR);
                 peak[0] = std::max(peak[0], std::max(std::fabs(al), std::fabs(ar)));
                 peak[1] = std::max(peak[1], std::max(std::fabs(bl), std::fabs(br)));
@@ -700,8 +731,10 @@ public:
                     preview_.read(rate, previewL, previewR);
                     phoneL += previewL;
                     phoneR += previewR;
-                    phoneL = (phoneL * (1.f - headMix_) + masterL * headMix_) * headGain_;
-                    phoneR = (phoneR * (1.f - headMix_) + masterR * headMix_) * headGain_;
+                    phoneL = safeOut((phoneL * (1.f - headMix_) + masterL * headMix_) * headGain_);
+                    phoneR = safeOut((phoneR * (1.f - headMix_) + masterR * headMix_) * headGain_);
+                    // O fone também tem limiter: o CUE soma dois canais antes do fader com EQ e trim, e passava de 1,0.
+                    phoneLimit_.process(phoneL, phoneR);
                 }
                 for (int channel = 0; channel < channels; ++channel) {
                     float sample = 0.f;
@@ -878,6 +911,7 @@ private:
     Deck decks_[2];
     deckbridge::MixerFx mixFx_;
     deckbridge::PeakLimiter masterLimit_;
+    deckbridge::PeakLimiter phoneLimit_;
     float trim_[2]{1.f, 1.f};
     float trimKnob_[2]{1.f, 1.f};
     deckbridge::PreviewVoice preview_;

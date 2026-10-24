@@ -375,9 +375,10 @@ struct PeakLimiter {
     void process(float &left, float &right) {
         const float peak = std::max(std::fabs(left), std::fabs(right));
         const float need = peak > ceiling ? ceiling / peak : 1.f;
+        // Ataque instantâneo; a liberação nunca sobe além do que este pico ainda permite (antes subia 0,2% do caminho até 1
+        // mesmo com o pico acima do teto, e o pico saía um pouco acima dele).
         if (need < envelope) envelope = need;
-        else envelope += (1.f - envelope) * 0.002f;
-        if (envelope > 1.f) envelope = 1.f;
+        else envelope = std::min(need, envelope + (1.f - envelope) * 0.002f);
         left *= envelope;
         right *= envelope;
     }
@@ -3015,7 +3016,8 @@ struct MixerFx {
     // isolador. Índices que faltam ficam como estão.
     void setConsole(const float *values, int count) {
         if (values == nullptr) return;
-        auto at = [&](int index, float fallback) { return index < count ? values[index] : fallback; };
+        // Índice que falta ou veio não finito (o motor troca o lixo por NaN) fica no padrão.
+        auto at = [&](int index, float fallback) { return index < count && std::isfinite(values[index]) ? values[index] : fallback; };
         chCurve = std::clamp(static_cast<int>(at(0, 2.f)), 0, 2);
         crossCurve = std::clamp(static_cast<int>(at(1, 0.f)), 0, 2);
         setComp(0, at(2, 0.f));
