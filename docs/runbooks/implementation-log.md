@@ -645,7 +645,7 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Proposta ADR-0007 (Pi 1 com o motor próprio): está em estado PROPOSTA e precisa de decisão do dono, porque o AGENTS.md manda começar o alvo 2 pelo Mixxx.
 - Evidência:
   - `fx_rmx_test` 88/0, `console_test` 40/0, `fx_measure` 13/0, `dsp_test` ALL PASS e `engine_host_test` FAILS 0.
-  - ASan+UBSan: 51 PASS e 0 erros.
+  - ASan+UBSan: 51 PASS e 0 erros. TSan na suíte inteira do motor, já com a correção da thread: 50 PASS e 0 avisos.
   - Dump das 46 cenas bit a bit igual entre as rodadas 1 e 2.
   - Suíte JVM com 142 testes e 0 falhas. APK compila para arm64, armeabi-v7a e x86_64.
 - Não verificado:
