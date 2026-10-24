@@ -109,7 +109,7 @@ A diferença entre as duas telas é o que se valida. Exemplos:
 - O modo de pad é do próprio hardware; o mapa não tem os botões de modo. O painel mostra o modo pela faixa de notas que os pads mandam.
 
 Limites:
-- O desenho segue a disposição da controladora, mas as medidas não são as do desenho técnico da Pioneer.
+- O desenho segue a disposição e a proporção de uma foto de produto, mas as medidas não são as do desenho técnico da Pioneer.
 - MASTER LEVEL não aparece: não manda MIDI no mapa pinado.
 - O ângulo do prato usa 720 passos por volta, a conta do script oficial (`scratchEnable 720`), não medido no prato real.
 
@@ -136,7 +136,13 @@ Erro corrigido junto: os quadros liam os picos de `mix.wav.levels.tsv` da pasta 
 - **Releases:** ECHO OUT na saída do A e BRAKE no final.
 - **Entrada do B:** SYNC no compasso 44 do A e PLAY no 48. A fase seis compassos depois da entrada é +0,0 ms.
 
-A DDJ virtual passou a uma janela de 1280 × 720, com o prato, os knobs, os pads e os textos maiores. No modo SAMPLER, cada pad mostra o que faz no RMX. O vídeo empilha o app (1280 × 720) e a DDJ (1280 × 720).
+A DDJ virtual é desenhada na grade de uma foto de produto da DDJ-400 de cima (894 × 505) e escalada para 1280 de largura. A janela tem 1280 × 760: a controladora ocupa 1280 × 723 e uma faixa embaixo mostra o último MIDI. O vídeo empilha o app (1280 × 720) e a DDJ (1280 × 760).
+
+Disposição, como na controladora:
+- **Cada deck:** IN/÷4BEAT e OUT redondos e laranja, RELOOP/EXIT, CUE/LOOP CALL ◄ ► e o BEAT SYNC "MASTER" vermelho no canto; o prato grande com o logo e o anel que fica laranja ao toque; o fader de tempo na lateral; SHIFT e REV/FWD sob o prato; CUE e PLAY/PAUSE redondos; os quatro modos de pad (HOT CUE, BEAT LOOP, BEAT JUMP, SAMPLER) e os oito pads.
+- **Mixer:** LOAD e BROWSE em cima; TRIM, EQ HI/MID/LOW e FILTER por canal; o medidor no meio; MIXING e LEVEL dos fones à esquerda; MASTER LEVEL à direita; CUE de canal, faders com a escala de 0 a 10 e o crossfader embaixo.
+- **Beat FX:** à direita do mixer, com BEAT ◄ ►, FX SELECT, a chave 1/2/MASTER, LEVEL/DEPTH e o ON/OFF azul.
+- **Pads:** cada modo tem os nomes dos pads (tempos do BEAT LOOP, ◄/► do BEAT JUMP). No SAMPLER aparece o nome no RMX.
 
 Dois bugs do motor apareceram neste roteiro e foram corrigidos no `dsp.h`, que é o mesmo código do app:
 

@@ -81,12 +81,12 @@ class SetFramesTest {
         val ddjView = ComposeView(ddjActivity).apply {
             setContent {
                 val frame by ddjState
-                Box(Modifier.width(1280.dp).height(720.dp).background(Color(0xFF0B0C0E))) {
+                Box(Modifier.width(1280.dp).height(760.dp).background(Color(0xFF0B0C0E))) {
                     frame?.let { DdjPanel(it) }
                 }
             }
         }
-        ddjActivity.setContentView(ddjView, android.view.ViewGroup.LayoutParams(1280, 720))
+        ddjActivity.setContentView(ddjView, android.view.ViewGroup.LayoutParams(1280, 760))
         val activity = Robolectric.buildActivity(ScreenshotActivity::class.java).setup().get()
         val state = mutableStateOf<SetFrame?>(null)
         state.value = SetFrame(listOf(DeckFace(), DeckFace()), BeatFxState(), RmxState(), MixerState(), 0, "", "", listOf(null, null), null, 5)
