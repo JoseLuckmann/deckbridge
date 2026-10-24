@@ -33,7 +33,7 @@ Medido no host ou na JVM. Não é o tablet e não é a DDJ-400.
 - Beat FX e Color FX (só o knob FILTER) no motor, com deslize de parâmetro. RMX com cena, X-Pad, isolador e release.
 - Drum build com bumbo, palma, caixa e chimbal em FLAC CC0, na grade do deck. O teste de onset ficou em 0 ms a 120, 128, 140 e 174 BPM, com pitch ±8%.
 - Histórico local e gravação WAV do master. O anel de gravação não aloca na thread de áudio, no teste hospedeiro.
-- Tela desenhada em 800×480, 1024×600 e 2000×1200, na JVM. Falta o ícone.
+- Tela desenhada em 800×480, 1024×600 e 2000×1200, na JVM. O ícone adaptativo existe desde 23/10.
 
 ## O que falta
 
@@ -56,9 +56,9 @@ O de/para está em `docs/research/fx-de-para.md`. O manual não publica as curva
 
 Números em `docs/testing/ground-truth-corpus.md`. Corpus fora do git.
 
-- Tempo, 58 faixas: Acc1 0,655, Acc2 0,724. O alvo era 0,85 e 0,95. House, techno e trance fecham. Drum and bass fica em Acc1 0,400. Dubstep fica em 0,400.
+- Tempo: no holdout, Acc1 0,894 e Acc2 0,947 desde 23/10 (`docs/testing/tempo-corpus.md`). Os números das 58 faixas abaixo são de antes. Na época eram Acc1 0,655 e Acc2 0,724, com alvo de 0,85 e 0,95. House, techno e trance fecham. Drum and bass fica em Acc1 0,400. Dubstep fica em 0,400.
 - Tom nas 58: MIREX 0,586, exato 0,466, Camelot 0,759. O alvo de 0,65 não apareceu. No holdout (16 faixas, fora da escolha dos parâmetros) o MIREX é 0,456 e o exato é 0,312. No extra (190) o MIREX é 0,519 e o exato é 0,437. Nas 248 juntas o exato é 0,444.
-- Frases: 16 de 26 fronteiras anotadas a 1 compasso (61%) e 20 de 26 a 4 compassos. `docs/testing/phrase-annotations.md`.
+- Frases: 17 de 26 fronteiras anotadas a 1 compasso (65%) e 22 de 26 a 4 compassos (24/10, rótulos no estilo do rekordbox). `docs/testing/phrase-annotations.md`.
 - Três faixas com TKEY continuam diferentes do tag: Chromosome Boutique lê F (TKEY Bm), Ecosystem lê Cm (TKEY Ebm), Silver lê D (TKEY Em). Nenhuma foi forçada.
 
 ### Leitor de club
@@ -67,21 +67,20 @@ A tabela está em `docs/research/cdj3000-coverage.md`. Fora desta linha: Pro DJ 
 
 ### App e aparelho
 
-- O APK não tem ícone (`android:icon` aponta para um recurso que não existe).
-- A assinatura é a de debug. Não há chave de release.
+- Ícone adaptativo e assinatura de release existem desde 23/10. A chave de release de verdade ainda precisa ser criada pelo dono.
 - O emulador desta máquina não abriu (A022). Os prints são da JVM.
-- Passos 13 a 24 de `docs/hil/roteiro-validacao-final.md` estão por executar. Incluem escuta, pendrive real, master e fone, e o RMX na controladora.
+- Passos 13 a 30 de `docs/hil/roteiro-validacao-final.md` estão por executar. O 25 (bring-up) deve ser o primeiro com a controladora. Incluem escuta, pendrive real, master e fone, e o RMX na controladora.
 - Busca por voz (A053) e quatro decks (A054) ficam adiados até o dono reabrir.
 - O alvo 2 (imagem de Raspberry, Mixxx no aparelho, gates G0 a G2) não começou no hardware.
 
 ## Roteiro de hardware
 
-`docs/hil/roteiro-validacao-final.md`. Os passos 13 a 24 continuam abertos. A 0.14.1 não fecha nenhum: drum build e grade não são um gesto novo na controladora. A instalação da prova A0 está em `docs/android/prova-a0.md`.
+`docs/hil/roteiro-validacao-final.md`. Os passos 13 a 30 continuam abertos. Comece pelo 25. A 0.14.1 não fecha nenhum: drum build e grade não são um gesto novo na controladora. A instalação da prova A0 está em `docs/android/prova-a0.md`.
 
 ## Backlog, por ordem
 
-1. Ouvir o app no Tab S6 Lite com a DDJ-400 e executar os passos 13 a 24. É o buraco que muda o produto.
-2. Ícone e assinatura de release, antes de entregar o APK fora deste ciclo.
+1. Ouvir o app no Tab S6 Lite com a DDJ-400 e executar os passos 25 e 13 a 30. É o buraco que muda o produto.
+2. Criar a chave de release (o dono) antes de entregar o APK fora deste ciclo.
 3. Os buracos de efeito que a mix já deixa ouvir: spiral, helix, balanço do roll, pitch.
 4. Tempo em drum and bass e dubstep, sem desfazer house, techno e trance.
 5. Tom fora do corte de 58, a começar pelo holdout.
@@ -196,3 +195,24 @@ A constituição 1.1.0 está em `.specify/memory/constitution.md`. A emenda é a
 - Ganho de saída do app (−12 a +6 dB) na tela da mesa; lista do set gravado (.cue e .txt); marcas de frase na onda; BEAT JUMP com valor 16 e setas; balanço do roll.
 - Set completo de seis faixas em vídeo (`docs/testing/session-video.md`).
 - Nada disto foi ouvido no tablet nem na DDJ-400 (`BLOCKED_HARDWARE`).
+
+## Atualização de 24/10/2026 (preparação para o hardware, só neste ambiente)
+
+- Recursos do leitor e da mesa:
+  - Touch Preview no fone, curvas dos faders, COMP por canal, isolador do master e Send/Return interno.
+  - SHIMMER, DELAY e FX FREQUENCY. O tom do Spiral e do Helix agora segue o tempo.
+  - Frases no estilo do rekordbox.
+  - Ver `docs/runbooks/implementation-log.md`.
+- DDJ-400 virtual numa janela separada (1280×760, a partir da foto do produto), com o log MIDI. Vídeos de mix e de RMX gerados com ela.
+- Motor real testado no host (`tools/engine_host_test.cpp`):
+  - Blocos de 64 a 4096 dão saída idêntica bit a bit.
+  - De 1 a 8 canais e de 44,1 a 96 kHz.
+  - Desconexão com nova tentativa.
+  - Fuzz com NaN e infinito.
+  - Quatro threads.
+  - ASan, UBSan e TSan limpos.
+  - O motor ganhou saneamento das entradas e um limitador no fone.
+- Fuzz do caminho MIDI → DeckPage. Achou e corrigiu um crash no ajuste de loop e system common tratado como running status.
+- Fuzz dos parsers da biblioteca: nenhuma exceção. A carga não muda nem cria arquivos num volume sem permissão de escrita (hash antes e depois). A exportação do histórico para o pendrive da biblioteca passou a ser recusada.
+- Bring-up: checklist das 121 mensagens do mapa, lista do que chega fora do mapa e remapeamento aprendido na tela de diagnóstico. Passo 25 do roteiro.
+- Suíte JVM: 141 testes, 0 falhas. Nada disto foi ouvido no tablet nem na DDJ-400 (`BLOCKED_HARDWARE`).
