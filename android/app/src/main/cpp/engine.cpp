@@ -90,8 +90,9 @@ const char *performanceName(oboe::PerformanceMode mode) {
 }
 
 struct Deck {
-    std::vector<float> left;
-    std::vector<float> right;
+    // PCM da faixa em int16 (ver deckbridge::pcmValue).
+    std::vector<int16_t> left;
+    std::vector<int16_t> right;
     int sampleRate = 48000;
     double position = 0.0;
     double pitch = 1.0;
@@ -289,6 +290,11 @@ public:
         } else if (route == 1 || route == 3) {
             phonesSent_ = false;
         }
+        {
+            // O stream ainda não toca: o lock do áudio está livre e o preparo não atrasa nenhum callback.
+            std::lock_guard<std::mutex> mix(mixMutex_);
+            mixFx_.prepareAll(sampleRate_);
+        }
         result = stream_->requestStart();
         if (result != oboe::Result::OK) {
             error_ = oboe::convertToText(result);
@@ -330,15 +336,15 @@ public:
         if (deck < 0 || deck > 1 || data == nullptr) return;
         const int ch = channels == 2 ? 2 : 1;
         const int frames = std::max(0, ch == 2 ? count / 2 : count);
-        std::vector<float> newLeft(static_cast<size_t>(frames));
-        std::vector<float> newRight(static_cast<size_t>(frames));
+        std::vector<int16_t> newLeft(static_cast<size_t>(frames));
+        std::vector<int16_t> newRight(static_cast<size_t>(frames));
         for (int index = 0; index < frames; ++index) {
             if (ch == 2) {
-                newLeft[index] = data[index * 2];
-                newRight[index] = data[index * 2 + 1];
+                newLeft[index] = deckbridge::toPcm16(data[index * 2]);
+                newRight[index] = deckbridge::toPcm16(data[index * 2 + 1]);
             } else {
-                newLeft[index] = data[index];
-                newRight[index] = data[index];
+                newLeft[index] = deckbridge::toPcm16(data[index]);
+                newRight[index] = newLeft[index];
             }
         }
         installDeck(deck, std::move(newLeft), std::move(newRight), rate, bpm, cueSeconds, hot, hotCount, loopStartSec, loopEndSec);
@@ -346,11 +352,11 @@ public:
 
     // A cópia de dezenas de MB acontece FORA do mutex do callback de áudio; dentro dele só se troca o vetor.
     // Antes, carregar uma faixa travava o áudio do outro deck pelo tempo da cópia.
-    void installDeck(int deck, std::vector<float> newLeft, std::vector<float> newRight, int rate, float bpm, float cueSeconds,
+    void installDeck(int deck, std::vector<int16_t> newLeft, std::vector<int16_t> newRight, int rate, float bpm, float cueSeconds,
                      const float *hot, int hotCount, float loopStartSec, float loopEndSec) {
         if (deck < 0 || deck > 1) return;
-        std::vector<float> oldLeft;
-        std::vector<float> oldRight;
+        std::vector<int16_t> oldLeft;
+        std::vector<int16_t> oldRight;
         {
             std::lock_guard<std::mutex> lock(mixMutex_);
             Deck &swapTarget = decks_[deck];
@@ -651,9 +657,15 @@ public:
     }
 
     void loadDrum(int voice, const uint8_t *data, int size) {
-        std::lock_guard<std::mutex> lock(mixMutex_);
-        if (data == nullptr || size <= 0) return;
-        deckbridge::loadDrumFlac(data, static_cast<size_t>(size), voice);
+        if (data == nullptr || size <= 0 || voice < 0 || voice > 4) return;
+        // Decodifica fora do lock (antes segurava o áudio por 90–532 µs por voz no x86); só a troca fica dentro.
+        std::vector<float> mono = deckbridge::decodeDrumFlac(data, static_cast<size_t>(size));
+        if (mono.size() < 8) return;
+        std::vector<float> old;
+        {
+            std::lock_guard<std::mutex> lock(mixMutex_);
+            old = deckbridge::drumBank().take(voice, std::move(mono));
+        }
     }
 
     float positionSeconds(int deck) {
@@ -817,7 +829,13 @@ public:
         // Desconexão ou troca de rota do áudio: tenta reabrir, para o som voltar sem mexer na tela.
         // As faixas e as posições dos decks não são tocadas. O hotplug de outro aparelho USB é tratado no Kotlin.
         if (retry) {
-            std::thread([this, device, route]() {
+            // A thread fica guardada (não mais detach): o destrutor espera por ela, e a próxima desconexão espera a
+            // anterior terminar (ela já saiu do laço, porque restarting_ voltou a false).
+            if (retry_.joinable()) {
+                if (retry_.get_id() == std::this_thread::get_id()) retry_.detach();
+                else retry_.join();
+            }
+            retry_ = std::thread([this, device, route]() {
                 for (int attempt = 0; attempt < 6; ++attempt) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(300 + attempt * 400));
                     {
@@ -828,8 +846,16 @@ public:
                     if (opened_.load()) break;
                 }
                 restarting_.store(false);
-            }).detach();
+            });
         }
+    }
+
+    ~ToneEngine() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            wantOpen_ = false;
+        }
+        if (retry_.joinable() && retry_.get_id() != std::this_thread::get_id()) retry_.join();
     }
 
 private:
@@ -960,6 +986,7 @@ private:
     int lastDevice_ = 0;
     int lastRoute_ = 0;
     std::atomic<bool> restarting_{false};
+    std::thread retry_;
     bool phonesSent_ = false;
     bool fallbackToTwo_ = false;
     std::string error_;
@@ -1020,11 +1047,17 @@ Java_os_deckbridge_android_NativeEngine_nativeLoadDeckStereo(
     if (left == nullptr || right == nullptr || frames <= 0) return;
     const jsize available = std::min(env->GetArrayLength(left), env->GetArrayLength(right));
     const int count = std::min<int>(frames, available);
-    // Copia direto do array Java para o vetor do motor, sem um buffer intermediário.
-    std::vector<float> newLeft(static_cast<size_t>(count));
-    std::vector<float> newRight(static_cast<size_t>(count));
-    env->GetFloatArrayRegion(left, 0, count, newLeft.data());
-    env->GetFloatArrayRegion(right, 0, count, newRight.data());
+    // Do array Java para o int16 do motor em pedaços de 16 k quadros: sem uma cópia float do tamanho da faixa.
+    std::vector<int16_t> newLeft(static_cast<size_t>(count));
+    std::vector<int16_t> newRight(static_cast<size_t>(count));
+    std::vector<float> chunk(16384);
+    for (int at = 0; at < count; at += static_cast<int>(chunk.size())) {
+        const int n = std::min<int>(static_cast<int>(chunk.size()), count - at);
+        env->GetFloatArrayRegion(left, at, n, chunk.data());
+        for (int i = 0; i < n; ++i) newLeft[static_cast<size_t>(at + i)] = deckbridge::toPcm16(chunk[static_cast<size_t>(i)]);
+        env->GetFloatArrayRegion(right, at, n, chunk.data());
+        for (int i = 0; i < n; ++i) newRight[static_cast<size_t>(at + i)] = deckbridge::toPcm16(chunk[static_cast<size_t>(i)]);
+    }
     std::vector<float> hotValues;
     if (hot != nullptr) {
         const jsize hotCount = env->GetArrayLength(hot);

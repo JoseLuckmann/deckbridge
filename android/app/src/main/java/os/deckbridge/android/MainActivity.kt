@@ -172,7 +172,7 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
         loading = true
         notice = "Lendo ${next.label}…"
         Thread {
-            val loaded = loadRekordbox(next, oneLibrary)
+            val loaded = os.deckbridge.logic.loadRekordboxLight(next, oneLibrary)
             if (loaded.error != "E_RB_EXPORT_NOT_FOUND") {
                 handler.post {
                     volume = next

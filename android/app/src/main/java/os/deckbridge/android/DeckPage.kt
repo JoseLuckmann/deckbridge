@@ -129,7 +129,8 @@ fun DeckPage(
     var headMix by remember { mutableStateOf(0f) }
     var headLevel by remember { mutableStateOf(0.75f) }
     var levels by remember { mutableStateOf(listOf(0f, 0f, 0f, 0f)) }
-    var peakHeld by remember { mutableStateOf(FloatArray(4)) }
+    // Picos com queda, lidos só pelos laços (medidores e LEDs): um vetor fixo, sem estado do Compose nem alocação.
+    val peakHeld = remember { FloatArray(4) }
     var pflA by remember { mutableStateOf(false) }
     var pflB by remember { mutableStateOf(false) }
     var faces by remember { mutableStateOf(listOf(DeckFace(), DeckFace())) }
@@ -245,17 +246,30 @@ fun DeckPage(
                     } else {
                         NativeEngine.loadDeck(deck, decoded, track.bpm.toFloat(), (analysis?.mainCueMs ?: 0) / 1000f, hot, -1f, -1f)
                         if (analysis != null && analysis.lacksDetail() && track.id !in detailWaves) {
-                            // Canal esquerdo basta para a onda e evita alocar outro vetor do tamanho da faixa.
-                            val left = if (decoded.left.size == decoded.frames) decoded.left else decoded.left.copyOf(decoded.frames)
-                            val filled = analysis.withDetail(os.deckbridge.logic.wavesFromPcm(left, decoded.sampleRate))
-                            withContext(Dispatchers.Main) { detailWaves[track.id] = filled }
+                            // O catálogo do app não guarda o detalhe (ver loadRekordbox): primeiro o ANLZ da faixa, que
+                            // é a onda do rekordbox; sem ANLZ, a onda sai do PCM (canal esquerdo basta).
+                            val fromUsb = if (track.analyzePath.isNotBlank()) os.deckbridge.logic.loadTrackDetail(source, track) else null
+                            val filled = if (fromUsb != null && !fromUsb.lacksDetail()) {
+                                fromUsb
+                            } else {
+                                val left = if (decoded.left.size == decoded.frames) decoded.left else decoded.left.copyOf(decoded.frames)
+                                analysis.withDetail(os.deckbridge.logic.wavesFromPcm(left, decoded.sampleRate))
+                            }
+                            withContext(Dispatchers.Main) {
+                                // Só o detalhe das faixas que estão nos decks fica na memória.
+                                val keep = liveLoaded.value.mapNotNull { it?.id }.toSet() + track.id
+                                detailWaves.keys.retainAll(keep)
+                                detailWaves[track.id] = filled
+                            }
                         }
-                        decoded to ""
+                        // Só o aviso de faixa cortada sai daqui: o PCM em Java (127 MB numa faixa de 6 min) já está no
+                        // motor e fica livre para o GC agora, não no fim da carga.
+                        decoded.truncated to ""
                     }
                 }
             }
-            val pcm = loadedPcm.first
-            if (pcm == null) {
+            val truncated = loadedPcm.first
+            if (truncated == null) {
                 note = loadedPcm.second
                 return@launch
             }
@@ -289,7 +303,7 @@ fun DeckPage(
             val loopText = if (loop == null) "" else " Loop armado em ${loop.first}–${loop.second} ms. Entra quando a cabeça chegar."
             note = "Carregada no deck ${deck + 1}: ${track.title}.$loopText"
             pushMix()
-            if (pcm.truncated) note = "$note Faixa longa: só os primeiros $MAX_TRACK_MINUTES minutos foram carregados."
+            if (truncated) note = "$note Faixa longa: só os primeiros $MAX_TRACK_MINUTES minutos foram carregados."
         }
     }
 
@@ -1022,7 +1036,7 @@ fun DeckPage(
         val raw = FloatArray(4)
         while (true) {
             NativeEngine.levels(raw)
-            peakHeld = FloatArray(4) { index -> kotlin.math.max(raw[index], peakHeld[index] * 0.8f) }
+            for (index in 0..3) peakHeld[index] = kotlin.math.max(raw[index], peakHeld[index] * 0.8f)
             if (overlay == "mixer") levels = peakHeld.map { os.deckbridge.logic.meterFraction(it) }
             delay(50)
         }
@@ -1145,7 +1159,9 @@ fun DeckPage(
         while (true) {
             val left = NativeEngine.position(0)
             val right = NativeEngine.position(1)
-            if (NativeEngine.running()) {
+            // Só recompõe quando alguma posição mudou: com os dois decks parados a tela fica quieta (antes eram 12,5
+            // recomposições por segundo do DeckPage inteiro sem nada a mostrar).
+            if (NativeEngine.running() && (faces.getOrNull(0)?.position != left || faces.getOrNull(1)?.position != right)) {
                 faces = faces.mapIndexed { index, face ->
                     face.copy(position = if (index == 0) left else right)
                 }

@@ -97,7 +97,7 @@ std::shared_ptr<oboe::AudioStream> openMixer(ToneEngine &engine, int device = 0)
     oboe::FakeDevice::allowExclusive = true;
     oboe::FakeDevice::failOpen = false;
     engine.start(device, 3);
-    return oboe::FakeDevice::last;
+    return oboe::FakeDevice::last();
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -189,7 +189,7 @@ void channelCountsAndRates() {
         ToneEngine engine;
         oboe::FakeDevice::maxChannels = 2;
         engine.start(0, 3);
-        auto stream = oboe::FakeDevice::last;
+        auto stream = oboe::FakeDevice::last();
         const std::string st = engine.stats();
         check(stream && stream->getChannelCount() == 2 && st.find("fallback_to_two=true") != std::string::npos,
               "aparelho de 2 canais: o motor abre em 2 e avisa (fallback_to_two)");
@@ -221,7 +221,7 @@ void channelCountsAndRates() {
         for (int fileRate : {22050, 44100, 48000, 96000}) {
             ToneEngine engine;
             engine.start(0, 3);
-            auto stream = oboe::FakeDevice::last;
+            auto stream = oboe::FakeDevice::last();
             stream->rate = outRate;
             loadBoth(engine, fileRate, 20.0);
             engine.setMix(1.f, 0.f, 1.f, 1.f, 0.f, false, false);
@@ -258,7 +258,7 @@ void disconnectAndRetry() {
     }
     check(back, "o cabo volta: o motor reabre sozinho depois de reabres que falharam");
     check(std::fabs(engine.positionSeconds(0) - before) < 0.01, "a posição da faixa não anda nem volta durante a queda");
-    auto reopened = oboe::FakeDevice::last;
+    auto reopened = oboe::FakeDevice::last();
     Stats after;
     for (int i = 0; i < 400; ++i) pump(engine, *reopened, 256, after);
     check(after.finite && after.masterPeak > 0.1f && engine.positionSeconds(0) > before + 1.5,

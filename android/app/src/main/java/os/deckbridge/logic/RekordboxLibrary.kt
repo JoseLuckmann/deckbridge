@@ -143,7 +143,16 @@ fun normalizeRekordboxPath(raw: String): String {
     return path
 }
 
-fun loadRekordbox(volume: ReadableVolume, oneLibrary: OneLibraryOpener? = null): RbCatalog {
+/**
+ * `loadRekordboxLight` é o modo do app: o catálogo guarda grade, cues, frases e as prévias, mas não as ondas de detalhe
+ * (150 colunas por segundo, ~0,5 MB por faixa de 6 min; 1000 faixas ≈ 0,5 GB de heap). O detalhe da faixa que vai
+ * para o deck é relido do ANLZ dela por `loadTrackDetail`.
+ */
+fun loadRekordboxLight(volume: ReadableVolume, oneLibrary: OneLibraryOpener? = null): RbCatalog = readRekordbox(volume, oneLibrary, detail = false)
+
+fun loadRekordbox(volume: ReadableVolume, oneLibrary: OneLibraryOpener? = null): RbCatalog = readRekordbox(volume, oneLibrary, detail = true)
+
+private fun readRekordbox(volume: ReadableVolume, oneLibrary: OneLibraryOpener?, detail: Boolean): RbCatalog {
     val warnings = mutableListOf<String>()
     val pdbPath = listOf(
         "PIONEER/rekordbox/export.pdb",
@@ -220,7 +229,8 @@ fun loadRekordbox(volume: ReadableVolume, oneLibrary: OneLibraryOpener? = null):
         RbPlaylist(row.id, row.parentId, row.name, row.folder, row.sortOrder, ids)
     }
     val analyses = tracks.associate { track ->
-        track.id to analysisFor(volume, track, warnings)
+        val full = analysisFor(volume, track, warnings)
+        track.id to if (detail) full else full.withoutDetail()
     }
     val usbWave = readUsbWavePrefs(volume)
     return RbCatalog(
@@ -259,6 +269,17 @@ private fun tagsByTrack(ext: PdbExt?): Map<Int, List<RbTag>> {
     }
     return grouped
 }
+
+/** Análise completa (com as ondas de detalhe) de uma faixa do pendrive, lida de novo do ANLZ dela. */
+fun loadTrackDetail(volume: ReadableVolume, track: RbTrack): RbAnalysis = analysisFor(volume, track, ArrayList())
+
+/** Mesma análise sem as ondas de detalhe; `bands` cai para a prévia quando era o próprio detalhe. */
+fun RbAnalysis.withoutDetail(): RbAnalysis = copy(
+    rgbDetail = null,
+    bandDetail = null,
+    blueDetail = ByteArray(0),
+    bands = if (bands != null && bands === bandDetail) bandPreview else bands,
+)
 
 private fun analysisFor(volume: ReadableVolume, track: RbTrack, warnings: MutableList<String>): RbAnalysis {
     val path = track.analyzePath

@@ -618,3 +618,35 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - Suíte com 141 testes, 0 falhas.
   - Print: `docs/ui/diagnostico-bringup.png`, com dados de exemplo.
 - Não verificado: a DDJ-400 real (`BLOCKED_HARDWARE`). O primeiro uso com ela deve ser exatamente esse checklist.
+
+## 2026-10-24 — Otimização, rodadas 1 e 2 (CPU, RAM, picos no áudio)
+
+- Análise: relatório de CPU e RAM feito por um agente Opus numa cópia de trabalho (`docs/performance/relatorio-cpu-ram.md`), com o harness em `tools/perf_harness.cpp`.
+- Rodada 1 (P0–P5):
+  - FTZ no callback, memo de pow/exp e cache de coeficientes.
+  - Linhas de atraso sem `%`.
+  - Fdn com LFO em quadratura e linhas em potência de 2.
+  - Beat FX que dorme quando está desligado e sem cauda.
+  - WSOLA com tabela de deslocamentos.
+  - Resultado no x86 deste host: ocioso 168→62 ns/quadro, típica 355→160, pior RMX 2216→1522.
+  - A saída só muda pelo LFO do Fdn (−58 dB).
+- Rodada 2:
+  - Nenhuma alocação no callback: tudo é preparado em `start()`.
+  - Limpar uma linha de atraso ficou O(1).
+  - O FLAC de bateria é decodificado fora do lock.
+  - Faixa e pré-escuta em int16, bit a bit iguais para fontes de 16 bit.
+  - Catálogo do app sem as ondas de detalhe.
+  - PCM em Java liberado mais cedo.
+  - UI sem lixo por quadro (onda e grade) e sem recompor com os decks parados.
+  - Números em `docs/performance/README.md`.
+- TSan e o motor:
+  - Com todos os testes do motor rodando, o TSan achou a thread de nova tentativa feita com `detach()`. Agora ela é guardada e o destrutor espera por ela.
+  - Também achou uma corrida no stub de teste, que ficou atômico.
+- Proposta ADR-0007 (Pi 1 com o motor próprio): está em estado PROPOSTA e precisa de decisão do dono, porque o AGENTS.md manda começar o alvo 2 pelo Mixxx.
+- Evidência:
+  - `fx_rmx_test` 88/0, `console_test` 40/0, `fx_measure` 13/0, `dsp_test` ALL PASS e `engine_host_test` FAILS 0.
+  - ASan+UBSan: 51 PASS e 0 erros.
+  - Dump das 46 cenas bit a bit igual entre as rodadas 1 e 2.
+  - Suíte JVM com 142 testes e 0 falhas. APK compila para arm64, armeabi-v7a e x86_64.
+- Não verificado:
+  - Nada medido no tablet nem num Pi (`BLOCKED_HARDWARE`). Os números do Pi são estimativas.

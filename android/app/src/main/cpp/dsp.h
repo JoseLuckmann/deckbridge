@@ -134,7 +134,20 @@ inline bool toggleBeatLoop(LoopState &loop, double position, double beats, doubl
     return true;
 }
 
-inline float readInterp(const float *data, int frames, double position) {
+// A faixa do deck fica em int16 (metade da RAM: 63,5 MB em vez de 127 MB numa faixa estéreo de 6 min a 44,1 kHz).
+// O decodificador entrega s/32768 e aqui volta s·(1/32768): potência de 2, então o float lido é bit a bit o mesmo de
+// antes para qualquer fonte de 16 bit (MP3, AAC, WAV 16). Fontes de 24 bit ou float perdem abaixo de −96 dBFS.
+inline float pcmValue(float v) { return v; }
+inline float pcmValue(int16_t v) { return static_cast<float>(v) * (1.f / 32768.f); }
+
+inline int16_t toPcm16(float x) {
+    if (!std::isfinite(x)) return 0;
+    const float scaled = std::nearbyint(x * 32768.f);
+    return static_cast<int16_t>(std::clamp(scaled, -32768.f, 32767.f));
+}
+
+template <class T>
+inline float readInterp(const T *data, int frames, double position) {
     if (data == nullptr || frames <= 0) return 0.f;
     if (position < 0.0) position = 0.0;
     int index = static_cast<int>(position);
@@ -142,7 +155,7 @@ inline float readInterp(const float *data, int frames, double position) {
     if (index < 0) index = 0;
     const int next = std::min(index + 1, frames - 1);
     const float frac = static_cast<float>(position - std::floor(position));
-    return data[index] * (1.f - frac) + data[next] * frac;
+    return pcmValue(data[index]) * (1.f - frac) + pcmValue(data[next]) * frac;
 }
 
 inline void flushDenorm(float &value) {
@@ -252,7 +265,8 @@ inline void mapFilterKnob(float norm, float sampleRate, int &mode, float &freq, 
     freq = std::clamp(freq, 30.f, std::max(200.f, sampleRate) * 0.45f);
 }
 
-inline float readLooped(const float *data, int frames, double position, double loopStart, double loopEnd, int fade) {
+template <class T>
+inline float readLooped(const T *data, int frames, double position, double loopStart, double loopEnd, int fade) {
     const float dry = readInterp(data, frames, position);
     if (!(loopEnd > loopStart) || fade <= 1) return dry;
     if (position < loopStart || position >= loopEnd) return dry;
@@ -271,7 +285,8 @@ inline float readLooped(const float *data, int frames, double position, double l
     return dry * std::cos(angle) + incoming * std::sin(angle);
 }
 
-inline float readRolled(const float *data, int frames, double position, double origin, double length, int fade) {
+template <class T>
+inline float readRolled(const T *data, int frames, double position, double origin, double length, int fade) {
     const float dry = readInterp(data, frames, position);
     if (!(length > 1.0) || origin < 0.0 || fade <= 1) return dry;
     if (position < origin || position >= origin + length) return dry;
@@ -285,7 +300,8 @@ inline float readRolled(const float *data, int frames, double position, double o
     return dry * std::cos(angle) + incoming * std::sin(angle);
 }
 
-inline float readPerformance(const float *data, int frames, double position, double loopStart, double loopEnd,
+template <class T>
+inline float readPerformance(const T *data, int frames, double position, double loopStart, double loopEnd,
                              double rollOrigin, double rollLength, int fade) {
     if (rollLength > 1.0 && rollOrigin >= 0.0) return readRolled(data, frames, position, rollOrigin, rollLength, fade);
     return readLooped(data, frames, position, loopStart, loopEnd, fade);
@@ -498,14 +514,22 @@ private:
 struct DelayLine {
     std::vector<float> data;
     int write = 0;
+    // Amostras escritas desde o último clear (até o tamanho). O que fica além disso lê zero, então clear() não precisa
+    // zerar o vetor inteiro: é O(1) em vez de 96 000 escritas segurando o lock do áudio (o release limpava duas linhas
+    // a cada disparo). Equivale bit a bit a uma linha zerada.
+    int filled = 0;
 
     void prepare(int size) {
-        if (static_cast<int>(data.size()) != size) data.assign(size, 0.f);
+        if (static_cast<int>(data.size()) != size) {
+            data.assign(size, 0.f);
+            write = 0;
+            filled = size;
+        }
     }
 
     void clear() {
-        std::fill(data.begin(), data.end(), 0.f);
         write = 0;
+        filled = 0;
     }
 
     float read(int delay) const {
@@ -514,6 +538,11 @@ struct DelayLine {
         int index = write - delay;
         while (index < 0) index += size;
         if (index >= size) index %= size;
+        if (filled < size) {
+            int distance = write - index;
+            if (distance <= 0) distance += size;
+            if (distance > filled) return 0.f;
+        }
         return data[static_cast<size_t>(index)];
     }
 
@@ -531,6 +560,7 @@ struct DelayLine {
         data[static_cast<size_t>(write)] = sample;
         write += 1;
         if (write >= static_cast<int>(data.size())) write = 0;
+        if (filled < static_cast<int>(data.size())) filled += 1;
     }
 };
 
@@ -1747,6 +1777,19 @@ struct DrumBank {
         }
     }
 
+    // Troca a voz por um vetor já decodificado (o fade é aplicado aqui). Devolve a voz antiga, para ser liberada fora
+    // do lock do áudio.
+    std::vector<float> take(int id, std::vector<float> data) {
+        if (id < 0 || id > 4 || data.size() < 8) return data;
+        const int frames = static_cast<int>(data.size());
+        const int fade = std::min(64, frames / 2);
+        for (int index = 0; index < fade; ++index) {
+            data[static_cast<size_t>(frames - 1 - index)] *= static_cast<float>(index) / static_cast<float>(fade);
+        }
+        voice[id].swap(data);
+        return data;
+    }
+
     bool empty(int id) const { return id < 0 || id > 4 || voice[id].size() < 8; }
 
     void ensureModel(int sampleRate) {
@@ -2911,16 +2954,22 @@ struct SendReturn {
 // Pré-escuta (Touch Preview do leitor de club): um trecho curto da faixa que só soa no fone, sem passar pelos canais.
 // Entra e sai com rampa de 10 ms para não estalar; para sozinha no fim do trecho.
 struct PreviewVoice {
-    std::vector<float> left;
-    std::vector<float> right;
+    // int16 como a faixa do deck (ver pcmValue): 30 s estéreo a 44,1 kHz ocupam 5,3 MB em vez de 10,6 MB.
+    std::vector<int16_t> left;
+    std::vector<int16_t> right;
     int rate = 48000;
     double position = 0.0;
     bool playing = false;
     float gain = 0.f;
 
     void load(const float *l, const float *r, int frames, int sourceRate) {
-        left.assign(l, l + std::max(0, frames));
-        right.assign(r, r + std::max(0, frames));
+        const size_t n = static_cast<size_t>(std::max(0, frames));
+        left.resize(n);
+        right.resize(n);
+        for (size_t i = 0; i < n; ++i) {
+            left[i] = toPcm16(l[i]);
+            right[i] = toPcm16(r[i]);
+        }
         rate = sourceRate > 0 ? sourceRate : 48000;
         position = 0.0;
         playing = frames > 1;
@@ -3074,6 +3123,24 @@ struct MixerFx {
             eq[1].prepare(sampleRate);
             for (auto &item : color) item.prepare(sampleRate);
         }
+    }
+
+    // Tudo o que algum efeito alocaria no primeiro uso, feito antes de o stream começar: o callback não aloca nem
+    // gera nada (antes o 1º callback alocava 3,5 MB e o 1º RMX levava 4,4 ms dentro do áudio, no x86).
+    void prepareAll(int rate) {
+        setSampleRate(rate);
+        beat.sampleRate = sampleRate;
+        if (beat.left.data.empty()) beat.prepare();
+        scene.sampleRate = sampleRate;
+        if (scene.left.data.empty()) scene.prepare();
+        release.left.prepare(96000);
+        release.right.prepare(96000);
+        xpad.sampleRate = sampleRate;
+        if (!xpad.drumTank.ready() || xpad.drumTank.sampleRate != sampleRate) {
+            xpad.drumTank.prepare(sampleRate);
+            xpad.wideLine.prepare(sampleRate / 20);
+        }
+        drumBank().ensureModel(sampleRate);
     }
 
     // EQ de canal de 3 bandas (LOW, MID, HI), knobs 0..1. Roda antes do Color FX, como num mixer.

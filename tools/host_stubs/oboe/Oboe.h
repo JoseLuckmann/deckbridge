@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 namespace oboe {
 
@@ -71,12 +72,25 @@ public:
 };
 
 /** O que o "aparelho" aceita: o teste muda para simular um tablet que só entrega 2 canais ou que recusa o modo exclusivo. */
+// Estado do "aparelho" falso. Atômico e com mutex porque a nova tentativa do motor abre o stream noutra thread enquanto
+// o teste muda o aparelho (o TSan acusou a corrida no teste de desconexão).
 struct FakeDevice {
-    static inline int maxChannels = 4;
-    static inline bool allowExclusive = true;
-    static inline bool failOpen = false;
-    static inline int opens = 0;
-    static inline std::shared_ptr<AudioStream> last;
+    static inline std::atomic<int> maxChannels{4};
+    static inline std::atomic<bool> allowExclusive{true};
+    static inline std::atomic<bool> failOpen{false};
+    static inline std::atomic<int> opens{0};
+    static inline std::mutex lastMutex;
+    static inline std::shared_ptr<AudioStream> lastStream;
+
+    static std::shared_ptr<AudioStream> last() {
+        std::lock_guard<std::mutex> lock(lastMutex);
+        return lastStream;
+    }
+
+    static void setLast(std::shared_ptr<AudioStream> stream) {
+        std::lock_guard<std::mutex> lock(lastMutex);
+        lastStream = std::move(stream);
+    }
 };
 
 class AudioStreamBuilder {
@@ -106,7 +120,7 @@ public:
         stream->sharing = sharing_;
         stream->performance = performance_;
         out = stream;
-        FakeDevice::last = stream;
+        FakeDevice::setLast(stream);
         return Result::OK;
     }
 

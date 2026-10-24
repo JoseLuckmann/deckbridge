@@ -580,17 +580,25 @@ class WaveStrip(val heights: FloatArray, val colors: IntArray, val low: FloatArr
  * entradas, fica com a maior (o pico de um bumbo nunca some entre dois pixels, como na tela do leitor); quando cobre
  * menos de uma, interpola entre os centros das entradas. Nada de suavizar: a forma de cada batida aparece.
  */
+/** Leitura de uma coluna por índice. Interface com `Int` primitivo: `(Int) -> Int` encaixotava cada valor (as cores RGB
+ * não cabem no cache de Integer) e gerava ~0,17 MB de lixo por desenho de deck. */
+fun interface ColumnAt {
+    fun at(index: Int): Int
+}
+
+private val ZERO_COLUMN = ColumnAt { 0 }
+
 fun waveStrip(
     start: Double,
     window: Double,
     pixels: Int,
     perSecond: Double,
     count: Int,
-    height: (Int) -> Int,
-    color: (Int) -> Int,
-    low: (Int) -> Int = { 0 },
-    mid: (Int) -> Int = { 0 },
-    high: (Int) -> Int = { 0 },
+    height: ColumnAt,
+    color: ColumnAt,
+    low: ColumnAt = ZERO_COLUMN,
+    mid: ColumnAt = ZERO_COLUMN,
+    high: ColumnAt = ZERO_COLUMN,
 ): WaveStrip {
     val heights = FloatArray(pixels)
     val colors = IntArray(pixels)
@@ -610,18 +618,18 @@ fun waveStrip(
             var m = 0
             var h = 0
             for (index in first.coerceAtLeast(0)..last.coerceAtMost(count - 1)) {
-                val value = height(index)
+                val value = height.at(index)
                 if (value > bestHeight) {
                     bestHeight = value
                     best = index
                 }
-                l = maxOf(l, low(index))
-                m = maxOf(m, mid(index))
-                h = maxOf(h, high(index))
+                l = maxOf(l, low.at(index))
+                m = maxOf(m, mid.at(index))
+                h = maxOf(h, high.at(index))
             }
             if (best >= 0) {
                 heights[pixel] = bestHeight / 255f
-                colors[pixel] = color(best)
+                colors[pixel] = color.at(best)
                 lows[pixel] = l / 255f
                 mids[pixel] = m / 255f
                 highs[pixel] = h / 255f
@@ -631,14 +639,14 @@ fun waveStrip(
             val centre = (a + b) / 2.0 - 0.5
             val i0 = Math.floor(centre).toInt()
             val frac = (centre - i0).toFloat()
-            fun lerp(read: (Int) -> Int): Float {
-                val x0 = if (i0 in 0 until count) read(i0) else 0
-                val x1 = if (i0 + 1 in 0 until count) read(i0 + 1) else 0
+            fun lerp(read: ColumnAt): Float {
+                val x0 = if (i0 in 0 until count) read.at(i0) else 0
+                val x1 = if (i0 + 1 in 0 until count) read.at(i0 + 1) else 0
                 return (x0 * (1f - frac) + x1 * frac) / 255f
             }
             if (i0 + 1 >= 0 && i0 < count) {
                 heights[pixel] = lerp(height)
-                colors[pixel] = color((if (frac < 0.5f) i0 else i0 + 1).coerceIn(0, count - 1))
+                colors[pixel] = color.at((if (frac < 0.5f) i0 else i0 + 1).coerceIn(0, count - 1))
                 lows[pixel] = lerp(low)
                 mids[pixel] = lerp(mid)
                 highs[pixel] = lerp(high)

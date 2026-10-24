@@ -102,7 +102,7 @@ struct Rig {
         oboe::FakeDevice::allowExclusive = true;
         oboe::FakeDevice::failOpen = false;
         engine.start(0, 3);
-        stream = oboe::FakeDevice::last;
+        stream = oboe::FakeDevice::last();
         out.assign(static_cast<size_t>(kBlock) * 4, 0.f);
     }
     double block() {
@@ -579,10 +579,14 @@ int main(int argc, char **argv) {
             std::vector<float> l(frames), r(frames);
             for (int i = 0; i < frames; ++i) { l[i] = 0.1f * std::sin(i * 0.01f); r[i] = l[i]; }
             rss("+ L/R de 6 min em memória de teste (lado 'Java')");
-            std::vector<float> a(l), b(r);
-            rig->engine.installDeck(0, std::move(a), std::move(b), 44100, 128.f, 0.f, nullptr, 0, -1.f, -1.f);
-            std::vector<float> c(l), d(r);
-            rig->engine.installDeck(1, std::move(c), std::move(d), 44100, 126.f, 0.f, nullptr, 0, -1.f, -1.f);
+            // Como o JNI faz: o motor guarda int16.
+            auto pcm16 = [](const std::vector<float> &x) {
+                std::vector<int16_t> y(x.size());
+                for (size_t i = 0; i < x.size(); ++i) y[i] = deckbridge::toPcm16(x[i]);
+                return y;
+            };
+            rig->engine.installDeck(0, pcm16(l), pcm16(r), 44100, 128.f, 0.f, nullptr, 0, -1.f, -1.f);
+            rig->engine.installDeck(1, pcm16(l), pcm16(r), 44100, 126.f, 0.f, nullptr, 0, -1.f, -1.f);
             rss("+ 2 decks carregados (vetores nativos)");
         }
         rss("lado 'Java' liberado: só o motor com 2 faixas");

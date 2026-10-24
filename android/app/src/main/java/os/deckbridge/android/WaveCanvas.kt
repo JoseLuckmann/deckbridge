@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -70,6 +71,12 @@ internal fun ZoomedWave(
     val window = windowSeconds(zoom, if (bpm > 1.0) bpm else 120.0, duration)
     val whole = zoom == WaveZoom.TRACK
     val start = if (whole) 0.0 else position - window * anchor
+    // A grade da faixa inteira só muda com a faixa, o BPM ou o ajuste de grade: antes era refeita (ordenar, mapear,
+    // filtrar) a cada desenho, ~0,12 MB de lixo por quadro por deck.
+    val beats = analysis?.beats
+    val allLines = remember(beats, bpm, duration, face.gridShiftMs, face.gridStretch) {
+        if (bpm > 1.0) gridLines(bpm, duration, applyGrid(beats.orEmpty(), GridEdit(face.gridShiftMs, face.gridStretch))) else emptyList()
+    }
     Box(
         modifier
             .background(Color(StagePalette.bg))
@@ -128,7 +135,7 @@ internal fun ZoomedWave(
                 anchor.toFloat() * size.width
             }
             if (bpm > 1.0) {
-                val lines = gridLines(bpm, duration, applyGrid(analysis?.beats.orEmpty(), GridEdit(face.gridShiftMs, face.gridStretch)))
+                val lines = allLines
                 val numberStyle = TextStyle(color = Color(StagePalette.ink), fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 lines.forEach { line ->
                     val fraction = markerFraction(line.seconds, position, window, whole, duration, anchor).toFloat()

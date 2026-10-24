@@ -59,6 +59,28 @@ float windowRms(const std::vector<float> &data, int start, int count) {
 }  // namespace
 
 int main() {
+    {
+        // PCM em int16 no deck: para fonte de 16 bit (s/32768) a leitura é bit a bit a mesma do float.
+        std::vector<float> f(4096);
+        std::vector<int16_t> q(4096);
+        uint32_t seed = 12345u;
+        bool same = true;
+        for (size_t i = 0; i < f.size(); ++i) {
+            seed = seed * 1664525u + 1013904223u;
+            const int sample = static_cast<int>(seed >> 16) - 32768;
+            f[i] = static_cast<float>(sample) / 32768.f;
+            q[i] = deckbridge::toPcm16(f[i]);
+            same = same && deckbridge::pcmValue(q[i]) == f[i];
+        }
+        for (double pos = 0.0; pos < 4090.0; pos += 0.37) {
+            same = same && deckbridge::readInterp(q.data(), 4096, pos) == deckbridge::readInterp(f.data(), 4096, pos);
+            same = same && deckbridge::readPerformance(q.data(), 4096, pos, 100.0, 900.0, -1.0, -1.0, deckbridge::kFadeSamples) ==
+                           deckbridge::readPerformance(f.data(), 4096, pos, 100.0, 900.0, -1.0, -1.0, deckbridge::kFadeSamples);
+        }
+        expect(same, "int16 deck PCM reads bit-identical to float for 16-bit sources");
+        expect(deckbridge::toPcm16(2.f) == 32767 && deckbridge::toPcm16(-2.f) == -32768 && deckbridge::toPcm16(NAN) == 0,
+               "int16 conversion clips and drops NaN");
+    }
     const double beat = deckbridge::samplesPerBeat(120.0, 48000.0);
     expect(std::abs(beat - 24000.0) < 1e-6, "beat length at 120 bpm");
 
