@@ -104,6 +104,12 @@ class MidiAssembler {
                 return@forEach
             }
             if (value >= 0xF8) return@forEach
+            // System common (0xF1..0xF7): cancela o running status e os dados que vierem depois são ignorados.
+            if (value >= 0xF1) {
+                runningStatus = null
+                pending.clear()
+                return@forEach
+            }
             if (value >= 0x80) {
                 runningStatus = value
                 pending.clear()

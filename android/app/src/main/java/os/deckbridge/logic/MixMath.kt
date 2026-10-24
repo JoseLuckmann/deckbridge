@@ -320,8 +320,9 @@ fun adjustLoopPoint(start: Float, end: Float, which: Int, delta: Double, duratio
     if (start < 0f || end <= start) return null
     val limit = if (durationSec > 0.0) durationSec.toFloat() else Float.MAX_VALUE
     return when (which) {
-        1 -> (start + delta.toFloat()).coerceIn(0f, end - 0.010f) to end
-        2 -> start to (end + delta.toFloat()).coerceIn(start + 0.010f, limit)
+        // As faixas nunca ficam vazias: um loop que já passa do fim da faixa (ou com menos de 10 ms) não derruba o app.
+        1 -> (start + delta.toFloat()).coerceIn(0f, (end - 0.010f).coerceAtLeast(0f)) to end
+        2 -> start to (end + delta.toFloat()).coerceIn(start + 0.010f, limit.coerceAtLeast(start + 0.010f))
         else -> null
     }
 }

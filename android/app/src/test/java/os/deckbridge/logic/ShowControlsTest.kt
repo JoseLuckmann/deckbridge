@@ -49,6 +49,9 @@ class ShowControlsTest {
         val atEnd = adjustLoopPoint(10f, 14f, 2, 500.0, 20.0)!!
         assertEquals(20f, atEnd.second, 1e-4f)
         assertEquals(0f, adjustLoopPoint(1f, 3f, 1, -50.0, 200.0)!!.first, 0f)
+        // Achados do MidiFuzzTest: loop que já passa do fim da faixa e loop curtíssimo no começo não lançam exceção.
+        assertEquals(8.01f, adjustLoopPoint(8f, 9f, 2, -0.5, 8.0)!!.second, 1e-4f)
+        assertEquals(0f, adjustLoopPoint(0f, 0.005f, 1, 0.3, 200.0)!!.first, 0f)
         assertNull(adjustLoopPoint(-1f, -1f, 1, 0.1, 200.0))
         assertNull(adjustLoopPoint(10f, 14f, 0, 0.1, 200.0))
     }

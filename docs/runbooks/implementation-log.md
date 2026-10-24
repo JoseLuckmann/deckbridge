@@ -570,3 +570,15 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - TSan sem nenhum aviso; o limiar caiu para 100 blocos porque o TSan roda cerca de 10× mais lento.
   - `console_test`, `fx_rmx_test` e a suíte Gradle passam; `assembleMultiDebug` compila.
 - Não verificado: Oboe real, AAudio e USB do tablet (`BLOCKED_HARDWARE`).
+
+## 2026-10-24 — Fuzz do caminho da controladora (MIDI → ações → DeckPage)
+
+- Teste: `MidiFuzzTest` (Robolectric) compõe o `DeckPage` de verdade e manda 12 000 rajadas por ele.
+  - Mensagens do mapa oficial com valores extremos, bytes aleatórios, running status, SysEx, clock e system common.
+  - Tudo passa por `MidiAssembler` → mapa → `interpretPerformance` → `onPerformance`.
+  - O assembler também é testado com os pacotes quebrados em qualquer byte e clock no meio de mensagem.
+- Achados e correções:
+  1. **Crash no ajuste de loop** (`adjustLoopPoint`): o app caía quando o loop já passava do fim da faixa ou tinha menos de 10 ms (`coerceIn` com faixa vazia). Em show, isso acontece com SHIFT+LOOP OUT e o prato. Corrigido; o caso entrou no `ShowControlsTest`.
+  2. **System common virava running status** (`MidiAssembler`): um 0xF2/0xF3/0xF6 fazia os bytes seguintes saírem como mensagens com status 0xF2. Agora cancela o running status, como manda a especificação MIDI.
+- Evidência: suíte com 135 testes, 0 falhas.
+- Não verificado: tráfego real da DDJ-400 (`BLOCKED_HARDWARE`).
