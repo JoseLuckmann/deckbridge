@@ -36,9 +36,9 @@ private val Blue = Color(0xFF4FA3FF)
 private val Red = Color(0xFFFF4D4D)
 
 /**
- * DDJ-400 vista de cima, em 1280 × 480 unidades: decks iguais (loops em cima, prato, tempo com BEAT SYNC à direita,
+ * DDJ-400 vista de cima, em 1280 × 720 unidades: decks iguais (loops em cima, prato, tempo com BEAT SYNC à direita,
  * SHIFT/CUE/PLAY e pads embaixo) e o mixer no meio. A disposição segue a da controladora; as medidas não são do
- * desenho técnico da Pioneer.
+ * desenho técnico da Pioneer. No modo SAMPLER os pads mostram o que fazem no RMX do app.
  */
 @Composable
 fun DdjPanel(frame: DdjFrame, modifier: Modifier = Modifier) {
@@ -50,6 +50,12 @@ fun DdjPanel(frame: DdjFrame, modifier: Modifier = Modifier) {
     }
 }
 
+/** O que os pads do SAMPLER fazem no RMX (reduceRmxPad): deck 1 cenas e X-PAD, deck 2 a bateria do X-PAD. */
+private val SAMPLER_LABELS = listOf(
+    listOf("ECHO UP", "NOISE UP", "SPIRAL UP", "REVERB UP", "ROLL", "TRANS", "DRUM", "HI-PASS"),
+    listOf("KICK", "CLAP", "SNARE", "KICK+CLAP", "4 COMP", "8 COMP", "16 COMP", "GAP"),
+)
+
 private class Painter(val s: DrawScope, val measurer: TextMeasurer, val u: Float, val f: DdjFrame) {
     val surface = f.surface
 
@@ -57,7 +63,7 @@ private class Painter(val s: DrawScope, val measurer: TextMeasurer, val u: Float
 
     fun o(x: Float, y: Float) = Offset(x * u, y * u)
 
-    fun text(x: Float, y: Float, value: String, size: Float = 11f, color: Color = Dim, center: Boolean = true, bold: Boolean = false, mono: Boolean = false) {
+    fun text(x: Float, y: Float, value: String, size: Float = 13f, color: Color = Dim, center: Boolean = true, bold: Boolean = false, mono: Boolean = false) {
         val style = TextStyle(
             color = color,
             fontSize = (size * u / s.density / s.fontScale).sp,
@@ -69,44 +75,44 @@ private class Painter(val s: DrawScope, val measurer: TextMeasurer, val u: Float
         s.drawText(layout, topLeft = Offset(left, y * u - layout.size.height / 2f))
     }
 
-    fun box(x: Float, y: Float, w: Float, h: Float, fill: Color, stroke: Color? = Edge, radius: Float = 5f, width: Float = 1.5f) {
+    fun box(x: Float, y: Float, w: Float, h: Float, fill: Color, stroke: Color? = Edge, radius: Float = 6f, width: Float = 2f) {
         s.drawRoundRect(fill, o(x, y), Size(w * u, h * u), CornerRadius(radius * u))
         if (stroke != null) s.drawRoundRect(stroke, o(x, y), Size(w * u, h * u), CornerRadius(radius * u), style = Stroke(width * u))
     }
 
     /** Botão: preenchido pela cor do LED quando aceso; contorno branco por um instante quando a mão aperta. */
-    fun button(x: Float, y: Float, w: Float, h: Float, label: String, lit: Color?, pressed: Boolean, size: Float = 10f) {
-        box(x, y, w, h, lit?.copy(alpha = 0.85f) ?: Plate, if (pressed) Press else Edge, width = if (pressed) 3f else 1.5f)
+    fun button(x: Float, y: Float, w: Float, h: Float, label: String, lit: Color?, pressed: Boolean, size: Float = 14f) {
+        box(x, y, w, h, lit?.copy(alpha = 0.88f) ?: Plate, if (pressed) Press else Edge, width = if (pressed) 4f else 2f)
         text(x + w / 2f, y + h / 2f, label, size, if (lit != null) Color.Black else Ink, bold = true)
     }
 
     fun round(cx: Float, cy: Float, r: Float, label: String, lit: Color?, pressed: Boolean) {
-        s.drawCircle(lit?.copy(alpha = 0.9f) ?: Plate, r * u, o(cx, cy))
-        s.drawCircle(if (pressed) Press else Edge, r * u, o(cx, cy), style = Stroke((if (pressed) 3f else 1.5f) * u))
-        text(cx, cy, label, 10f, if (lit != null) Color.Black else Ink, bold = true)
+        s.drawCircle(lit?.copy(alpha = 0.92f) ?: Plate, r * u, o(cx, cy))
+        s.drawCircle(if (pressed) Press else Edge, r * u, o(cx, cy), style = Stroke((if (pressed) 4f else 2f) * u))
+        text(cx, cy, label, 15f, if (lit != null) Color.Black else Ink, bold = true)
     }
 
     /** Botão giratório: 0..127 em 270°; marca no centro (64). */
     fun knob(cx: Float, cy: Float, r: Float, value: Int, label: String, accent: Color = Ink) {
         s.drawCircle(Plate, r * u, o(cx, cy))
-        s.drawCircle(Edge, r * u, o(cx, cy), style = Stroke(1.5f * u))
+        s.drawCircle(if (accent == Ink) Edge else accent, r * u, o(cx, cy), style = Stroke(2f * u))
         val angle = Math.toRadians(-225.0 + value / 127.0 * 270.0)
         val tip = Offset((cx + cos(angle).toFloat() * r * 0.85f) * u, (cy + sin(angle).toFloat() * r * 0.85f) * u)
-        s.drawLine(accent, o(cx, cy), tip, 2.5f * u)
-        s.drawCircle(Dim, 1.5f * u, o(cx, cy - r - 3f))
-        text(cx, cy + r + 7f, label, 8f)
+        s.drawLine(accent, o(cx, cy), tip, 4f * u)
+        s.drawCircle(Dim, 2f * u, o(cx, cy - r - 4f))
+        text(cx, cy + r + 11f, label, 12f)
     }
 
-    fun vFader(x: Float, top: Float, bottom: Float, fraction: Float, label: String, accent: Color, capW: Float = 26f) {
-        s.drawLine(Color.Black, o(x, top), o(x, bottom), 4f * u)
+    fun vFader(x: Float, top: Float, bottom: Float, fraction: Float, label: String, accent: Color, capW: Float = 40f) {
+        s.drawLine(Color.Black, o(x, top), o(x, bottom), 6f * u)
         val y = bottom - (bottom - top) * fraction.coerceIn(0f, 1f)
-        box(x - capW / 2f, y - 7f, capW, 14f, Color(0xFF3B4048), accent, radius = 2f, width = 2f)
-        s.drawLine(accent, o(x - capW / 2f + 3f, y), o(x + capW / 2f - 3f, y), 2f * u)
-        text(x, bottom + 11f, label, 8.5f)
+        box(x - capW / 2f, y - 10f, capW, 20f, Color(0xFF3B4048), accent, radius = 3f, width = 3f)
+        s.drawLine(accent, o(x - capW / 2f + 4f, y), o(x + capW / 2f - 4f, y), 3f * u)
+        text(x, bottom + 16f, label, 12f)
     }
 
     fun draw() {
-        box(2f, 2f, 1276f, 476f, Body, Edge, radius = 14f)
+        box(2f, 2f, 1276f, 716f, Body, Edge, radius = 18f)
         deck(0, 0f)
         deck(1, 810f)
         mixer()
@@ -117,50 +123,50 @@ private class Painter(val s: DrawScope, val measurer: TextMeasurer, val u: Float
         val d = surface.decks[index]
         val now = f.now
         val ch = 0x90 + index
-        text(ox + 22f, 14f, "DECK ${index + 1}", 11f, Ink, center = false, bold = true)
+        text(ox + 20f, 30f, "DECK ${index + 1}", 16f, Ink, center = false, bold = true)
         // Loop: IN, OUT, RELOOP/EXIT, CUE/LOOP CALL ◄ ►.
         val loops = listOf("LOOP_IN" to "IN", "LOOP_OUT" to "OUT", "RELOOP" to "RELOOP", "CALL_LEFT" to "◄ 1/2", "CALL_RIGHT" to "2X ►")
         loops.forEachIndexed { i, (key, label) ->
-            button(ox + 92f + i * 62f, 8f, 56f, 22f, label, null, surface.lit(d.pressedAt[key], now))
+            button(ox + 108f + i * 58f, 14f, 54f, 32f, label, null, surface.lit(d.pressedAt[key], now), 12f)
         }
-        // Prato: anel claro quando tocado no topo; o traço gira com o ângulo dos passos recebidos.
-        val cx = ox + 215f
-        val cy = 160f
-        val r = 100f
+        // Prato: anel laranja quando tocado no topo; o traço gira com o ângulo dos passos recebidos.
+        val cx = ox + 200f
+        val cy = 232f
+        val r = 150f
         s.drawCircle(Color(0xFF101114), r * u, o(cx, cy))
-        s.drawCircle(if (d.jogTouched) Orange else Edge, r * u, o(cx, cy), style = Stroke((if (d.jogTouched) 5f else 3f) * u))
+        s.drawCircle(if (d.jogTouched) Orange else Edge, r * u, o(cx, cy), style = Stroke((if (d.jogTouched) 8f else 4f) * u))
         s.drawCircle(Color(0xFF2B2F36), r * 0.62f * u, o(cx, cy))
         s.rotate(d.jogAngle.toFloat(), o(cx, cy)) {
-            drawLine(Ink, Offset(cx * u, (cy - r * 0.62f) * u), Offset(cx * u, (cy - r + 4f) * u), 4f * u)
+            drawLine(Ink, Offset(cx * u, (cy - r * 0.62f) * u), Offset(cx * u, (cy - r + 6f) * u), 6f * u)
         }
-        text(cx, cy - 10f, if (d.jogTouched) "TOQUE (VINIL)" else "JOG", 10f, if (d.jogTouched) Orange else Dim, bold = true)
-        text(cx, cy + 10f, "%+.0f°".format(d.jogAngle % 360.0), 10f, Ink, mono = true)
+        text(cx, cy - 16f, if (d.jogTouched) "TOQUE (VINIL)" else "JOG", 16f, if (d.jogTouched) Orange else Dim, bold = true)
+        text(cx, cy + 16f, "%+.0f°".format(d.jogAngle % 360.0), 16f, Ink, mono = true)
         // Tempo à direita do prato, BEAT SYNC em cima. 0 = fader em cima ("−"), 16383 embaixo ("+").
         val syncLed = led(ch, 0x58) > 0
-        button(ox + 400f, 40f, 58f, 22f, "SYNC", if (syncLed) Blue else null, surface.lit(d.pressedAt["SYNC"], now))
+        button(ox + 386f, 62f, 76f, 34f, "SYNC", if (syncLed) Blue else null, surface.lit(d.pressedAt["SYNC"], now), 15f)
         val tempoFraction = 1f - d.tempo / 16383f
-        vFader(ox + 429f, 76f, 250f, tempoFraction, "TEMPO", Ink, capW = 30f)
-        text(ox + 429f, 278f, "%d".format(d.tempo), 8.5f, Ink, mono = true)
-        text(ox + 408f, 80f, "−", 10f)
-        text(ox + 408f, 246f, "+", 10f)
+        vFader(ox + 424f, 118f, 372f, tempoFraction, "TEMPO", Ink, capW = 44f)
+        text(ox + 424f, 410f, "%d".format(d.tempo), 12f, Ink, mono = true)
+        text(ox + 392f, 124f, "−", 16f)
+        text(ox + 392f, 366f, "+", 16f)
         // SHIFT, CUE e PLAY à esquerda dos pads.
-        button(ox + 16f, 300f, 54f, 22f, "SHIFT", if (d.shift) Ink else null, d.shift)
-        round(ox + 43f, 356f, 22f, "CUE", if (led(ch, 0x0C) > 0) Orange else null, surface.lit(d.pressedAt["CUE"], now))
-        round(ox + 43f, 412f, 22f, "▶/II", if (led(ch, 0x0B) > 0) Green else null, surface.lit(d.pressedAt["PLAY"], now))
+        button(ox + 12f, 444f, 64f, 32f, "SHIFT", if (d.shift) Ink else null, d.shift, 13f)
+        round(ox + 44f, 534f, 32f, "CUE", if (led(ch, 0x0C) > 0) Orange else null, surface.lit(d.pressedAt["CUE"], now))
+        round(ox + 44f, 622f, 32f, "▶/II", if (led(ch, 0x0B) > 0) Green else null, surface.lit(d.pressedAt["PLAY"], now))
         // Modo de pad (o hardware troca a faixa de notas) e os 8 pads com os LEDs do modo.
         DdjSurface.PadMode.entries.forEachIndexed { i, mode ->
-            button(ox + 92f + i * 92f, 296f, 86f, 20f, mode.label, if (d.padMode == mode) Color(0xFFB8C2CF) else null, false, 9f)
+            button(ox + 92f + i * 94f, 440f, 88f, 30f, mode.label, if (d.padMode == mode) Color(0xFFB8C2CF) else null, false, 12f)
         }
         val padStatus = 0x97 + 2 * index
         for (pad in 0..7) {
             val row = pad / 4
             val col = pad % 4
-            val x = ox + 92f + col * 92f
-            val y = 322f + row * 62f
+            val x = ox + 92f + col * 94f
+            val y = 480f + row * 94f
             val lit = when (d.padMode) {
                 DdjSurface.PadMode.HOT_CUE -> led(padStatus, pad) > 0
                 DdjSurface.PadMode.BEAT_LOOP -> led(padStatus, 0x60 + pad) > 0
-                DdjSurface.PadMode.SAMPLER -> led(0x97, 0x30 + pad) > 0
+                DdjSurface.PadMode.SAMPLER -> led(0x97, 0x30 + pad) > 0 && index == 0
                 DdjSurface.PadMode.BEAT_JUMP -> false
             }
             val color = when (d.padMode) {
@@ -169,37 +175,41 @@ private class Painter(val s: DrawScope, val measurer: TextMeasurer, val u: Float
                 DdjSurface.PadMode.SAMPLER -> Blue
                 DdjSurface.PadMode.BEAT_JUMP -> Green
             }
-            button(x, y, 86f, 56f, "${pad + 1}", if (lit) color else null, surface.lit(d.padAt[pad], now, 0.25))
+            val pressed = surface.lit(d.padAt[pad], now, 0.25)
+            button(x, y, 88f, 86f, "${pad + 1}", if (lit) color else null, pressed, 18f)
+            if (d.padMode == DdjSurface.PadMode.SAMPLER) {
+                text(x + 44f, y + 70f, SAMPLER_LABELS[index][pad], 11f, if (lit) Color.Black else Dim, bold = true)
+            }
         }
     }
 
     fun mixer() {
         val now = f.now
-        box(470f, 6f, 340f, 440f, Color(0xFF1F2227), Edge, radius = 8f)
+        box(470f, 8f, 340f, 656f, Color(0xFF1F2227), Edge, radius = 10f)
         // Topo: fones, BROWSE e LOAD.
-        knob(500f, 34f, 13f, surface.headMix, "H.MIX")
-        knob(780f, 34f, 13f, surface.headLevel, "H.LEVEL")
-        button(540f, 20f, 50f, 24f, "LOAD", null, surface.lit(surface.pressedAt["LOAD1"], now))
-        button(690f, 20f, 50f, 24f, "LOAD", null, surface.lit(surface.pressedAt["LOAD2"], now))
-        s.drawCircle(Plate, 18f * u, o(640f, 32f))
-        s.drawCircle(if (surface.lit(surface.pressedAt["BROWSE"], now)) Press else Edge, 18f * u, o(640f, 32f), style = Stroke(2f * u))
-        s.rotate(surface.browseAngle.toFloat(), o(640f, 32f)) {
-            drawLine(Ink, Offset(640f * u, 18f * u), Offset(640f * u, 26f * u), 2.5f * u)
+        knob(500f, 46f, 17f, surface.headMix, "H.MIX")
+        knob(780f, 46f, 17f, surface.headLevel, "H.LEVEL")
+        button(528f, 26f, 70f, 36f, "LOAD", null, surface.lit(surface.pressedAt["LOAD1"], now))
+        button(682f, 26f, 70f, 36f, "LOAD", null, surface.lit(surface.pressedAt["LOAD2"], now))
+        s.drawCircle(Plate, 26f * u, o(640f, 44f))
+        s.drawCircle(if (surface.lit(surface.pressedAt["BROWSE"], now)) Press else Edge, 26f * u, o(640f, 44f), style = Stroke(3f * u))
+        s.rotate(surface.browseAngle.toFloat(), o(640f, 44f)) {
+            drawLine(Ink, Offset(640f * u, 22f * u), Offset(640f * u, 34f * u), 4f * u)
         }
-        text(640f, 58f, "BROWSE", 8.5f)
+        text(640f, 84f, "BROWSE", 12f)
         // Canais: TRIM, HI, MID, LOW e o FILTER (CFX).
         for (deck in 0..1) {
             val d = surface.decks[deck]
-            val x = if (deck == 0) 506f else 774f
-            knob(x, 84f, 11f, d.trim, "TRIM")
-            knob(x, 126f, 11f, d.hi, "HI")
-            knob(x, 168f, 11f, d.mid, "MID")
-            knob(x, 210f, 11f, d.low, "LOW", if (d.low < 20) Red else Ink)
-            knob(x, 254f, 13f, surface.filter[deck], "FILTER", if (surface.filter[deck] != 64) Blue else Ink)
-            button(x - 22f, 284f, 44f, 20f, "CUE", if (led(0x90 + deck, 0x54) > 0) Orange else null, surface.lit(d.pressedAt["PFL"], now))
-            vFader(x, 322f, 404f, d.volume / 127f, "CH ${deck + 1}", Ink)
+            val x = if (deck == 0) 508f else 772f
+            knob(x, 126f, 17f, d.trim, "TRIM")
+            knob(x, 186f, 17f, d.hi, "HI")
+            knob(x, 246f, 17f, d.mid, "MID")
+            knob(x, 306f, 17f, d.low, "LOW", if (d.low < 20) Red else Ink)
+            knob(x, 372f, 20f, surface.filter[deck], "FILTER", if (surface.filter[deck] != 64) Blue else Ink)
+            button(x - 30f, 414f, 60f, 30f, "CUE", if (led(0x90 + deck, 0x54) > 0) Orange else null, surface.lit(d.pressedAt["PFL"], now), 13f)
+            vFader(x, 468f, 600f, d.volume / 127f, "CH ${deck + 1}", Ink)
             // VU do canal: o valor que o app manda (0xB0/0xB1 0x02).
-            val vuX = if (deck == 0) 540f else 732f
+            val vuX = if (deck == 0) 542f else 726f
             val level = led(0xB0 + deck, 0x02) / 127f
             for (seg in 0 until 12) {
                 val on = level >= (seg + 1) / 12f
@@ -208,31 +218,31 @@ private class Painter(val s: DrawScope, val measurer: TextMeasurer, val u: Float
                     seg >= 8 -> Orange
                     else -> Green
                 }
-                box(vuX, 380f - seg * 13f, 8f, 10f, if (on) color else Color(0xFF2A2E35), null, radius = 1f)
+                box(vuX, 590f - seg * 18f, 12f, 14f, if (on) color else Color(0xFF2A2E35), null, radius = 2f)
             }
         }
         // Beat FX no centro.
-        box(560f, 74f, 160f, 190f, Color(0xFF191B1F), Edge, radius = 6f)
-        text(640f, 86f, "BEAT FX", 10f, Ink, bold = true)
-        button(574f, 98f, 132f, 22f, "FX SELECT", null, surface.lit(surface.pressedAt["FX_SELECT"], now))
-        button(574f, 126f, 62f, 22f, "◄ BEAT", null, surface.lit(surface.pressedAt["BEAT_LEFT"], now))
-        button(644f, 126f, 62f, 22f, "BEAT ►", null, surface.lit(surface.pressedAt["BEAT_RIGHT"], now))
+        box(562f, 108f, 156f, 270f, Color(0xFF191B1F), Edge, radius = 8f)
+        text(640f, 126f, "BEAT FX", 14f, Ink, bold = true)
+        button(574f, 144f, 132f, 32f, "FX SELECT", null, surface.lit(surface.pressedAt["FX_SELECT"], now), 13f)
+        button(574f, 184f, 64f, 32f, "◄ BEAT", null, surface.lit(surface.pressedAt["BEAT_LEFT"], now), 12f)
+        button(642f, 184f, 64f, 32f, "BEAT ►", null, surface.lit(surface.pressedAt["BEAT_RIGHT"], now), 12f)
         listOf("1", "2", "MST").forEachIndexed { i, label ->
-            button(574f + i * 45f, 154f, 41f, 20f, label, if (surface.fxChannel == i) Color(0xFFB8C2CF) else null, false, 9f)
+            button(574f + i * 45f, 224f, 41f, 28f, label, if (surface.fxChannel == i) Color(0xFFB8C2CF) else null, false, 12f)
         }
-        knob(605f, 206f, 17f, surface.fxLevel, "LEVEL/DEPTH")
-        round(677f, 206f, 19f, "ON", if (led(0x94, 0x47) > 0) Red else null, surface.lit(surface.pressedAt["FX_ON"], now))
+        knob(604f, 304f, 24f, surface.fxLevel, "LEVEL/DEPTH")
+        round(680f, 304f, 26f, "ON", if (led(0x94, 0x47) > 0) Red else null, surface.lit(surface.pressedAt["FX_ON"], now))
         // Crossfader: 0 = deck 1.
-        val cx = 580f + 120f * (surface.cross / 127f)
-        s.drawLine(Color.Black, o(580f, 428f), o(700f, 428f), 4f * u)
-        box(cx - 9f, 416f, 18f, 24f, Color(0xFF3B4048), Ink, radius = 2f, width = 2f)
-        text(640f, 410f, "CROSSFADER", 8.5f)
+        val cx = 570f + 140f * (surface.cross / 127f)
+        s.drawLine(Color.Black, o(570f, 636f), o(710f, 636f), 6f * u)
+        box(cx - 12f, 618f, 24f, 36f, Color(0xFF3B4048), Ink, radius = 3f, width = 3f)
+        text(640f, 606f, "CROSSFADER", 12f)
     }
 
     fun log() {
-        box(8f, 450f, 1264f, 24f, Color(0xFF0E1013), null, radius = 4f)
+        box(8f, 676f, 1264f, 36f, Color(0xFF0E1013), null, radius = 6f)
         val lines = surface.log.toList().takeLast(3)
-        val joined = lines.reversed().joinToString("   ·   ") { (time, line) -> "%.2f  %s".format(time, line) }.take(190)
-        text(16f, 462f, "MIDI  $joined", 10f, if (lines.isEmpty()) Dim else Ink, center = false, mono = true)
+        val joined = lines.reversed().joinToString("   ·   ") { (time, line) -> "%.2f  %s".format(time, line) }.take(150)
+        text(18f, 694f, "MIDI  $joined", 13f, if (lines.isEmpty()) Dim else Ink, center = false, mono = true)
     }
 }

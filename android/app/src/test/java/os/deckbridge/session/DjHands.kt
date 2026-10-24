@@ -11,6 +11,12 @@ interface DjAgent {
     fun step()
 }
 
+/** O que o roteiro conta no checks.txt: notas e a fase entre os decks medida depois de cada entrada. */
+interface Reporting {
+    val notes: List<String>
+    val checks: List<PhaseCheck>
+}
+
 /**
  * As mãos do DJ na DDJ-400 e na tela: as mensagens MIDI e os toques que os roteiros usam, mais a geometria de
  * compassos de uma faixa e o "ouvido" (desvio medido entre os ataques reais e a grade, tools/onset_offsets.py).

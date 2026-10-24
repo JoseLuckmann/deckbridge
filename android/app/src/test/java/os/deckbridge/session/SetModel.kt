@@ -176,7 +176,14 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
                 coast[deck] = if (next == target) Double.NaN else next
             } else if (faces[deck].playing && !scratching[deck]) {
                 val face = faces[deck]
-                pos[deck] = advancePlayhead(pos[deck], dt * face.pitch, face.loopStart.toDouble(), face.loopEnd.toDouble())
+                // Tape STOP do RMX freia o deck do canal da cena, como o motor (pitchMul = 1 − intensidade).
+                val rmxDeck = when (rmx.channel) {
+                    1 -> 1
+                    2 -> -1
+                    else -> 0
+                }
+                val tape = if (rmx.panel && rmx.scene == 6 && (rmxDeck == deck || rmxDeck == -1)) (1.0 - rmx.intensity).coerceIn(0.0, 1.0) else 1.0
+                pos[deck] = advancePlayhead(pos[deck], dt * face.pitch * tape, face.loopStart.toDouble(), face.loopEnd.toDouble())
                 if (face.slip) shadow[deck] += dt * face.pitch
             }
             syncFace(deck)
@@ -256,6 +263,11 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
 
     fun closeRmx() {
         rmx = rmx.copy(panel = false, full = false)
+    }
+
+    /** Toque no painel RMX da tela: cenas 5–8, BEAT do X-PAD, isolador, canal e o que mais não tem pad. */
+    fun rmxTouch(block: (RmxState) -> RmxState) {
+        rmx = block(rmx)
     }
 
     /** Release FX do RMX (2 = backspin); -1 desarma. */

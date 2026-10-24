@@ -48,8 +48,9 @@ fun runSet(
     return model to agent
 }
 
-/** SET_AGENT=mix escolhe a mixagem de duas faixas com truques; o padrão é o set completo. */
+/** SET_AGENT=mix escolhe a mixagem de duas faixas com truques, SET_AGENT=rmx a que explora o RMX; o padrão é o set completo. */
 fun agentFromEnv(model: SetModel, catalog: RbCatalog): DjAgent = when (System.getenv("SET_AGENT")) {
+    "rmx" -> MixRmxAgent(model, catalog.tracks.indexOfFirst { it.title == "t1" }, catalog.tracks.indexOfFirst { it.title == "t2" }, SessionAssets.dir)
     "mix" -> MixShowAgent(model, catalog.tracks.indexOfFirst { it.title == "t1" }, catalog.tracks.indexOfFirst { it.title == "t2" }, SessionAssets.dir)
     else -> SetAgent(model, SetAssets.orderIndices(catalog), SessionAssets.dir)
 }

@@ -509,7 +509,57 @@ void backspinCoasts() {
     check(follower.active && !follower.coasting && follower.step(rate, 1.0, 1.0) == 0.0, "backspin: segurar o prato para o giro solto");
 }
 
+// Tape STOP: soltar religa a fita mesmo com a grade parada (a grade vem do deck que a própria cena parou).
+// Antes a soltura esperava a próxima batida dessa grade, que nunca chegava, e a faixa ficava parada.
+void tapeStopReleases() {
+    const int rate = 48000;
+    deckbridge::MixerFx mix;
+    mix.setSampleRate(rate);
+    auto rmx = [&](bool holding) {
+        mix.setRmx(true, 6, holding, 0.f, 1.f, 0, 0.25f, false, -1, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, false, 1, 120.f);
+    };
+    rmx(true);
+    // Um compasso segurado: a grade anda junto com a velocidade do deck, que cai a zero.
+    double beat = 10.0;
+    for (int i = 0; i < rate * 2; ++i) {
+        beat += mix.rateFor(1) / (rate * 0.5);
+        mix.setDrumPhase(beat, true, true);
+        float l = 0.1f, r = 0.1f;
+        mix.processDeck(1, l, r);
+    }
+    check(mix.rateFor(1) < 0.1, "Tape STOP segurado: o deck quase parou");
+    rmx(false);
+    int samples = 0;
+    while (mix.rateFor(1) < 0.999 && samples < rate) {
+        beat += mix.rateFor(1) / (rate * 0.5);
+        mix.setDrumPhase(beat, true, true);
+        float l = 0.1f, r = 0.1f;
+        mix.processDeck(1, l, r);
+        ++samples;
+    }
+    check(samples < rate / 5, "Tape STOP solto: a fita volta a 1x em " + std::to_string(samples * 1000 / rate) + " ms");
+    // Outra cena solta com a grade parada (deck freado): sai depois de no máximo 2 batidas do relógio.
+    deckbridge::MixerFx echo;
+    echo.setSampleRate(rate);
+    echo.setRmx(true, 0, true, 0.f, 1.f, 0, 0.25f, false, -1, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, false, 0, 120.f);
+    for (int i = 0; i < rate * 2; ++i) {
+        echo.setDrumPhase(3.0, true, true);
+        float l = 0.1f, r = 0.1f;
+        echo.processDeck(0, l, r);
+    }
+    echo.setRmx(true, 0, false, 0.f, 1.f, 0, 0.25f, false, -1, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, false, 0, 120.f);
+    int wait = 0;
+    while (echo.scene.releasing && wait < rate * 20) {
+        echo.setDrumPhase(3.0, true, true);
+        float l = 0.1f, r = 0.1f;
+        echo.processDeck(0, l, r);
+        ++wait;
+    }
+    check(!echo.scene.releasing, "cena solta com a grade parada termina (" + std::to_string(wait / rate) + " s)");
+}
+
 int main() {
+    tapeStopReleases();
     scratchFollows();
     backspinCoasts();
     rollBalanceCurve();

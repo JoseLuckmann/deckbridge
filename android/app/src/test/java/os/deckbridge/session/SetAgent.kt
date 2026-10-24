@@ -19,9 +19,9 @@ class PhaseCheck(val label: String, val time: Double, val milliseconds: Double)
  * compasso. O "ouvido" do DJ são os desvios medidos entre os ataques reais e a grade do analisador
  * (tools/onset_offsets.py), usados para acertar a hora do PLAY.
  */
-class SetAgent(model: SetModel, private val order: List<Int>, offsetsDir: File) : DjHands(model, offsetsDir) {
-    val checks = ArrayList<PhaseCheck>()
-    val notes = ArrayList<String>()
+class SetAgent(model: SetModel, private val order: List<Int>, offsetsDir: File) : DjHands(model, offsetsDir), Reporting {
+    override val checks = ArrayList<PhaseCheck>()
+    override val notes = ArrayList<String>()
 
     private var phase = 0
     private var readyAt = 0.0

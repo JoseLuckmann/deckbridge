@@ -8,9 +8,9 @@ import os.deckbridge.logic.beatPhase
  * Mixagem de duas faixas com os truques: loop roll com slip, scratch com cortes no crossfader, backspin manual pelo prato, SYNC, troca de grave,
  * buildup com RMX, saída da primeira faixa com o BACKSPIN do RMX e final com backspin pelo prato. Tudo em compassos da faixa A (que toca do começo) e da B.
  */
-class MixShowAgent(model: SetModel, private val a: Int, private val b: Int, offsetsDir: File) : DjHands(model, offsetsDir) {
-    val notes = ArrayList<String>()
-    val checks = ArrayList<PhaseCheck>()
+class MixShowAgent(model: SetModel, private val a: Int, private val b: Int, offsetsDir: File) : DjHands(model, offsetsDir), Reporting {
+    override val notes = ArrayList<String>()
+    override val checks = ArrayList<PhaseCheck>()
     private var phase = 0
 
     override fun step() {

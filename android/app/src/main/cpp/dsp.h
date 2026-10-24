@@ -1257,6 +1257,7 @@ struct SceneFx {
     bool holding = false;
     bool releasing = false;
     bool armSnap = false;
+    int armWait = 0;
     bool tailing = false;
     int snapLeft = -1;
     int clock = 0;
@@ -1304,6 +1305,13 @@ struct SceneFx {
             holding = false;
             releasing = intensity > 0.f;
             armSnap = releasing;
+            armWait = 0;
+            if (releasing && scene == 6) {
+                // Tape STOP: soltar religa a fita na hora (motor partindo em ~80 ms), sem esperar a batida. A grade vem do
+                // deck que a própria cena parou; esperar a batida dele deixava a faixa parada para sempre.
+                armSnap = false;
+                snapLeft = std::max(1, static_cast<int>(0.08f * static_cast<float>(sampleRate)));
+            }
         }
     }
 
@@ -1352,7 +1360,9 @@ struct SceneFx {
         prevGridValid = gridValid;
         if (holding) intensity = std::min(ceiling, intensity + 1.f / ramp);
         else if (releasing) {
-            if (armSnap && onBeat) {
+            // Grade parada (deck freado ou parado) por mais de 2 batidas do relógio: solta mesmo assim.
+            if (armSnap) armWait += 1;
+            if (armSnap && (onBeat || armWait > 2 * beatN)) {
                 armSnap = false;
                 snapLeft = std::max(1, static_cast<int>(0.018f * sr));
                 if (useTail()) {
@@ -1695,6 +1705,7 @@ struct XPad {
     float phase = 0.f;
     float hatState = 0.f;
     Biquad hp;
+    Biquad hpR;
     uint32_t noise = 0x51u;
     int drumVoice = 0;
     int drumBars = 8;
@@ -1850,8 +1861,9 @@ struct XPad {
             const bool open = (clock % slice) < (slice * 2) / 3;
             const float cut = open ? 900.f : 4200.f;
             hp.setHighpass(cut, static_cast<float>(sampleRate), 0.9f);
+            hpR.setHighpass(cut, static_cast<float>(sampleRate), 0.9f);
             inL = sanitize(hp.process(inL));
-            inR = sanitize(inL);
+            inR = sanitize(hpR.process(inR));
         }
         clock += 1;
         if (env > 0) env -= 1;
