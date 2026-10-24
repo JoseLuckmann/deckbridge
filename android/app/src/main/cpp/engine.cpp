@@ -81,6 +81,7 @@ struct Deck {
     bool holdingCue = false;
     deckbridge::Wsola stretch;
     deckbridge::ScratchFollower scratch;
+    deckbridge::MotorGain motorGain;
     double expectedPos = -1.0;
     int shiftCached = 999;
     double shiftFactor = 1.0;
@@ -106,7 +107,11 @@ struct Deck {
             rightOut = deckbridge::readInterp(right.data(), total, position);
             const double unit = rateMul * static_cast<double>(sampleRate) / static_cast<double>(outputRate);
             const double normal = playing ? deckbridge::directedStep(pitch, rateMul, sampleRate, outputRate, reversed) : 0.0;
-            position = std::min(std::max(0.0, position + scratch.step(outputRate, normal, unit)), static_cast<double>(total - 2));
+            const double moved = scratch.step(outputRate, normal, unit);
+            const float motor = motorGain.next(moved / (static_cast<double>(sampleRate) / outputRate), outputRate);
+            leftOut *= motor;
+            rightOut *= motor;
+            position = std::min(std::max(0.0, position + moved), static_cast<double>(total - 2));
             lastEmitted = position;
             expectedPos = position;
             stretch.reset();
@@ -158,6 +163,9 @@ struct Deck {
             if (stretch.havePrev || stretch.phase < deckbridge::Wsola::kHop) stretch.reset();
         }
         const double step = deckbridge::directedStep(pitch, rateMul, sampleRate, outputRate, reversed);
+        const float motor = motorGain.next(step / (static_cast<double>(sampleRate) / outputRate), outputRate);
+        leftOut *= motor;
+        rightOut *= motor;
         if (rollLength > 1.0 && rollOrigin >= 0.0 && shadow >= 0.0) {
             if (rollMix < 0.999f && shadow < frames - 1) {
                 leftOut = deckbridge::rollBalance(leftOut, deckbridge::readInterp(left.data(), frames, shadow), rollMix);

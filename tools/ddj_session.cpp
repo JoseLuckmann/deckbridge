@@ -63,6 +63,7 @@ struct Deck {
     double loopEnd = -1.0;
     float trim = 1.f;  // ganho automático por faixa (o trim da análise de loudness)
     deckbridge::ScratchFollower scratch;
+    deckbridge::MotorGain motorGain;
 
     void read(double rateMul, float &l, float &r) {
         l = r = 0.f;
@@ -75,7 +76,11 @@ struct Deck {
             lastEmitted = position;
             l = deckbridge::readInterp(leftData->data(), frames, position) * trim;
             r = deckbridge::readInterp(rightData->data(), frames, position) * trim;
-            position = std::min(std::max(0.0, position + scratch.step(kRate, playing ? pitch * rateMul : 0.0, rateMul)), static_cast<double>(frames - 2));
+            const double moved = scratch.step(kRate, playing ? pitch * rateMul : 0.0, rateMul);
+            const float motor = motorGain.next(moved, kRate);
+            l *= motor;
+            r *= motor;
+            position = std::min(std::max(0.0, position + moved), static_cast<double>(frames - 2));
             return;
         }
         if (position < 0.0) position = 0.0;
@@ -86,6 +91,9 @@ struct Deck {
         lastEmitted = position;
         l = deckbridge::readInterp(leftData->data(), frames, position) * trim;
         r = deckbridge::readInterp(rightData->data(), frames, position) * trim;
+        const float motor = motorGain.next(pitch * rateMul, kRate);
+        l *= motor;
+        r *= motor;
         position += pitch * rateMul;
         // Loop de batida: ao passar da saída, volta para a entrada mantendo a fração do passo (sem emenda).
         if (loopEnd > loopStart && position >= loopEnd) {

@@ -535,3 +535,16 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - **Não verificado:**
   - Nada foi ouvido na DDJ-400 nem no tablet (`BLOCKED_HARDWARE`), inclusive o fone da pré-escuta.
   - As curvas, o COMP e os tempos do Send não foram medidos num DJM.
+
+## 2026-10-24 — Vídeo explorando o RMX e dois bugs do motor
+
+- Mudança:
+  - Roteiro `MixRmxAgent`: as oito cenas, X-PAD, GATE, isolador, CH SELECT e releases.
+  - DDJ virtual em 1280 × 720.
+  - SceneFx: o Tape STOP solta na hora, e a cena não trava com a grade parada.
+  - `MotorGain`: o deck parado não manda mais DC.
+  - X-PAD Hi-pass em estéreo.
+- Evidência:
+  - `fx_rmx_test`: `tapeStopReleases` e `motorStops`.
+  - Áudio do roteiro: o trecho depois do Tape STOP volta a 0,44 RMS (antes 0,75, com o deck parado). O BRAKE final cai a 0,00 (antes 0,79 constante).
+- Risco: nada ouvido no hardware (`BLOCKED_HARDWARE`). O limiar de 15% do `MotorGain` é nosso.

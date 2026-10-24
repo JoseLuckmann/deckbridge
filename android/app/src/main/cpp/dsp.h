@@ -551,6 +551,21 @@ struct GrainShift {
     }
 };
 
+// Saída de um deck pela velocidade do "disco": como uma agulha, o som cai junto com a velocidade abaixo de 15% da
+// normal e some parado. Sem isso, um deck freado (BRAKE, Tape STOP) ou um prato seguro parado repetia a mesma
+// amostra e mandava tensão contínua (DC) para as caixas. `speed` é a velocidade em x da normal (com sinal).
+struct MotorGain {
+    float gain = 1.f;
+
+    float next(double speed, int outputRate) {
+        const float target = static_cast<float>(std::min(1.0, std::fabs(speed) / 0.15));
+        const float coef = 1.f - std::exp(-1.f / std::max(1.f, 0.002f * static_cast<float>(outputRate)));
+        gain += (target - gain) * coef;
+        if (gain < 1e-4f && target == 0.f) gain = 0.f;
+        return gain;
+    }
+};
+
 // Scratch: com o prato tocado, a faixa para de andar sozinha e segue o prato. Cada passo do prato soma um trecho
 // (em amostras da faixa) a percorrer; a velocidade vai até esse trecho em cerca de 10 ms, com um polo de 3 ms, e pode
 // ser negativa (para trás). Soltar o prato zera o que falta. O deslocamento total é a soma dos passos.

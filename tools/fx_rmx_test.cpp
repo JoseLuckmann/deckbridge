@@ -558,7 +558,23 @@ void tapeStopReleases() {
     check(!echo.scene.releasing, "cena solta com a grade parada termina (" + std::to_string(wait / rate) + " s)");
 }
 
+// Deck freado até parar: a saída cai com a velocidade e some parado (sem tensão contínua).
+void motorStops() {
+    const int rate = 48000;
+    deckbridge::MotorGain motor;
+    float g = 0.f;
+    for (int i = 0; i < rate / 10; ++i) g = motor.next(1.0, rate);
+    check(std::fabs(g - 1.f) < 1e-3f, "motor: na velocidade normal o ganho é 1");
+    for (int i = 0; i < rate / 10; ++i) g = motor.next(0.075, rate);
+    check(std::fabs(g - 0.5f) < 0.01f, "motor: a 7,5% da velocidade o som está na metade");
+    for (int i = 0; i < rate / 10; ++i) g = motor.next(0.0, rate);
+    check(g == 0.f, "motor: parado, a saída é zero");
+    for (int i = 0; i < rate / 10; ++i) g = motor.next(-2.0, rate);
+    check(std::fabs(g - 1.f) < 1e-3f, "motor: para trás rápido (backspin) volta inteiro");
+}
+
 int main() {
+    motorStops();
     tapeStopReleases();
     scratchFollows();
     backspinCoasts();

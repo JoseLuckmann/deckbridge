@@ -116,3 +116,31 @@ Limites:
 Erro corrigido junto: os quadros liam os picos de `mix.wav.levels.tsv` da pasta do set de seis faixas. No vídeo de mixagem anterior, os medidores da tela mostravam o áudio do set, não o da mixagem. Agora `SET_LEVELS` aponta os picos do áudio deste roteiro.
 
 `docs/ui/ddj-virtual-rmx.png`: o buildup do RMX, com o deck 1 em SAMPLER, os pads 2 (Noise UP segurado) e 7 (roll de bateria) acesos e o LOW do deck 1 fechado.
+
+## Mixagem explorando o RMX, com a DDJ virtual maior (24/10/2026)
+
+`SET_AGENT=rmx` (`MixRmxAgent`) usa t1 e t2, com 3,9 min. Os pads do deck 1 no modo SAMPLER são as cenas e o X-PAD do RMX; o resto é na tela.
+
+- **Cenas pelos pads:**
+  - Echo UP (pad 1), 4 compassos.
+  - Spiral UP (pad 3), 8 compassos; o BEAT ► sobe o tamanho da cena.
+  - Noise UP (pad 2), como build para a entrada do B e de novo antes do drop do B.
+  - Reverb UP (pad 4), no breakdown do B.
+- **Cenas pela tela:** Reverb DOWN, Echo DOWN (saída do A), Tape STOP (1 compasso) e Dub ECHO.
+- **X-PAD:**
+  - Roll descendo de 1/4 a 1/16 e de 1/2 a 1/16.
+  - Trans em 1/8 e Hi-pass em 1/4.
+  - Drum com KICK+CLAP e 8 compassos (pads do deck 2); o LEVEL sobe a intensidade até o drop.
+- **Isolador do RMX:** LOW do A fora por 3 compassos; HI e depois MID do B fora no drop. O GATE fica ligado 2 compassos.
+- **CH SELECT:** o 1 nas cenas do A e o 2 depois da saída dele.
+- **Releases:** ECHO OUT na saída do A e BRAKE no final.
+- **Entrada do B:** SYNC no compasso 44 do A e PLAY no 48. A fase seis compassos depois da entrada é +0,0 ms.
+
+A DDJ virtual passou a uma janela de 1280 × 720, com o prato, os knobs, os pads e os textos maiores. No modo SAMPLER, cada pad mostra o que faz no RMX. O vídeo empilha o app (1280 × 720) e a DDJ (1280 × 720).
+
+Dois bugs do motor apareceram neste roteiro e foram corrigidos no `dsp.h`, que é o mesmo código do app:
+
+1. **Tape STOP:** soltar a cena esperava a próxima batida da grade do deck que a própria cena tinha parado. A batida não vinha, e a faixa ficava parada indefinidamente. Agora a fita volta em ~80 ms. Qualquer outra cena solta depois de 2 batidas do relógio se a grade estiver parada. Teste: `fx_rmx_test` (`tapeStopReleases`).
+2. **Deck parado mandava DC:** um deck freado até zero (BRAKE, Tape STOP) ou um prato seguro parado repetia a mesma amostra e mandava tensão contínua para a saída; no fim do roteiro isso era 0,79 RMS constante. Agora a saída cai com a velocidade abaixo de 15% da normal, como uma agulha, e some com o deck parado (`MotorGain`). Teste: `fx_rmx_test` (`motorStops`).
+
+O X-PAD Hi-pass também saía mono (o canal direito copiava o esquerdo) e agora filtra cada lado.
