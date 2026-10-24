@@ -548,3 +548,4 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - `fx_rmx_test`: `tapeStopReleases` e `motorStops`.
   - Áudio do roteiro: o trecho depois do Tape STOP volta a 0,44 RMS (antes 0,75, com o deck parado). O BRAKE final cai a 0,00 (antes 0,79 constante).
 - Risco: nada ouvido no hardware (`BLOCKED_HARDWARE`). O limiar de 15% do `MotorGain` é nosso.
+- O painel virtual pegou um erro de LED, que também estava no app (DeckPage). Ao segurar pela tela uma cena sem pad (Reverb DOWN, Echo DOWN, Tape STOP ou Dub ECHO), acendia o pad do X-PAD de mesmo número: o Tape STOP acendia DRUM. A regra agora fica em `rmxSamplerPads` (`DdjLeds.kt`), usada pelo app e pela simulação. Teste: `DdjLedsTest` (`rmxScenesWithoutPadDoNotLightPads`).

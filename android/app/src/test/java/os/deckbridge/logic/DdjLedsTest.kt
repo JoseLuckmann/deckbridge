@@ -50,4 +50,15 @@ class DdjLedsTest {
         assertEquals(-1, beatLoopIndex(3.0))
         assertEquals(-1, beatLoopIndex(0.0))
     }
+
+    @Test
+    fun rmxScenesWithoutPadDoNotLightPads() {
+        // Cenas 1–4 têm pad e acendem; Reverb DOWN, Echo DOWN, Tape STOP e Dub ECHO (5–8) só existem na tela.
+        assertEquals(setOf(1), rmxSamplerPads(RmxState(panel = true, scene = 1, holding = true)))
+        for (scene in 4..7) {
+            assertEquals(emptySet<Int>(), rmxSamplerPads(RmxState(panel = true, scene = scene, holding = true)))
+        }
+        assertEquals(setOf(6), rmxSamplerPads(RmxState(panel = true, xOn = true, xMode = 2)))
+        assertEquals(emptySet<Int>(), rmxSamplerPads(RmxState(panel = false, scene = 0, holding = true, xOn = true)))
+    }
 }

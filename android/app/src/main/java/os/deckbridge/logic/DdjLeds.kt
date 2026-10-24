@@ -79,3 +79,13 @@ class LedDiff {
         return out
     }
 }
+
+/**
+ * Pads do SAMPLER (banda esquerda) acesos pelo RMX: as cenas 1–4 (que têm pad) enquanto seguradas e o modo do X-PAD
+ * ligado (pads 5–8). As cenas 5–8 só existem na tela e não acendem pad nenhum.
+ */
+fun rmxSamplerPads(rmx: RmxState): Set<Int> = buildSet {
+    if (!rmx.panel) return@buildSet
+    if (rmx.holding && rmx.scene in 0..3) add(rmx.scene)
+    if (rmx.xOn) add((4 + rmx.xMode).coerceIn(4, 7))
+}

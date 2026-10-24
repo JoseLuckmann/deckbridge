@@ -1052,10 +1052,7 @@ fun DeckPage(
                         )
                     },
                     beatFxOn = fx.on && !rmx.panel,
-                    samplerPads = buildSet {
-                        if (rmx.panel && rmx.holding) add(rmx.scene.coerceIn(0, 7))
-                        if (rmx.panel && rmx.xOn) add((4 + rmx.xMode).coerceIn(0, 7))
-                    },
+                    samplerPads = os.deckbridge.logic.rmxSamplerPads(rmx),
                 )
                 diff.messages(state).forEach { PerformanceHub.sendMidi(it) }
             }

@@ -58,7 +58,7 @@ class SetFramesTest {
     fun renderSetFrames() {
         assumeTrue(SessionAssets.enabled() && File(SessionAssets.dir, "src/t1.wav").isFile && System.getenv("SET") == "1")
         val fps = (System.getenv("SESSION_FPS") ?: "10").toInt()
-        val outDir = File(SessionAssets.dir, "frames").apply { deleteRecursively(); mkdirs() }
+        val outDir = File(SessionAssets.dir, "frames").apply { if (System.getenv("SET_ONLY_DDJ") != "1") deleteRecursively(); mkdirs() }
         val catalog = SessionAssets.catalog()
         // Nomes das faixas de teste na tela (o código usa os nomes de arquivo t1..t6).
         val names = mapOf(
@@ -148,7 +148,10 @@ class SetFramesTest {
                 colorFx = model.colorFx,
             )
             repeat(3) { ShadowLooper.idleMainLooper(20, java.util.concurrent.TimeUnit.MILLISECONDS) }
-            activity.window.decorView.captureRoboImage(File(outDir, "frame%05d.png".format(frame)).absolutePath)
+            // SET_ONLY_DDJ=1 refaz só a tela da DDJ (os quadros do app ficam como estão).
+            if (System.getenv("SET_ONLY_DDJ") != "1") {
+                activity.window.decorView.captureRoboImage(File(outDir, "frame%05d.png".format(frame)).absolutePath)
+            }
             ddjState.value = DdjFrame(model.surface, os.deckbridge.logic.ledTargets(model.leds(listOf(held[0], held[1]))), model.t)
             repeat(2) { ShadowLooper.idleMainLooper(20, java.util.concurrent.TimeUnit.MILLISECONDS) }
             val bitmap = android.graphics.Bitmap.createBitmap(ddjView.width, ddjView.height, android.graphics.Bitmap.Config.ARGB_8888)

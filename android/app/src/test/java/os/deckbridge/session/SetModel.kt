@@ -436,10 +436,7 @@ class SetModel(private val catalog: RbCatalog, private val realDuration: DoubleA
             )
         },
         beatFxOn = fx.on && !rmx.panel,
-        samplerPads = buildSet {
-            if (rmx.panel && rmx.holding) add(rmx.scene.coerceIn(0, 7))
-            if (rmx.panel && rmx.xOn) add((4 + rmx.xMode).coerceIn(0, 7))
-        },
+        samplerPads = os.deckbridge.logic.rmxSamplerPads(rmx),
     )
 
     /** Hot cues da análise do app, em segundos, por faixa. */
