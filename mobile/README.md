@@ -6,6 +6,10 @@ App Android (`os.deckbridge.manager`) para organizar a biblioteca no celular e e
 
 O mesmo do player (`StagePalette`): fundo preto, botões retos com texto azul-claro, ativo em azul-escuro com contorno azul, valores em laranja, tom compatível em verde, hot cue em grade 2×4, lista com disco, miniatura da onda e BPM monoespaçado, fileira de botões iguais embaixo (coluna de ícones quando deitado). `DesignSystemTest` impede cor à mão e formas arredondadas do Material. Tabela completa em `docs/ui-spec.md` §6.
 
+## Princípio de tela
+
+Curto e limpo: uma linha de topo, uma fileira de filtros, linhas de faixa compactas, detalhe em abas (MARCAR · CUES · INFO), ações raras no MENU e explicações só em confirmações.
+
 ## O que faz
 
 - **Biblioteca no aparelho** (`getExternalFilesDir/biblioteca/dados`), mesmo formato de um pendrive; mudanças ficam numa fila (barra "Salvar / Desfazer / Descartar") e são gravadas com cópia de segurança; ao sair do app o que estiver pendente é salvo.
@@ -24,7 +28,6 @@ O núcleo (`core/`) é o mesmo do programa de computador. Nenhum outro código e
 - **Busca com filtros escritos**: `bpm:120-128`, `bpm:>124`, `tom:8A` (aceita Am e 8A), `nota:4`, `cor:verde`, `genero:house`, combináveis com palavras. O "?" na busca explica.
 - **Salvar lista como playlist**: com busca ou filtro ativo, cria a playlist com o que está na tela.
 - **Playlist alvo**: definida uma vez, cada faixa ganha um "+" de um toque (e "✓" para tirar); também na triagem e em "＋ ao alvo" na seleção.
-- **Estrelas na própria linha**: tocar numa estrela marca sem abrir a faixa.
 - **Triagem**: uma faixa por vez, botões grandes de nota (avança sozinho), cor, adicionar ao alvo, ouvir; em pé e deitado.
 - **Editar em lote**: vários campos de várias faixas; só o preenchido muda.
 - **Arrumar tudo**: sugestões por regras (espaços, maiúsculas, nome do arquivo), todas visíveis e desmarcáveis; não é IA.

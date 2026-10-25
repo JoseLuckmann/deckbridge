@@ -844,3 +844,11 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Guarda contra nova deriva: `DesignSystemTest` (4 testes) falha com cor escrita à mão, `RoundedCornerShape`/`CircleShape`/botões do Material fora do tema, ou valores diferentes do `StagePalette`; confere contraste (texto, botão azul, texto secundário, tom compatível).
 - Achado no caminho: um conjunto de capturas falhou por "Compose não ficou ocioso" quando duas execuções do Gradle rodaram ao mesmo tempo; sozinhas, as mesmas 12 capturas passam. Não rodar duas ao mesmo tempo.
 - Não verificado: comparação lado a lado com o rekordbox real (só com as telas do player do projeto e com a descrição do `ui-spec.md`); uso no S25 Ultra.
+
+## 2026-10-25 — Celular mais limpo: menos texto, telas leves
+
+- Pedido do dono: experiência clean, sem textos longos e sem telas carregadas.
+- Feito: topo de uma linha (área + contagem, busca escondida atrás do ⌕, importar no ＋); uma única fileira de filtros (com a playlist alvo e "＋ Playlist" quando há filtro); "Primeiros passos" virou uma linha "PRÓXIMO …"; linha de faixa de 60 dp (disco, título/artista, estrelas só quando há nota, BPM apagado quando falta análise, tom; ponto laranja para mudança não salva); barra de salvar numa linha (contador, ↶ ↷, SALVAR); detalhe da faixa em três abas (MARCAR · CUES · INFO); playlists com ⋯ no lugar de botões espalhados; pendrive com três linhas e um botão (EXPORTAR também salva antes, se houver fila); avisos de uma ou duas palavras; explicações só nas confirmações.
+- Removido da frente (continua no MENU): Arrumar nomes, Analisar todas, Descartar mudanças, ajuda de busca. Estrelas tocáveis na linha saíram (nota pela triagem, pelo detalhe ou pela seleção).
+- Evidência: mobile 25 testes, 0 falhas (inclui `UxFlowTest` novo: busca escondida até pedir e ✕ limpa). Capturas `docs/ui/mobile-*.png` (14).
+- Não verificado: uso real no S25 Ultra; se os textos curtos continuam claros para quem nunca usou.
