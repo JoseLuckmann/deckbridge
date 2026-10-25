@@ -80,6 +80,7 @@ class UiState {
     var rename by mutableStateOf(false)
     var organize by mutableStateOf(false)
     var transfer by mutableStateOf<TransferState?>(null)
+    var moreMenu by mutableStateOf(false)
     val organizeState = OrganizeState()
     var drag by mutableStateOf<DragInfo?>(null)
     var hoverPlaylist by mutableStateOf<Int?>(null)
@@ -178,22 +179,22 @@ fun App(model: ManagerModel, ui: UiState = remember { UiState() }) {
 @Composable
 private fun TopBar(model: ManagerModel, ui: UiState) {
     Row(Modifier.fillMaxWidth().background(Pal.Panel).border(1.dp, Pal.Line).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Label("DECKBRIDGE", Pal.Blue, 16.sp, bold = true)
-        Label("Library Manager", Pal.Ink, 16.sp)
+        Label("BIBLIOTECA", Pal.Blue, 13.sp, bold = true)
         val vol = model.volume
         if (vol != null) {
-            Label(vol.root.path, Pal.Muted, 12.sp, modifier = Modifier.weight(1f))
-            Btn("Importar áudio…", { val f = ui.chooseFiles(); if (f.isNotEmpty()) ui.startImportOf(f, model) })
-            Btn("Organizar…", { refreshSuggestions(model, ui.organizeState); ui.organize = true })
-            Btn("Renomear arquivos…", { ui.rename = true })
-            Btn("Exportar para pendrive…", { ui.transfer = TransferState(export = true) })
-            Btn("Trazer de pendrive…", { ui.transfer = TransferState(export = false) })
-            Btn("Backups", { ui.backups = true })
-            Btn("Abrir outro…", { ui.chooser()?.let { model.open(it) } })
+            val local = runCatching { vol.root.canonicalFile == localLibraryRoot().canonicalFile }.getOrDefault(false)
+            Label(if (local) "Neste computador" else vol.root.name.ifEmpty { vol.root.path }, Pal.Ink, 15.sp, bold = true)
+            Label("${model.view?.tracks?.size ?: 0}", Pal.Orange, 13.sp, modifier = Modifier.weight(1f))
+            // Só o que se usa sempre fica à vista; o resto mora no ⋯.
+            Btn("Importar", { val f = ui.chooseFiles(); if (f.isNotEmpty()) ui.startImportOf(f, model) })
+            Btn("Exportar", { ui.transfer = TransferState(export = true) })
+            Box {
+                Btn("⋯", { ui.moreMenu = !ui.moreMenu })
+                if (ui.moreMenu) MoreMenu(model, ui)
+            }
         } else {
             Spacer(Modifier.weight(1f))
         }
-        Label(if (model.dirty) "● mudanças não gravadas" else "somente leitura até aplicar", if (model.dirty) Pal.Orange else Pal.Muted, 12.sp, bold = model.dirty)
     }
 }
 
@@ -211,17 +212,11 @@ fun localLibraryRoot(): File = File(System.getProperty("user.home"), ".deckbridg
 private fun Welcome(model: ManagerModel, ui: UiState) {
     val found = remember { VolumeDetector.find() }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(Modifier.width(560.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Label("Abra um pendrive exportado pelo rekordbox", Pal.Ink, 20.sp, bold = true)
-            Label("Aqui você organiza a biblioteca à mão: metadados, playlists e pastas. Nada é gravado enquanto você edita. As mudanças ficam numa fila, você revisa, e só então o programa grava, com cópia de segurança antes.", Pal.Muted, 13.sp, maxLines = 5)
-            if (found.isNotEmpty()) {
-                Caption("Pendrives encontrados")
-                found.forEach { f -> Btn(f.path, { model.open(f) }, Modifier.fillMaxWidth()) }
-            }
-            Btn("Escolher a pasta do pendrive…", { ui.chooser()?.let { model.open(it) } }, primary = true)
-            Caption("Ou use a biblioteca local deste computador")
-            Label("Fica em ${localLibraryRoot().path}, no mesmo formato de um pendrive. Edite aqui e exporte para o pendrive quando quiser.", Pal.Muted, 12.sp, maxLines = 3)
-            Btn("Abrir a biblioteca local", { os.deckbridge.manager.transfer.LocalLibrary.ensure(localLibraryRoot()); model.open(localLibraryRoot()) })
+        Column(Modifier.width(360.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Label("BIBLIOTECA", Pal.Blue, 13.sp, bold = true)
+            Btn("Neste computador", { os.deckbridge.manager.transfer.LocalLibrary.ensure(localLibraryRoot()); model.open(localLibraryRoot()) }, Modifier.fillMaxWidth(), primary = true)
+            found.forEach { f -> Btn("Pendrive · ${f.name.ifEmpty { f.path }}", { model.open(f) }, Modifier.fillMaxWidth()) }
+            Btn("Outra pasta…", { ui.chooser()?.let { model.open(it) } }, Modifier.fillMaxWidth())
         }
     }
 }
@@ -258,15 +253,16 @@ private fun Sidebar(model: ManagerModel, ui: UiState, modifier: Modifier) {
                 Btn("+ Playlist", { newPlaylist(model, ui, folder = false) }, Modifier.weight(1f))
                 Btn("+ Pasta", { newPlaylist(model, ui, folder = true) }, Modifier.weight(1f))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Renomear, excluir e mover só aparecem com uma playlist escolhida.
+            if (selected != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Btn("Renomear", { selected?.let { p -> ui.prompt = Prompt("Renomear \"${p.name}\"", p.name, "Renomear") { n -> model.submit(Edit.RenamePlaylist(p.id, n), "Renomear ${if (p.folder) "pasta" else "playlist"} \"${p.name}\" para \"${n.trim()}\"") } } }, Modifier.weight(1f), enabled = selected != null)
                 Btn("Excluir", { selected?.let { p -> ui.confirm = ConfirmAsk("Excluir \"${p.name}\"?", if (p.folder) "A pasta e tudo o que há dentro dela saem da biblioteca. As faixas continuam na coleção." else "A playlist sai da biblioteca. As faixas continuam na coleção.", "Excluir", true) { model.submit(Edit.DeletePlaylist(p.id), "Excluir ${if (p.folder) "pasta" else "playlist"} \"${p.name}\""); model.openPlaylist = null } } }, Modifier.weight(1f), danger = true, enabled = selected != null)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (selected != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 val siblings = selected?.let { view.children(it.parentId) }.orEmpty()
                 val at = siblings.indexOfFirst { it.id == selected?.id }
-                Btn("▲ Subir", { selected?.let { model.submit(Edit.MovePlaylist(it.id, it.parentId, at - 1), "Subir \"${it.name}\"") } }, Modifier.weight(1f), enabled = selected != null && at > 0)
-                Btn("▼ Descer", { selected?.let { model.submit(Edit.MovePlaylist(it.id, it.parentId, at + 1), "Descer \"${it.name}\"") } }, Modifier.weight(1f), enabled = selected != null && at in 0 until siblings.lastIndex)
+                Btn("▲", { selected?.let { model.submit(Edit.MovePlaylist(it.id, it.parentId, at - 1), "Subir \"${it.name}\"") } }, Modifier.weight(1f), enabled = selected != null && at > 0)
+                Btn("▼", { selected?.let { model.submit(Edit.MovePlaylist(it.id, it.parentId, at + 1), "Descer \"${it.name}\"") } }, Modifier.weight(1f), enabled = selected != null && at in 0 until siblings.lastIndex)
             }
         }
     }
@@ -318,7 +314,7 @@ private fun Center(model: ManagerModel, ui: UiState, modifier: Modifier) {
     val inTrackPlaylist = open != null && !open.folder
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextBox(model.query, { model.query = it }, Modifier.weight(1f), placeholder = "Buscar… ou filtrar: bpm:120-128 tom:8A nota:4 cor:verde")
+            TextBox(model.query, { model.query = it }, Modifier.weight(1f), placeholder = "Buscar  (bpm:120-128  tom:8A  nota:4)")
             Box {
                 Btn("Adicionar à playlist ▾", { ui.addMenu = !ui.addMenu }, enabled = model.selection.isNotEmpty() && view.playlists.any { !it.folder })
                 if (ui.addMenu) AddMenu(model, ui)
@@ -346,14 +342,14 @@ private fun Center(model: ManagerModel, ui: UiState, modifier: Modifier) {
         val counts = model.filterCounts()
         Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             QuickFilter.values().filter { it == QuickFilter.ALL || it == model.filter || (counts[it] ?: 0) > 0 }.forEach { f ->
-                Btn(if (f == QuickFilter.ALL) f.title else "${f.title} · ${counts[f] ?: 0}", { model.filter = f }, primary = model.filter == f)
+                Btn(if (f == QuickFilter.ALL) "Todas" else "${f.shortTitle()} ${counts[f] ?: 0}", { model.filter = f }, primary = model.filter == f)
             }
             if ((model.query.isNotBlank() || model.filter != QuickFilter.ALL) && rows.isNotEmpty()) {
-                Btn("Salvar lista como playlist", { ui.prompt = Prompt("Nome da playlist (${rows.size} faixa${if (rows.size == 1) "" else "s"})", "", "Criar") { n -> model.saveListAsPlaylist(n.trim()) } })
+                Btn("＋ Playlist", { ui.prompt = Prompt("Nome da playlist (${rows.size} faixa${if (rows.size == 1) "" else "s"})", "", "Criar") { n -> model.saveListAsPlaylist(n.trim()) } })
             }
             if (inTrackPlaylist) {
-                Label("Ordenar:", Pal.Muted, 12.sp, modifier = Modifier.padding(start = 10.dp))
-                Smart.SortMode.values().filter { it != Smart.SortMode.TITLE && it != Smart.SortMode.ARTIST }.forEach { mode -> Btn(mode.title, { model.sortPlaylist(open!!.id, mode) }) }
+                Spacer(Modifier.width(10.dp))
+                listOf(Smart.SortMode.BPM_UP to "BPM ↑", Smart.SortMode.HARMONIC to "Harmônica").forEach { (mode, label) -> Btn(label, { model.sortPlaylist(open!!.id, mode) }) }
             }
         }
         Label(
@@ -477,7 +473,7 @@ private fun Inspector(model: ManagerModel, ui: UiState, modifier: Modifier) {
     Column(modifier.background(Pal.Panel).border(1.dp, Pal.Line).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (tracks.isEmpty()) {
             Caption("Faixa")
-            Label("Selecione uma ou mais faixas para editar título, artista, álbum, gênero, tom, nota e comentário. Com várias selecionadas, só os campos que você mexer mudam.", Pal.Muted, 13.sp, maxLines = 6)
+            Label("Nenhuma faixa selecionada", Pal.Muted, 13.sp)
         } else {
             InspectorForm(model, ui, tracks)
         }
@@ -497,7 +493,14 @@ private fun androidx.compose.foundation.layout.ColumnScope.InspectorForm(model: 
         return if (values.size == 1) values.first() to false else "" to true
     }
     val multi = tracks.size > 1
-    Caption(if (multi) "${tracks.size} faixas" else "Faixa ${tracks.first().id}")
+    var more by remember { mutableStateOf(false) }
+    val single = tracks.first()
+    if (multi) Caption("${tracks.size} faixas")
+    else {
+        // Cabeçalho da faixa: o que não se edita numa linha só, em fonte monoespaçada como no player.
+        Label(single.title.ifEmpty { single.fileName }, Pal.Ink, 15.sp, bold = true)
+        Label("%.2f BPM  ·  %s  ·  %d:%02d".format(single.bpm, single.key.ifEmpty { "—" }, single.durationSeconds / 60, single.durationSeconds % 60), Pal.Muted, 12.sp)
+    }
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         data class F(val id: String, val title: String, val get: (TrackItem) -> String)
         val fields = listOf(
@@ -511,28 +514,25 @@ private fun androidx.compose.foundation.layout.ColumnScope.InspectorForm(model: 
             F("trackNumber", "Nº da faixa") { if (it.trackNumber > 0) it.trackNumber.toString() else "" },
             F("comment", "Comentário") { it.comment },
         )
+        // À vista só o que se edita sempre; tom, selo, ano e número ficam em "Mais".
+        val extra = setOf("key", "label", "year", "trackNumber")
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Caption("Nota")
+            Stars(rating ?: common { it.rating.toString() }.first.toIntOrNull() ?: 0, { rating = it }, 20.sp)
+        }
         for (f in fields) {
             if (multi && f.id == "title") continue
+            if (f.id in extra && !more) continue
             val (value, mixed) = common(f.get)
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Caption(f.title)
                 TextBox(drafts[f.id] ?: value, { drafts = drafts + (f.id to it) }, Modifier.fillMaxWidth(), placeholder = if (mixed && drafts[f.id] == null) "— valores diferentes —" else "")
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Caption("Nota")
-            Stars(rating ?: common { it.rating.toString() }.first.toIntOrNull() ?: 0, { rating = it }, 20.sp)
-        }
-        Caption("Somente leitura")
-        val single = tracks.first()
-        if (!multi) {
-            Info("BPM", "%.2f".format(single.bpm))
-            Info("Duração", "%d:%02d".format(single.durationSeconds / 60, single.durationSeconds % 60))
+        Label(if (more) "Menos ▴" else "Mais ▾", Pal.Blue, 12.sp, bold = true, modifier = Modifier.clickable { more = !more }.padding(vertical = 4.dp))
+        if (more && !multi) {
             Info("Taxa", "${single.sampleRate} Hz" + if (single.bitrate > 0) " · ${single.bitrate} kbps" else "")
             Info("Arquivo", single.filePath)
-            Info("Análise", single.analyzePath)
-        } else {
-            Label("BPM, duração e arquivo aparecem com uma faixa só.", Pal.Muted, 12.sp, maxLines = 2)
         }
     }
     val patch = TrackPatch(
@@ -548,9 +548,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.InspectorForm(model: 
         rating = rating,
     )
     val changed = !patch.isEmpty
-    if (!multi) Btn("Cues e grade…", { ui.cueTrack = single0(tracks).id }, Modifier.fillMaxWidth(), enabled = model.hasAnalysis(tracks.first()))
+    if (!multi) Btn("Cues e grade", { ui.cueTrack = single0(tracks).id }, Modifier.fillMaxWidth(), enabled = model.hasAnalysis(tracks.first()))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Btn("Guardar na fila", {
+        Btn("Aplicar", {
             val text = describe(tracks, patch)
             if (model.submit(Edit.SetTracks(tracks.map { it.id }, patch), text)) {
                 drafts = emptyMap()
@@ -596,12 +596,12 @@ fun describe(tracks: List<TrackItem>, patch: TrackPatch): String {
 private fun PendingBar(model: ManagerModel, ui: UiState) {
     Row(Modifier.fillMaxWidth().background(Pal.Panel).border(1.dp, Pal.Line).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         val n = model.pending.size
-        if (n == 0) Label("Nenhuma mudança na fila.", Pal.Muted, 13.sp, modifier = Modifier.weight(1f))
-        else Label("$n mudança${if (n == 1) "" else "s"} na fila · última: ${model.pending.last().text}", Pal.Orange, 13.sp, modifier = Modifier.weight(1f))
-        Btn("Desfazer a última", { model.undo() }, enabled = n > 0)
-        if (model.redoStack.isNotEmpty()) Btn("Refazer", { model.redo() })
-        Btn("Descartar tudo", { ui.confirm = ConfirmAsk("Descartar ${model.pending.size} mudanças?", "As mudanças da fila somem. O pendrive não foi tocado.", "Descartar", true) { model.discard() } }, danger = true, enabled = n > 0)
-        Btn("Revisar e aplicar…", { ui.review = true }, primary = true, enabled = n > 0)
+        if (n == 0) Spacer(Modifier.weight(1f))
+        else Label("● $n na fila", Pal.Orange, 13.sp, bold = true, modifier = Modifier.weight(1f))
+        Btn("↶ Desfazer", { model.undo() }, enabled = n > 0)
+        if (model.redoStack.isNotEmpty()) Btn("↷ Refazer", { model.redo() })
+        Btn("Descartar", { ui.confirm = ConfirmAsk("Descartar ${model.pending.size} mudanças?", "As mudanças da fila somem. O pendrive não foi tocado.", "Descartar", true) { model.discard() } }, danger = true, enabled = n > 0)
+        Btn("Gravar…", { ui.review = true }, primary = true, enabled = n > 0)
     }
 }
 
@@ -631,23 +631,16 @@ private fun ConfirmModal(c: ConfirmAsk, close: () -> Unit) {
 @Composable
 private fun ReviewModal(model: ManagerModel, ui: UiState) {
     val report = model.lastReport
-    Modal("Revisar e aplicar ao pendrive", 760.dp, if (ui.applying == null) ({ ui.review = false }) else null) {
-        Label("Pendrive: ${model.volume?.root?.path.orEmpty()}", Pal.Muted, 12.sp)
+    Modal("Gravar", 640.dp, if (ui.applying == null) ({ ui.review = false }) else null) {
         Caption("${model.pending.size} mudança${if (model.pending.size == 1) "" else "s"}")
         Column(Modifier.fillMaxWidth().height(230.dp).background(Pal.Bg).border(1.dp, Pal.Line).verticalScroll(rememberScrollState()).padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             model.pending.forEachIndexed { n, c -> Label("${n + 1}.  ${c.text}", Pal.Ink, 12.sp, maxLines = 2) }
         }
-        Column(Modifier.fillMaxWidth().background(Pal.Raised).padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Label("O que acontece ao gravar", Pal.Blue, 12.sp, bold = true)
-            Label("1. O banco novo é montado em memória e conferido: só as tabelas editadas mudam e as outras ficam idênticas byte a byte.", Pal.Muted, 12.sp, maxLines = 2)
-            Label("2. Uma cópia do export.pdb atual vai para ~/.deckbridge/backups, fora do pendrive, com SHA-256.", Pal.Muted, 12.sp, maxLines = 2)
-            Label("3. O novo arquivo é gravado ao lado, conferido e trocado de uma vez. Se algo falhar, o original volta.", Pal.Muted, 12.sp, maxLines = 2)
-            Label("Nenhum player nem o rekordbox foi testado com bancos gravados por este programa. Teste primeiro numa cópia do pendrive.", Pal.Orange, 12.sp, maxLines = 2)
-        }
+        Label("Cópia de segurança antes de gravar. Ainda não testado em player: use uma cópia do pendrive.", Pal.Muted, 12.sp, maxLines = 2)
         val busy = ui.applying
         if (busy != null) Label("Gravando… $busy", Pal.Orange, 13.sp, bold = true)
         else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Btn("Gravar no pendrive", {
+            Btn("Gravar", {
                 ui.applying = "começando"
                 thread(name = "gravar") {
                     val r = model.apply { ui.applying = it }
@@ -677,8 +670,7 @@ private fun BackupsModal(model: ManagerModel, ui: UiState) {
     val list = model.backupList()
     var armed by remember { mutableStateOf<BackupRecord?>(null) }
     Modal("Cópias de segurança", 720.dp, { ui.backups = false }) {
-        Label("Cada gravação guarda antes uma cópia do export.pdb. Restaurar devolve o pendrive àquele estado e, antes disso, guarda o estado de agora (dá para desfazer).", Pal.Muted, 12.sp, maxLines = 3)
-        if (list.isEmpty()) Label("Ainda não há cópias para este pendrive.", Pal.Muted, 13.sp)
+        if (list.isEmpty()) Label("Nenhuma cópia", Pal.Muted, 13.sp)
         Column(Modifier.fillMaxWidth().height(260.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             list.forEach { r ->
                 Row(Modifier.fillMaxWidth().background(Pal.Raised).padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -687,7 +679,7 @@ private fun BackupsModal(model: ManagerModel, ui: UiState) {
                         Label(r.changes.firstOrNull() ?: "(sem descrição)" + if (r.changes.size > 1) " e mais ${r.changes.size - 1}" else "", Pal.Muted, 12.sp)
                     }
                     if (armed == r) {
-                        Btn("Confirmar restauração", { model.restore(r); armed = null; ui.backups = false }, danger = true)
+                        Btn("Restaurar agora", { model.restore(r); armed = null; ui.backups = false }, danger = true)
                         Btn("Não", { armed = null })
                     } else Btn("Restaurar", { armed = r })
                 }
@@ -714,4 +706,33 @@ fun prettyStamp(stamp: String): String {
     val m = Regex("""(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})(?:-\d+)?(.*)""").matchEntire(stamp) ?: return stamp
     val g = m.groupValues
     return "${g[3]}/${g[2]}/${g[1]} ${g[4]}:${g[5]}:${g[6]}"
+}
+
+
+/** Rótulo curto de cada filtro rápido. */
+fun QuickFilter.shortTitle() = when (this) {
+    QuickFilter.ALL -> "Todas"
+    QuickFilter.UNANALYZED -> "Sem análise"
+    QuickFilter.UNRATED -> "Sem nota"
+    QuickFilter.NO_PLAYLIST -> "Sem playlist"
+    QuickFilter.NO_GENRE -> "Sem gênero"
+    QuickFilter.NO_ARTIST -> "Sem artista"
+    QuickFilter.TOP -> "★4+"
+    QuickFilter.RECENT -> "Recentes"
+}
+
+/** O ⋯ do topo: ações que não se usam o tempo todo. */
+@Composable
+private fun MoreMenu(model: ManagerModel, ui: UiState) {
+    Column(Modifier.padding(top = 34.dp).width(200.dp).background(Pal.Raised).border(1.dp, Pal.Line)) {
+        listOf(
+            "Organizar…" to { refreshSuggestions(model, ui.organizeState); ui.organize = true },
+            "Renomear arquivos…" to { ui.rename = true },
+            "Trazer de pendrive…" to { ui.transfer = TransferState(export = false) },
+            "Cópias de segurança" to { ui.backups = true },
+            "Abrir outra…" to { ui.chooser()?.let { model.open(it) }; Unit },
+        ).forEach { (label, action) ->
+            Label(label, Pal.Blue, 13.sp, modifier = Modifier.fillMaxWidth().clickable { ui.moreMenu = false; action() }.padding(horizontal = 12.dp, vertical = 9.dp))
+        }
+    }
 }

@@ -135,7 +135,16 @@ class ManagerModel(val backups: Backups = Backups()) {
     }
 
     /** Grade, cues e prévia de onda da faixa, já com as edições da fila (um ANLZ editado aparece aqui antes de ser gravado). */
-    class TrackFilesView(val beats: List<os.deckbridge.manager.anlz.Beat>, val cues: List<os.deckbridge.manager.anlz.Cue>, val wave: ByteArray, val durationMs: Int, val error: String?)
+    class TrackFilesView(
+        val beats: List<os.deckbridge.manager.anlz.Beat>,
+        val cues: List<os.deckbridge.manager.anlz.Cue>,
+        val wave: ByteArray,
+        val durationMs: Int,
+        val error: String?,
+        /** Prévia colorida do player (PWV4): altura e cor RGB por coluna. Vazia se o ANLZ não traz. */
+        val colorHeights: ByteArray = ByteArray(0),
+        val colors: IntArray = IntArray(0),
+    )
 
     fun hasAnalysis(t: os.deckbridge.manager.pdb.TrackItem): Boolean {
         val rel = t.analyzePath.replace('\\', '/').trimStart('/')
@@ -153,7 +162,7 @@ class ManagerModel(val backups: Backups = Backups()) {
             val extBytes = files.read(extRel)
             val ext = extBytes?.let { os.deckbridge.manager.anlz.AnlzModel.parse(it) }
             val merged = os.deckbridge.logic.mergeAnalysis(os.deckbridge.logic.parseAnlz(datBytes), extBytes?.let { os.deckbridge.logic.parseAnlz(it) })
-            TrackFilesView(os.deckbridge.manager.anlz.GridIo.read(dat), os.deckbridge.manager.anlz.CueIo.read(dat, ext).cues.sortedWith(compareBy({ it.hot == 0 }, { it.hot }, { it.timeMs })), merged.bluePreview, t.durationSeconds * 1000, null)
+            TrackFilesView(os.deckbridge.manager.anlz.GridIo.read(dat), os.deckbridge.manager.anlz.CueIo.read(dat, ext).cues.sortedWith(compareBy({ it.hot == 0 }, { it.hot }, { it.timeMs })), merged.bluePreview, t.durationSeconds * 1000, null, merged.rgbPreview?.height ?: ByteArray(0), merged.rgbPreview?.rgb ?: IntArray(0))
         } catch (e: os.deckbridge.manager.anlz.AnlzFormatException) {
             TrackFilesView(emptyList(), emptyList(), ByteArray(0), t.durationSeconds * 1000, "Arquivo de análise inválido: ${e.message}")
         }

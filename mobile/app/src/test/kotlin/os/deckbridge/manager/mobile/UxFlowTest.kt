@@ -71,12 +71,12 @@ class UxFlowTest {
         val total = a.triage!!.size
         val firstId = a.triage!![0]
         rule.setContent { ManagerRoot(a, noActions) }
-        rule.onNodeWithText("4★").performClick()
+        rule.onAllNodesWithText("☆")[3].performClick()
         rule.waitForIdle()
         assertEquals(4, a.model.view!!.track(firstId)!!.rating)
         assertEquals(1, a.triageAt)
         repeat(total - 1) {
-            rule.onNodeWithText(if (a.triageAt >= total - 1) "Concluir" else "Pular ›").performClick()
+            rule.onNodeWithText(if (a.triageAt >= total - 1) "FIM" else "PULAR ›").performClick()
             rule.waitForIdle()
         }
         assertNull(a.triage)

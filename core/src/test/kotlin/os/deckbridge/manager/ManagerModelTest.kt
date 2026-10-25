@@ -203,4 +203,17 @@ class ManagerModelTest {
         m.submit(Edit.CreatePlaylist(m.nextPlaylistId(), 0, "Vazia", false), "vazia")
         assertEquals(2, m.removeEmptyPlaylists(), "a alvo e a nova estão vazias")
     }
+
+    @Test
+    fun anImportedTrackCarriesTheColouredPreviewThePlayerDraws() {
+        val root = TestVolumes.fromScratch(TestVolumes.tempDir("dbm-mm-bk"))
+        val m = model()
+        assertTrue(m.open(root))
+        val t = m.view!!.tracks.first()
+        val f = m.trackFiles(t)
+        assertTrue(f.colors.isNotEmpty(), "sem prévia colorida (PWV4)")
+        assertEquals(f.colors.size, f.colorHeights.size)
+        assertTrue(f.colorHeights.any { (it.toInt() and 0xFF) > 0 }, "prévia colorida toda zerada")
+        assertTrue(f.colors.any { it != 0 }, "cores todas pretas")
+    }
 }

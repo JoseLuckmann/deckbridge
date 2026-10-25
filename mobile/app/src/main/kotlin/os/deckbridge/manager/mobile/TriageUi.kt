@@ -49,16 +49,16 @@ fun TriageScreen(app: ManagerApp) {
         app.preview.stop()
         if (at >= ids.lastIndex) {
             app.endTriage()
-            app.notice = os.deckbridge.manager.Banner("Triagem concluída: ${ids.size} faixa(s) vistas.", false)
+            app.notice = os.deckbridge.manager.Banner("Triagem ✓", false)
         } else app.triageAt = at + 1
     }
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg)) {
         val wide = maxWidth >= WIDE_DP.dp
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { app.endTriage() }) { Text("‹ SAIR", fontSize = 13.sp) }
+                TextButton(onClick = { app.endTriage() }) { Text("✕", fontSize = 16.sp) }
                 Text("TRIAGEM", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-                Text("${at + 1} de ${ids.size}", color = Palette.orange, fontSize = 15.sp, fontFamily = Mono, modifier = Modifier.padding(start = 10.dp).weight(1f))
+                Text("${at + 1}/${ids.size}", color = Palette.orange, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.padding(start = 10.dp).weight(1f))
                 if (m.dirty) TextButton(onClick = { m.undo() }) { Text("↶", fontSize = 20.sp) }
             }
             LinearProgressIndicator(progress = { (at + 1f) / ids.size }, modifier = Modifier.fillMaxWidth(), color = Palette.blue, trackColor = Palette.line)
@@ -80,15 +80,10 @@ fun TriageScreen(app: ManagerApp) {
 @Composable
 private fun TrackCard(app: ManagerApp, t: TrackItem) {
     val playing = app.preview.playingId == t.id
-    Column(Modifier.fillMaxWidth().rbPanel().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(t.artist.ifEmpty { "sem artista" } + if (t.album.isNotEmpty()) " · ${t.album}" else "", color = Palette.muted, fontSize = 16.sp, maxLines = 2)
-        Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.padding(top = 8.dp)) {
-            Stat("BPM", if (t.bpm > 0) "%.1f".format(t.bpm) else "—")
-            Stat("Tom", t.key.ifEmpty { "—" })
-            Stat("Tempo", formatDuration(t.durationSeconds))
-            Stat("Gênero", t.genre.ifEmpty { "—" })
-        }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(t.artist.ifEmpty { "—" }, color = Palette.muted, fontSize = 16.sp, maxLines = 1)
+        Text(listOf(if (t.bpm > 0) "%.1f".format(t.bpm) else "—", t.key.ifEmpty { "—" }, formatDuration(t.durationSeconds)).joinToString("  ·  "), color = Palette.mutedBright, fontSize = 15.sp, fontFamily = Mono, modifier = Modifier.padding(top = 4.dp))
         // Botão de tocar na cor do PLAY do player: verde-claro com texto escuro.
         Box(Modifier.fillMaxWidth().padding(top = 6.dp).height(52.dp).clip(RbShape).background(if (playing) Palette.surfaceHigh else Palette.playBg).clickable { app.preview.toggle(t) }, contentAlignment = Alignment.Center) {
             Text(if (playing) "■ PARAR" else "▶ OUVIR", color = if (playing) Palette.blue else Palette.playInk, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
@@ -105,15 +100,14 @@ private fun Controls(app: ManagerApp, t: TrackItem, at: Int, total: Int, compact
         m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = n)), "Nota $n em \"${t.title}\"")
         advance()
     }
-    Text("NOTA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Cinco estrelas grandes: tocar na terceira dá 3 e já passa para a próxima.
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         for (n in 1..5) {
-            Box(Modifier.weight(1f).height(big).clip(RbShape).background(if (t.rating == n) Palette.blueActiveFill else Palette.surfaceHigh).border(androidx.compose.foundation.BorderStroke(1.dp, if (t.rating == n) Palette.blue else Palette.line), RbShape).clickable { rate(n) }, contentAlignment = Alignment.Center) {
-                Text("$n★", color = Palette.orange, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Box(Modifier.weight(1f).height(big).clip(RbShape).background(Palette.surfaceHigh).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line), RbShape).clickable { rate(n) }, contentAlignment = Alignment.Center) {
+                Text(if (n <= t.rating) "★" else "☆", color = if (n <= t.rating) Palette.orange else Palette.mutedBright, fontSize = 30.sp)
             }
         }
     }
-    Text("COR", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Palette.trackColors.forEachIndexed { n, c ->
             Box(Modifier.weight(1f).height(if (compact) 38.dp else 48.dp).clip(RbShape).background(c).clickable {
@@ -128,14 +122,6 @@ private fun Controls(app: ManagerApp, t: TrackItem, at: Int, total: Int, compact
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = { app.preview.stop(); app.triageAt = (at - 1).coerceAtLeast(0) }, enabled = at > 0, modifier = Modifier.weight(1f).height(mid)) { Text("‹") }
-        OutlinedButton(onClick = { advance() }, modifier = Modifier.weight(1f).height(mid)) { Text(if (at >= total - 1) "Concluir" else "Pular ›") }
-    }
-}
-
-@Composable
-private fun Stat(label: String, value: String) {
-    Column {
-        Text(value, color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, fontFamily = Mono)
-        Text(label.uppercase(), color = Palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+        OutlinedButton(onClick = { advance() }, modifier = Modifier.weight(1f).height(mid)) { Text(if (at >= total - 1) "FIM" else "PULAR ›") }
     }
 }

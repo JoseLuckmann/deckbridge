@@ -97,19 +97,21 @@ private fun SectionTitle(text: String) = Text(text.uppercase(), color = Palette.
 private fun Marking(app: ManagerApp, t: TrackItem) {
     val m = app.model
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             for (n in 1..5) {
                 Text(
-                    if (n <= t.rating) "★" else "☆", color = if (n <= t.rating) Palette.orange else Palette.muted, fontSize = 32.sp,
-                    modifier = Modifier.size(48.dp).clickable { m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = if (t.rating == n) 0 else n)), "Nota ${if (t.rating == n) 0 else n} em \"${t.title}\"") },
+                    if (n <= t.rating) "★" else "☆", color = if (n <= t.rating) Palette.orange else Palette.muted, fontSize = 34.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.weight(1f).height(52.dp).clickable { m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = if (t.rating == n) 0 else n)), "Nota ${if (t.rating == n) 0 else n} em \"${t.title}\"") },
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        // As oito cores ocupam a largura toda: alvos grandes, sem sobra à direita.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             Palette.trackColors.forEachIndexed { n, c ->
                 val on = t.colorId == n + 1
                 Box(
-                    Modifier.size(32.dp).clip(RbShape).background(c).clickable { m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(colorId = if (on) 0 else n + 1)), "Cor em \"${t.title}\"") },
+                    Modifier.weight(1f).height(40.dp).clip(RbShape).background(c).clickable { m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(colorId = if (on) 0 else n + 1)), "Cor em \"${t.title}\"") },
                     contentAlignment = Alignment.Center,
                 ) { if (on) Text("✓", color = Palette.bg, fontWeight = FontWeight.Bold) }
             }
@@ -157,7 +159,7 @@ private fun CueSection(app: ManagerApp, t: TrackItem) {
             return
         }
         val duration = files.durationMs.coerceAtLeast(1)
-        Wave(files.wave, files.beats.map { it.timeMs to it.inBar }, files.cues, duration, pos) { pos = it }
+        Wave(files, duration, pos) { pos = it }
         // Posição, pulo de batida e ouvir daqui numa linha só.
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(formatMs(pos), color = Palette.text, fontSize = 15.sp, fontFamily = Mono, modifier = Modifier.weight(1f))
@@ -219,36 +221,53 @@ private fun GridEditor(m: ManagerModel, t: TrackItem, files: ManagerModel.TrackF
     }
 }
 
-/** Onda com batidas (a do início do compasso mais forte), cues e a posição. Toque ou arraste para mudar a posição. */
+/**
+ * Onda como no cartão do player: a prévia colorida do ANLZ (PWV4, grave/médio/agudo misturados em RGB), espelhada no
+ * centro. Sem ela, a prévia azul. Por cima, a grade (início de compasso em vermelho), os cues e a posição.
+ * Toque ou arraste para mudar a posição.
+ */
 @Composable
-private fun Wave(wave: ByteArray, beats: List<Pair<Int, Int>>, cues: List<Cue>, durationMs: Int, pos: Int, onPos: (Int) -> Unit) {
+private fun Wave(files: ManagerModel.TrackFilesView, durationMs: Int, pos: Int, onPos: (Int) -> Unit) {
     Canvas(
-        Modifier.fillMaxWidth().height(110.dp).background(Palette.waveBg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line))
+        Modifier.fillMaxWidth().height(96.dp).background(Palette.waveBg)
             .pointerInput(durationMs) { detectTapGestures { o -> onPos((o.x / size.width * durationMs).toInt().coerceIn(0, durationMs)) } }
             .pointerInput(durationMs) { detectDragGestures { change, _ -> onPos((change.position.x / size.width * durationMs).toInt().coerceIn(0, durationMs)) } },
     ) {
         val w = size.width
         val h = size.height
-        if (wave.isNotEmpty()) {
-            val col = w / wave.size
-            for (c in wave.indices) {
-                val v = (wave[c].toInt() and 0xFF) / 255f
-                val bar = (v * h * 0.9f).coerceAtLeast(1f)
-                drawRect(Palette.wave, Offset(c * col, (h - bar) / 2), Size(col.coerceAtLeast(1f), bar))
+        val mid = h / 2
+        val heights = files.colorHeights
+        val colors = files.colors
+        if (heights.isNotEmpty() && colors.size == heights.size) {
+            val peak = heights.maxOf { it.toInt() and 0xFF }.coerceAtLeast(1)
+            val col = w / heights.size
+            for (c in heights.indices) {
+                val half = ((heights[c].toInt() and 0xFF).toFloat() / peak * mid * 0.95f).coerceAtLeast(0.5f)
+                drawRect(rgb(colors[c]), Offset(c * col, mid - half), Size(col + 0.6f, half * 2))
+            }
+        } else if (files.wave.isNotEmpty()) {
+            val col = w / files.wave.size
+            for (c in files.wave.indices) {
+                val half = ((files.wave[c].toInt() and 0xFF) / 255f * mid * 0.95f).coerceAtLeast(0.5f)
+                drawRect(Palette.wave, Offset(c * col, mid - half), Size(col + 0.6f, half * 2))
             }
         } else {
-            drawLine(Palette.line, Offset(0f, h / 2), Offset(w, h / 2), 2f)
+            drawLine(Palette.line, Offset(0f, mid), Offset(w, mid), 2f)
         }
-        for ((ms, inBar) in beats) {
-            val x = ms.toFloat() / durationMs * w
-            // Início de compasso em vermelho e as demais batidas em branco fraco, como a grade do player.
-            drawLine(if (inBar == 1) Palette.danger else Palette.text.copy(alpha = 0.35f), Offset(x, 0f), Offset(x, if (inBar == 1) h else h * 0.18f), if (inBar == 1) 2f else 1f)
+        // Grade só como marcas curtas em cima e embaixo, para não cobrir a onda.
+        for (b in files.beats) {
+            val x = b.timeMs.toFloat() / durationMs * w
+            val bar = b.inBar == 1
+            val len = if (bar) h * 0.16f else h * 0.07f
+            val color = if (bar) Palette.danger else Palette.text.copy(alpha = 0.45f)
+            drawLine(color, Offset(x, 0f), Offset(x, len), if (bar) 2f else 1f)
+            drawLine(color, Offset(x, h - len), Offset(x, h), if (bar) 2f else 1f)
         }
-        for (c in cues) {
+        for (c in files.cues) {
             val x = c.timeMs.toFloat() / durationMs * w
             val color = if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.orange
-            drawLine(color, Offset(x, 0f), Offset(x, h), 3f)
-            drawRect(color, Offset(x, 0f), Size(14f, 14f))
+            drawLine(color, Offset(x, 0f), Offset(x, h), 2f)
+            drawRect(color, Offset(x - 6f, 0f), Size(12f, 12f))
         }
         val px = pos.toFloat() / durationMs * w
         drawLine(Palette.text, Offset(px, 0f), Offset(px, h), 3f)

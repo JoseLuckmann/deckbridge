@@ -861,3 +861,10 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Prova: `PreviewLifecycleTest` (4 testes, player simulado do Robolectric). Com a correção retirada, os dois testes de sair/fechar falham; com ela, passam.
 - Achado no caminho: a classe que abre a atividade de verdade deixava estado que fazia as capturas seguintes esperarem para sempre por "ocioso" (explica também a falha intermitente vista antes). Testes agora rodam uma JVM por classe (`forkEvery = 1`); a causa exata dentro do Compose/Robolectric não foi isolada.
 - Evidência: mobile 29 testes, 0 falhas. Não verificado no aparelho: precisa confirmar no S25 Ultra que fechar, trocar de app, ligação e desconectar o fone param o som.
+
+## 2026-10-25 — Enxugar 2 e 3: onda colorida, triagem, desktop limpo
+
+- Celular: a aba CUES usa a prévia colorida do player (PWV4, grave/médio/agudo em RGB, espelhada), com a grade só como marcas curtas para não cobrir a onda; sem PWV4, a prévia azul. `TrackFilesView` ganhou `colorHeights`/`colors` (teste no core: faixa importada traz prévia colorida não vazia). Estrelas e as oito cores ocupam a largura toda. Triagem: ✕, contador 4/10, título, artista e uma linha "BPM · tom · tempo", OUVIR, cinco estrelas grandes (tocar a 3ª dá 3 e avança), cores, alvo, ‹ / PULAR ›; sem rótulos nem painel.
+- Desktop: topo com BIBLIOTECA, nome, contagem, Importar, Exportar e ⋯ (Organizar, Renomear, Trazer, Cópias, Abrir outra); boas-vindas com três botões (Neste computador, pendrives achados, Outra pasta); filtros com rótulos curtos; inspetor com cabeçalho da faixa (BPM · tom · tempo), nota no topo e tom/selo/ano/nº em "Mais"; barra de baixo "● 3 na fila · ↶ · Descartar · Gravar…"; confirmação de gravar numa linha; botões de playlist só quando há uma escolhida.
+- Evidência: mobile 29 testes, desktop 6, core (ManagerModelTest) verde. A demonstração usa faixas de clique sintético: a onda colorida sai de uma cor só; com música real ela varia.
+- Não verificado: aparelho e uso real.
