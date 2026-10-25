@@ -49,6 +49,9 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     var tab by mutableStateOf(Tab.LIBRARY)
     var detailId by mutableStateOf<Int?>(null)
     var searchOpen by mutableStateOf(false)
+
+    /** Pedido vindo de fora (atalho do ícone ou "compartilhar"), tratado assim que a biblioteca abre. */
+    var pendingIntent by mutableStateOf<android.content.Intent?>(null)
     var detailPage by mutableStateOf(DetailPage.MARK)
     var selecting by mutableStateOf(false)
     var job by mutableStateOf<Job?>(null)
@@ -76,6 +79,16 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         private set
     var exportedOnce by mutableStateOf(prefs.getBoolean("exportou", false))
         private set
+
+    /** Atalho do ícone ou "compartilhar": faz o que o pedido diz. [pickAudio] abre o seletor de músicas. */
+    fun handle(intent: android.content.Intent, pickAudio: () -> Unit) {
+        when (intent.action) {
+            android.content.Intent.ACTION_SEND, android.content.Intent.ACTION_SEND_MULTIPLE -> intent.streamUris().takeIf { it.isNotEmpty() }?.let { importAudio(it) }
+            ACTION_TRIAGEM -> startTriage()
+            ACTION_IMPORTAR -> pickAudio()
+            ACTION_EXPORTAR -> tab = Tab.USB
+        }
+    }
 
     fun hideGuide() {
         guideHidden = true
@@ -237,7 +250,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
 
     fun importAudio(uris: List<Uri>) {
         if (uris.isEmpty()) return
-        background("Importando") { j -> importInto(j, uris.mapIndexed { n, u -> u to (displayName(u) ?: "faixa-$n") }) }
+        background("Importando") { j -> importInto(j, uris.mapIndexed { n, u -> u to nameOf(u, n) }) }
     }
 
     /** Importa todos os áudios de uma pasta (e subpastas) escolhida no seletor. */
@@ -272,7 +285,12 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         val firstError = StringBuilder()
         fun flush() {
             if (edits.isEmpty()) return
-            imported += model.submitAll(edits)
+            val ok = model.submitAll(edits)
+            imported += ok
+            if (ok < edits.size) {
+                failed += edits.size - ok
+                if (firstError.isEmpty()) firstError.append(model.banner?.text.orEmpty())
+            }
             edits.clear()
             model.apply(null) { j.text = it }
         }
@@ -315,6 +333,18 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         } finally {
             cache.deleteRecursively()
         }
+    }
+
+    /**
+     * Nome do arquivo de um endereço (seletor ou "compartilhar"). Sem nome, usa o fim do caminho; sem extensão, deduz
+     * pelo tipo do arquivo, porque a importação precisa saber o formato.
+     */
+    private fun nameOf(uri: Uri, n: Int): String {
+        val base = displayName(uri) ?: uri.lastPathSegment?.substringAfterLast('/') ?: "faixa-$n"
+        if (base.substringAfterLast('.', "").length in 2..4) return base
+        val type = runCatching { context.contentResolver.getType(uri) }.getOrNull()
+        val ext = type?.let { android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(it) } ?: "mp3"
+        return "$base.$ext"
     }
 
     private fun displayName(uri: Uri): String? = runCatching {
@@ -409,6 +439,12 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
          * Um só estado por processo. Se a tela é destruída e recriada com o processo vivo, ela reencontra o mesmo
          * [ManagerApp] (e o mesmo player), em vez de criar outro e deixar o antigo tocando sem controle.
          */
+        /** Só para testes: cada teste do Robolectric tem um processo "novo", e o estado não deve passar de um para outro. */
+        internal fun resetForTests() {
+            instance?.preview?.stop()
+            instance = null
+        }
+
         fun get(context: Context): ManagerApp = instance ?: synchronized(this) {
             instance ?: ManagerApp(context.applicationContext).also { instance = it }
         }

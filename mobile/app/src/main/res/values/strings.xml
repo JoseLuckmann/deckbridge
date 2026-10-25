@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DeckBridge Biblioteca</string>
+    <string name="launcher_name">Biblioteca DJ</string>
+    <string name="sc_triage">Triagem</string>
+    <string name="sc_import">Importar</string>
+    <string name="sc_export">Exportar</string>
+    <string name="share_import">Importar na biblioteca</string>
+</resources>

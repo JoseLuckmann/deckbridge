@@ -33,7 +33,13 @@ class ManagerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         app = ManagerApp.get(this)
+        app.pendingIntent = intent
         setContent { Content(app) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        app.pendingIntent = intent
     }
 
     override fun onStart() {
@@ -64,6 +70,25 @@ private fun Content(app: ManagerApp) {
     val pickUsb = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? -> if (uri != null) app.chooseUsb(uri) }
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? -> if (uri != null) app.importFolder(uri) }
     LaunchedEffect(Unit) { if (!app.model.isOpen) app.start() }
+    // Atalhos do ícone e músicas compartilhadas de outros apps.
+    val incoming = app.pendingIntent
+    LaunchedEffect(incoming, app.model.isOpen) {
+        if (incoming == null || !app.model.isOpen) return@LaunchedEffect
+        app.pendingIntent = null
+        app.handle(incoming) { pickAudio.launch(arrayOf("audio/*")) }
+    }
     val actions = remember { Actions(pickAudio = { pickAudio.launch(arrayOf("audio/*")) }, pickUsb = { pickUsb.launch(null) }, pickFolder = { pickFolder.launch(null) }) }
     ManagerRoot(app, actions)
+}
+
+const val ACTION_TRIAGEM = "os.deckbridge.manager.TRIAGEM"
+const val ACTION_IMPORTAR = "os.deckbridge.manager.IMPORTAR"
+const val ACTION_EXPORTAR = "os.deckbridge.manager.EXPORTAR"
+
+/** As músicas de um "compartilhar" (uma ou várias). */
+@Suppress("DEPRECATION")
+fun Intent.streamUris(): List<Uri> = when (action) {
+    Intent.ACTION_SEND -> listOfNotNull(getParcelableExtra(Intent.EXTRA_STREAM) as? Uri)
+    Intent.ACTION_SEND_MULTIPLE -> getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
+    else -> emptyList()
 }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Atalhos ao segurar o ícone: o que se faz toda vez. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="triagem" android:enabled="true" android:icon="@drawable/ic_sc_triage" android:shortcutShortLabel="@string/sc_triage">
+        <intent android:action="os.deckbridge.manager.TRIAGEM" android:targetPackage="os.deckbridge.manager" android:targetClass="os.deckbridge.manager.mobile.ManagerActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="importar" android:enabled="true" android:icon="@drawable/ic_sc_import" android:shortcutShortLabel="@string/sc_import">
+        <intent android:action="os.deckbridge.manager.IMPORTAR" android:targetPackage="os.deckbridge.manager" android:targetClass="os.deckbridge.manager.mobile.ManagerActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="exportar" android:enabled="true" android:icon="@drawable/ic_sc_export" android:shortcutShortLabel="@string/sc_export">
+        <intent android:action="os.deckbridge.manager.EXPORTAR" android:targetPackage="os.deckbridge.manager" android:targetClass="os.deckbridge.manager.mobile.ManagerActivity" />
+    </shortcut>
+</shortcuts>

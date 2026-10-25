@@ -41,7 +41,25 @@ fun main(args: Array<String>) = application {
                 ui.confirm = ConfirmAsk("Sair com mudanças na fila?", "${model.pending.size} mudanças ainda não foram gravadas e se perdem ao sair. O pendrive não foi tocado.", "Sair mesmo assim", true) { exitApplication() }
             } else exitApplication()
         },
-        title = "DeckBridge Library Manager",
+        title = "DeckBridge Biblioteca",
+        icon = remember { AppIcon },
         state = rememberWindowState(size = DpSize(1360.dp, 820.dp)),
     ) { App(model, ui) }
+}
+
+
+/** Ícone da janela: o mesmo disco do app de celular (anel e ponto brancos, marca azul, arco laranja), no fundo preto. */
+object AppIcon : androidx.compose.ui.graphics.painter.Painter() {
+    override val intrinsicSize = androidx.compose.ui.geometry.Size(108f, 108f)
+
+    override fun androidx.compose.ui.graphics.drawscope.DrawScope.onDraw() {
+        val k = size.minDimension / 108f
+        val c = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
+        val ink = androidx.compose.ui.graphics.Color(os.deckbridge.logic.StagePalette.ink)
+        drawCircle(androidx.compose.ui.graphics.Color(os.deckbridge.logic.StagePalette.bg), radius = 54f * k, center = c)
+        drawCircle(ink, radius = 29f * k, center = c, style = androidx.compose.ui.graphics.drawscope.Stroke(6f * k))
+        drawCircle(ink, radius = 5.5f * k, center = c)
+        drawLine(androidx.compose.ui.graphics.Color(os.deckbridge.logic.StagePalette.accentBlue), androidx.compose.ui.geometry.Offset(c.x, c.y - 29f * k), androidx.compose.ui.geometry.Offset(c.x, c.y - 16f * k), 6f * k, androidx.compose.ui.graphics.StrokeCap.Round)
+        drawArc(androidx.compose.ui.graphics.Color(os.deckbridge.logic.StagePalette.accentOrange), 38f, 22f, false, androidx.compose.ui.geometry.Offset(c.x - 29f * k, c.y - 29f * k), androidx.compose.ui.geometry.Size(58f * k, 58f * k), style = androidx.compose.ui.graphics.drawscope.Stroke(5f * k, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+    }
 }

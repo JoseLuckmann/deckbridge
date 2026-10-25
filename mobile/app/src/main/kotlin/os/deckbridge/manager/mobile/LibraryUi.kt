@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -77,7 +78,7 @@ fun LibraryTab(app: ManagerApp, actions: Actions) {
             if (rows.isEmpty()) {
                 item(key = "empty") { EmptyList(app, actions) }
             } else {
-                items(rows, key = { it.id }) { t -> TrackRow(app, t, selected = t.id in m.selection, edited = t.id in m.editedTrackIds()) }
+                items(rows, key = { it.id }) { t -> SwipeToTarget(app, t, onNoTarget = { dialog = Dialog.PickTarget }) { TrackRow(app, t, selected = t.id in m.selection, edited = t.id in m.editedTrackIds()) } }
             }
         }
         if (app.selecting) SelectionBar(app, rows) { dialog = it }
@@ -187,6 +188,35 @@ private fun Disc(color: Color?) {
         drawCircle(Palette.text, radius = size.minDimension * 0.36f, center = c, style = Stroke(width = 3f))
         drawCircle(Palette.text, radius = size.minDimension * 0.07f, center = c)
     }
+}
+
+/**
+ * Deslizar a linha para a direita põe a faixa na playlist alvo (ou tira, se já está); sem alvo, pede qual. A linha
+ * volta ao lugar: é um gesto de ação, não de apagar.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToTarget(app: ManagerApp, t: TrackItem, onNoTarget: () -> Unit, content: @Composable () -> Unit) {
+    val m = app.model
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val state = androidx.compose.material3.rememberSwipeToDismissBoxState(confirmValueChange = { value ->
+        if (value == androidx.compose.material3.SwipeToDismissBoxValue.StartToEnd && !app.selecting) {
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+            if (m.target == null) onNoTarget() else app.did(m.toggleInTarget(t.id))
+        }
+        false
+    })
+    val target = m.target?.let { m.playlist(it) }
+    val inTarget = target != null && t.id in m.view?.entries?.get(target.id).orEmpty()
+    androidx.compose.material3.SwipeToDismissBox(
+        state = state,
+        enableDismissFromEndToStart = false,
+        backgroundContent = {
+            Box(Modifier.fillMaxSize().background(Palette.blueActiveFill).padding(start = 18.dp), contentAlignment = Alignment.CenterStart) {
+                Text(if (target == null) "≡ ALVO?" else (if (inTarget) "− " else "＋ ") + target.name, color = Palette.text, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            }
+        },
+    ) { Box(Modifier.background(Palette.bg)) { content() } }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

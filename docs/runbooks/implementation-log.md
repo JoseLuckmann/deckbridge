@@ -885,3 +885,15 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Evidência: core 87 testes (`MergeTest`: faixas, marcações, grade, playlists, PPTH apontando para o áudio local, pendrive intocado, juntar de novo não duplica, caminho ocupado vai para "(2)"); mobile 31 (juntar pelo seletor de documentos de brinquedo); desktop compila e passa.
 - Também com origem real: `MergeRealExportTest` junta o export `demo_tracks` do rekordbox (amostra pública do rekordcrate, sem áudio; o áudio é um arquivo de teste) e confere título, artista, BPM, tom e a grade do rekordbox na biblioteca local. Só roda com `REAL_EXPORT`.
 - Não verificado: pendrive real com áudio de verdade; faixas sem análise no pendrive vêm sem análise (dá para analisar depois).
+
+## 2026-10-25 — Rodada 6: deslizar, ícone, abertura, atalhos, compartilhar
+
+- Deslizar a linha da faixa para a direita põe (ou tira) na playlist alvo; sem alvo, pergunta qual. A linha volta ao lugar.
+- Ícone próprio do app (adaptativo, com versão temática do Android 13+): o disco da lista nas cores do player, preto, anel e ponto brancos, marca azul e arco laranja, dentro da área segura. Nome no lançador: "Biblioteca DJ". Abertura (Android 12+) preta com o mesmo disco, sem flash branco. Versão 0.2.0 (código 2).
+- Atalhos ao segurar o ícone: Triagem, Importar, Exportar.
+- "Compartilhar" de outro app (arquivos, WhatsApp, Drive) com áudio importa direto; repetidas são puladas.
+- Achado pelo teste novo: compartilhar um arquivo sem nome/extensão falhava em silêncio ("Não importou:" vazio). Agora o nome cai para o fim do caminho e a extensão é deduzida do tipo; recusas do banco aparecem no aviso.
+- Desktop: lembra os 4 últimos padrões de renomear (preferências do usuário) e a janela tem o mesmo ícone, desenhado em código com as cores do StagePalette.
+- Evidência: mobile 36 testes (PlatformTest: ícone desenha dentro da área segura, rótulo do lançador, atalhos Triagem/Importar/Exportar, compartilhar importa e não duplica; UxFlowTest: deslizar põe na alvo e não abre a faixa). Desenhos em `docs/ui/icone/`.
+- Achado de teste: o Robolectric não desenha uma segunda atividade Compose no mesmo processo; só um teste por classe abre a atividade, os demais chamam `ManagerApp.handle` direto.
+- Não verificado: ícone no lançador da Samsung (One UI), atalhos e compartilhar no aparelho.

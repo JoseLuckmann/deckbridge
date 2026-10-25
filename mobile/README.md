@@ -37,6 +37,10 @@ O núcleo (`core/`) é o mesmo do programa de computador. Nenhum outro código e
 - **Ordenar playlist** por BPM, nota ou ordem harmônica (roda Camelot + BPM).
 - **Antes de exportar**: verificação com o botão que resolve (analisar todas, apagar playlists vazias); falta de áudio bloqueia.
 
+## Ícone e integração com o Android
+
+Ícone adaptativo e temático (disco nas cores do player), abertura preta, nome "Biblioteca DJ" no lançador. Segurar o ícone: Triagem, Importar, Exportar. "Compartilhar" áudio de outro app importa direto. Deslizar a linha para a direita põe a faixa na playlist alvo.
+
 ## Build e testes
 
 ```

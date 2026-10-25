@@ -134,7 +134,9 @@ private val presets = listOf(
 
 @Composable
 fun RenameModal(model: ManagerModel, onClose: () -> Unit) {
-    var pattern by remember { mutableStateOf(presets[0]) }
+    // Lembra os padrões usados (os 4 últimos) entre uma sessão e outra.
+    val saved = remember { SavedPatterns.load() }
+    var pattern by remember { mutableStateOf(saved.firstOrNull() ?: presets[0]) }
     val view = model.view ?: return
     val scope = model.selection.mapNotNull { view.track(it) }.ifEmpty { view.tracks }
     val files = remember { model.volume?.root?.let { os.deckbridge.manager.volume.FileOverlay(it) } }
@@ -146,7 +148,7 @@ fun RenameModal(model: ManagerModel, onClose: () -> Unit) {
             TextBox(pattern, { pattern = it }, Modifier.fillMaxWidth())
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            presets.forEach { p -> Box(Modifier.background(Pal.Raised).border(1.dp, Pal.Line).clickable { pattern = p }.padding(horizontal = 8.dp, vertical = 5.dp)) { Label(p, Pal.Blue, 11.sp) } }
+            (saved + presets).distinct().take(8).forEach { p -> Box(Modifier.background(Pal.Raised).border(1.dp, Pal.Line).clickable { pattern = p }.padding(horizontal = 8.dp, vertical = 5.dp)) { Label(p, Pal.Blue, 11.sp) } }
         }
         Caption("${plan.size} de ${scope.size} faixa${if (scope.size == 1) "" else "s"} mudam de nome (${if (model.selection.isEmpty()) "toda a coleção" else "só as selecionadas"})")
         Column(Modifier.fillMaxWidth().height(230.dp).background(Pal.Bg).border(1.dp, Pal.Line).verticalScroll(rememberScrollState()).padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -162,7 +164,7 @@ fun RenameModal(model: ManagerModel, onClose: () -> Unit) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Btn("Adicionar à fila (${plan.size})", {
-                if (model.submit(Edit.RenameFiles(plan), "Renomear ${plan.size} arquivo${if (plan.size == 1) "" else "s"} pelo padrão $pattern")) onClose()
+                if (model.submit(Edit.RenameFiles(plan), "Renomear ${plan.size} arquivo${if (plan.size == 1) "" else "s"} pelo padrão $pattern")) { SavedPatterns.remember(pattern); onClose() }
             }, primary = true, enabled = plan.isNotEmpty())
             Btn("Cancelar", onClose)
         }
@@ -240,5 +242,18 @@ fun OrganizeModal(model: ManagerModel, st: OrganizeState, onClose: () -> Unit) {
             if (busy != null) Label(busy, Pal.Orange, 12.sp, maxLines = 1)
             Btn("Fechar", onClose)
         }
+    }
+}
+
+
+/** Padrões de nome usados por último, guardados nas preferências do usuário (fora do pendrive). */
+object SavedPatterns {
+    private val prefs get() = java.util.prefs.Preferences.userRoot().node("os/deckbridge/manager")
+
+    fun load(): List<String> = runCatching { prefs.get("padroes", "").split("\n").filter { it.isNotBlank() } }.getOrDefault(emptyList())
+
+    fun remember(pattern: String) {
+        val list = (listOf(pattern) + load()).distinct().take(4)
+        runCatching { prefs.put("padroes", list.joinToString("\n")) }
     }
 }

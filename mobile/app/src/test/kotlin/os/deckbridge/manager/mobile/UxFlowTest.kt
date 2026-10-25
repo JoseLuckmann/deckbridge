@@ -6,6 +6,8 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeRight
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import kotlin.test.assertEquals
@@ -107,5 +109,18 @@ class UxFlowTest {
         rule.onNodeWithText("✓ Aquecimento").performClick()
         rule.waitForIdle()
         assertTrue(t.id !in a.model.view!!.entries[2].orEmpty())
+    }
+
+    @Test fun swipingARowRightPutsItInTheTargetPlaylist() {
+        val a = app()
+        a.hideGuide()
+        a.model.target = 2
+        val t = a.model.view!!.tracks.first { it.title == "Night Signal" }
+        assertTrue(t.id !in a.model.view!!.entries[2].orEmpty())
+        rule.setContent { ManagerRoot(a, noActions) }
+        rule.onNodeWithText("Night Signal").performTouchInput { swipeRight() }
+        rule.waitForIdle()
+        assertTrue(t.id in a.model.view!!.entries[2].orEmpty(), "deslizar põe na playlist alvo")
+        assertEquals(null, a.detailId, "deslizar não abre a faixa")
     }
 }

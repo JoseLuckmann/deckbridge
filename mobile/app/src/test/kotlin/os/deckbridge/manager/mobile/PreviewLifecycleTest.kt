@@ -22,6 +22,8 @@ import org.robolectric.shadows.util.DataSource
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w411dp-h891dp-port-560dpi")
 class PreviewLifecycleTest {
+    @org.junit.Before fun fresh() = ManagerApp.resetForTests()
+
     private fun playFirst(app: ManagerApp) {
         if (app.model.view?.tracks.isNullOrEmpty()) DemoLibrary.build(app, seconds = 12)
         val t = app.model.view!!.tracks.first()
