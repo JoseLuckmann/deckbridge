@@ -3,6 +3,7 @@ package os.deckbridge.manager
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import org.junit.Assume.assumeTrue
 import os.deckbridge.manager.pdb.Edit
 import os.deckbridge.manager.pdb.EditException
@@ -77,5 +78,57 @@ class PiCrossCheckTest {
             val entries = lines.filter { it[0] == "E" }.groupBy { it[1].toInt() }.mapValues { (_, l) -> l.sortedBy { it[2].toInt() }.map { it[3].toInt() } }
             assertEquals(want.entries.filterValues { it.isNotEmpty() }, entries, "rodada $round")
         }
+    }
+
+    private fun anlzLines(bin: File, vararg files: File): List<List<String>> {
+        val proc = ProcessBuilder(listOf(bin.path, "--anlz") + files.map { it.path }).redirectErrorStream(true).start()
+        val out = proc.inputStream.bufferedReader().readText()
+        assertEquals(0, proc.waitFor(), out)
+        return out.lines().filter { it.isNotEmpty() }.map { it.split("\t") }
+    }
+
+    @Test
+    fun thePiReaderSeesTheAnalysisWrittenByCuesGridImportAndReanalysis() {
+        assumeTrue("g++ ausente", runCatching { ProcessBuilder("g++", "--version").start().waitFor() == 0 }.getOrDefault(false))
+        val bin = summaryBinary()
+        val dir = TestVolumes.synthetic()
+        val vol = os.deckbridge.manager.volume.Volumes.open(dir)
+        val e = PdbEditor(vol.raw, vol.root)
+        val t = e.view().tracks.first { File(dir, it.analyzePath.trimStart('/')).isFile && File(dir, it.filePath.trimStart('/')).isFile }
+        val cues = listOf(
+            os.deckbridge.manager.anlz.Cue(1, 400, comment = "Início", rgb = 0xff3b3b),
+            os.deckbridge.manager.anlz.Cue(6, 3000, comment = "Drop é ç", rgb = 0xb44dff),
+            os.deckbridge.manager.anlz.Cue(0, 400, comment = "Memória"),
+            os.deckbridge.manager.anlz.Cue(0, 1000, loopEndMs = 2000, comment = "Loop"),
+        )
+        e.apply(Edit.SetCues(t.id, cues))
+        e.apply(Edit.SetGrid(t.id, 127.5, 90))
+        val src = File(TestVolumes.tempDir("dbm-pi-src"), "Banda - Teste.wav")
+        src.writeBytes(os.deckbridge.logic.encodeWavMono16(os.deckbridge.logic.click(bpm = 122.0, seconds = 24, rate = 22050, freq = 300.0), 22050))
+        val prepared = os.deckbridge.manager.importer.ImportPrep.prepare(src)
+        e.apply(Edit.ImportTrack(prepared, "Teste", "Banda", "Disco", "House", prepared.read.keyName, 2026, 1, prepared.suggestedCues))
+        os.deckbridge.manager.volume.SafeWriter.apply(vol, e, listOf("sessão"), os.deckbridge.manager.volume.Backups(TestVolumes.tempDir("dbm-pi-bk")))
+
+        val reopened = os.deckbridge.manager.volume.Volumes.open(dir)
+        val view = os.deckbridge.manager.pdb.LibraryView.of { reopened.raw.table(it)?.rows ?: emptyList() }
+        val model = ManagerModel(os.deckbridge.manager.volume.Backups(TestVolumes.tempDir("dbm-pi-bk2")))
+        model.open(dir)
+        for (id in listOf(t.id, view.tracks.maxOf { it.id })) {
+            val track = view.track(id)!!
+            val rel = track.analyzePath.trimStart('/')
+            val stem = File(dir, rel.dropLast(3))
+            val lines = anlzLines(bin, File("${stem.path}DAT"), File("${stem.path}EXT"), File("${stem.path}2EX").takeIf { it.isFile } ?: File("${stem.path}EXT"))
+            val mine = model.trackFiles(model.view!!.track(id)!!)
+            val beats = lines.filter { it[0] == "B" }
+            assertEquals(mine.beats.size, beats.size, "faixa $id: batidas")
+            mine.beats.forEachIndexed { n, b -> assertEquals(listOf(b.timeMs.toString(), b.inBar.toString(), b.tempo100.toString()), beats[n].drop(1), "faixa $id batida $n") }
+            val seen = lines.filter { it[0] == "C" }.map { listOf(it[1].toInt(), it[2].toInt(), it[3].toInt(), it[4]) }.sortedWith(compareBy({ it[0] as Int }, { it[1] as Int }))
+            val want = mine.cues.map { listOf(it.hot, it.timeMs, it.loopEndMs ?: 0, it.comment) }.sortedWith(compareBy({ it[0] as Int }, { it[1] as Int }))
+            assertEquals(want, seen, "faixa $id: cues")
+            assertTrue(lines.none { it[0] == "I" }, "faixa $id: ${lines.filter { it[0] == "I" }}")
+        }
+        // E o banco continua legível pelo Pi com a faixa nova.
+        val summary = run(bin, File(dir, "PIONEER/rekordbox/export.pdb"))
+        assertTrue(summary.any { it[0] == "T" && it[2] == "Teste" && it[3] == "Banda" && it[4] == "Disco" })
     }
 }

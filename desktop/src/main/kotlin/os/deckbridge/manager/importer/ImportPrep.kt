@@ -48,8 +48,14 @@ object AudioIo {
         var bitrate = 0
         var tags = mapOf<String, String>()
         if (ffprobe) {
-            val out = run(listOf("ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "format=duration,bit_rate:stream=sample_rate:format_tags=title,artist,album,genre,date,track", "-of", "default=noprint_wrappers=1", file.path))
-            val kv = out.lines().filter { '=' in it }.associate { it.substringBefore('=').lowercase() to it.substringAfter('=').trim() }
+            val out = run(listOf("ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "format=duration,bit_rate:stream=sample_rate:format_tags=title,artist,album,genre,date,track:stream_tags=title,artist,album,genre,date,track", "-of", "default=noprint_wrappers=1", file.path))
+            // As etiquetas podem vir do formato (MP3, FLAC, M4A) ou do fluxo de áudio (Ogg Vorbis): vale a primeira não vazia.
+            val kv = HashMap<String, String>()
+            for (line in out.lines().filter { '=' in it }) {
+                val k = line.substringBefore('=').lowercase()
+                val v = line.substringAfter('=').trim()
+                if (v.isNotEmpty() && kv[k].isNullOrEmpty()) kv[k] = v
+            }
             duration = kv["duration"]?.toDoubleOrNull() ?: 0.0
             rate = kv["sample_rate"]?.toIntOrNull() ?: 0
             bitrate = (kv["bit_rate"]?.toDoubleOrNull() ?: 0.0).div(1000).toInt()

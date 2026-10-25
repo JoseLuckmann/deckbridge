@@ -1,6 +1,7 @@
 // Resumo de um export.pdb pelo leitor do Pi, em linhas TSV, para conferir contra outros leitores (o gravador do
 // Library Manager de desktop é testado contra este programa). Só lê.
 //   pdb_summary export.pdb
+//   pdb_summary --anlz ARQ.DAT [ARQ.EXT [ARQ.2EX]]   grade e cues como o Pi os lê (B tempo_ms beat bpm100 | C hot tempo_ms loop_ms comentário rgb | W fonte | I problema)
 #include "rekordbox.h"
 
 #include <algorithm>
@@ -9,7 +10,29 @@
 
 using namespace deckbridge::library;
 
+static int anlzMode(int argc, char **argv) {
+    std::vector<AnlzFile> files;
+    for (int i = 2; i < argc; ++i) {
+        auto bytes = readFile(argv[i]);
+        if (!bytes) {
+            std::fprintf(stderr, "não consegui ler %s\n", argv[i]);
+            return 1;
+        }
+        files.push_back(parseAnlz(*bytes));
+    }
+    if (files.empty()) return 2;
+    const AnlzFile merged = mergeAnalysis(&files[0], files.size() > 1 ? &files[1] : nullptr, files.size() > 2 ? &files[2] : nullptr);
+    for (const auto &b : merged.beats) std::printf("B\t%d\t%d\t%d\n", b.timeMs, b.beatInBar, b.bpm100);
+    for (const auto &c : merged.cues) {
+        std::printf("C\t%d\t%d\t%d\t%s\t%d\n", c.hotIndex ? *c.hotIndex + 1 : 0, c.timeMs, c.loopEndMs ? *c.loopEndMs : 0, c.comment.c_str(), c.colorRgb ? *c.colorRgb : -1);
+    }
+    std::printf("W\t%s\n", merged.waveSource.c_str());
+    for (const auto &i : merged.issues) std::printf("I\t%s\n", i.c_str());
+    return 0;
+}
+
 int main(int argc, char **argv) {
+    if (argc >= 3 && std::string(argv[1]) == "--anlz") return anlzMode(argc, argv);
     if (argc < 2) {
         std::fprintf(stderr, "uso: %s export.pdb\n", argv[0]);
         return 2;

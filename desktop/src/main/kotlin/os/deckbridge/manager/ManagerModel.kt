@@ -110,6 +110,86 @@ class ManagerModel(val backups: Backups = Backups()) {
         if (openPlaylist != null && view!!.playlists.none { it.id == openPlaylist }) openPlaylist = null
     }
 
+    /** Grade, cues e prévia de onda da faixa, já com as edições da fila (um ANLZ editado aparece aqui antes de ser gravado). */
+    class TrackFilesView(val beats: List<os.deckbridge.manager.anlz.Beat>, val cues: List<os.deckbridge.manager.anlz.Cue>, val wave: ByteArray, val durationMs: Int, val error: String?)
+
+    fun hasAnalysis(t: os.deckbridge.manager.pdb.TrackItem): Boolean {
+        val rel = t.analyzePath.replace('\\', '/').trimStart('/')
+        return rel.isNotEmpty() && editor?.files?.exists(rel) == true
+    }
+
+    fun trackFiles(t: os.deckbridge.manager.pdb.TrackItem): TrackFilesView {
+        val files = editor?.files ?: return TrackFilesView(emptyList(), emptyList(), ByteArray(0), t.durationSeconds * 1000, "nada aberto")
+        val rel = t.analyzePath.replace('\\', '/').trimStart('/')
+        val datBytes = files.read(rel) ?: return TrackFilesView(emptyList(), emptyList(), ByteArray(0), t.durationSeconds * 1000, "A faixa não tem arquivo de análise no pendrive.")
+        return try {
+            val dat = os.deckbridge.manager.anlz.AnlzModel.parse(datBytes)
+            val tail = rel.takeLast(3)
+            val extRel = rel.dropLast(3) + if (tail == tail.uppercase()) "EXT" else "ext"
+            val extBytes = files.read(extRel)
+            val ext = extBytes?.let { os.deckbridge.manager.anlz.AnlzModel.parse(it) }
+            val merged = os.deckbridge.logic.mergeAnalysis(os.deckbridge.logic.parseAnlz(datBytes), extBytes?.let { os.deckbridge.logic.parseAnlz(it) })
+            TrackFilesView(os.deckbridge.manager.anlz.GridIo.read(dat), os.deckbridge.manager.anlz.CueIo.read(dat, ext).cues.sortedWith(compareBy({ it.hot == 0 }, { it.hot }, { it.timeMs })), merged.bluePreview, t.durationSeconds * 1000, null)
+        } catch (e: os.deckbridge.manager.anlz.AnlzFormatException) {
+            TrackFilesView(emptyList(), emptyList(), ByteArray(0), t.durationSeconds * 1000, "Arquivo de análise inválido: ${e.message}")
+        }
+    }
+
+    /** Arrastar faixas para uma playlist (ou pasta: vai para nenhuma, só playlists recebem). */
+    fun dropOnPlaylist(trackIds: List<Int>, playlistId: Int): Boolean {
+        val p = playlist(playlistId) ?: return false
+        if (p.folder) {
+            banner = Banner("\"${p.name}\" é uma pasta. Solte a faixa numa playlist dentro dela.", error = true)
+            return false
+        }
+        val have = view?.entries?.get(playlistId).orEmpty().toSet()
+        val fresh = trackIds.filter { it !in have }
+        if (fresh.isEmpty()) {
+            banner = Banner("Essas faixas já estão em \"${p.name}\".", error = false)
+            return false
+        }
+        return submit(Edit.AddToPlaylist(playlistId, fresh), "Adicionar ${fresh.size} faixa${if (fresh.size == 1) "" else "s"} a \"${p.name}\"")
+    }
+
+    /** Arrastar dentro de uma playlist: [moving] passa a ficar antes de [beforeTrackId] (ou no fim, se for null). */
+    fun reorderInPlaylist(playlistId: Int, moving: List<Int>, beforeTrackId: Int?): Boolean {
+        val p = playlist(playlistId) ?: return false
+        val current = view?.entries?.get(playlistId).orEmpty()
+        val rest = current.filter { it !in moving }
+        val at = if (beforeTrackId == null) rest.size else rest.indexOf(beforeTrackId).let { if (it < 0) rest.size else it }
+        val order = rest.take(at) + current.filter { it in moving } + rest.drop(at)
+        if (order == current) return false
+        return submit(Edit.ReorderPlaylist(playlistId, order), "Reordenar \"${p.name}\"")
+    }
+
+    /** Várias edições de uma vez (diálogos de importar, renomear e organizar). Para na primeira recusa. */
+    fun submitAll(items: List<Pair<Edit, String>>): Int {
+        var n = 0
+        for ((edit, text) in items) {
+            if (!submit(edit, text)) break
+            n++
+        }
+        return n
+    }
+
+    fun compact(progress: (String) -> Unit = {}): ApplyReport? {
+        val vol = volume ?: return null
+        if (dirty) {
+            banner = Banner("Grave ou descarte as mudanças da fila antes de compactar.", error = true)
+            return null
+        }
+        return try {
+            val report = SafeWriter.compact(vol, backups, vol.root, progress)
+            lastReport = report
+            open(vol.root)
+            banner = Banner("Banco compactado: ${report.bytesBefore / 1024} KB → ${report.bytesAfter / 1024} KB. Cópia de segurança em ${report.backup.dir.path}", error = false)
+            report
+        } catch (ex: VolumeException) {
+            banner = Banner(ex.message ?: ex.code, error = true)
+            null
+        }
+    }
+
     fun nextPlaylistId(): Int = (view?.playlists?.maxOfOrNull { it.id } ?: 0) + 1
 
     /** Faixas com alguma edição de campo na fila (marcadas na tabela). */

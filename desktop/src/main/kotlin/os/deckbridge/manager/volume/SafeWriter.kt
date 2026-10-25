@@ -285,6 +285,48 @@ object SafeWriter {
     private class Done(val undo: () -> Unit)
 
     /**
+     * Reescreve o `export.pdb` só com as páginas em uso (as edições antigas deixam páginas órfãs). Não muda nenhuma linha:
+     * a conferência exige as mesmas linhas, tabela a tabela, e o mesmo número de faixas no leitor do app.
+     */
+    fun compact(source: LoadedVolume, backups: Backups, target: File = source.root, hook: (String) -> Unit = {}): ApplyReport {
+        val pdb = File(target, PDB_RELATIVE)
+        if (!pdb.isFile) throw VolumeException("E_RB_EXPORT_NOT_FOUND", "O destino não tem $PDB_RELATIVE.")
+        val store = runCatching { Files.getFileStore(pdb.toPath()) }.getOrNull()
+        if (store != null && store.isReadOnly) throw VolumeException("E_VOLUME_READ_ONLY", "O volume está montado somente leitura.")
+        val current = pdb.readBytes()
+        val currentSha = sha256(current)
+        if (currentSha != source.sha256) throw VolumeException("E_VOLUME_CHANGED", "O export.pdb mudou desde que foi aberto. Reabra o pendrive.")
+        hook("compactando")
+        val compact = source.raw.compact()
+        if (compact.size >= current.size) throw VolumeException("E_NOTHING_TO_DO", "O banco já está compacto.")
+        val fresh = try {
+            os.deckbridge.manager.pdb.RawPdb.parse(compact)
+        } catch (e: PdbFormatException) {
+            throw VolumeException("E_VERIFY", "O banco compactado não é lido: ${e.message}")
+        }
+        val problems = ArrayList<String>()
+        for (t in source.raw.tables) {
+            val other = fresh.table(t.type)
+            if (other == null || other.rows.size != t.rows.size || t.rows.indices.any { !Verifier.sameRow(t.rows[it], other.rows[it]) }) problems += "a tabela ${t.type} mudou ao compactar"
+        }
+        problems += fresh.warnings.filter { it !in source.raw.warnings }
+        val app = os.deckbridge.logic.parseExportPdb(compact).database
+        if (app == null || app.tracks.size != (source.raw.table(0)?.rows?.size ?: -1)) problems += "o leitor do app não vê as mesmas faixas"
+        if (problems.isNotEmpty()) throw VolumeException("E_VERIFY", "A conferência falhou e nada foi gravado:\n" + problems.joinToString("\n") { "• $it" })
+        hook("copiando o backup")
+        val backup = backups.create(target, listOf(PDB_RELATIVE), listOf("Compactar o banco (${current.size / 1024} KB → ${compact.size / 1024} KB)"))
+        try {
+            hook("gravando")
+            replaceAtomically(pdb, compact)
+            if (sha256(pdb.readBytes()) != sha256(compact)) throw VolumeException("E_WRITE_VERIFY", "O export.pdb gravado não confere.")
+        } catch (e: Exception) {
+            runCatching { replaceAtomically(pdb, current) }
+            throw if (e is VolumeException) e else VolumeException("E_WRITE", "Falha ao gravar; o original foi restaurado: ${e.message}")
+        }
+        return ApplyReport(backup, currentSha, sha256(compact), emptyList(), (compact.size - current.size) / source.raw.pageLen, current.size, compact.size)
+    }
+
+    /**
      * Aplica as edições do [editor] ao volume [target] (por padrão, o próprio volume aberto): primeiro as renomeações, as
      * cópias de áudio e os arquivos de análise; o `export.pdb` por último. Qualquer falha desfaz tudo em ordem inversa.
      * [changes] é o texto das mudanças, guardado no manifesto do backup.

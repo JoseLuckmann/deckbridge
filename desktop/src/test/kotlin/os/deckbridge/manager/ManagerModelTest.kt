@@ -93,4 +93,62 @@ class ManagerModelTest {
         assertTrue(m.scopeTrackIds().isNotEmpty())
         assertEquals(m.scopeTrackIds().size, m.scopeTrackIds().distinct().size)
     }
+
+    @Test
+    fun dropOnPlaylistAndReorderGoThroughTheQueue() {
+        val m = model()
+        m.open(TestVolumes.synthetic())
+        val v = m.view!!
+        val list = v.playlists.first { !it.folder && v.entries[it.id].orEmpty().size in 3 until v.tracks.size }
+        val folder = v.playlists.first { it.folder }
+        val extra = v.tracks.map { it.id }.first { it !in v.entries[list.id].orEmpty() }
+        assertFalse(m.dropOnPlaylist(listOf(extra), folder.id), "pasta não recebe faixas")
+        assertTrue(m.banner!!.error)
+        assertTrue(m.dropOnPlaylist(listOf(extra), list.id))
+        assertFalse(m.dropOnPlaylist(listOf(extra), list.id), "já está lá")
+        val entries = m.view!!.entries[list.id]!!
+        assertEquals(extra, entries.last())
+        assertTrue(m.reorderInPlaylist(list.id, listOf(extra), entries.first()))
+        assertEquals(extra, m.view!!.entries[list.id]!!.first())
+        assertFalse(m.reorderInPlaylist(list.id, listOf(extra), m.view!!.entries[list.id]!![1]), "mesma posição não enfileira")
+        assertEquals(2, m.pending.size, "só o que mudou algo entra na fila")
+    }
+
+    @Test
+    fun trackFilesShowTheQueuedCueEditsBeforeTheyAreWritten() {
+        val dir = TestVolumes.synthetic()
+        val m = model()
+        m.open(dir)
+        val t = m.view!!.tracks.first { m.hasAnalysis(it) }
+        val before = m.trackFiles(t)
+        assertTrue(before.error == null && before.beats.isNotEmpty())
+        m.submit(Edit.SetCues(t.id, listOf(os.deckbridge.manager.anlz.Cue(2, 700, comment = "novo", rgb = 0xff0000))), "cues")
+        val after = m.trackFiles(t)
+        assertEquals(listOf(2), after.cues.map { it.hot })
+        assertEquals(700, after.cues.single().timeMs)
+        assertTrue(before.cues.size != 1 || before.cues.single().timeMs != 700)
+    }
+
+    @Test
+    fun compactShrinksAfterManyApplyCyclesAndKeepsEveryRow() {
+        val dir = TestVolumes.synthetic()
+        val m = model()
+        m.open(dir)
+        assertEquals(null, m.compact(), "já compacto: nada a fazer")
+        repeat(5) { n ->
+            val t = m.view!!.tracks[n]
+            m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(comment = "rodada $n")), "r$n")
+            assertNotNull(m.apply())
+        }
+        val before = java.io.File(dir, PDB_RELATIVE).length()
+        val tracks = m.view!!.tracks
+        m.submit(Edit.SetTracks(listOf(tracks[0].id), TrackPatch(comment = "x")), "x")
+        assertEquals(null, m.compact(), "com mudanças na fila não compacta")
+        m.discard()
+        val report = m.compact()
+        assertNotNull(report)
+        assertTrue(java.io.File(dir, PDB_RELATIVE).length() < before)
+        assertEquals(tracks, m.view!!.tracks)
+        assertTrue(m.view!!.entries.isNotEmpty())
+    }
 }

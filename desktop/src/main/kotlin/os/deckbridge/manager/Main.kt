@@ -21,10 +21,19 @@ fun chooseFolder(): File? {
     return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile else null
 }
 
+fun chooseAudioFiles(): List<File> {
+    val chooser = JFileChooser().apply {
+        isMultiSelectionEnabled = true
+        fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
+        dialogTitle = "Escolha os arquivos de áudio (ou uma pasta)"
+    }
+    return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFiles.toList() else emptyList()
+}
+
 /** `deckbridge-manager [PASTA_DO_PENDRIVE]`. Sem argumento, a tela de boas-vindas lista os pendrives encontrados. */
 fun main(args: Array<String>) = application {
     val model = remember { ManagerModel() }
-    val ui = remember { UiState().apply { chooser = ::chooseFolder } }
+    val ui = remember { UiState().apply { chooser = ::chooseFolder; chooseFiles = ::chooseAudioFiles } }
     LaunchedEffect(Unit) { args.firstOrNull()?.let { model.open(File(it)) } }
     Window(
         onCloseRequest = {

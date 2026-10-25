@@ -40,4 +40,16 @@ O ADR-0002 e o AGENTS.md proíbem escrita no pendrive rekordbox. O próprio ADR-
 
 - O `desktop/` é um build Gradle separado, que compila os mesmos fontes de `android/app/src/main/java/os/deckbridge/logic/` (puro JVM, sem import de Android). Não toca no build do Android.
 - A automação futura (classificar, pontuar, renomear, preencher metadados) entra como mais uma fonte de mudanças pendentes, passando pela mesma fila, revisão e gravação segura. Nada grava sem o "Aplicar".
-- Escrever o ANLZ (cue points, grade, ondas das faixas importadas) e copiar áudio para o pendrive passam pelas mesmas salvaguardas, em etapa posterior.
+- Escrever o ANLZ (cue points, grade, ondas das faixas importadas), copiar áudio para o pendrive e renomear arquivos passam pelas mesmas salvaguardas. Isso foi implementado em 2026-10-25 (ver abaixo).
+
+## Atualização 2026-10-25 — escrita de arquivos
+
+Pedido do dono: "faça tudo que falta". O programa passou a escrever, além do `export.pdb`, os arquivos de análise (ANLZ), a cópia de áudio importado e as renomeações, sempre pelo plano com salvaguardas:
+
+- **Ordem e desfazer:** renomeações, cópias de áudio, ANLZ e, por último, o `export.pdb`. Cada arquivo vai para um temporário ao lado, é conferido e só então ocupa o lugar. Qualquer falha desfaz tudo em ordem inversa.
+- **O backup registra** o que foi substituído (cópia com SHA-256), o que foi criado e o que foi renomeado. Restaurar devolve tudo isso.
+- **Áudio nunca é apagado.** Restaurar uma importação remove os arquivos de análise criados, mas deixa o áudio copiado no pendrive e avisa. Remover uma faixa da biblioteca também não toca no arquivo de áudio.
+- **ANLZ por seções.** Só as seções de grade e de cues são trocadas; ondas e frases ficam intactas; entradas de cue que não mudaram voltam com os mesmos bytes.
+- **Conferência por quatro leitores:** o do app (Kotlin), o do Pi (C++), o parser Kaitai do banco e o do ANLZ, gerados da especificação aberta.
+
+Continuam de fora: pendrive novo do zero (sem export real para comparar), classificação e pontuação por modelo de aprendizado (sem dados rotulados nem acurácia medida) e escrita de etiquetas dentro dos arquivos de áudio.

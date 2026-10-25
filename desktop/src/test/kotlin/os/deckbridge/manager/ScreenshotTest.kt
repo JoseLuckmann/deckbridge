@@ -10,7 +10,11 @@ import kotlin.test.Test
 import os.deckbridge.manager.pdb.Edit
 import os.deckbridge.manager.pdb.TrackPatch
 import os.deckbridge.manager.ui.App
+import androidx.compose.ui.geometry.Offset
+import os.deckbridge.manager.ui.DragInfo
 import os.deckbridge.manager.ui.UiState
+import os.deckbridge.manager.ui.refreshSuggestions
+import os.deckbridge.manager.ui.startImport
 import os.deckbridge.manager.volume.Backups
 
 /** Capturas offscreen da interface (sem janela do sistema). Só com SHOTS_DIR: `SHOTS_DIR=/pasta ./gradlew test --tests '*ScreenshotTest'`. */
@@ -66,5 +70,70 @@ class ScreenshotTest {
         m.submit(Edit.SetTracks(listOf(v.tracks[0].id), TrackPatch(comment = "tocar na abertura")), "Faixa 1: comentário")
         ui.backups = true
         shoot(out, "06-backups", m, ui)
+    
+        phaseTwo(out, usb, backups)
+    }
+
+    private fun phaseTwo(out: File, usb: File, backups: Backups) {
+        val m = ManagerModel(backups)
+        m.open(usb)
+        val v = m.view!!
+        val withAnalysis = v.tracks.first { m.hasAnalysis(it) && m.trackFiles(it).cues.isNotEmpty() }
+        m.selection = setOf(withAnalysis.id)
+        m.sort = Sort(Column.TITLE)
+
+        val ui = UiState()
+        ui.cueTrack = withAnalysis.id
+        shoot(out, "07-cues-e-grade", m, ui)
+        ui.cueTrack = null
+
+        // Importar: um WAV sintético vira linha analisada.
+        val src = File(out, "Nara Vale - Corredor de Vidro.wav")
+        src.writeBytes(os.deckbridge.logic.encodeWavMono16(os.deckbridge.logic.click(bpm = 126.0, seconds = 40, rate = 22050, freq = 330.0), 22050))
+        val rows = startImport(listOf(src, File(out, "Faixa Que Falta.mp3")))
+        val end = System.currentTimeMillis() + 90_000
+        while (rows.any { it.status.startsWith("lendo") } && System.currentTimeMillis() < end) Thread.sleep(50)
+        ui.importRows = rows
+        shoot(out, "08-importar", m, ui)
+        ui.importRows = null
+        src.delete()
+
+        ui.rename = true
+        m.selection = emptySet()
+        shoot(out, "09-renomear", m, ui)
+        ui.rename = false
+
+        // Organizar: bagunça um pouco a cópia para haver o que sugerir.
+        val messy = ManagerModel(backups)
+        messy.open(usb)
+        val mv = messy.view!!
+        messy.submit(Edit.SetTracks(listOf(mv.tracks[2].id), TrackPatch(title = "  NIGHT   BUS  ", artist = "NARA VALE")), "x")
+        messy.submit(Edit.SetTracks(listOf(mv.tracks[5].id), TrackPatch(genre = "house   ", album = "WARM CONCRETE")), "y")
+        val keep = messy.pending.size
+        messy.apply()
+        ui.organize = true
+        refreshSuggestions(messy, ui.organizeState)
+        shoot(out, "10-organizar", messy, ui)
+        ui.organize = false
+
+        // Arrastar faixas até uma playlist.
+        val pl = v.playlists.first { !it.folder && v.entries[it.id].orEmpty().size in 1 until v.tracks.size }
+        val drag = UiState().apply { expanded = v.playlists.filter { it.folder }.map { it.id }.toSet() }
+        val scene = androidx.compose.ui.ImageComposeScene(1360, 820, androidx.compose.ui.unit.Density(1f)) { App(m, drag) }
+        try {
+            scene.render(0)
+            scene.render(50_000_000)
+            val target = drag.rects["pl:${pl.id}"]
+            if (target != null) {
+                drag.drag = DragInfo(listOf(withAnalysis.id), withAnalysis.title, Offset(target.center.x, target.center.y))
+                drag.updateHover()
+            }
+            scene.render(100_000_000)
+            val data = scene.render(150_000_000).encodeToData(EncodedImageFormat.PNG)!!
+            File(out, "11-arrastar.png").writeBytes(data.bytes)
+        } finally {
+            scene.close()
+        }
+        check(keep == 2)
     }
 }

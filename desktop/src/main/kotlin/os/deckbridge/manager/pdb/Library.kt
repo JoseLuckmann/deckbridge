@@ -140,6 +140,12 @@ sealed interface Edit {
 
     data class RenameFiles(val renames: List<FileRename>) : Edit
 
+    /**
+     * Cria um ANLZ novo, da análise do app, para uma faixa que já está no banco (sem análise, ou para reanalisar). O ANLZ
+     * antigo não é tocado: o banco passa a apontar para o novo. [setTempo] também grava o andamento e [setKey] o tom.
+     */
+    data class AttachAnalysis(val trackId: Int, val prepared: PreparedTrack, val cues: List<Cue>, val setTempo: Boolean, val setKey: Boolean) : Edit
+
     /** Copia o áudio para o pendrive, cria o ANLZ da análise e acrescenta a faixa ao banco. */
     data class ImportTrack(
         val prepared: PreparedTrack,
@@ -202,6 +208,7 @@ class PdbEditor(private val raw: RawPdb, root: File? = null) {
             is Edit.SetCues -> setCues(edit)
             is Edit.RenameFiles -> renameFiles(edit)
             is Edit.ImportTrack -> importTrack(edit)
+            is Edit.AttachAnalysis -> attachAnalysis(edit)
         }
     }
 
@@ -646,5 +653,25 @@ class PdbEditor(private val raw: RawPdb, root: File? = null) {
         row.dateAdded = today
         row.analyzeDate = today
         tracks += row.encode()
+    }
+
+    private fun attachAnalysis(e: Edit.AttachAnalysis) {
+        val at = trackIndex(e.trackId)
+        val row = parseRow(at)
+        val prefix = lead(row.analyzePath.ifEmpty { row.filePath })
+        var n = e.trackId
+        fun path(i: Int) = "PIONEER/USBANLZ/PDBM/%08X/ANLZ0000.DAT".format(i)
+        while (files.exists(path(n))) n++
+        val dat = path(n)
+        val set = AnlzBuild.fullSet("/" + norm(row.filePath), e.prepared.read, e.prepared.waves, row.duration.coerceAtLeast(1) * 1000, e.cues)
+        files.put(dat, set.dat)
+        files.put(sibling(dat, "EXT"), set.ext)
+        files.put(sibling(dat, "2EX"), set.ex2)
+        row.analyzePath = prefix + dat
+        row.analyzeDate = LocalDate.now().toString()
+        if (e.setTempo) row.tempo = (e.prepared.read.bpm * 100).roundToInt().coerceIn(0, 65535)
+        if (e.setKey && e.prepared.read.keyName.isNotBlank() && e.prepared.read.keyName != "—") row.keyId = nameId(PdbType.KEYS, e.prepared.read.keyName, 0)
+        rowsOf(PdbType.TRACKS)[at] = row.encode()
+        dropOrphans()
     }
 }

@@ -794,3 +794,23 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Evidência (PC x86_64): 31 testes, 0 falhas, 0 ignorados (detalhe em `desktop/README.md`). Três leitores independentes (Kotlin, C++ do Pi, Kaitai) veem o que o plano diz. A janela real abriu sob Xvfb. Capturas em `docs/ui/desktop-*.png`.
 - Não verificado (`BLOCKED_HARDWARE`): nenhum player nem o rekordbox leu um banco gravado por este programa; nenhum pendrive real foi usado; sem export real do rekordbox para comparar byte a byte. Risco registrado no ADR-0009 e no README.
 - Próximo: importar áudio com análise, escrever ANLZ (grade e cues), renomear arquivos, remover faixa, compactar pela tela.
+
+## 2026-10-25 — Library Manager, fase 2: ANLZ, importar, renomear, remover, organizar, arrastar
+
+- Pedido do dono: "faça tudo que falta". Implementado: escrita de ANLZ (grade e cues), editor de cues e grade, importar áudio com análise, renomear arquivos por padrão, remover da biblioteca, compactar o banco, assistente Organizar por regras, análise sob demanda, arrastar e soltar.
+- Não implementado, de propósito (detalhe e motivo no ADR-0009 e no `desktop/README.md`): pendrive novo do zero, classificação/pontuação por modelo de aprendizado, etiquetas dentro dos arquivos de áudio.
+- Arquitetura:
+  - `anlz/`: edição por seções (`AnlzModel`), cues com reaproveitamento das entradas intactas (`CueIo`), grade (`GridIo`), conjunto completo para faixa nova (`AnlzBuild`).
+  - `volume/FileOps.kt`, `SafeWriter.kt`: operações Put/CopyIn/Move, conferência prévia, execução com desfazer em ordem inversa, backup que registra criados e renomeados, restauração que nunca apaga áudio, compactação.
+  - `importer/`: leitura de WAV e ffmpeg/ffprobe opcionais; análise com o analisador do app.
+  - `organize/`: regras e padrões de nome; análise sob demanda.
+  - `ui/`: editor de cues, importar, renomear, organizar, arrastar e soltar.
+- Achados e correções no caminho:
+  - Esta sessão rodava com locale ASCII: o Java não cria arquivo com "Á" no nome. A gravação desfez tudo direito, mas a mensagem era ruim. Agora há uma checagem prévia com a instrução (`LANG=C.UTF-8`) e os testes rodam com UTF-8.
+  - **Disco cheio:** meus testes criavam um pendrive sintético de vários MB em `/tmp` por execução e nunca apagavam; dezenas de execuções esgotaram o disco, e uma rodada inteira falhou por isso (o Gradle também ficou com o cache de execução travado). Os testes agora apagam suas pastas ao terminar. Só apaguei as pastas `dbm-*` que eu mesmo criei.
+  - O leitor do app numera o hot cue de 0 a 7 (A = 0); eu havia comparado com 1 a 8 num teste.
+  - O título "Padrão — campos" em maiúsculas escrevia `{ARTISTA}`; trocado por um texto que preserva a caixa.
+  - Ogg Vorbis guarda as etiquetas no fluxo de áudio e não no formato; o programa só lia as do formato. O teste com ffmpeg achou e agora as duas são lidas.
+  - O README dizia que WAV estéreo, de 24 bits e float eram lidos sem que nenhum teste cobrisse isso; escrevi o teste (`AudioIoTest`) antes de manter a frase.
+- Evidência (PC x86_64, Linux): 65 testes, 0 falhas, 0 ignorados. Quatro leitores independentes veem o que o plano diz (app Kotlin, Pi C++, Kaitai do banco, Kaitai do ANLZ). Uma falha injetada no meio da gravação desfaz tudo. Capturas em `docs/ui/desktop-07…11`.
+- Não verificado (`BLOCKED_HARDWARE`): nenhum player nem o rekordbox leu o que o programa grava; sem export real para comparar; o gesto real de arrastar com o mouse e de soltar arquivos do gerenciador não foi exercitado; MP3, FLAC, M4A e OGG só foram testados com arquivos gerados pelo ffmpeg desta máquina a partir de um WAV sintético.

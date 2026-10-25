@@ -19,6 +19,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.awtTransferable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,15 +71,78 @@ class UiState {
     var expanded by mutableStateOf<Set<Int>>(emptySet())
     var applying by mutableStateOf<String?>(null)
     var chooser: (() -> File?) = { null }
+    var chooseFiles: (() -> List<File>) = { emptyList() }
+    var cueTrack by mutableStateOf<Int?>(null)
+    var importRows by mutableStateOf<List<ImportRow>?>(null)
+    var rename by mutableStateOf(false)
+    var organize by mutableStateOf(false)
+    val organizeState = OrganizeState()
+    var drag by mutableStateOf<DragInfo?>(null)
+    var hoverPlaylist by mutableStateOf<Int?>(null)
+
+    /** Retângulos (na janela) das linhas da barra lateral ("pl:id") e da tabela ("row:id"), para saber onde se solta. */
+    val rects = mutableStateMapOf<String, Rect>()
+
+    fun updateHover() {
+        val d = drag ?: return
+        hoverPlaylist = rects.entries.firstOrNull { it.key.startsWith("pl:") && it.value.contains(d.pos) }?.key?.removePrefix("pl:")?.toIntOrNull()
+    }
+
+    fun finishDrag(model: ManagerModel, open: PlaylistItem?) {
+        val d = drag ?: return
+        drag = null
+        hoverPlaylist = null
+        val target = rects.entries.firstOrNull { it.key.startsWith("pl:") && it.value.contains(d.pos) }
+        if (target != null) {
+            model.dropOnPlaylist(d.ids, target.key.removePrefix("pl:").toInt())
+            return
+        }
+        if (open != null && !open.folder && model.sort.column == null) {
+            val row = rects.entries.firstOrNull { it.key.startsWith("row:") && it.value.contains(d.pos) } ?: return
+            val over = row.key.removePrefix("row:").toInt()
+            val ordered = model.view?.entries?.get(open.id).orEmpty()
+            val before = if (d.pos.y < row.value.center.y) over else ordered.getOrNull(ordered.indexOf(over) + 1)
+            model.reorderInPlaylist(open.id, d.ids.filter { it in ordered }, before)
+        }
+    }
+
+    fun startImportOf(files: List<File>, model: ManagerModel) {
+        if (!model.isOpen) {
+            model.banner = os.deckbridge.manager.Banner("Abra um pendrive antes de importar áudio.", error = true)
+            return
+        }
+        val expanded = files.flatMap { f -> if (f.isDirectory) f.walkTopDown().filter { it.isFile && os.deckbridge.manager.volume.isAudio(it.name) }.take(300).toList() else listOf(f) }
+        val audio = expanded.filter { os.deckbridge.manager.volume.isAudio(it.name) }
+        if (audio.isEmpty()) {
+            model.banner = os.deckbridge.manager.Banner("Nenhum arquivo de áudio (WAV, MP3, FLAC, AIFF, M4A) foi escolhido.", error = true)
+            return
+        }
+        importRows = startImport(audio)
+    }
 }
+
+data class DragInfo(val ids: List<Int>, val label: String, val pos: Offset)
 
 class Prompt(val title: String, val initial: String, val action: String, val onOk: (String) -> Unit)
 
 class ConfirmAsk(val title: String, val text: String, val action: String, val danger: Boolean, val onOk: () -> Unit)
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun App(model: ManagerModel, ui: UiState = remember { UiState() }) {
-    Box(Modifier.fillMaxSize().background(Pal.Bg)) {
+    val dropTarget = remember(model, ui) {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                val files = runCatching {
+                    @Suppress("UNCHECKED_CAST")
+                    event.awtTransferable.getTransferData(java.awt.datatransfer.DataFlavor.javaFileListFlavor) as List<File>
+                }.getOrNull() ?: return false
+                ui.startImportOf(files, model)
+                return true
+            }
+        }
+    }
+    Box(Modifier.fillMaxSize().background(Pal.Bg).dragAndDropTarget(shouldStartDragAndDrop = { true }, target = dropTarget)) {
         Column(Modifier.fillMaxSize()) {
             TopBar(model, ui)
             model.banner?.let { Banner(it.text, it.error) { model.banner = null } }
@@ -72,15 +151,22 @@ fun App(model: ManagerModel, ui: UiState = remember { UiState() }) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     Sidebar(model, ui, Modifier.width(250.dp).fillMaxHeight())
                     Center(model, ui, Modifier.weight(1f).fillMaxHeight())
-                    Inspector(model, Modifier.width(330.dp).fillMaxHeight())
+                    Inspector(model, ui, Modifier.width(330.dp).fillMaxHeight())
                 }
                 PendingBar(model, ui)
             }
         }
         ui.prompt?.let { p -> Box(Modifier.fillMaxSize()) { PromptModal(p) { ui.prompt = null } } }
         ui.confirm?.let { c -> Box(Modifier.fillMaxSize()) { ConfirmModal(c) { ui.confirm = null } } }
+        ui.cueTrack?.let { id -> model.view?.track(id)?.let { t -> Box(Modifier.fillMaxSize()) { CueEditorModal(model, t) { ui.cueTrack = null } } } }
+        ui.importRows?.let { rows -> Box(Modifier.fillMaxSize()) { ImportModal(model, rows) { ui.importRows = null } } }
+        if (ui.rename) Box(Modifier.fillMaxSize()) { RenameModal(model) { ui.rename = false } }
+        if (ui.organize) Box(Modifier.fillMaxSize()) { OrganizeModal(model, ui.organizeState) { ui.organize = false } }
         if (ui.review) Box(Modifier.fillMaxSize()) { ReviewModal(model, ui) }
         if (ui.backups) Box(Modifier.fillMaxSize()) { BackupsModal(model, ui) }
+        ui.drag?.let { d ->
+            Box(Modifier.offset { IntOffset(d.pos.x.toInt() + 14, d.pos.y.toInt() + 10) }.background(Pal.Blue).padding(horizontal = 10.dp, vertical = 5.dp)) { Label(d.label, Pal.Bg, 12.sp, bold = true) }
+        }
     }
 }
 
@@ -92,6 +178,9 @@ private fun TopBar(model: ManagerModel, ui: UiState) {
         val vol = model.volume
         if (vol != null) {
             Label(vol.root.path, Pal.Muted, 12.sp, modifier = Modifier.weight(1f))
+            Btn("Importar áudio…", { val f = ui.chooseFiles(); if (f.isNotEmpty()) ui.startImportOf(f, model) })
+            Btn("Organizar…", { refreshSuggestions(model, ui.organizeState); ui.organize = true })
+            Btn("Renomear arquivos…", { ui.rename = true })
             Btn("Backups", { ui.backups = true })
             Btn("Abrir outro…", { ui.chooser()?.let { model.open(it) } })
         } else {
@@ -131,7 +220,7 @@ private fun Sidebar(model: ManagerModel, ui: UiState, modifier: Modifier) {
     Column(modifier.background(Pal.Panel).border(1.dp, Pal.Line)) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(vertical = 10.dp)) {
             Caption("Biblioteca", Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
-            SideRow("Coleção", view.tracks.size.toString(), 0, model.openPlaylist == null, "♫") {
+            SideRow("Coleção", view.tracks.size.toString(), 0, model.openPlaylist == null, "♫", null, ui) {
                 model.openPlaylist = null
                 model.selection = emptySet()
                 model.sort = os.deckbridge.manager.Sort(Col.ARTIST)
@@ -142,7 +231,7 @@ private fun Sidebar(model: ManagerModel, ui: UiState, modifier: Modifier) {
             }
             rows(0, 0).forEach { (p, depth) ->
                 val count = if (p.folder) view.children(p.id).size else view.entries[p.id].orEmpty().size
-                SideRow(p.name, count.toString(), depth, model.openPlaylist == p.id, if (p.folder) (if (p.id in ui.expanded) "▾" else "▸") else "≡") {
+                SideRow(p.name, count.toString(), depth, model.openPlaylist == p.id, if (p.folder) (if (p.id in ui.expanded) "▾" else "▸") else "≡", p.id, ui) {
                     if (p.folder) ui.expanded = if (p.id in ui.expanded) ui.expanded - p.id else ui.expanded + p.id
                     model.openPlaylist = p.id
                     model.selection = emptySet()
@@ -190,9 +279,14 @@ private fun newPlaylist(model: ManagerModel, ui: UiState, folder: Boolean) {
 }
 
 @Composable
-private fun SideRow(name: String, count: String, depth: Int, selected: Boolean, icon: String, onClick: () -> Unit) {
+private fun SideRow(name: String, count: String, depth: Int, selected: Boolean, icon: String, playlistId: Int?, ui: UiState, onClick: () -> Unit) {
+    val hover = playlistId != null && ui.hoverPlaylist == playlistId
+    if (playlistId != null) DisposableEffect(playlistId) { onDispose { ui.rects.remove("pl:$playlistId") } }
     Row(
-        Modifier.fillMaxWidth().background(if (selected) Pal.Blue.copy(alpha = 0.22f) else Color.Transparent).clickable(onClick = onClick).padding(start = (14 + depth * 16).dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+        Modifier.fillMaxWidth()
+            .onGloballyPositioned { if (playlistId != null) ui.rects["pl:$playlistId"] = it.boundsInWindow() }
+            .background(if (hover) Pal.Orange.copy(alpha = 0.35f) else if (selected) Pal.Blue.copy(alpha = 0.22f) else Color.Transparent)
+            .clickable(onClick = onClick).padding(start = (14 + depth * 16).dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -216,6 +310,16 @@ private fun Center(model: ManagerModel, ui: UiState, modifier: Modifier) {
             Box {
                 Btn("Adicionar à playlist ▾", { ui.addMenu = !ui.addMenu }, enabled = model.selection.isNotEmpty() && view.playlists.any { !it.folder })
                 if (ui.addMenu) AddMenu(model, ui)
+            }
+            if (!inTrackPlaylist) {
+                val sel = model.selection.toList()
+                Btn("Remover da biblioteca", {
+                    ui.confirm = ConfirmAsk(
+                        "Remover ${sel.size} faixa${if (sel.size == 1) "" else "s"} da biblioteca?",
+                        "Saem da coleção, das playlists, do histórico e das tags. O arquivo de áudio e o de análise continuam no pendrive: nada de música é apagado.",
+                        "Remover", true,
+                    ) { model.submit(Edit.RemoveTracks(sel), "Remover ${sel.size} faixa${if (sel.size == 1) "" else "s"} da biblioteca: ${sel.take(3).mapNotNull { view.track(it)?.title }.joinToString()}${if (sel.size > 3) "…" else ""}"); model.selection = emptySet() }
+                }, danger = true, enabled = sel.isNotEmpty())
             }
             if (inTrackPlaylist) {
                 val ordered = model.sort.column == null
@@ -250,7 +354,17 @@ private fun Center(model: ManagerModel, ui: UiState, modifier: Modifier) {
         val ids = if (inTrackPlaylist) view.entries[open!!.id].orEmpty() else emptyList()
         LazyColumn(Modifier.fillMaxSize()) {
             items(rows, key = { it.id }) { t ->
-                TrackRowView(t, selected = t.id in model.selection, edited = t.id in edited, position = if (inTrackPlaylist) ids.indexOf(t.id) + 1 else null) { ctrl, shift -> model.click(t.id, ctrl, shift, rows) }
+                TrackRowView(
+                    t, selected = t.id in model.selection, edited = t.id in edited, position = if (inTrackPlaylist) ids.indexOf(t.id) + 1 else null, ui = ui,
+                    onDragStart = { at ->
+                        if (t.id !in model.selection) model.selection = setOf(t.id)
+                        val picked = rows.map { it.id }.filter { it in model.selection }
+                        ui.drag = DragInfo(picked, if (picked.size == 1) t.title else "${picked.size} faixas", at)
+                        ui.updateHover()
+                    },
+                    onDragMove = { at -> ui.drag = ui.drag?.copy(pos = at); ui.updateHover() },
+                    onDragEnd = { ui.finishDrag(model, open) },
+                ) { ctrl, shift -> model.click(t.id, ctrl, shift, rows) }
             }
         }
     }
@@ -287,13 +401,32 @@ private fun cellModifier(c: Col): Modifier = columnWidths[c]?.let { Modifier.wid
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun TrackRowView(t: TrackItem, selected: Boolean, edited: Boolean, position: Int?, onClick: (ctrl: Boolean, shift: Boolean) -> Unit) {
+private fun TrackRowView(
+    t: TrackItem, selected: Boolean, edited: Boolean, position: Int?, ui: UiState,
+    onDragStart: (Offset) -> Unit, onDragMove: (Offset) -> Unit, onDragEnd: () -> Unit,
+    onClick: (ctrl: Boolean, shift: Boolean) -> Unit,
+) {
     val ink = if (edited) Pal.Orange else Pal.Ink
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    var at by remember { mutableStateOf(Offset.Zero) }
+    DisposableEffect(t.id) { onDispose { ui.rects.remove("row:${t.id}") } }
     Row(
         Modifier.fillMaxWidth().height(28.dp).background(if (selected) Pal.Blue.copy(alpha = 0.25f) else Color.Transparent)
+            .onGloballyPositioned {
+                origin = it.positionInWindow()
+                ui.rects["row:${t.id}"] = it.boundsInWindow()
+            }
             .onPointerEvent(PointerEventType.Press) {
                 val m = it.keyboardModifiers
                 onClick(m.isCtrlPressed || m.isMetaPressed, m.isShiftPressed)
+            }
+            .pointerInput(t.id) {
+                detectDragGestures(
+                    onDragStart = { local -> at = origin + local; onDragStart(at) },
+                    onDrag = { change, amount -> change.consume(); at += amount; onDragMove(at) },
+                    onDragEnd = { onDragEnd() },
+                    onDragCancel = { ui.drag = null; ui.hoverPlaylist = null },
+                )
             }
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -312,7 +445,7 @@ private fun TrackRowView(t: TrackItem, selected: Boolean, edited: Boolean, posit
 }
 
 @Composable
-private fun Inspector(model: ManagerModel, modifier: Modifier) {
+private fun Inspector(model: ManagerModel, ui: UiState, modifier: Modifier) {
     val view = model.view ?: return
     val tracks = model.selection.mapNotNull { view.track(it) }
     Column(modifier.background(Pal.Panel).border(1.dp, Pal.Line).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -320,7 +453,7 @@ private fun Inspector(model: ManagerModel, modifier: Modifier) {
             Caption("Faixa")
             Label("Selecione uma ou mais faixas para editar título, artista, álbum, gênero, tom, nota e comentário. Com várias selecionadas, só os campos que você mexer mudam.", Pal.Muted, 13.sp, maxLines = 6)
         } else {
-            InspectorForm(model, tracks)
+            InspectorForm(model, ui, tracks)
         }
     }
 }
@@ -328,7 +461,7 @@ private fun Inspector(model: ManagerModel, modifier: Modifier) {
 private class Draft(var text: String? = null)
 
 @Composable
-private fun androidx.compose.foundation.layout.ColumnScope.InspectorForm(model: ManagerModel, tracks: List<TrackItem>) {
+private fun androidx.compose.foundation.layout.ColumnScope.InspectorForm(model: ManagerModel, ui: UiState, tracks: List<TrackItem>) {
     // O formulário recomeça quando a seleção ou os dados mudam (depois de guardar, por exemplo).
     val key = tracks.map { it.id to it.hashCode() }
     var drafts by remember(key) { mutableStateOf(mapOf<String, String>()) }
@@ -389,6 +522,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.InspectorForm(model: 
         rating = rating,
     )
     val changed = !patch.isEmpty
+    if (!multi) Btn("Cues e grade…", { ui.cueTrack = single0(tracks).id }, Modifier.fillMaxWidth(), enabled = model.hasAnalysis(tracks.first()))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Btn("Guardar na fila", {
             val text = describe(tracks, patch)
@@ -400,6 +534,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.InspectorForm(model: 
         Btn("Reverter", { drafts = emptyMap(); rating = null }, enabled = changed)
     }
 }
+
+private fun single0(tracks: List<TrackItem>) = tracks.first()
 
 @Composable
 private fun Info(label: String, value: String) {
@@ -529,6 +665,18 @@ private fun BackupsModal(model: ManagerModel, ui: UiState) {
                     } else Btn("Restaurar", { armed = r })
                 }
             }
+        }
+        val vol = model.volume
+        if (vol != null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            val size = vol.pdbFile.length() / 1024
+            Btn("Compactar o banco", {
+                ui.applying = "compactando"
+                thread(name = "compactar") {
+                    model.compact { ui.applying = it }
+                    ui.applying = null
+                }
+            }, enabled = !model.dirty && ui.applying == null)
+            Label(if (model.dirty) "Grave ou descarte a fila antes de compactar." else "export.pdb: $size KB. As gravações deixam páginas antigas no arquivo; compactar tira só o que ficou sem uso, sem mudar nenhuma linha.", Pal.Muted, 11.sp, maxLines = 2)
         }
         Btn("Fechar", { ui.backups = false })
     }
