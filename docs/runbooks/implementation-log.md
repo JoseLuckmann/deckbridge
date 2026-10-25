@@ -720,3 +720,22 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - Ponta a ponta com o PCM null: o pendrive estava sem permissão de escrita, as faixas carregaram (WAV e MP3) e tocaram com 0 falhas, e os 157 arquivos ficaram com o mesmo SHA-256.
 - Licenças: NOTICE e SBOM ganharam dr_flac (que estava sem registro), dr_mp3, alsa-lib, SDL2 e SDL2_ttf.
 - Não verificado: pendrive real do rekordbox (`BLOCKED_HARDWARE`). Só o volume sintético foi lido.
+
+## 2026-10-25 — Pi: tela nativa SDL2 (ADR-0008)
+
+- `pi/ui/deckbridge_ui.cpp`: o layout do app em 1024×600 e 800×480.
+  - Barra de estado e navegação.
+  - Ondas de detalhe com grade, compassos e hot cues.
+  - Painel lateral e hot cues A–H.
+  - Cartões com título, REMAIN, TEMPO, BPM e visão geral.
+  - Lista do pendrive com BROWSE/LOAD da DDJ-400, ou pelo toque. A carga roda noutra thread e a tela volta às ondas, como no leitor.
+  - Textos em textura com cache LRU: o quadro estável não aloca.
+- Demonstração sem controladora (`--midi-demo`): bytes do mapa oficial pelo mesmo caminho do rawmidi, com BROWSE ×3, LOAD no deck 2 e PLAY nos dois. Funcionou do jeito esperado (print `docs/ui/pi-1024x600-ddj-demo.png`).
+- Medido no x86 por Xvfb: CPU de 8,4 % e RSS de 54 MB com 2 decks a 30 qps.
+  - A pilha das threads ficou em 512 KB (`pthread_setattr_default_np`). Com o `mlockall`, as pilhas de 8 MB davam 70 MB.
+  - O `deckbridge_pi` foi de 30 para 22,5 MB.
+- O binário aarch64 renderiza a mesma tela sob qemu (print `pi-800x480-arm64-qemu.png`).
+- Concorrência:
+  - TSan na tela com a demonstração: 0 avisos.
+  - Revisão manual achou `pitch` e `bpm` lidos por outra thread no `DeckControl`. Viraram atômicos.
+- Não verificado (`BLOCKED_HARDWARE`): Pi real com KMSDRM, tela de 7", toque e DDJ-400.

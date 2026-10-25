@@ -1,6 +1,6 @@
-# Serviço do motor no Raspberry Pi OS (fase 1, sem tela). Copiar para /etc/systemd/system/ e ajustar o aparelho.
+# Serviço do DeckBridge no Raspberry Pi OS. Copiar para /etc/systemd/system/ e ajustar o aparelho e o ponto de montagem.
 [Unit]
-Description=DeckBridge (motor de áudio, fase 1)
+Description=DeckBridge (tela, motor e DDJ-400)
 After=sound.target
 
 [Service]
@@ -9,7 +9,9 @@ User=deckbridge
 SupplementaryGroups=audio
 # Nome do PCM da DDJ-400: confira com `aplay -l` no aparelho (não supomos o nome do cartão).
 Environment=DECKBRIDGE_ALSA_DEVICE=hw:CARD=DDJ400
-ExecStart=/opt/deckbridge/deckbridge_pi --seconds 86400
+# Pendrive montado só leitura (ro) pelo sistema, como pede a OD-23.
+Environment=SDL_VIDEODRIVER=kmsdrm
+ExecStart=/opt/deckbridge/deckbridge_ui --usb /media/deckbridge/usb --midi DDJ --map /opt/deckbridge/ddj400-map.json --size 800x480
 # Tempo real e RAM travada para a thread de áudio (SCHED_FIFO e mlockall do programa).
 LimitRTPRIO=95
 LimitMEMLOCK=infinity

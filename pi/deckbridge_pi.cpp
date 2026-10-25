@@ -100,6 +100,15 @@ int main(int argc, char **argv) {
         }
     }
     // Sem paginação no meio do set: o que o motor usa fica na RAM (precisa de memlock; sem ele só avisa).
+    // Pilha de 512 KB para as threads novas (áudio, MIDI, carga): com mlockall, a pilha padrão de 8 MB de cada thread
+    // ficava toda travada na RAM (+29 MB medidos na tela). O motor usa pouca pilha; 512 KB sobra.
+    {
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setstacksize(&attr, 512 * 1024);
+        pthread_setattr_default_np(&attr);
+        pthread_attr_destroy(&attr);
+    }
     if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) std::fprintf(stderr, "aviso: mlockall recusado (%s); siga sem travar a RAM\n", std::strerror(errno));
 
     ToneEngine &engine = ::engine();

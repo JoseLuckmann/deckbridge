@@ -22,13 +22,13 @@ public:
 
     /** BPM da grade de cada deck (vem da análise da faixa); sem ele o SYNC não age. */
     void setBpm(int deck, double bpm) {
-        if (deck >= 0 && deck <= 1) bpm_[static_cast<size_t>(deck)] = bpm;
+        if (deck >= 0 && deck <= 1) bpm_[deck].store(bpm);
     }
 
     // Lidos pela thread dos LEDs enquanto a do MIDI escreve: atômicos.
     bool playing(int deck) const { return deck >= 0 && deck <= 1 && playing_[deck].load(std::memory_order_relaxed); }
     bool pfl(int deck) const { return deck >= 0 && deck <= 1 && pfl_[deck].load(std::memory_order_relaxed); }
-    float pitch(int deck) const { return deck >= 0 && deck <= 1 ? pitch_[static_cast<size_t>(deck)] : 1.f; }
+    float pitch(int deck) const { return deck >= 0 && deck <= 1 ? pitch_[deck].load(std::memory_order_relaxed) : 1.f; }
     long unsupported() const { return unsupported_; }
     const std::string &lastUnsupported() const { return lastUnsupported_; }
 
@@ -82,7 +82,7 @@ public:
                 engine_.setHead(headMix_, headLevel_);
                 break;
             case Kind::PITCH:
-                if (valid) pitch_[d] = static_cast<float>(a.slider.value_or(1.0));
+                if (valid) pitch_[d].store(static_cast<float>(a.slider.value_or(1.0)));
                 break;
             case Kind::JOG_TOUCH:
                 if (!valid) return;
@@ -107,8 +107,9 @@ public:
                 // Tempo do outro deck (sem o alinhamento de fase do app, que precisa da grade: próxima etapa).
                 if (!valid) return;
                 const size_t other = 1 - d;
-                if (bpm_[d] <= 0.0 || bpm_[other] <= 0.0) return;
-                pitch_[d] = static_cast<float>(std::clamp(bpm_[other] * pitch_[other] / bpm_[d], 0.5, 2.0));
+                const double own = bpm_[d].load(), them = bpm_[other].load();
+                if (own <= 0.0 || them <= 0.0) return;
+                pitch_[d].store(static_cast<float>(std::clamp(them * pitch_[other].load() / own, 0.5, 2.0)));
                 break;
             }
             default:
@@ -120,15 +121,16 @@ public:
     }
 
 private:
-    void pushMix() { engine_.setMix(vol_[0], vol_[1], pitch_[0], pitch_[1], cross_, pfl_[0].load(), pfl_[1].load()); }
+    void pushMix() { engine_.setMix(vol_[0], vol_[1], pitch_[0].load(), pitch_[1].load(), cross_, pfl_[0].load(), pfl_[1].load()); }
 
     Engine &engine_;
     std::atomic<bool> playing_[2]{{false}, {false}};
     std::array<bool, 2> scratching_{};
     std::atomic<bool> pfl_[2]{{false}, {false}};
     std::array<float, 2> vol_{0.8f, 0.8f};
-    std::array<float, 2> pitch_{1.f, 1.f};
-    std::array<double, 2> bpm_{};
+    // pitch lido pela tela e bpm escrito pela thread de carga: atômicos.
+    std::atomic<float> pitch_[2]{{1.f}, {1.f}};
+    std::atomic<double> bpm_[2]{{0.0}, {0.0}};
     std::array<std::array<float, 3>, 2> eq_{{{0.5f, 0.5f, 0.5f}, {0.5f, 0.5f, 0.5f}}};
     float cross_ = 0.5f;
     float headMix_ = 0.f;
