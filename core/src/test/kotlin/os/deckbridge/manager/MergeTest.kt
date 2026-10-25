@@ -85,3 +85,32 @@ class MergeTest {
         assertTrue(m.view!!.tracks.all { File(a, it.filePath.trimStart('/')).isFile })
     }
 }
+
+/** Origem = export real do rekordbox (amostra pública do rekordcrate, sem áudio: aqui o áudio é um arquivo de teste). */
+class MergeRealExportTest {
+    @Test fun `juntar a partir de um export real do rekordbox`() {
+        val root = System.getenv("REAL_EXPORT")?.let { File(it, "demo_tracks") }?.takeIf { it.isDirectory } ?: return
+        val usb = TestVolumes.tempDir("dbm-merge-real")
+        root.copyRecursively(usb)
+        val theirs = PdbEditor(Volumes.open(usb).raw, usb).view()
+        for (t in theirs.tracks) File(usb, t.filePath.trimStart('/')).apply { parentFile.mkdirs() }.writeBytes(ByteArray(4096) { (it % 251).toByte() })
+        val local = TestVolumes.tempDir("dbm-merge-real-local")
+        LocalLibrary.ensure(local)
+        val backups = Backups(TestVolumes.tempDir("dbm-merge-real-bk"))
+        val r = UsbMerger(backups, TestVolumes.tempDir("dbm-merge-real-tmp")).merge(FileStorage(usb), local)
+        assertEquals(theirs.tracks.size, r.added, "faixas do export real")
+        val m = ManagerModel(backups)
+        assertTrue(m.open(local))
+        val mine = m.view!!
+        assertEquals(theirs.tracks.map { it.title }.sorted(), mine.tracks.map { it.title }.sorted())
+        for (t in mine.tracks) {
+            val src = theirs.tracks.first { it.title == t.title }
+            assertEquals(src.artist, t.artist)
+            assertEquals(src.bpm, t.bpm, 0.01)
+            assertEquals(src.key, t.key)
+            val files = m.trackFiles(t)
+            assertEquals(null, files.error)
+            assertTrue(files.beats.isNotEmpty(), "grade do rekordbox trazida para ${t.title}")
+        }
+    }
+}
