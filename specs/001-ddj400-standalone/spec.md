@@ -54,7 +54,7 @@ Isto é requisito cumprido em software, com a escuta ainda aberta. O detalhe e o
 - RMX desde a 0.8.0: Scene FX, X-Pad, isolador e release (OD-19). O mapa dos pads é provisório.
 - Beat FX com de/para aos manuais públicos na 0.14.0 (OD-20). O que o manual não publica continua aproximação.
 - Drum build na 0.14.1: one-shots CC0 na fase da grade do deck (OD-21).
-- USB do rekordbox somente leitura (OD-23, ADR-0002).
+- USB do rekordbox somente leitura na performance (OD-23, ADR-0002). Só o Library Manager de desktop escreve (OD-25, ADR-0009).
 - Analisador com métricas publicadas, sem subir o piso do teste até o alvo que não foi atingido (OD-24).
 
 ## 2. Personas e casos de uso
@@ -449,6 +449,7 @@ São o que o dono pediu e o que o app 0.14.1 faz. A escuta de cada uma continua 
 | OD-22 | Busca por voz e quatro decks não entram até o dono reabrir. | A053 e A054, `DEFERRED`. Igual ao §1.4. |
 | OD-23 | O USB do rekordbox é somente leitura no alvo 1 e no alvo 2. | ADR-0002. O Android é quem monta o volume. O app não pede escrita e não grava `export.pdb`, ANLZ nem áudio nesse volume. |
 | OD-24 | O analisador publica a medida e não finge o alvo. | Tempo, 58 faixas GiantSteps: Acc1 0,655, Acc2 0,724. Tom nas mesmas 58: MIREX 0,586, exato 0,466. Holdout (16): MIREX 0,456, exato 0,312. Extra (190): MIREX 0,519. Frases: 16 de 26 a 1 compasso. Os alvos 0,85 / 0,95 / 0,65 não foram atingidos. |
+| OD-25 | O Library Manager de desktop pode escrever no pendrive rekordbox. Performance (Android, Pi, Mixxx) continua somente leitura. | ADR-0009. Emenda a OD-23 só para o programa de desktop: pedido explícito, backup local, troca atômica, verificação, restauração. Decisão do dono, 2026-10-25. Nenhum player leu um banco gravado por ele (`BLOCKED_HARDWARE`). |
 
 #### Ainda abertas — `OWNER_DECISION` (não impedem P0/P1)
 
