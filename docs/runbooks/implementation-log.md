@@ -697,3 +697,26 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - Suíte JVM com 143 testes e 0 falhas. Build aarch64 ok.
 - Não verificado: leitura rawmidi de uma DDJ-400 real (este PC não tem porta MIDI) (`BLOCKED_HARDWARE`).
 - Ambiente: o Maven Central devolveu 429 (limite de pedidos) depois do download do protótipo Compose. Uma tentativa com `--refresh-dependencies` gravou artefatos como ausentes no cache do Gradle; a resolução em série (`--max-workers=1`), depois de esperar, recuperou o build offline.
+
+## 2026-10-25 — Pi: LEDs, leitor do pendrive, decodificação e sessão
+
+- LEDs (`pi/control/leds.h`): porta do DdjLeds.kt. Contra o `LedGoldenTest` deu 800 estados e 77 877 bytes iguais. Saída por rawmidi a 20 Hz, só com o que mudou.
+- Pendrive (`pi/library/rekordbox.h`):
+  - Porta de DeviceSql.kt, Anlz.kt e mergeAnalysis.
+  - O `RekordboxGoldenTest` grava o volume sintético (só `PIONEER/`, 1,6 MB, gerado por nós) e o resumo do que o Kotlin lê dele.
+  - O C++ escreve o mesmo resumo: 26 faixas, campos, cues, CRC das ondas e frases. Leitura em 9,9 ms.
+  - 3000 arquivos estragados sob ASan/UBSan: nenhuma leitura fora da faixa.
+- Decodificação (`pi/audio/decode.h`): WAV, MP3 (dr_mp3 0.7.4) e FLAC (dr_flac) direto para int16. O teste parte de um WAV sintético; o MP3 e o FLAC são gerados dele pelo `lame` 3.100 e pelo `flac` 1.4.3, só no PC.
+  - WAV e FLAC: bit a bit iguais.
+  - MP3 a 320 kbps: SNR de 31,5 dB.
+  - MP3 V5: SNR de 23,8 dB.
+  - MP3: comprimento exato e atraso 0.
+  - AAC/M4A ainda não decodifica no Pi.
+- Achado do fuzz: o dr_flac tem estouro de inteiro com sinal (UB) com FLAC estragado. `-fwrapv` no build do Pi e no CMake do app torna o estouro definido. Com ele, 180 arquivos estragados passam limpos sob ASan/UBSan.
+- Sessão (`pi/app/session.h`):
+  - Catálogo do pendrive, só leitura.
+  - Carga com BPM, grade e cue principal como o DeckPage, mais as hot cues.
+  - `deckbridge_pi --usb PASTA --track N`.
+  - Ponta a ponta com o PCM null: o pendrive estava sem permissão de escrita, as faixas carregaram (WAV e MP3) e tocaram com 0 falhas, e os 157 arquivos ficaram com o mesmo SHA-256.
+- Licenças: NOTICE e SBOM ganharam dr_flac (que estava sem registro), dr_mp3, alsa-lib, SDL2 e SDL2_ttf.
+- Não verificado: pendrive real do rekordbox (`BLOCKED_HARDWARE`). Só o volume sintético foi lido.

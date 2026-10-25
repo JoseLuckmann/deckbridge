@@ -69,6 +69,45 @@
       "scope": "build futura do Mixxx",
       "license": "UNKNOWN por codec",
       "vendored": false
+    },
+    {
+      "name": "dr_flac",
+      "version": "0.13.4",
+      "commit": "b4264c5c1f61c1d460aced4cf4d8a8dec197ca48",
+      "sha256": "96b3dfca87d02eb977d01278d19b10caea84b3fcd545f373495940e0587a3c9e",
+      "scope": "motor (app e Pi)",
+      "license": "Unlicense OR MIT-0",
+      "vendored": true
+    },
+    {
+      "name": "dr_mp3",
+      "version": "0.7.4",
+      "commit": "b4264c5c1f61c1d460aced4cf4d8a8dec197ca48",
+      "sha256": "91f264e8559cc8ccecbcfc38abc77fff66533f5e95f666a4ba48238e69e190a4",
+      "scope": "Pi",
+      "license": "Unlicense OR MIT-0",
+      "vendored": true
+    },
+    {
+      "name": "alsa-lib",
+      "version": "do sistema (1.2.11 no build de 2026-10-25)",
+      "scope": "Pi, ligação dinâmica",
+      "license": "LGPL-2.1-or-later",
+      "vendored": false
+    },
+    {
+      "name": "SDL2",
+      "version": "do sistema (2.30.0 no build de 2026-10-25)",
+      "scope": "Pi, tela nativa, ligação dinâmica",
+      "license": "Zlib",
+      "vendored": false
+    },
+    {
+      "name": "SDL2_ttf",
+      "version": "do sistema (2.22.0 no build de 2026-10-25)",
+      "scope": "Pi, tela nativa, ligação dinâmica",
+      "license": "Zlib",
+      "vendored": false
     }
   ]
 }

@@ -1,8 +1,9 @@
 // DeckBridge no Linux (Raspberry Pi OS 64 bit, ADR-0007 opção C), fase 1: o motor do app (engine.cpp, sem mudança)
-// tocando pelo ALSA, sem tela. Carrega WAV nos dois decks (ou uma faixa sintética), toca e imprime a cada segundo
+// tocando pelo ALSA, sem tela. Carrega faixas do pendrive, de arquivos ou sintéticas, toca e imprime a cada segundo
 // a posição, os x-runs, as falhas de bloco, a CPU do processo e a RAM residente.
 //
-//   deckbridge_pi [--device hw:DDJ400] [--period 256] [--seconds 30] [--wav a.wav] [--wav b.wav] [--fx]
+//   deckbridge_pi [--device hw:DDJ400] [--period 256] [--seconds 30] [--wav a.mp3] [--wav b.flac] [--fx]
+//                 [--usb /media/PENDRIVE --track 3 --track 7]  (catálogo rekordbox, só leitura; faixas pela ordem)
 //                 [--midi DDJ] [--map ddj400-map.json]   (DDJ-400 pelo ALSA rawmidi; ADR-0008)
 //
 // O pendrive do rekordbox é só leitura: este programa só lê os arquivos que recebe e não grava nada.
@@ -12,6 +13,7 @@
 #include "control/deck_control.h"
 #include "control/leds.h"
 #include "control/midi_in.h"
+#include "app/session.h"
 
 #include <sys/mman.h>
 #include <sys/resource.h>
@@ -23,87 +25,9 @@
 
 namespace {
 
-struct Pcm16 {
-    std::vector<int16_t> left;
-    std::vector<int16_t> right;
-    int rate = 0;
-};
-
-uint32_t le32(const uint8_t *p) { return p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24); }
-uint16_t le16(const uint8_t *p) { return static_cast<uint16_t>(p[0] | (p[1] << 8)); }
-
-/** WAV PCM 16/24/32 bit ou float 32, mono ou estéreo, direto para int16 (sem uma cópia float da faixa). */
-bool readWav(const char *path, Pcm16 &out, std::string &error) {
-    std::ifstream file(path, std::ios::binary);
-    if (!file) {
-        error = "não abri o arquivo";
-        return false;
-    }
-    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    if (bytes.size() < 44 || std::memcmp(bytes.data(), "RIFF", 4) != 0 || std::memcmp(bytes.data() + 8, "WAVE", 4) != 0) {
-        error = "não é WAV";
-        return false;
-    }
-    int format = 0, channels = 0, bits = 0;
-    size_t at = 12;
-    const uint8_t *data = nullptr;
-    size_t dataSize = 0;
-    while (at + 8 <= bytes.size()) {
-        const uint32_t size = le32(&bytes[at + 4]);
-        const uint8_t *body = &bytes[at + 8];
-        const size_t room = bytes.size() - (at + 8);
-        if (std::memcmp(&bytes[at], "fmt ", 4) == 0 && size >= 16 && room >= 16) {
-            format = le16(body);
-            channels = le16(body + 2);
-            out.rate = static_cast<int>(le32(body + 4));
-            bits = le16(body + 14);
-            if (format == 0xFFFE && size >= 26 && room >= 26) format = le16(body + 24);
-        } else if (std::memcmp(&bytes[at], "data", 4) == 0) {
-            data = body;
-            dataSize = std::min<size_t>(size, room);
-            break;
-        }
-        at += 8 + size + (size & 1);
-    }
-    if (data == nullptr || channels < 1 || channels > 8 || out.rate <= 0) {
-        error = "WAV sem fmt/data";
-        return false;
-    }
-    const size_t width = static_cast<size_t>(bits / 8);
-    if (!((format == 1 && (bits == 16 || bits == 24 || bits == 32)) || (format == 3 && bits == 32))) {
-        error = "formato não suportado (PCM 16/24/32 ou float 32)";
-        return false;
-    }
-    const size_t frames = dataSize / (width * static_cast<size_t>(channels));
-    out.left.resize(frames);
-    out.right.resize(frames);
-    auto sample = [&](const uint8_t *p) -> float {
-        if (format == 3) {
-            float f;
-            std::memcpy(&f, p, 4);
-            return f;
-        }
-        if (bits == 16) return static_cast<float>(static_cast<int16_t>(le16(p))) / 32768.f;
-        if (bits == 24) {
-            int32_t v = p[0] | (p[1] << 8) | (p[2] << 16);
-            if (v & 0x800000) v |= ~0xFFFFFF;
-            return static_cast<float>(v) / 8388608.f;
-        }
-        return static_cast<float>(static_cast<int32_t>(le32(p))) / 2147483648.f;
-    };
-    for (size_t i = 0; i < frames; ++i) {
-        const uint8_t *frame = data + i * width * static_cast<size_t>(channels);
-        const float l = sample(frame);
-        const float r = channels > 1 ? sample(frame + width) : l;
-        out.left[i] = deckbridge::toPcm16(l);
-        out.right[i] = deckbridge::toPcm16(r);
-    }
-    return true;
-}
-
 /** Faixa sintética (bumbo, baixo e chimbal a 128 BPM) para testar sem música. */
-Pcm16 synthTrack(int seconds, double bpm, double bassHz) {
-    Pcm16 out;
+deckbridge::audio::Pcm16 synthTrack(int seconds, double bpm, double bassHz) {
+    deckbridge::audio::Pcm16 out;
     out.rate = 44100;
     const size_t frames = static_cast<size_t>(seconds) * 44100u;
     out.left.resize(frames);
@@ -150,6 +74,8 @@ int main(int argc, char **argv) {
     int seconds = 20;
     bool fx = false;
     std::vector<std::string> wavs;
+    std::string usb;
+    std::vector<int> trackNumbers;
     std::string midiFilter;
     bool midi = false;
     std::string mapPath = "ddj400-map.json";
@@ -162,12 +88,14 @@ int main(int argc, char **argv) {
         else if (arg == "--seconds") seconds = std::max(1, std::atoi(next().c_str()));
         else if (arg == "--wav") wavs.push_back(next());
         else if (arg == "--fx") fx = true;
+        else if (arg == "--usb") usb = next();
+        else if (arg == "--track") trackNumbers.push_back(std::atoi(next().c_str()));
         else if (arg == "--midi") {
             midi = true;
             midiFilter = next();
         } else if (arg == "--map") mapPath = next();
         else {
-            std::fprintf(stderr, "uso: %s [--device NOME] [--period N] [--periods N] [--seconds N] [--wav a.wav] [--wav b.wav] [--fx] [--midi FILTRO] [--map ARQ]\n", argv[0]);
+            std::fprintf(stderr, "uso: %s [--device NOME] [--period N] [--periods N] [--seconds N] [--wav a.mp3] [--wav b.flac] [--usb PASTA --track N --track M] [--fx] [--midi FILTRO] [--map ARQ]\n", argv[0]);
             return 2;
         }
     }
@@ -175,18 +103,48 @@ int main(int argc, char **argv) {
     if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) std::fprintf(stderr, "aviso: mlockall recusado (%s); siga sem travar a RAM\n", std::strerror(errno));
 
     ToneEngine &engine = ::engine();
+    // Faixas: do pendrive (--usb/--track), de arquivos (--wav, WAV/MP3/FLAC) ou sintéticas.
+    deckbridge::app::Catalog catalog;
+    double deckBpm[2] = {128.0, 128.0};
+    if (!usb.empty()) {
+        std::string error;
+        if (!catalog.open(usb, error)) {
+            std::fprintf(stderr, "pendrive %s: %s\n", usb.c_str(), error.c_str());
+            return 1;
+        }
+        std::printf("pendrive %s: %zu faixas, %zu playlists (só leitura)\n", usb.c_str(), catalog.tracks().size(), catalog.playlists().size());
+    }
     for (int deck = 0; deck < 2; ++deck) {
-        Pcm16 track;
+        if (!usb.empty() && deck < static_cast<int>(trackNumbers.size())) {
+            const int n = trackNumbers[static_cast<size_t>(deck)];
+            if (n < 1 || n > static_cast<int>(catalog.tracks().size())) {
+                std::fprintf(stderr, "deck %d: faixa %d fora do catálogo\n", deck + 1, n);
+                return 1;
+            }
+            deckbridge::app::LoadedTrack loaded;
+            std::string error;
+            if (!deckbridge::app::loadTrack(engine, deck, catalog, catalog.tracks()[static_cast<size_t>(n - 1)], loaded, error)) {
+                std::fprintf(stderr, "deck %d: %s: %s\n", deck + 1, catalog.tracks()[static_cast<size_t>(n - 1)].row.filePath.c_str(), error.c_str());
+                return 1;
+            }
+            deckBpm[deck] = loaded.bpm;
+            std::printf("deck %d: %s — %s, %.2f BPM, %.1f s, %zu batidas, %zu cues%s\n", deck + 1, loaded.info.row.title.c_str(),
+                        loaded.info.artist.c_str(), loaded.bpm, loaded.durationSec, loaded.analysis.beats.size(), loaded.analysis.cues.size(),
+                        loaded.truncated ? " (cortada no teto)" : "");
+            continue;
+        }
+        deckbridge::audio::Pcm16 track;
         if (deck < static_cast<int>(wavs.size())) {
             std::string error;
-            if (!readWav(wavs[static_cast<size_t>(deck)].c_str(), track, error)) {
+            if (!deckbridge::audio::decodeFile(wavs[static_cast<size_t>(deck)], track, error)) {
                 std::fprintf(stderr, "deck %d: %s: %s\n", deck + 1, wavs[static_cast<size_t>(deck)].c_str(), error.c_str());
                 return 1;
             }
         } else {
             track = synthTrack(std::max(seconds + 5, 30), 128.0, deck == 0 ? 55.0 : 49.0);
         }
-        engine.installDeck(deck, std::move(track.left), std::move(track.right), track.rate, 128.f, 0.f, nullptr, 0, -1.f, -1.f);
+        const int rate = track.rate;
+        engine.installDeck(deck, std::move(track.left), std::move(track.right), rate, 128.f, 0.f, nullptr, 0, -1.f, -1.f);
     }
     const std::string opened = engine.start(0, 3);
     std::printf("aparelho %s: aberto=%s canais=%s taxa=%s latência=%s ms formato=%s erro=%s\n",
@@ -210,8 +168,8 @@ int main(int argc, char **argv) {
             std::fprintf(stderr, "mapa MIDI vazio ou ausente: %s\n", mapPath.c_str());
             return 1;
         }
-        control.setBpm(0, 128.0);
-        control.setBpm(1, 128.0);
+        control.setBpm(0, deckBpm[0]);
+        control.setBpm(1, deckBpm[1]);
         const std::string port = midiIn.open(midiFilter, [&](const deckbridge::control::MidiMessage &m) {
             midiMessages.fetch_add(1);
             if (auto action = deckbridge::control::interpretPerformance(map.lookup(m.status, m.data1), m.data2, tempo)) control.apply(*action);

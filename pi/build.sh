@@ -7,7 +7,7 @@ set -eu
 cd "$(dirname "$0")/.."
 OUT=${OUT:-pi/build}
 mkdir -p "$OUT"
-FLAGS="-std=c++17 -O2 -pthread -Wall -I pi/alsa -I android/app/src/main/cpp"
+FLAGS="-std=c++17 -O2 -fwrapv -pthread -Wall -I pi/alsa -I android/app/src/main/cpp"
 if [ "${1:-}" = "arm64" ]; then
     # Cabeçalhos do ALSA são os mesmos nas duas arquiteturas; só eles entram, não o resto do /usr/include do PC.
     mkdir -p "$OUT/inc"
