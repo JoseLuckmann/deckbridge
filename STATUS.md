@@ -233,4 +233,5 @@ A constituição 1.1.0 está em `.specify/memory/constitution.md`. A emenda é a
 - Lógica única: o controle e os LEDs da DDJ-400 agora são uma implementação só, em C++, para o app e para o Pi. O motor já era um só.
 - Duplicado de propósito: o leitor do pendrive (Kotlin no app, C++ no Pi). Os dois estão presos pelo `RekordboxGoldenTest`.
 - Demonstração no PC (Xvfb): a tela do Pi mixou duas faixas por roteiro MIDI da DDJ-400, com Beat FX, loops, SYNC e RMX (cenas e X-PAD). Ver `pi/demo/README.md`.
+- Library Manager de desktop (ADR-0009, OD-25): programa novo em `desktop/` que organiza a biblioteca do pendrive à mão (metadados e playlists) e é o único que escreve no pendrive, com backup, troca atômica, verificação e restauração. Lido por três leitores independentes (Kotlin, C++ do Pi, Kaitai), 31 testes. **Nenhum player nem o rekordbox leu um banco gravado por ele (`BLOCKED_HARDWARE`)**: teste numa cópia primeiro. Falta importar áudio com análise, escrever o ANLZ, renomear arquivos e a automação. Ver `desktop/README.md`.
 - Nada disto rodou num Pi, num tablet nem na DDJ-400 (`BLOCKED_HARDWARE`).

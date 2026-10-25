@@ -775,3 +775,22 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - Pico do master em −0,2 dBFS antes do limitador da exportação.
   - O vídeo e as faixas ficaram fora do repositório: são da sessão local do dono.
 - Não verificado (`BLOCKED_HARDWARE`): no Pi real, com a DDJ-400 e o som numa placa de verdade. Ninguém ouviu a mixagem; não há julgamento de ouvido.
+
+## 2026-10-25 — Library Manager de desktop: leitura, edição manual e gravação segura do pendrive
+
+- Pedido do dono: uma versão para o computador, fora da performance, para criar playlists, organizar e (no futuro) classificar, renomear e preencher metadados, **com escrita no pendrive** no padrão da Pioneer. Agora a interface e a parte manual; a automação fica para depois.
+- Decisão: ADR-0009. Escrita só no programa de desktop, por pedido explícito, com backup local, troca atômica, verificação e restauração. O ADR-0002, o AGENTS.md e a spec (OD-25) foram emendados só para esse programa. Performance continua somente leitura.
+- Tecnologia: Compose Desktop em build Gradle separado (`desktop/`), compilando os mesmos fontes de `logic/` do app (puro JVM). Alternativa descartada: SDL2, que foi medido para o Pi e não serve a telas de tabela e formulário.
+- Núcleo (`desktop/src/main/kotlin/os/deckbridge/manager/`):
+  - `pdb/RawPdb.kt`: leitura crua das tabelas; gravação que só reescreve as tabelas editadas, em páginas novas no fim.
+  - `pdb/Rows.kt`, `pdb/Library.kt`: linhas de faixa, nomes e playlists; editor com metadados e playlists.
+  - `volume/SafeWriter.kt`, `volume/Verifier.kt`: backup, troca atômica, conferência, restauração.
+  - `ManagerModel.kt` e `ui/`: fila de mudanças, telas.
+- Referência externa: especificação aberta do Crate Digger (`rekordbox_pdb.ksy`, commit `7c9d535`, EPL-2.0/MPL-2.0/LGPL-3.0), compilada para Python com o compilador Kaitai 0.11.0 (`desktop/tools/setup_kaitai.sh`). Nada disso entra no repositório.
+- Erros achados e corrigidos no caminho:
+  - Eu lia o id do artista no byte 0 da linha, mas ele fica no byte 4. Os testes de referência quebrada pegaram na hora.
+  - O teste de "artista sem faixas sai do banco" escolhia um artista que também era de álbum, que o gravador mantém de propósito.
+  - Na interface: cabeçalhos de Título/Artista/Álbum sem largura, painel modal que cobria só o topo e texto de status cortado. Achados olhando as capturas, corrigidos.
+- Evidência (PC x86_64): 31 testes, 0 falhas, 0 ignorados (detalhe em `desktop/README.md`). Três leitores independentes (Kotlin, C++ do Pi, Kaitai) veem o que o plano diz. A janela real abriu sob Xvfb. Capturas em `docs/ui/desktop-*.png`.
+- Não verificado (`BLOCKED_HARDWARE`): nenhum player nem o rekordbox leu um banco gravado por este programa; nenhum pendrive real foi usado; sem export real do rekordbox para comparar byte a byte. Risco registrado no ADR-0009 e no README.
+- Próximo: importar áudio com análise, escrever ANLZ (grade e cues), renomear arquivos, remover faixa, compactar pela tela.
