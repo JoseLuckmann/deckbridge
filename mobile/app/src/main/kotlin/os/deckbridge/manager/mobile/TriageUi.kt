@@ -83,7 +83,9 @@ private fun TrackCard(app: ManagerApp, t: TrackItem) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(t.artist.ifEmpty { "—" }, color = Palette.muted, fontSize = 16.sp, maxLines = 1)
-        Text(listOf(if (t.bpm > 0) "%.1f".format(t.bpm) else "—", t.key.ifEmpty { "—" }, formatDuration(t.durationSeconds)).joinToString("  ·  "), color = Palette.mutedBright, fontSize = 15.sp, fontFamily = Mono, modifier = Modifier.padding(top = 4.dp))
+        Text(listOf(if (t.bpm > 0) "%.1f".format(t.bpm) else "—", t.key.ifEmpty { "—" }, formatDuration(t.durationSeconds)).joinToString("  ·  "), color = Palette.mutedBright, fontSize = 15.sp, fontFamily = Mono, modifier = Modifier.padding(top = 4.dp, bottom = 6.dp))
+        // Tocar na onda ouve daquele ponto: dá para pular direto para o drop.
+        PlayableWave(app, t, 64.dp)
         // Botão de tocar na cor do PLAY do player: verde-claro com texto escuro.
         Box(Modifier.fillMaxWidth().padding(top = 6.dp).height(52.dp).clip(RbShape).background(if (playing) Palette.surfaceHigh else Palette.playBg).clickable { app.preview.toggle(t) }, contentAlignment = Alignment.Center) {
             Text(if (playing) "■ PARAR" else "▶ OUVIR", color = if (playing) Palette.blue else Palette.playInk, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
@@ -96,7 +98,9 @@ private fun Controls(app: ManagerApp, t: TrackItem, at: Int, total: Int, compact
     val big = if (compact) 52.dp else 64.dp
     val mid = if (compact) 44.dp else 56.dp
     val m = app.model
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     fun rate(n: Int) {
+        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
         m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = n)), "Nota $n em \"${t.title}\"")
         advance()
     }

@@ -28,6 +28,9 @@ class Preview(private val app: ManagerApp) {
 
     val isPlaying: Boolean get() = player != null
 
+    /** Posição atual em ms (0 se parado), para a cabeça andar sobre a onda. */
+    fun positionMs(): Int = runCatching { player?.currentPosition ?: 0 }.getOrDefault(0)
+
     fun toggle(t: TrackItem, fromMs: Int = 0) {
         if (playingId == t.id && fromMs == 0) {
             stop()

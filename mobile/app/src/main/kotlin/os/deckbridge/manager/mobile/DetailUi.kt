@@ -77,7 +77,9 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when (app.detailPage) {
                 DetailPage.MARK -> {
+                    PlayableWave(app, t)
                     Marking(app, t)
+                    PlaylistChips(app, t)
                     AnalysisSection(app, t)
                 }
                 DetailPage.CUES -> CueSection(app, t)
@@ -117,6 +119,32 @@ private fun Marking(app: ManagerApp, t: TrackItem) {
             }
         }
     }
+}
+
+/** Em que playlists a faixa está: tocar liga e desliga. "＋" cria uma nova já com a faixa. */
+@Composable
+private fun PlaylistChips(app: ManagerApp, t: TrackItem) {
+    val m = app.model
+    val v = m.view ?: return
+    var naming by remember { mutableStateOf(false) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(v.playlists.filter { !it.folder }.size) { n ->
+            val p = v.playlists.filter { !it.folder }[n]
+            val inIt = t.id in v.entries[p.id].orEmpty()
+            FilterChip(selected = inIt, onClick = {
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                if (inIt) m.submit(Edit.RemoveFromPlaylist(p.id, listOf(t.id)), "Tirar \"${t.title}\" de \"${p.name}\"")
+                else m.submit(Edit.AddToPlaylist(p.id, listOf(t.id)), "Adicionar \"${t.title}\" a \"${p.name}\"")
+            }, label = { Text((if (inIt) "✓ " else "") + p.name, maxLines = 1) })
+        }
+        item { FilterChip(selected = false, onClick = { naming = true }, label = { Text("＋") }) }
+    }
+    if (naming) NameDialog("Nova playlist", confirm = "Criar", onName = { name ->
+        val id = m.nextPlaylistId()
+        if (m.submit(Edit.CreatePlaylist(id, 0, name, false), "Criar playlist \"$name\"")) m.submit(Edit.AddToPlaylist(id, listOf(t.id)), "Adicionar \"${t.title}\" a \"$name\"")
+        naming = false
+    }, onClose = { naming = false })
 }
 
 @Composable
@@ -227,11 +255,16 @@ private fun GridEditor(m: ManagerModel, t: TrackItem, files: ManagerModel.TrackF
  * Toque ou arraste para mudar a posição.
  */
 @Composable
-private fun Wave(files: ManagerModel.TrackFilesView, durationMs: Int, pos: Int, onPos: (Int) -> Unit) {
+private fun Wave(files: ManagerModel.TrackFilesView, durationMs: Int, pos: Int, onPos: (Int) -> Unit) =
+    ColorWaveView(files, durationMs, pos, 96.dp, marks = true, onPos = onPos, drag = true)
+
+/** A onda do player em qualquer tamanho. [marks] desenha grade e cues; [pos] negativo esconde a cabeça. */
+@Composable
+fun ColorWaveView(files: ManagerModel.TrackFilesView, durationMs: Int, pos: Int, height: androidx.compose.ui.unit.Dp, marks: Boolean, drag: Boolean = false, onPos: (Int) -> Unit) {
     Canvas(
-        Modifier.fillMaxWidth().height(96.dp).background(Palette.waveBg)
+        Modifier.fillMaxWidth().height(height).background(Palette.waveBg)
             .pointerInput(durationMs) { detectTapGestures { o -> onPos((o.x / size.width * durationMs).toInt().coerceIn(0, durationMs)) } }
-            .pointerInput(durationMs) { detectDragGestures { change, _ -> onPos((change.position.x / size.width * durationMs).toInt().coerceIn(0, durationMs)) } },
+            .let { if (drag) it.pointerInput(durationMs) { detectDragGestures { change, _ -> onPos((change.position.x / size.width * durationMs).toInt().coerceIn(0, durationMs)) } } else it },
     ) {
         val w = size.width
         val h = size.height
@@ -255,7 +288,7 @@ private fun Wave(files: ManagerModel.TrackFilesView, durationMs: Int, pos: Int, 
             drawLine(Palette.line, Offset(0f, mid), Offset(w, mid), 2f)
         }
         // Grade só como marcas curtas em cima e embaixo, para não cobrir a onda.
-        for (b in files.beats) {
+        if (marks) for (b in files.beats) {
             val x = b.timeMs.toFloat() / durationMs * w
             val bar = b.inBar == 1
             val len = if (bar) h * 0.16f else h * 0.07f
@@ -263,15 +296,39 @@ private fun Wave(files: ManagerModel.TrackFilesView, durationMs: Int, pos: Int, 
             drawLine(color, Offset(x, 0f), Offset(x, len), if (bar) 2f else 1f)
             drawLine(color, Offset(x, h - len), Offset(x, h), if (bar) 2f else 1f)
         }
-        for (c in files.cues) {
+        if (marks) for (c in files.cues) {
             val x = c.timeMs.toFloat() / durationMs * w
             val color = if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.orange
             drawLine(color, Offset(x, 0f), Offset(x, h), 2f)
             drawRect(color, Offset(x - 6f, 0f), Size(12f, 12f))
         }
-        val px = pos.toFloat() / durationMs * w
-        drawLine(Palette.text, Offset(px, 0f), Offset(px, h), 3f)
+        if (pos >= 0) {
+            val px = pos.toFloat() / durationMs * w
+            drawLine(Palette.text, Offset(px, 0f), Offset(px, h), 3f)
+        }
     }
+}
+
+/**
+ * Onda pequena que toca: tocar num ponto ouve dali; enquanto toca, a cabeça anda. Usada na aba MARCAR e na triagem,
+ * para decidir sem abrir os cues.
+ */
+@Composable
+fun PlayableWave(app: ManagerApp, t: TrackItem, height: androidx.compose.ui.unit.Dp = 56.dp) {
+    val m = app.model
+    val files = remember(t.id, t.analyzePath, m.pending.size) { m.trackFiles(t) }
+    if (files.error != null) return
+    val duration = files.durationMs.coerceAtLeast(1)
+    var head by remember(t.id) { mutableIntStateOf(-1) }
+    val playing = app.preview.playingId == t.id
+    androidx.compose.runtime.LaunchedEffect(playing) {
+        while (playing && app.preview.playingId == t.id) {
+            head = app.preview.positionMs()
+            kotlinx.coroutines.delay(100)
+        }
+        head = -1
+    }
+    ColorWaveView(files, duration, if (playing) head else -1, height, marks = false) { ms -> app.preview.toggle(t, fromMs = ms.coerceAtLeast(1)) }
 }
 
 @Composable

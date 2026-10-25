@@ -92,4 +92,12 @@ class SmartTest {
         val v = view(listOf(t(1, rating = 5), t(2), t(3, rating = 1), t(4)))
         assertEquals(listOf(2, 4, 1, 3), Smart.triageQueue(v))
     }
+
+    @Test fun `duplicata por titulo, artista e duracao`() {
+        val v = view(listOf(t(1, title = "Night Signal", artist = "Aurora Drive").copy(durationSeconds = 300)))
+        assertEquals(1, Smart.findDuplicate(v, "  night   SIGNAL ", "aurora drive", 301)?.id)
+        assertNull(Smart.findDuplicate(v, "Night Signal", "Aurora Drive", 310), "duração muito diferente: outra versão")
+        assertNull(Smart.findDuplicate(v, "Night Signal", "Outro Artista", 300))
+        assertNull(Smart.findDuplicate(v, "", "", 300))
+    }
 }

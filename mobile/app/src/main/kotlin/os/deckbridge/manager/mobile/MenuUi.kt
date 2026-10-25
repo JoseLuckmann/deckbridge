@@ -31,6 +31,7 @@ fun MenuTab(app: ManagerApp, actions: Actions) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Section("Biblioteca")
         Line("Importar músicas", "") { actions.pickAudio() }
+        Line("Importar pasta", "") { actions.pickFolder() }
         Line("Analisar todas", "${counts[QuickFilter.UNANALYZED] ?: 0}") { app.analyzeAll() }
         Line("Arrumar nomes", "") { app.openTidy() }
         Line("Triagem", "${counts[QuickFilter.UNRATED] ?: 0}") { app.startTriage() }

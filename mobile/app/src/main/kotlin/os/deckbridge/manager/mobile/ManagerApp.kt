@@ -237,47 +237,83 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
 
     fun importAudio(uris: List<Uri>) {
         if (uris.isEmpty()) return
-        background("Importando ${uris.size} faixa(s)") { j ->
-            val cache = File(context.cacheDir, "importar").apply { deleteRecursively(); mkdirs() }
-            val edits = ArrayList<Pair<Edit, String>>()
-            var failed = 0
-            var imported = 0
-            val firstError = StringBuilder()
-            // Em lotes de 6: grava no aparelho e solta as análises da memória antes de seguir.
-            fun flush() {
-                if (edits.isEmpty()) return
-                imported += model.submitAll(edits)
-                edits.clear()
-                model.apply(null) { j.text = it }
-            }
-            try {
-                uris.forEachIndexed { n, uri ->
+        background("Importando") { j -> importInto(j, uris.mapIndexed { n, u -> u to (displayName(u) ?: "faixa-$n") }) }
+    }
+
+    /** Importa todos os áudios de uma pasta (e subpastas) escolhida no seletor. */
+    fun importFolder(tree: Uri) {
+        background("Importando pasta") { j ->
+            j.text = "Procurando músicas"
+            val root = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, tree) ?: throw ExportException("E_SAF_ROOT", "Pasta ilegível")
+            val found = ArrayList<Pair<Uri, String>>()
+            fun walk(dir: androidx.documentfile.provider.DocumentFile) {
+                for (f in dir.listFiles()) {
                     if (j.cancelled) throw Cancelled()
-                    val name = displayName(uri) ?: "faixa-$n"
-                    j.text = "Lendo e analisando ${n + 1}/${uris.size}: $name"
-                    val copy = File(cache, "%03d-%s".format(n, name.replace(Regex("[\\\\/:*?\"<>|]"), "_")))
-                    try {
-                        context.contentResolver.openInputStream(uri)!!.use { i -> copy.outputStream().use { i.copyTo(it) } }
-                        val p = ImportPrep.prepare(copy)
-                        edits += Edit.ImportTrack(p, p.info.title, p.info.artist, p.info.album, p.info.genre, p.read.keyName, p.info.year, p.info.trackNumber, p.suggestedCues) to "Importar \"${p.info.title}\""
-                        if (edits.size >= 6) {
-                            flush()
-                            copy.parentFile?.listFiles()?.forEach { f -> if (f != copy) f.delete() }
-                        }
-                    } catch (e: Cancelled) {
-                        throw e
-                    } catch (e: Exception) {
-                        failed++
-                        if (firstError.isEmpty()) firstError.append("$name: ${e.message}")
-                    }
+                    val name = f.name ?: continue
+                    if (f.isDirectory) walk(f) else if (os.deckbridge.manager.volume.isAudio(name)) found += f.uri to name
                 }
-                flush()
-                pruneBackups()
-                if (imported > 0) say("$imported importadas" + if (failed > 0) " · $failed falharam" else "", undo = false)
-                else say("Não importou: $firstError", error = true)
-            } finally {
-                cache.deleteRecursively()
             }
+            walk(root)
+            if (found.isEmpty()) say("Nenhuma música na pasta", error = true) else importInto(j, found.sortedBy { it.second.lowercase() })
+        }
+    }
+
+    /**
+     * Copia, confere se já existe, analisa e grava em lotes de 6 (grava no aparelho e solta as análises da memória antes
+     * de seguir). Música que já está na biblioteca (mesmo título, artista e duração) é pulada.
+     */
+    private fun importInto(j: Job, items: List<Pair<Uri, String>>) {
+        val cache = File(context.cacheDir, "importar").apply { deleteRecursively(); mkdirs() }
+        val edits = ArrayList<Pair<Edit, String>>()
+        val seen = HashSet<String>()
+        var failed = 0
+        var imported = 0
+        var dups = 0
+        val firstError = StringBuilder()
+        fun flush() {
+            if (edits.isEmpty()) return
+            imported += model.submitAll(edits)
+            edits.clear()
+            model.apply(null) { j.text = it }
+        }
+        try {
+            items.forEachIndexed { n, (uri, name) ->
+                if (j.cancelled) throw Cancelled()
+                j.text = "${n + 1}/${items.size} · $name"
+                val copy = File(cache, "%03d-%s".format(n, name.replace(Regex("[\\\\/:*?\"<>|]"), "_")))
+                try {
+                    context.contentResolver.openInputStream(uri)!!.use { i -> copy.outputStream().use { i.copyTo(it) } }
+                    val info = os.deckbridge.manager.importer.AudioIo.probe(copy)
+                    val key = "${info.title.lowercase().trim()}|${info.artist.lowercase().trim()}"
+                    val v = model.view
+                    if ((v != null && Smart.findDuplicate(v, info.title, info.artist, info.durationSec) != null) || !seen.add(key)) {
+                        dups++
+                        copy.delete()
+                        return@forEachIndexed
+                    }
+                    val p = ImportPrep.prepare(copy)
+                    edits += Edit.ImportTrack(p, p.info.title, p.info.artist, p.info.album, p.info.genre, p.read.keyName, p.info.year, p.info.trackNumber, p.suggestedCues) to "Importar \"${p.info.title}\""
+                    if (edits.size >= 6) {
+                        flush()
+                        copy.parentFile?.listFiles()?.forEach { f -> if (f != copy) f.delete() }
+                    }
+                } catch (e: Cancelled) {
+                    throw e
+                } catch (e: Exception) {
+                    failed++
+                    if (firstError.isEmpty()) firstError.append("$name: ${e.message}")
+                }
+            }
+            flush()
+            pruneBackups()
+            val parts = buildList {
+                if (imported > 0) add("$imported importadas")
+                if (dups > 0) add("$dups já estavam")
+                if (failed > 0) add("$failed falharam")
+            }
+            if (imported == 0 && dups == 0) say("Não importou: $firstError", error = true) else say(parts.joinToString(" · "))
+        } finally {
+            cache.deleteRecursively()
         }
     }
 

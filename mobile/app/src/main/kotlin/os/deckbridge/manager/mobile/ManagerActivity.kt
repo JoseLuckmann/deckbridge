@@ -62,7 +62,8 @@ class ManagerActivity : ComponentActivity() {
 private fun Content(app: ManagerApp) {
     val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> -> app.importAudio(uris) }
     val pickUsb = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? -> if (uri != null) app.chooseUsb(uri) }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? -> if (uri != null) app.importFolder(uri) }
     LaunchedEffect(Unit) { if (!app.model.isOpen) app.start() }
-    val actions = remember { Actions(pickAudio = { pickAudio.launch(arrayOf("audio/*")) }, pickUsb = { pickUsb.launch(null) }) }
+    val actions = remember { Actions(pickAudio = { pickAudio.launch(arrayOf("audio/*")) }, pickUsb = { pickUsb.launch(null) }, pickFolder = { pickFolder.launch(null) }) }
     ManagerRoot(app, actions)
 }

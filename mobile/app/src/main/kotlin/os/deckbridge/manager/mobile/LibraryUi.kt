@@ -146,8 +146,9 @@ private fun EmptyList(app: ManagerApp, actions: Actions) {
     Column(Modifier.fillMaxWidth().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (m.view?.tracks?.isEmpty() == true) {
             Text("A biblioteca está vazia.", color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text("Importe músicas do aparelho (WAV, MP3, FLAC, AAC). Elas são analisadas aqui mesmo: BPM, tom, grade e cues.", color = Palette.muted, fontSize = 14.sp)
+            Text("WAV · MP3 · FLAC · AAC", color = Palette.muted, fontSize = 14.sp)
             Button(onClick = actions.pickAudio, modifier = Modifier.height(52.dp)) { Text("IMPORTAR MÚSICAS") }
+            OutlinedButton(onClick = actions.pickFolder, modifier = Modifier.height(48.dp)) { Text("IMPORTAR PASTA") }
         } else {
             Text("Nenhuma faixa nesta lista.", color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Text(if (m.filter != QuickFilter.ALL) m.filter.hint else "Mude a busca.", color = Palette.muted, fontSize = 14.sp)

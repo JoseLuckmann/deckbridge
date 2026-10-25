@@ -165,6 +165,19 @@ object Smart {
         return out
     }
 
+    private fun norm(x: String) = x.lowercase().replace(Regex("\\s+"), " ").trim()
+
+    /**
+     * A faixa que já está na biblioteca com o mesmo título e artista (sem diferença de caixa e espaços) e duração a até
+     * 2 s; null se não há. Serve para não importar a mesma música duas vezes.
+     */
+    fun findDuplicate(view: LibraryView, title: String, artist: String, durationSec: Int): TrackItem? {
+        val t = norm(title)
+        val a = norm(artist)
+        if (t.isEmpty()) return null
+        return view.tracks.firstOrNull { norm(it.title) == t && norm(it.artist) == a && kotlin.math.abs(it.durationSeconds - durationSec) <= 2 }
+    }
+
     /** Fila da triagem: sem nota primeiro, na ordem em que foram importadas; depois as já marcadas. */
     fun triageQueue(view: LibraryView): List<Int> = view.tracks.sortedWith(compareBy({ it.rating != 0 }, { it.id })).map { it.id }
 

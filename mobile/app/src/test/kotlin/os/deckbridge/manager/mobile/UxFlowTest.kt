@@ -93,4 +93,19 @@ class UxFlowTest {
         assertTrue(a.model.rows().all { it.rating >= 4 })
         assertTrue(a.model.rows().isNotEmpty())
     }
+
+    @Test fun playlistChipsOnTheTrackToggleMembershipInOneTap() {
+        val a = app()
+        a.hideGuide()
+        val t = a.model.view!!.tracks.first { it.title == "Night Signal" }
+        assertTrue(t.id !in a.model.view!!.entries[2].orEmpty())
+        a.detailId = t.id
+        rule.setContent { ManagerRoot(a, noActions) }
+        rule.onNodeWithText("Aquecimento").performClick()
+        rule.waitForIdle()
+        assertTrue(t.id in a.model.view!!.entries[2].orEmpty())
+        rule.onNodeWithText("✓ Aquecimento").performClick()
+        rule.waitForIdle()
+        assertTrue(t.id !in a.model.view!!.entries[2].orEmpty())
+    }
 }

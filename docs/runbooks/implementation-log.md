@@ -868,3 +868,12 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Desktop: topo com BIBLIOTECA, nome, contagem, Importar, Exportar e ⋯ (Organizar, Renomear, Trazer, Cópias, Abrir outra); boas-vindas com três botões (Neste computador, pendrives achados, Outra pasta); filtros com rótulos curtos; inspetor com cabeçalho da faixa (BPM · tom · tempo), nota no topo e tom/selo/ano/nº em "Mais"; barra de baixo "● 3 na fila · ↶ · Descartar · Gravar…"; confirmação de gravar numa linha; botões de playlist só quando há uma escolhida.
 - Evidência: mobile 29 testes, desktop 6, core (ManagerModelTest) verde. A demonstração usa faixas de clique sintético: a onda colorida sai de uma cor só; com música real ela varia.
 - Não verificado: aparelho e uso real.
+
+## 2026-10-25 — Rodada 4: ouvir pela onda, playlists na faixa, importar pasta, pular repetidas
+
+- Onda colorida pequena na aba MARCAR e na triagem: tocar num ponto ouve dali; enquanto toca, a cabeça anda (posição do MediaPlayer a cada 100 ms, só enquanto toca).
+- MARCAR mostra as playlists como botões: tocar coloca ou tira a faixa; "＋" cria uma nova já com ela. Vibração curta ao marcar (playlists e notas da triagem).
+- Importar pasta inteira (MENU e tela vazia), com subpastas, em ordem alfabética.
+- Importação pula a música que já está na biblioteca (mesmo título e artista, duração a até 2 s; `Smart.findDuplicate`, com teste) e repetidas dentro do mesmo lote; o aviso diz "N importadas · N já estavam · N falharam".
+- Evidência: mobile 30 testes (novo: chip de playlist liga e desliga em um toque), core `SmartTest` verde.
+- Não verificado: aparelho (vibração, cabeça andando com áudio real, seletor de pasta com pendrive/cartão).
