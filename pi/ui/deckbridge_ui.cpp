@@ -5,6 +5,15 @@
 //
 //   deckbridge_ui --usb /media/PENDRIVE [--track 3 --track 7] [--size 1024x600] [--device hw:..] [--midi DDJ]
 //                 [--map ddj400-map.json] [--seconds N] [--shot arquivo.bmp --shot-at 4.5] [--browse] [--play] [--midi-demo]
+//                 [--script roteiro.txt] [--record quadros.bgra]
+//
+// --script: bytes MIDI da DDJ-400 no tempo da música (ver pi/demo/README.md). Linhas:
+//   at SEG BYTES...        segundos desde o começo do roteiro
+//   bar D COMPASSO BYTES...  quando o deck D (1 ou 2) chega ao compasso (pela grade da faixa)
+//   ramp D DE ATE STATUS NOTA V0 V1   CC de V0 a V1 entre os compassos DE e ATE (a cada 40 ms)
+//   panel D COMPASSO 0|1   abre/fecha o painel RMX (o toque no botão RMX da tela)
+//   end D COMPASSO         termina a demonstração
+// --record: quadros BGRA crus a 30 qps de tempo de relógio (para o ffmpeg; o quadro se repete se a tela atrasar).
 
 #define DECKBRIDGE_NO_JNI 1
 #include "../../android/app/src/main/cpp/engine.cpp"
@@ -19,7 +28,9 @@
 
 #include <cstdio>
 #include <deque>
+#include <fstream>
 #include <functional>
+#include <sstream>
 #include <list>
 #include <unordered_map>
 
@@ -146,10 +157,10 @@ public:
         SDL_SetRenderDrawColor(r_, c.r, c.g, c.b, c.a);
         SDL_RenderDrawLine(r_, x, y0, x, y1);
     }
-    void button(const SDL_Rect &rect, const std::string &label, bool selected = false) {
+    void button(const SDL_Rect &rect, const std::string &label, bool selected = false, int font = 1) {
         fill(rect, selected ? kBlue : kPanelRaised);
         frame(rect, selected ? kBlue : kLine);
-        text_.draw(label, rect.x + rect.w / 2, rect.y + rect.h / 2 - Y(7), selected ? kBg : kBlue, 1, 1);
+        text_.draw(label, rect.x + rect.w / 2, rect.y + rect.h / 2 - Y(7), selected ? kBg : kBlue, font, 1);
     }
 
     /** Onda de detalhe em volta da cabeça (no meio), com a grade e as hot cues. Uma coluna por pixel. */
@@ -268,6 +279,7 @@ int main(int argc, char **argv) {
     std::string usb, mapPath = "ddj400-map.json", midiFilter = "DDJ", shot;
     double shotAt = 3.0;
     bool midi = false, browse = false, play = false, midiDemo = false;
+    std::string scriptPath, recordPath;
     std::vector<int> trackNumbers;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -286,6 +298,8 @@ int main(int argc, char **argv) {
         else if (arg == "--browse") browse = true;
         else if (arg == "--play") play = true;
         else if (arg == "--midi-demo") midiDemo = true;
+        else if (arg == "--script") scriptPath = next();
+        else if (arg == "--record") recordPath = next();
         else {
             std::fprintf(stderr, "uso: %s --usb PASTA [--track N] [--size 1024x600] [--device NOME] [--midi FILTRO] [--map ARQ] [--seconds N] [--shot a.bmp --shot-at S] [--browse]\n", argv[0]);
             return 2;
@@ -320,7 +334,7 @@ int main(int argc, char **argv) {
             LoadedTrack loaded;
             std::string error;
             if (deckbridge::app::loadTrack(engine, deck, catalog, catalog.tracks()[index], loaded, error)) {
-                control.setBpm(deck, loaded.bpm);
+                control.setGrid(deck, loaded.gridOriginSec, loaded.bpm);
                 std::lock_guard<std::mutex> lock(deckMutex);
                 decks[deck].track = std::move(loaded);
                 decks[deck].loaded = true;
@@ -334,6 +348,7 @@ int main(int argc, char **argv) {
     while (loading.load() > 0) std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
     const std::string opened = engine.start(0, 3);
+    const auto audioOpenedAt = std::chrono::steady_clock::now();
     const bool audioOk = opened.find("opened=true") != std::string::npos;
     engine.setMix(1.f, 1.f, 1.f, 1.f, 0.5f, false, false);
     if (play) {
@@ -350,7 +365,7 @@ int main(int argc, char **argv) {
     deckbridge::control::TempoAssembler tempo;
     std::unique_ptr<deckbridge::control::MidiMap> map;
     std::function<void(const deckbridge::control::MidiMessage &)> onMessage;
-    if (midi || midiDemo) {
+    if (midi || midiDemo || !scriptPath.empty()) {
         map = std::make_unique<deckbridge::control::MidiMap>(deckbridge::control::MidiMap::fromFile(mapPath));
         onMessage = [&](const deckbridge::control::MidiMessage &m) {
             auto a = deckbridge::control::interpretPerformance(map->lookup(m.status, m.data1), m.data2, tempo);
@@ -385,6 +400,128 @@ int main(int argc, char **argv) {
         });
     }
 
+    // Roteiro no tempo da música: o mesmo `onMessage` da DDJ-400, agendado pelo compasso da grade de cada deck.
+    std::atomic<bool> scriptDone{false};
+    std::thread scriptThread;
+    if (!scriptPath.empty()) {
+        scriptThread = std::thread([&]() {
+            std::ifstream in(scriptPath);
+            deckbridge::control::MidiAssembler assembler;
+            std::vector<deckbridge::control::MidiMessage> out;
+            const auto start = std::chrono::steady_clock::now();
+            std::mutex sendMutex;  // o roteiro e as rampas mandam pelo mesmo montador
+            auto send = [&](const std::vector<uint8_t> &bytes) {
+                std::lock_guard<std::mutex> lock(sendMutex);
+                out.clear();
+                assembler.push(bytes.data(), bytes.size(), out);
+                for (const auto &m : out) onMessage(m);
+            };
+            auto barTime = [&](int deck, double bar) {
+                return control.gridOrigin(deck) + bar * 240.0 / std::max(1.0, control.bpm(deck));
+            };
+            // Relógio "tocado" de cada deck: anda com a posição, mas um salto para trás (volta do loop, beat jump)
+            // conta como tempo tocado na velocidade de antes. Assim "bar 1 11" depois de um loop no 9 chega na
+            // hora musical certa, em vez de esperar uma posição que o loop nunca deixa alcançar.
+            std::atomic<double> played[2]{0.0, 0.0};
+            std::atomic<bool> clockRunning{true};
+            std::thread clock([&]() {
+                double last[2], speed[2]{0.0, 0.0};
+                auto prev = std::chrono::steady_clock::now();
+                for (int d = 0; d < 2; ++d) played[d] = last[d] = engine.positionSeconds(d);
+                while (clockRunning.load()) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                    const auto now = std::chrono::steady_clock::now();
+                    const double dt = std::chrono::duration<double>(now - prev).count();
+                    prev = now;
+                    for (int d = 0; d < 2; ++d) {
+                        const double pos = engine.positionSeconds(d), delta = pos - last[d];
+                        last[d] = pos;
+                        if (!control.playing(d)) {
+                            played[d] = pos;  // parado (carga, cue): o relógio volta a ser a posição
+                            speed[d] = 0.0;
+                        } else if (delta < 0.0 || delta > 0.25) {
+                            played[d] = played[d] + speed[d] * dt;
+                        } else {
+                            played[d] = played[d] + delta;
+                            if (dt > 0.0) speed[d] = delta / dt;
+                        }
+                    }
+                }
+            });
+            auto waitBar = [&](int deck, double bar) {
+                const double target = barTime(deck, bar);
+                for (int guard = 0; guard < 300000 && played[deck].load() < target; ++guard) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                }
+            };
+            auto bytesOf = [](std::istringstream &words) {
+                std::vector<uint8_t> bytes;
+                std::string w;
+                while (words >> w) bytes.push_back(static_cast<uint8_t>(std::strtol(w.c_str(), nullptr, 16)));
+                return bytes;
+            };
+            std::vector<std::thread> ramps;
+            std::string line;
+            while (std::getline(in, line)) {
+                std::istringstream words(line);
+                std::string op;
+                if (!(words >> op) || op[0] == '#') continue;
+                if (op == "at") {
+                    double sec = 0;
+                    words >> sec;
+                    std::this_thread::sleep_until(start + std::chrono::microseconds(static_cast<long long>(sec * 1e6)));
+                    send(bytesOf(words));
+                } else if (op == "bar") {
+                    int deck = 1;
+                    double bar = 0;
+                    words >> deck >> bar;
+                    waitBar(deck - 1, bar);
+                    send(bytesOf(words));
+                } else if (op == "ramp") {
+                    // A rampa corre numa thread própria (fader, EQ, filtro ao mesmo tempo que os botões).
+                    int deck = 1, v0 = 0, v1 = 0;
+                    double from = 0, to = 0;
+                    std::string st, d1;
+                    words >> deck >> from >> to >> st >> d1 >> v0 >> v1;
+                    const int status = static_cast<int>(std::strtol(st.c_str(), nullptr, 16));
+                    const int data1 = static_cast<int>(std::strtol(d1.c_str(), nullptr, 16));
+                    waitBar(deck - 1, from);
+                    ramps.emplace_back([&, deck, from, to, status, data1, v0, v1]() {
+                        const double t0 = barTime(deck - 1, from), t1 = barTime(deck - 1, to);
+                        int last = -1;
+                        while (true) {
+                            const double now = played[deck - 1].load();
+                            const double k = std::clamp((now - t0) / std::max(0.01, t1 - t0), 0.0, 1.0);
+                            const int value = static_cast<int>(std::lround(v0 + (v1 - v0) * k));
+                            if (value != last) {
+                                send({static_cast<uint8_t>(status), static_cast<uint8_t>(data1), static_cast<uint8_t>(value)});
+                                last = value;
+                            }
+                            if (k >= 1.0) break;
+                            std::this_thread::sleep_for(std::chrono::milliseconds(40));
+                        }
+                    });
+                } else if (op == "panel") {
+                    int deck = 1, open = 0;
+                    double bar = 0;
+                    words >> deck >> bar >> open;
+                    waitBar(deck - 1, bar);
+                    control.setRmxPanel(open != 0);
+                } else if (op == "end") {
+                    int deck = 1;
+                    double bar = 0;
+                    words >> deck >> bar;
+                    waitBar(deck - 1, bar);
+                    break;
+                }
+            }
+            for (auto &r : ramps) r.join();
+            clockRunning.store(false);
+            clock.join();
+            scriptDone.store(true);
+        });
+    }
+
     SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "0");
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
     if (SDL_Init(SDL_INIT_VIDEO) != 0 || TTF_Init() != 0) {
@@ -413,6 +550,16 @@ int main(int argc, char **argv) {
         deckbridge::control::LedDiff ledDiff;
         std::vector<uint8_t> ledBytes;
         float peaks[4]{}, raw[4]{};
+        // Gravação: quadros BGRA no relógio (30 qps de tempo real). Se a tela atrasa, o quadro se repete e o vídeo
+        // continua com a mesma duração do áudio. O buffer é um só, alocado aqui.
+        std::FILE *record = recordPath.empty() ? nullptr : std::fopen(recordPath.c_str(), "wb");
+        std::vector<uint8_t> pixels(record != nullptr ? static_cast<size_t>(width) * height * 4 : 0);
+        long written = 0;
+        if (record != nullptr) {
+            std::fprintf(stderr, "gravação: o 1º quadro sai %.3f s depois de abrir o áudio\n",
+                         std::chrono::duration<double>(t0 - audioOpenedAt).count());
+        }
+        auto lastTick = t0;
         while (running) {
             SDL_Event e;
             while (SDL_PollEvent(&e)) {
@@ -440,7 +587,10 @@ int main(int argc, char **argv) {
                     browse = false;
                 }
             }
-            const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+            const auto nowTick = std::chrono::steady_clock::now();
+            control.tick(std::chrono::duration<double>(nowTick - lastTick).count());  // rampa da cena RMX
+            lastTick = nowTick;
+            const double elapsed = std::chrono::duration<double>(nowTick - t0).count();
             if (frames == 30) cpuStart = static_cast<double>(std::clock()) / CLOCKS_PER_SEC;
 
             s.fill(SDL_Rect{0, 0, width, height}, kBg);
@@ -498,19 +648,62 @@ int main(int argc, char **argv) {
                         }
                     }
                     const double windowSec = decks[d].loaded && decks[d].track.bpm > 1 ? 8 * 240.0 / decks[d].track.bpm : 15.0;
-                    s.detailWave(s.R(120, y, 738, 144), decks[d], pos[d], windowSec);
+                    const SDL_Rect waveArea = s.R(120, y, 738, 144);
+                    s.detailWave(waveArea, decks[d], pos[d], windowSec);
+                    const auto loop = control.loop(d);
+                    if (loop.end > loop.start) {
+                        // Loop ativo: faixa laranja translúcida sobre a onda, como no app.
+                        const double start = pos[d] - windowSec * 0.5;
+                        const int x0 = waveArea.x + static_cast<int>(std::clamp((loop.start - start) / windowSec, 0.0, 1.0) * waveArea.w);
+                        const int x1 = waveArea.x + static_cast<int>(std::clamp((loop.end - start) / windowSec, 0.0, 1.0) * waveArea.w);
+                        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+                        s.fill(SDL_Rect{x0, waveArea.y + 1, std::max(1, x1 - x0), waveArea.h - 2}, SDL_Color{255, 138, 30, 60});
+                        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+                        s.fill(SDL_Rect{x0, waveArea.y + 1, std::max(1, x1 - x0), s.Y(3)}, kOrange);
+                    }
                 }
                 // Painel lateral (tempo do master e estado da controladora).
                 const SDL_Rect side = s.R(864, 72, 156, 292);
                 s.fill(side, kPanel);
-                s.button(s.R(868, 78, 72, 22), "BEAT FX", true);
-                s.button(s.R(944, 78, 72, 22), "RMX");
+                const auto fx = control.beatFx();
+                const auto rmx = control.rmx();
+                s.button(s.R(868, 78, 72, 22), "BEAT FX", !rmx.panel);
+                s.button(s.R(944, 78, 72, 22), "RMX", rmx.panel);
                 const int lead = control.playing(1) && !control.playing(0) ? 1 : 0;
                 char bpmText[32];
                 std::snprintf(bpmText, sizeof bpmText, "%.2f BPM", decks[lead].track.bpm * control.pitch(lead));
-                text.draw(bpmText, side.x + s.X(6), side.y + s.Y(36), kInk, 1);
-                text.draw(midi ? "DDJ-400: MIDI ligado" : "DDJ-400: sem MIDI", side.x + s.X(6), side.y + s.Y(60), midi ? kGreen : kMuted);
-                text.draw(loading.load() > 0 ? "Carregando…" : "", side.x + s.X(6), side.y + s.Y(80), kOrange);
+                if (!rmx.panel) {
+                    // Beat FX: efeito, fração, canal, nível e ON (como o painel do app).
+                    const SDL_Rect name = s.R(868, 106, 148, 30);
+                    s.fill(name, fx.on ? SDL_Color{26, 58, 104, 255} : kPanelRaised);
+                    s.frame(name, fx.on ? kOrange : kBlue);
+                    text.draw(deckbridge::control::kBeatFxNames[fx.effect], name.x + name.w / 2, name.y + s.Y(8), fx.on ? kOrange : kInk, 1, 1);
+                    text.draw(bpmText, side.x + s.X(6), side.y + s.Y(72), kInk, 1);
+                    text.draw(std::string("FRAÇÃO ") + deckbridge::control::kFractionLabels[fx.fraction], side.x + s.X(6), side.y + s.Y(94), kMuted);
+                    const char *ch[] = {"CH 1", "CH 2", "MST"};
+                    for (int c = 0; c < 3; ++c) s.button(s.R(868 + c * 50, 196, 46, 22), ch[c], fx.channel == c);
+                    text.draw("LEVEL/DEPTH", side.x + s.X(6), side.y + s.Y(152), kMuted);
+                    const SDL_Rect bar = s.R(870, 240, 144, 8);
+                    s.fill(bar, kPanelRaised);
+                    s.fill(SDL_Rect{bar.x, bar.y, bar.w * fx.level / 127, bar.h}, kOrange);
+                    s.button(s.R(868, 256, 148, 26), fx.on ? "ON" : "OFF", fx.on);
+                } else {
+                    // RMX: as oito cenas (as quatro primeiras nos pads), intensidade e X-PAD.
+                    text.draw(bpmText, side.x + s.X(6), side.y + s.Y(32), kInk, 1);
+                    // Uma cena por linha: "Reverb DOWN" não cabe em meia largura do painel.
+                    for (int k = 0; k < 8; ++k) {
+                        const bool active = rmx.scene == k && (rmx.holding || rmx.intensity > 0.02f);
+                        s.button(s.R(868, 118 + k * 18, 148, 17), deckbridge::control::kSceneNames[k], active, 0);
+                    }
+                    const SDL_Rect bar = s.R(870, 266, 144, 6);
+                    s.fill(bar, kPanelRaised);
+                    s.fill(SDL_Rect{bar.x, bar.y, static_cast<int>(bar.w * rmx.intensity), bar.h}, kOrange);
+                    const char *xpad[] = {"ROLL", "TRANS", "DRUM", "HI-PASS"};
+                    text.draw(std::string("X-PAD ") + (rmx.xOn ? xpad[std::clamp(rmx.xMode, 0, 3)] : "—"), side.x + s.X(6), side.y + s.Y(206), rmx.xOn ? kOrange : kMuted, 1);
+                    text.draw(std::string("CH ") + (rmx.channel == 1 ? "2" : rmx.channel == 2 ? "MST" : "1"), side.x + s.X(6), side.y + s.Y(226), kMuted);
+                }
+                text.draw(loading.load() > 0 ? "Carregando…" : (midi ? "DDJ-400: MIDI ligado" : "DDJ-400: roteiro/sem MIDI"), side.x + s.X(6),
+                          side.y + s.Y(272), loading.load() > 0 ? kOrange : kMuted);
             }
             // Hot cues A–H de cada deck.
             for (int d = 0; d < 2; ++d) {
@@ -559,6 +752,15 @@ int main(int argc, char **argv) {
             }
             SDL_RenderPresent(renderer);
             ++frames;
+            if (record != nullptr) {
+                SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_ARGB8888, pixels.data(), width * 4);
+                const long due = static_cast<long>(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() * 30.0) + 1;
+                while (written < due) {
+                    std::fwrite(pixels.data(), 1, pixels.size(), record);
+                    ++written;
+                }
+            }
+            if (!scriptPath.empty() && scriptDone.load()) running = false;
 
             // LEDs a cada 3 quadros (~10–20 Hz conforme a taxa de quadros).
             if (midi && frames % 3 == 0) {
@@ -594,11 +796,13 @@ int main(int argc, char **argv) {
             const auto next = t0 + std::chrono::microseconds(static_cast<long long>(frames * 1e6 / 30));
             std::this_thread::sleep_until(next);
         }
+        if (record != nullptr) std::fclose(record);
         const double cpu = static_cast<double>(std::clock()) / CLOCKS_PER_SEC - cpuStart;
         const double wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() - 1.0;
         std::printf("quadros %d, CPU do processo depois do 1º segundo: %.1f%% de um núcleo\n", frames, wall > 0 ? 100.0 * cpu / wall : 0.0);
     }
     if (demo.joinable()) demo.join();
+    if (scriptThread.joinable()) scriptThread.join();
     while (loading.load() > 0) std::this_thread::sleep_for(std::chrono::milliseconds(5));
     engine.stop();
     TTF_CloseFont(big);

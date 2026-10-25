@@ -232,4 +232,5 @@ A constituição 1.1.0 está em `.specify/memory/constitution.md`. A emenda é a
   - Ver `pi/README.md` e `docs/ui/pi-*.png`.
 - Lógica única: o controle e os LEDs da DDJ-400 agora são uma implementação só, em C++, para o app e para o Pi. O motor já era um só.
 - Duplicado de propósito: o leitor do pendrive (Kotlin no app, C++ no Pi). Os dois estão presos pelo `RekordboxGoldenTest`.
+- Demonstração no PC (Xvfb): a tela do Pi mixou duas faixas por roteiro MIDI da DDJ-400, com Beat FX, loops, SYNC e RMX (cenas e X-PAD). Ver `pi/demo/README.md`.
 - Nada disto rodou num Pi, num tablet nem na DDJ-400 (`BLOCKED_HARDWARE`).

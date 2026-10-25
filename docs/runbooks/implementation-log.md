@@ -754,3 +754,24 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - O APK leva as 8 funções JNI novas, além das 41 do motor.
   - Testes do Pi passam com os arquivos movidos.
 - Continua com duas implementações: o leitor do pendrive (Kotlin no app, C++ no Pi). O `RekordboxGoldenTest` e o `rekordbox_test` os prendem ao mesmo resumo.
+
+## 2026-10-25 — Mixagem de demonstração na tela do Pi (2 faixas, Beat FX, RMX, loops)
+
+- Pedido do dono: "Faça uma mixagem de exemplo na tela do pi com duas músicas, efeitos, rmx e tal".
+- `DeckControl` (Pi) ganhou o que a demonstração usa. A regra é a mesma do app:
+  - Beat FX: SELECT, CH, LEVEL e ON, com os 17 nomes.
+  - Painel RMX: cenas nos pads 1–4 com subida enquanto o pad está seguro e queda ao soltar, X-PAD nos pads 5–8 e intensidade no LEVEL. Com o painel aberto o Beat FX desliga.
+  - Loops: BEAT LOOP, IN/OUT, RELOOP e ½×/2×. BEAT JUMP.
+  - SYNC com fase pela grade.
+  - Testes novos em `controller_test`, todos PASS.
+- A tela desenha o painel Beat FX/RMX e o loop sobre a onda. Ganhou `--script` (roteiro em compassos) e `--record` (quadros BGRA a 30 qps de relógio).
+- `pi/demo/mix_demo.py` gera o roteiro a partir do mapa oficial da DDJ-400, pelo nome do controle.
+- Correções no caminho:
+  - O roteiro esperava posição. Um loop impedia o deck de chegar ao compasso seguinte e a primeira tomada travou no compasso 9. Agora conta tempo tocado.
+  - As oito cenas não cabiam em meia largura ("Reverb DOWN"). Agora é uma cena por linha.
+- Evidência, PC x86 com Xvfb e ALSA `file`:
+  - 96,6 s de vídeo e 96,6 s de áudio, com 2899 quadros.
+  - CPU do processo de 17 % de um núcleo, com motor e tela no mesmo processo.
+  - Pico do master em −0,2 dBFS antes do limitador da exportação.
+  - O vídeo e as faixas ficaram fora do repositório: são da sessão local do dono.
+- Não verificado (`BLOCKED_HARDWARE`): no Pi real, com a DDJ-400 e o som numa placa de verdade. Ninguém ouviu a mixagem; não há julgamento de ouvido.

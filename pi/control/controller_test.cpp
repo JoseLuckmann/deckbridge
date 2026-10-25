@@ -103,6 +103,28 @@ int main(int argc, char **argv) {
         void scratchMove(int, double s) { scratched += s; finite = finite && std::isfinite(s); ++calls; }
         void nudge(int, double s) { nudged += s; finite = finite && std::isfinite(s); ++calls; }
         void setFilter(int, float f) { filter = f; ++calls; }
+        int fxEffect = -1, rmxCalls = 0;
+        bool fxOn = false;
+        float rmxScene = -1.f, rmxHolding = 0.f, loopStart = -2.f, loopEnd = -2.f;
+        double positionSeconds(int) const { return 10.0; }
+        void setBeatFx(int effect, bool on, int, int, float bpm, float beats) {
+            fxEffect = effect;
+            fxOn = on;
+            finite = finite && std::isfinite(bpm + beats);
+            ++calls;
+        }
+        void setRmx(const float *raw, int count) {
+            for (int i = 0; i < count; ++i) finite = finite && std::isfinite(raw[i]);
+            rmxScene = raw[1];
+            rmxHolding = raw[2];
+            ++rmxCalls;
+            ++calls;
+        }
+        void setLoop(int, float a, float b) {
+            loopStart = a;
+            loopEnd = b;
+            ++calls;
+        }
         void setMix(float a, float b, float pa, float pb, float c, bool fa, bool fb) {
             vol[0] = a; vol[1] = b; pitch[0] = pa; pitch[1] = pb; cross = c; pfl[0] = fa; pfl[1] = fb;
             finite = finite && std::isfinite(a + b + pa + pb + c);
@@ -135,6 +157,34 @@ int main(int argc, char **argv) {
             if (hit.key == "PioneerDDJ400.jogTurn" && hit.group == "[Channel1]") send(hit.status, hit.midino, 64 + 10);
         }
         expect(e.scratched > 0.0 && e.nudged == 0.0, "giro com o prato tocado vira scratch");
+        // Beat FX: SELECT avança o efeito, ON/OFF liga (regra do reduceBeatFx).
+        auto pressKey = [&](const char *key, int value = 127) {
+            for (const auto &hit : map.all()) {
+                if (hit.key == key) {
+                    send(hit.status, hit.midino, value);
+                    return;
+                }
+            }
+        };
+        pressKey("PioneerDDJ400.beatFxSelectPressed");
+        pressKey("PioneerDDJ400.beatFxOnOffPressed");
+        expect(e.fxEffect == 1 && e.fxOn && c.beatFx().on, "Beat FX: SELECT vai para Echo e ON/OFF liga no motor");
+        // RMX: com o painel aberto, o pad 1 do SAMPLER segura a cena 1 e a rampa sobe; solto, a cena cai.
+        c.setRmxPanel(true);
+        expect(!e.fxOn, "painel RMX aberto: Beat FX desligado no motor, como no app");
+        send(0x97, 0x30, 127);
+        for (int i = 0; i < 25; ++i) c.tick(0.04);
+        expect(e.rmxScene == 0.f && e.rmxHolding == 1.f && c.rmx().intensity > 0.05f, "pad do SAMPLER segura a cena e a intensidade sobe");
+        send(0x97, 0x30, 0);
+        for (int i = 0; i < 40; ++i) c.tick(0.04);
+        expect(e.rmxHolding == 0.f && c.rmx().intensity == 0.f, "solto, a cena cai a zero");
+        c.setRmxPanel(false);
+        // Beat loop de 4 batidas a 120 BPM: 2 s a partir da posição; de novo, sai do loop.
+        c.setGrid(0, 0.0, 120.0);
+        pressKey("beatloop_4_toggle");
+        expect(std::fabs(e.loopStart - 10.f) < 1e-4f && std::fabs(e.loopEnd - 12.f) < 1e-4f, "beat loop de 4 a 120 BPM: 10 s → 12 s");
+        pressKey("beatloop_4_toggle");
+        expect(e.loopStart == -1.f && c.loop(0).memoryEnd > 11.f, "o mesmo pad sai do loop e guarda a memória");
         // Fuzz: todas as mensagens do golden pelo redutor, sem valor não finito.
         std::ifstream again(root + "/pi/control/testdata/golden.txt");
         std::string l;
