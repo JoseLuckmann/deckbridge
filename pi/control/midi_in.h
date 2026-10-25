@@ -22,8 +22,8 @@ struct RawMidiPort {
     std::string name;
 };
 
-/** Portas rawmidi de entrada que o ALSA conhece agora. */
-inline std::vector<RawMidiPort> listRawMidiInputs() {
+/** Portas rawmidi de entrada (ou de saída) que o ALSA conhece agora. */
+inline std::vector<RawMidiPort> listRawMidiInputs(snd_rawmidi_stream_t stream = SND_RAWMIDI_STREAM_INPUT) {
     std::vector<RawMidiPort> ports;
     int card = -1;
     while (snd_card_next(&card) == 0 && card >= 0) {
@@ -35,7 +35,7 @@ inline std::vector<RawMidiPort> listRawMidiInputs() {
             snd_rawmidi_info_t *info = nullptr;
             snd_rawmidi_info_alloca(&info);
             snd_rawmidi_info_set_device(info, static_cast<unsigned>(device));
-            snd_rawmidi_info_set_stream(info, SND_RAWMIDI_STREAM_INPUT);
+            snd_rawmidi_info_set_stream(info, stream);
             snd_rawmidi_info_set_subdevice(info, 0);
             if (snd_ctl_rawmidi_info(ctl, info) < 0) continue;
             ports.push_back({hw + "," + std::to_string(device) + ",0", snd_rawmidi_info_get_name(info)});
@@ -121,6 +121,57 @@ private:
     std::thread thread_;
     std::atomic<bool> running_{false};
     std::atomic<bool> lost_{false};
+};
+
+/** Saída MIDI para a controladora (LEDs). Mesmo critério de escolha da entrada; DECKBRIDGE_MIDI_OUT tem precedência. */
+class MidiOut {
+public:
+    ~MidiOut() { close(); }
+
+    std::string open(const std::string &filter) {
+        close();
+        std::string device;
+        std::string name;
+        const char *env = std::getenv("DECKBRIDGE_MIDI_OUT");
+        if (env != nullptr && *env != '\0') {
+            device = env;
+            name = env;
+        } else {
+            for (const auto &port : listRawMidiInputs(SND_RAWMIDI_STREAM_OUTPUT)) {
+                if (filter.empty() || port.name.find(filter) != std::string::npos) {
+                    device = port.device;
+                    name = port.name;
+                    break;
+                }
+            }
+        }
+        if (device.empty() || snd_rawmidi_open(nullptr, &out_, device.c_str(), SND_RAWMIDI_NONBLOCK) < 0) {
+            out_ = nullptr;
+            return "";
+        }
+        return name + " (" + device + ")";
+    }
+
+    bool isOpen() const { return out_ != nullptr; }
+
+    /** Escreve sem bloquear; o que não couber agora some (o próximo diff reenvia o estado que mudar). */
+    void send(const std::vector<uint8_t> &bytes) {
+        if (out_ == nullptr || bytes.empty()) return;
+        if (snd_rawmidi_write(out_, bytes.data(), bytes.size()) < 0) {
+            snd_rawmidi_close(out_);
+            out_ = nullptr;
+        }
+    }
+
+    void close() {
+        if (out_ != nullptr) {
+            snd_rawmidi_close(out_);
+            out_ = nullptr;
+        }
+    }
+
+private:
+    snd_rawmidi_t *out_ = nullptr;
 };
 
 }  // namespace deckbridge::control

@@ -10,6 +10,7 @@
 #define DECKBRIDGE_NO_JNI 1
 #include "../android/app/src/main/cpp/engine.cpp"
 #include "control/deck_control.h"
+#include "control/leds.h"
 #include "control/midi_in.h"
 
 #include <sys/mman.h>
@@ -217,6 +218,36 @@ int main(int argc, char **argv) {
         });
         std::printf("MIDI: %s\n", port.empty() ? "nenhuma porta de entrada encontrada (DECKBRIDGE_MIDI_DEVICE ou --midi FILTRO)" : port.c_str());
     }
+    // LEDs da DDJ-400 a 20 Hz, só o que mudou (a mesma regra do app: deckbridge::control::LedDiff).
+    deckbridge::control::MidiOut midiOut;
+    std::atomic<bool> ledsRunning{midi};
+    std::thread leds;
+    if (midi) {
+        const std::string out = midiOut.open(midiFilter);
+        std::printf("LEDs: %s\n", out.empty() ? "sem porta de saída" : out.c_str());
+        leds = std::thread([&]() {
+            deckbridge::control::LedDiff diff;
+            std::vector<uint8_t> bytes;
+            float peaks[4]{};
+            float raw[4]{};
+            while (ledsRunning.load()) {
+                engine.takeLevels(raw);
+                for (int i = 0; i < 4; ++i) peaks[i] = std::max(raw[i], peaks[i] * 0.8f);
+                deckbridge::control::LedState state;
+                for (int d = 0; d < 2; ++d) {
+                    auto &led = state.decks[static_cast<size_t>(d)];
+                    led.loaded = true;
+                    led.playing = control.playing(d);
+                    led.pfl = control.pfl(d);
+                    led.peak = peaks[d];
+                }
+                bytes.clear();
+                diff.messages(state, bytes);
+                midiOut.send(bytes);
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+        });
+    }
     std::printf("tempo real: %s\n", oboe::AlsaConfig::lastRealtime.load() ? "sim (SCHED_FIFO)" : "não (sem permissão de rtprio)");
     double lastCpu = cpuSeconds();
     auto lastWall = std::chrono::steady_clock::now();
@@ -232,6 +263,8 @@ int main(int argc, char **argv) {
                     engine.positionSeconds(1), field(st, "xruns").c_str(), engine.glitchCount(), share * 100.0, rssKb(), midiMessages.load());
         std::fflush(stdout);
     }
+    ledsRunning.store(false);
+    if (leds.joinable()) leds.join();
     engine.stop();
     return 0;
 }

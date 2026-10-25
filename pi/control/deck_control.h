@@ -6,6 +6,7 @@
 #include "controller.h"
 
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <string>
 
@@ -24,7 +25,9 @@ public:
         if (deck >= 0 && deck <= 1) bpm_[static_cast<size_t>(deck)] = bpm;
     }
 
-    bool playing(int deck) const { return deck >= 0 && deck <= 1 && playing_[static_cast<size_t>(deck)]; }
+    // Lidos pela thread dos LEDs enquanto a do MIDI escreve: atômicos.
+    bool playing(int deck) const { return deck >= 0 && deck <= 1 && playing_[deck].load(std::memory_order_relaxed); }
+    bool pfl(int deck) const { return deck >= 0 && deck <= 1 && pfl_[deck].load(std::memory_order_relaxed); }
     float pitch(int deck) const { return deck >= 0 && deck <= 1 ? pitch_[static_cast<size_t>(deck)] : 1.f; }
     long unsupported() const { return unsupported_; }
     const std::string &lastUnsupported() const { return lastUnsupported_; }
@@ -36,8 +39,8 @@ public:
         switch (a.kind) {
             case Kind::PLAY:
                 if (!valid) return;
-                playing_[d] = !playing_[d];
-                engine_.transport(deck, playing_[d]);
+                playing_[d] = !playing_[d].load();
+                engine_.transport(deck, playing_[d].load());
                 break;
             case Kind::CUE:
                 if (!valid) return;
@@ -68,7 +71,7 @@ public:
                 engine_.transport(deck, true);
                 break;
             case Kind::PFL:
-                if (valid) pfl_[d] = !pfl_[d];
+                if (valid) pfl_[d] = !pfl_[d].load();
                 break;
             case Kind::HEAD_MIX:
                 headMix_ = static_cast<float>(a.slider.value_or(0.0));
@@ -117,12 +120,12 @@ public:
     }
 
 private:
-    void pushMix() { engine_.setMix(vol_[0], vol_[1], pitch_[0], pitch_[1], cross_, pfl_[0], pfl_[1]); }
+    void pushMix() { engine_.setMix(vol_[0], vol_[1], pitch_[0], pitch_[1], cross_, pfl_[0].load(), pfl_[1].load()); }
 
     Engine &engine_;
-    std::array<bool, 2> playing_{};
+    std::atomic<bool> playing_[2]{{false}, {false}};
     std::array<bool, 2> scratching_{};
-    std::array<bool, 2> pfl_{};
+    std::atomic<bool> pfl_[2]{{false}, {false}};
     std::array<float, 2> vol_{0.8f, 0.8f};
     std::array<float, 2> pitch_{1.f, 1.f};
     std::array<double, 2> bpm_{};
