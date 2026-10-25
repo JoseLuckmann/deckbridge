@@ -814,3 +814,16 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - O README dizia que WAV estéreo, de 24 bits e float eram lidos sem que nenhum teste cobrisse isso; escrevi o teste (`AudioIoTest`) antes de manter a frase.
 - Evidência (PC x86_64, Linux): 65 testes, 0 falhas, 0 ignorados. Quatro leitores independentes veem o que o plano diz (app Kotlin, Pi C++, Kaitai do banco, Kaitai do ANLZ). Uma falha injetada no meio da gravação desfaz tudo. Capturas em `docs/ui/desktop-07…11`.
 - Não verificado (`BLOCKED_HARDWARE`): nenhum player nem o rekordbox leu o que o programa grava; sem export real para comparar; o gesto real de arrastar com o mouse e de soltar arquivos do gerenciador não foi exercitado; MP3, FLAC, M4A e OGG só foram testados com arquivos gerados pelo ffmpeg desta máquina a partir de um WAV sintético.
+
+## 2026-10-25 — Biblioteca local, exportar para pendrive e app de celular
+
+- Pedido do dono: salvar também no aparelho; fazer o mesmo no celular (em pé e deitado, Galaxy S25 Ultra como referência): analisar, montar playlists, marcar faixas e exportar para pendrive. ADR-0010.
+- Entregue:
+  - `ExportFactory`/`ExportTemplate`: `export.pdb` (20 tabelas) e `exportExt.pdb` (9) criados do zero. Conferido contra o export vazio real do rekordbox: **arquivos idênticos byte a byte** (ajustes no `RawPdb.build`: ordem das páginas vazias reservadas, índice de tabela vazia, arquivo termina sem a página zerada final, sequência por tabela).
+  - `transfer/`: `Storage` (pasta e SAF), `LocalLibrary`, `UsbExporter` (confere origem e espaço, backup local do banco do destino, copia sem apagar nada, banco por último, relê e confere, devolve o banco antigo se a conferência falhar), `UsbImporter` (só lê o pendrive).
+  - `mobile/`: app Compose com layout em pé e deitado, `SafStorage` (troca de arquivo por renomear em ordem segura), `MediaDecoder` (MediaCodec).
+  - Desktop: abrir biblioteca local, exportar e trazer.
+- Evidência (PC x86_64): core 75 testes, desktop 6, mobile 11, 0 falhas. A biblioteca criada do zero e exportada é lida igual pelo leitor do Pi (C++) e pelo Kaitai. Exportação completa por provedor de documentos de brinquedo (Robolectric). APK de debug montado.
+- Achado: o `query` antigo do Robolectric é recusado pelo `DocumentsProvider` real; o teste usa um provedor próprio (`FakeDocumentsProvider`).
+- Não verificado (`BLOCKED_HARDWARE`): app no S25 Ultra; MP3/FLAC no MediaCodec; pendrive USB real por SAF; qualquer player lendo o resultado. Detalhe em `mobile/README.md`.
+- Próximo: teste no aparelho e em cópia de pendrive; importação em lotes menores; juntar bibliotecas (hoje exportar/trazer substituem).

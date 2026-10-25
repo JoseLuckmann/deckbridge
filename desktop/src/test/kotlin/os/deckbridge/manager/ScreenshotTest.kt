@@ -116,6 +116,16 @@ class ScreenshotTest {
         shoot(out, "10-organizar", messy, ui)
         ui.organize = false
 
+        // Exportar para um pendrive que já tem biblioteca (outro volume sintético).
+        val other = TestVolumes.synthetic()
+        val tr = os.deckbridge.manager.ui.TransferState(export = true)
+        tr.target = other
+        tr.existing = os.deckbridge.manager.transfer.UsbExporter(backups.base).inspect(os.deckbridge.manager.transfer.FileStorage(other))
+        ui.transfer = tr
+        shoot(out, "12-exportar", m, ui)
+        ui.transfer = null
+        ui.organize = false
+
         // Arrastar faixas até uma playlist.
         val pl = v.playlists.first { !it.folder && v.entries[it.id].orEmpty().size in 1 until v.tracks.size }
         val drag = UiState().apply { expanded = v.playlists.filter { it.folder }.map { it.id }.toSet() }

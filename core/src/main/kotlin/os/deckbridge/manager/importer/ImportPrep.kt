@@ -25,6 +25,12 @@ class AudioInfo(
 
 class MonoAudio(val samples: FloatArray, val rate: Int)
 
+/** Decodificador da plataforma (no Android, o MediaCodec), usado quando não há ffmpeg. Devolve null se não souber ler. */
+interface PlatformDecoder {
+    fun probe(file: File): AudioInfo?
+    fun mono(file: File): MonoAudio?
+}
+
 /**
  * Leitura de áudio para importar. WAV PCM (16, 24 ou 32 bits, ou float) é lido aqui. MP3, FLAC, AAC e o resto precisam do
  * `ffmpeg`/`ffprobe` do sistema, se houver. Nada é embutido: as ferramentas são chamadas como programas separados,
@@ -34,6 +40,9 @@ object AudioIo {
     private fun has(tool: String): Boolean = runCatching {
         ProcessBuilder(tool, "-version").redirectErrorStream(true).start().also { it.inputStream.readBytes() }.waitFor(10, TimeUnit.SECONDS)
     }.getOrDefault(false)
+
+    /** Quem decodifica MP3/FLAC/AAC onde não existe ffmpeg. Definido uma vez, na partida do app. */
+    @Volatile var platform: PlatformDecoder? = null
 
     val ffmpeg: Boolean by lazy { has("ffmpeg") }
     val ffprobe: Boolean by lazy { has("ffprobe") }
@@ -61,6 +70,7 @@ object AudioIo {
             bitrate = (kv["bit_rate"]?.toDoubleOrNull() ?: 0.0).div(1000).toInt()
             tags = kv.filterKeys { it.startsWith("tag:") }.mapKeys { it.key.removePrefix("tag:") }
         }
+        if (duration <= 0.0 && !ffprobe) platform?.probe(file)?.let { return it }
         if (duration <= 0.0 && file.extension.lowercase() in setOf("wav")) {
             wavHeader(file)?.let { (r, ch, bits, frames) ->
                 rate = r
@@ -126,6 +136,7 @@ object AudioIo {
     /** Áudio mono para a análise, até ~24 kHz. */
     fun mono(file: File): MonoAudio {
         if (file.extension.lowercase() == "wav") wavMono(file)?.let { return it }
+        if (!ffmpeg) platform?.mono(file)?.let { return it }
         if (!ffmpeg) throw ImportException("Não consegui ler ${file.name}. Só WAV PCM é lido sem o ffmpeg; instale o ffmpeg para MP3, FLAC e AAC.")
         val p = ProcessBuilder("ffmpeg", "-v", "error", "-i", file.path, "-vn", "-ac", "1", "-ar", "22050", "-f", "s16le", "pipe:1").redirectError(ProcessBuilder.Redirect.DISCARD).start()
         val raw = p.inputStream.readBytes()

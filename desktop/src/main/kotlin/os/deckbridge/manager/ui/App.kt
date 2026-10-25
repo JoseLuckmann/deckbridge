@@ -76,6 +76,7 @@ class UiState {
     var importRows by mutableStateOf<List<ImportRow>?>(null)
     var rename by mutableStateOf(false)
     var organize by mutableStateOf(false)
+    var transfer by mutableStateOf<TransferState?>(null)
     val organizeState = OrganizeState()
     var drag by mutableStateOf<DragInfo?>(null)
     var hoverPlaylist by mutableStateOf<Int?>(null)
@@ -164,6 +165,7 @@ fun App(model: ManagerModel, ui: UiState = remember { UiState() }) {
         if (ui.organize) Box(Modifier.fillMaxSize()) { OrganizeModal(model, ui.organizeState) { ui.organize = false } }
         if (ui.review) Box(Modifier.fillMaxSize()) { ReviewModal(model, ui) }
         if (ui.backups) Box(Modifier.fillMaxSize()) { BackupsModal(model, ui) }
+        ui.transfer?.let { t -> Box(Modifier.fillMaxSize()) { TransferModal(model, t, ui.chooser) { ui.transfer = null } } }
         ui.drag?.let { d ->
             Box(Modifier.offset { IntOffset(d.pos.x.toInt() + 14, d.pos.y.toInt() + 10) }.background(Pal.Blue).padding(horizontal = 10.dp, vertical = 5.dp)) { Label(d.label, Pal.Bg, 12.sp, bold = true) }
         }
@@ -181,6 +183,8 @@ private fun TopBar(model: ManagerModel, ui: UiState) {
             Btn("Importar áudio…", { val f = ui.chooseFiles(); if (f.isNotEmpty()) ui.startImportOf(f, model) })
             Btn("Organizar…", { refreshSuggestions(model, ui.organizeState); ui.organize = true })
             Btn("Renomear arquivos…", { ui.rename = true })
+            Btn("Exportar para pendrive…", { ui.transfer = TransferState(export = true) })
+            Btn("Trazer de pendrive…", { ui.transfer = TransferState(export = false) })
             Btn("Backups", { ui.backups = true })
             Btn("Abrir outro…", { ui.chooser()?.let { model.open(it) } })
         } else {
@@ -198,6 +202,8 @@ private fun Banner(text: String, error: Boolean, onClose: () -> Unit) {
     }
 }
 
+fun localLibraryRoot(): File = File(System.getProperty("user.home"), ".deckbridge/library")
+
 @Composable
 private fun Welcome(model: ManagerModel, ui: UiState) {
     val found = remember { VolumeDetector.find() }
@@ -210,6 +216,9 @@ private fun Welcome(model: ManagerModel, ui: UiState) {
                 found.forEach { f -> Btn(f.path, { model.open(f) }, Modifier.fillMaxWidth()) }
             }
             Btn("Escolher a pasta do pendrive…", { ui.chooser()?.let { model.open(it) } }, primary = true)
+            Caption("Ou use a biblioteca local deste computador")
+            Label("Fica em ${localLibraryRoot().path}, no mesmo formato de um pendrive. Edite aqui e exporte para o pendrive quando quiser.", Pal.Muted, 12.sp, maxLines = 3)
+            Btn("Abrir a biblioteca local", { os.deckbridge.manager.transfer.LocalLibrary.ensure(localLibraryRoot()); model.open(localLibraryRoot()) })
         }
     }
 }

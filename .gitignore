@@ -55,3 +55,6 @@ desktop/.kotlin/
 core/.gradle/
 core/.kotlin/
 core/build/
+mobile/.gradle/
+mobile/local.properties
+mobile/build/
