@@ -82,4 +82,17 @@ class SafStorageTest {
         assertEquals(10, back.tracks)
         assertEquals(sha256(File(usb, PDB_RELATIVE)), sha256(File(other, PDB_RELATIVE)))
     }
+
+    @Test fun mergesALibraryFromThePendriveIntoAnEmptyOneThroughSaf() {
+        val app = ManagerApp(ctx, File(ctx.cacheDir, "lib-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 12) }
+        val s = storage()
+        UsbExporter(app.backupsDir).export(app.root, s, replaceExisting = false)
+        val other = ManagerApp(ctx, File(ctx.cacheDir, "outra-${System.nanoTime()}/biblioteca/dados")).also { it.start() }
+        val r = os.deckbridge.manager.transfer.UsbMerger(other.model.backups, ctx.cacheDir).merge(s, other.root)
+        assertEquals(10, r.added)
+        other.model.open(other.root)
+        assertEquals(10, other.model.view!!.tracks.size)
+        assertEquals(setOf("Sexta à noite", "Aquecimento"), other.model.view!!.playlists.map { it.name }.toSet())
+        assertEquals(0, os.deckbridge.manager.transfer.UsbMerger(other.model.backups, ctx.cacheDir).merge(s, other.root).added)
+    }
 }

@@ -22,6 +22,7 @@ import os.deckbridge.manager.transfer.TargetLibrary
 import os.deckbridge.manager.transfer.TransferReport
 import os.deckbridge.manager.transfer.UsbExporter
 import os.deckbridge.manager.transfer.UsbImporter
+import os.deckbridge.manager.transfer.UsbMerger
 
 /** Estado do diálogo de exportar/trazer. [export] é verdadeiro para exportar o volume aberto, falso para trazer um pendrive. */
 class TransferState(val export: Boolean) {
@@ -30,7 +31,11 @@ class TransferState(val export: Boolean) {
     var error by mutableStateOf<String?>(null)
     var status by mutableStateOf<String?>(null)
     var report by mutableStateOf<TransferReport?>(null)
+    var merged by mutableStateOf<os.deckbridge.manager.transfer.MergeReport?>(null)
     @Volatile var cancelled = false
+
+    /** Trazer: juntar (padrão, não apaga nada) ou substituir a biblioteca aberta. */
+    var merge by mutableStateOf(true)
 }
 
 /**
@@ -46,9 +51,14 @@ fun TransferModal(model: ManagerModel, st: TransferState, chooser: () -> File?, 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Label(
                 if (st.export) "Copia a biblioteca aberta (${model.view?.tracks?.size ?: 0} faixas) para o pendrive: áudio e análises que faltam e, por último, o banco. Depois relê o pendrive e confere."
+                else if (st.merge) "Traz as faixas que faltam, com análise, notas e playlists. Nada é apagado; o pendrive só é lido."
                 else "Substitui a biblioteca aberta pela do pendrive. A atual fica em backup. O pendrive só é lido.",
                 Pal.Muted, 12.sp, maxLines = 4,
             )
+            if (!st.export) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Btn("Juntar", { st.merge = true }, primary = st.merge)
+                Btn("Substituir", { st.merge = false }, primary = !st.merge)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Btn("Escolher o pendrive…", {
                     chooser()?.let { f ->
@@ -77,6 +87,7 @@ fun TransferModal(model: ManagerModel, st: TransferState, chooser: () -> File?, 
             if (model.dirty) Label("Há mudanças não gravadas na fila. Aplique ou descarte antes.", Pal.Red, 12.sp)
             st.error?.let { Label(it, Pal.Red, 12.sp, maxLines = 4) }
             st.status?.let { Label(it, Pal.Blue, 12.sp, maxLines = 2) }
+            st.merged?.let { r -> Label("Pronto: ${r.added} trazidas · ${r.alreadyThere} já estavam" + if (r.failed > 0) " · ${r.failed} falharam" else "", Pal.Green, 12.sp) }
             st.report?.let { r ->
                 Label("Pronto: ${r.tracks} faixas, ${r.playlists} playlists, ${r.files} arquivos (${r.copied} copiados, ${r.skipped} já estavam).", Pal.Green, 12.sp, maxLines = 3)
                 r.backupDir?.let { Label("Backup: ${it.path}", Pal.Muted, 11.sp, maxLines = 2) }
@@ -91,6 +102,13 @@ fun TransferModal(model: ManagerModel, st: TransferState, chooser: () -> File?, 
                     st.report = null
                     thread(isDaemon = true) {
                         try {
+                            if (!st.export && st.merge) {
+                                val m = UsbMerger(model.backups, File(System.getProperty("java.io.tmpdir"))).merge(FileStorage(target!!), vol.root, progress = { st.status = it }, cancelled = { st.cancelled })
+                                st.merged = m
+                                st.error = null
+                                model.open(vol.root)
+                                return@thread
+                            }
                             val r = if (st.export) UsbExporter(backupBase).export(vol.root, FileStorage(target!!), replaceExisting = true, progress = { st.status = it }, cancelled = { st.cancelled })
                             else UsbImporter(backupBase).import(FileStorage(target!!), vol.root, includeAudio = true, progress = { st.status = it }, cancelled = { st.cancelled })
                             st.report = r

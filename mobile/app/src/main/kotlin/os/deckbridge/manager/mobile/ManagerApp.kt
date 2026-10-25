@@ -373,6 +373,21 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         }
     }
 
+    /** Junta as faixas do pendrive às do aparelho, sem apagar nada; repetidas são puladas. */
+    fun mergeFromUsb() {
+        val choice = usb ?: return
+        if (model.dirty) {
+            say("Salve antes", error = true)
+            return
+        }
+        background("Juntando") { j ->
+            val r = os.deckbridge.manager.transfer.UsbMerger(model.backups, context.cacheDir).merge(choice.storage, root, progress = { j.text = it }, cancelled = { j.cancelled })
+            model.open(root)
+            pruneBackups()
+            say(listOfNotNull("${r.added} trazidas", r.alreadyThere.takeIf { it > 0 }?.let { "$it já estavam" }, r.failed.takeIf { it > 0 }?.let { "$it falharam" }).joinToString(" · "))
+        }
+    }
+
     fun importFromUsb(includeAudio: Boolean) {
         val choice = usb ?: return
         if (model.dirty) {

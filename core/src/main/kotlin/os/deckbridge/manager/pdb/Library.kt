@@ -146,6 +146,13 @@ sealed interface Edit {
      */
     data class AttachAnalysis(val trackId: Int, val prepared: PreparedTrack, val cues: List<Cue>, val setTempo: Boolean, val setKey: Boolean) : Edit
 
+    /**
+     * Traz uma faixa pronta de outra biblioteca (outro pendrive): copia o áudio e as análises que ela já tem (o caminho
+     * do áudio dentro do ANLZ é atualizado), com nota, cor, comentário e campos, e a põe nas playlists de mesmo nome
+     * (criando as que faltam). Nada é reanalisado.
+     */
+    data class AdoptTrack(val track: TrackItem, val audio: File, val anlz: Map<String, ByteArray>, val playlists: List<String> = emptyList()) : Edit
+
     /** Copia o áudio para o pendrive, cria o ANLZ da análise e acrescenta a faixa ao banco. */
     data class ImportTrack(
         val prepared: PreparedTrack,
@@ -208,6 +215,7 @@ class PdbEditor(private val raw: RawPdb, root: File? = null) {
             is Edit.SetCues -> setCues(edit)
             is Edit.RenameFiles -> renameFiles(edit)
             is Edit.ImportTrack -> importTrack(edit)
+            is Edit.AdoptTrack -> adoptTrack(edit)
             is Edit.AttachAnalysis -> attachAnalysis(edit)
         }
     }
@@ -657,6 +665,66 @@ class PdbEditor(private val raw: RawPdb, root: File? = null) {
         row.dateAdded = today
         row.analyzeDate = today
         tracks += row.encode()
+    }
+
+    private fun adoptTrack(e: Edit.AdoptTrack) {
+        val src = e.track
+        val title = src.title.trim().ifEmpty { e.audio.nameWithoutExtension }
+        if (!e.audio.isFile) throw EditException("O áudio de \"$title\" não existe.")
+        val tracks = rowsOf(PdbType.TRACKS)
+        val templateBytes = tracks.firstOrNull()
+        val template = templateBytes?.let(TrackRow::parse)
+        val id = (tracks.maxOfOrNull { it.u32(72) } ?: 0) + 1
+        val prefix = template?.filePath?.let(::lead) ?: "/"
+        // Mantém o caminho de origem quando está livre; senão, a mesma pasta com " (2)".
+        var rel = norm(src.filePath).ifEmpty { "Contents/${safeName(src.artist, "Sem artista")}/${e.audio.name}" }
+        val base = rel.substringBeforeLast('.')
+        val ext = rel.substringAfterLast('.', e.audio.extension)
+        var n = 2
+        while (files.exists(rel)) rel = "$base ($n).$ext".also { n++ }
+        files.copyIn(rel, e.audio)
+        var analyzeId = id
+        fun datPath(i: Int) = "PIONEER/USBANLZ/PDBM/%08X/ANLZ0000.DAT".format(i)
+        while (files.exists(datPath(analyzeId))) analyzeId++
+        val dat = datPath(analyzeId)
+        var hasDat = false
+        for ((kind, bytes) in e.anlz) {
+            val model = runCatching { AnlzModel.parse(bytes) }.getOrNull() ?: continue
+            val fixed = model.replacing(setOf("PPTH"), listOf(AnlzBuild.path("/$rel"))).write()
+            val target = if (kind == "DAT") dat else sibling(dat, kind)
+            files.put(target, fixed)
+            if (kind == "DAT") hasDat = true
+        }
+        val row = TrackRow.blank(templateBytes)
+        row.id = id
+        row.sampleRate = src.sampleRate
+        row.fileSize = e.audio.length().coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        row.bitrate = src.bitrate
+        row.sampleDepth = 16
+        row.duration = src.durationSeconds
+        row.tempo = (src.bpm * 100).roundToInt().coerceIn(0, 65535)
+        row.year = src.year
+        row.trackNumber = src.trackNumber
+        row.rating = src.rating.coerceIn(0, 5)
+        row.colorId = src.colorId.coerceIn(0, 8)
+        row.comment = src.comment
+        row.title = title
+        row.artistId = nameId(PdbType.ARTISTS, src.artist.trim(), 0)
+        row.albumId = nameId(PdbType.ALBUMS, src.album.trim(), row.artistId)
+        row.genreId = nameId(PdbType.GENRES, src.genre.trim(), 0)
+        row.keyId = nameId(PdbType.KEYS, src.key.trim(), 0)
+        row.labelId = nameId(PdbType.LABELS, src.label.trim(), 0)
+        row.filePath = prefix + rel
+        row.fileName = rel.substringAfterLast('/')
+        row.analyzePath = if (hasDat) prefix + dat else ""
+        row.dateAdded = LocalDate.now().toString()
+        tracks += row.encode()
+        for (name in e.playlists.map { it.trim() }.filter { it.isNotEmpty() }.distinct()) {
+            val v = view()
+            val existing = v.playlists.firstOrNull { !it.folder && it.name == name }
+            val pid = existing?.id ?: ((v.playlists.maxOfOrNull { it.id } ?: 0) + 1).also { createPlaylist(Edit.CreatePlaylist(it, 0, name, false)) }
+            addToPlaylist(Edit.AddToPlaylist(pid, listOf(id)))
+        }
     }
 
     private fun attachAnalysis(e: Edit.AttachAnalysis) {

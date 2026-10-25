@@ -73,10 +73,12 @@ fun UsbTab(app: ManagerApp, actions: Actions) {
             "${usb?.existing?.tracks} → ${v?.tracks?.size} faixas. O banco antigo fica guardado. Nenhum áudio é apagado.",
             "EXPORTAR", onConfirm = { confirm = null; app.export() }, onClose = { confirm = null },
         )
-        Confirm.IMPORT -> ConfirmDialog(
-            "Trazer do pendrive?",
-            "A biblioteca do aparelho vira a do pendrive (${usb?.existing?.tracks} faixas). A atual fica guardada.",
-            "TRAZER", onConfirm = { confirm = null; app.importFromUsb(true) }, onClose = { confirm = null },
+        // Juntar é o padrão (não apaga nada); substituir fica como segunda opção.
+        Confirm.IMPORT -> ChoiceDialog(
+            "Trazer do pendrive (${usb?.existing?.tracks} faixas)",
+            listOf("Juntar com as do aparelho", "Substituir as do aparelho"),
+            onPick = { n -> confirm = null; if (n == 0) app.mergeFromUsb() else app.importFromUsb(true) },
+            onClose = { confirm = null },
         )
         null -> {}
     }

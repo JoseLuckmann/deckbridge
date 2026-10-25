@@ -877,3 +877,10 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Importação pula a música que já está na biblioteca (mesmo título e artista, duração a até 2 s; `Smart.findDuplicate`, com teste) e repetidas dentro do mesmo lote; o aviso diz "N importadas · N já estavam · N falharam".
 - Evidência: mobile 30 testes (novo: chip de playlist liga e desliga em um toque), core `SmartTest` verde.
 - Não verificado: aparelho (vibração, cabeça andando com áudio real, seletor de pasta com pendrive/cartão).
+
+## 2026-10-25 — Rodada 5: juntar a biblioteca do pendrive sem substituir
+
+- Antes, "trazer do pendrive" só substituía a biblioteca local. Agora o padrão é juntar: cada faixa que ainda não existe aqui (mesmo título, artista e duração) vem com áudio, análises (o caminho do áudio dentro do ANLZ é reescrito para o novo lugar), nota, cor, comentário, campos e as playlists de mesmo nome (criadas se faltarem). Nada é apagado de nenhum lado e o pendrive só é lido. Grava em lotes de 20, cada lote com cópia de segurança.
+- Núcleo: `Edit.AdoptTrack` e `UsbMerger`. Celular: "TRAZER DO PENDRIVE" pergunta Juntar (primeira opção) ou Substituir. Desktop: no diálogo de trazer, Juntar/Substituir.
+- Evidência: core 87 testes (`MergeTest`: faixas, marcações, grade, playlists, PPTH apontando para o áudio local, pendrive intocado, juntar de novo não duplica, caminho ocupado vai para "(2)"); mobile 31 (juntar pelo seletor de documentos de brinquedo); desktop compila e passa.
+- Não verificado: pendrive real exportado pelo rekordbox como origem (só bibliotecas geradas por este projeto); faixas sem análise no pendrive vêm sem análise (dá para analisar depois).
