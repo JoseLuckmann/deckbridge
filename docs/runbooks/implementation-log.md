@@ -668,3 +668,15 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Ferramentas, todas pelo apt assinado: g++-aarch64-linux-gnu 13.3.0, libasound2-dev(:arm64) 1.2.11-1ubuntu0.3 (ports.ubuntu.com para o arm64), qemu-user 8.2.2.
 - Não verificado: Pi, DDJ-400 no Pi, latência e temperatura (`BLOCKED_HARDWARE`).
 - Próximo: MIDI da DDJ-400 por ALSA e uma ADR da interface com medida.
+
+## 2026-10-25 — Pi: aarch64 igual ao x86 e decisão da interface (ADR-0008)
+
+- Correção numérica no aarch64: o dump das 46 cenas, compilado para Cortex-A53 e rodado sob qemu-aarch64, foi comparado ao x86.
+  - Com FMA (padrão do GCC): −93,7 dB, maior diferença 0,0002.
+  - Com `-ffp-contract=off`: −110 dB. O resto vem da libm.
+  - Inaudível. O código está certo no aarch64.
+- Interface do Pi, medida com protótipos da mesma cena (1024×600, 30 qps, Xvfb):
+  - SDL2 software: 15 MB de RSS, 7 MB privados, 4,0 % de CPU.
+  - Compose Desktop: 151–243 MB de RSS, 128–180 MB privados, 29–39 % de CPU.
+  - Decisão (ADR-0008): interface nativa em C++ com SDL2 no Pi, com a lógica de controle portada e verificada por vetores de referência gerados do Kotlin.
+- Nota de ambiente: o Gradle, baixando em paralelo pelo proxy deste ambiente, dava "Could not find" em artefatos que existem; `--max-workers=1` resolveu. Nada disso afeta o build do app, que roda `--offline`.
