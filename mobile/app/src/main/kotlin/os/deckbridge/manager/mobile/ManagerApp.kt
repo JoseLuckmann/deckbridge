@@ -73,6 +73,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     var helpRequested by mutableStateOf(false)
 
     val preview = Preview(this)
+    val sets = SetDesk(this)
 
     private val prefs = context.getSharedPreferences("biblioteca", Context.MODE_PRIVATE)
     var guideHidden by mutableStateOf(prefs.getBoolean("guiaOculto", false))

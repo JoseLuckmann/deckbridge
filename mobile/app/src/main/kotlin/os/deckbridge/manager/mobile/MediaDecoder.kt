@@ -129,6 +129,80 @@ class MediaDecoder : PlatformDecoder {
         }
     }
 
+    /**
+     * Um trecho estéreo, para a prévia de transição: pula para o quadro-chave antes de [startMs], decodifica, e descarta
+     * o que veio antes do ponto pedido. Só roda em aparelho (`BLOCKED_HARDWARE` nos testes de JVM).
+     */
+    override fun segment(file: File, startMs: Int, lengthMs: Int): os.deckbridge.logic.DecodedPcm? {
+        val extractor = MediaExtractor()
+        var decoder: MediaCodec? = null
+        return try {
+            extractor.setDataSource(file.absolutePath)
+            val track = (0 until extractor.trackCount).firstOrNull { extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME).orEmpty().startsWith("audio/") } ?: return null
+            val format = extractor.getTrackFormat(track)
+            extractor.selectTrack(track)
+            val startUs = startMs * 1000L
+            extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+            val codec = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME) ?: return null).also { decoder = it }
+            codec.configure(format, null, null, 0)
+            codec.start()
+            val rate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            val channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            val want = (lengthMs.toLong() * rate / 1000).toInt()
+            // Folga para o que vem antes do ponto (do quadro-chave até ele), descartada no fim.
+            val cap = want + rate * 4
+            val sink = PcmAccumulator(rate, channels, cap, cap)
+            var firstUs = -1L
+            val info = MediaCodec.BufferInfo()
+            var inputDone = false
+            var outputDone = false
+            var guard = 0
+            while (!outputDone) {
+                if (!inputDone) {
+                    val inIndex = codec.dequeueInputBuffer(5_000)
+                    if (inIndex >= 0) {
+                        val buffer = codec.getInputBuffer(inIndex) ?: return null
+                        val read = extractor.readSampleData(buffer, 0)
+                        if (read < 0) {
+                            codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            inputDone = true
+                        } else {
+                            codec.queueInputBuffer(inIndex, 0, read, extractor.sampleTime, 0)
+                            extractor.advance()
+                        }
+                    }
+                }
+                val outIndex = codec.dequeueOutputBuffer(info, 5_000)
+                if (outIndex >= 0) {
+                    guard = 0
+                    val buffer = codec.getOutputBuffer(outIndex)
+                    if (buffer != null && info.size > 0) {
+                        if (firstUs < 0) firstUs = info.presentationTimeUs
+                        buffer.order(ByteOrder.nativeOrder())
+                        buffer.position(info.offset)
+                        buffer.limit(info.offset + info.size)
+                        sink.append(buffer, info.size / (2 * channels))
+                    }
+                    codec.releaseOutputBuffer(outIndex, false)
+                    val skip = ((startUs - firstUs.coerceAtLeast(0)) * rate / 1_000_000L).coerceAtLeast(0)
+                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0 || sink.full || (firstUs >= 0 && sink.count >= skip + want)) outputDone = true
+                } else if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER && inputDone && ++guard > 200) {
+                    outputDone = true
+                }
+            }
+            val pcm = sink.result() ?: return null
+            val skip = ((startUs - firstUs.coerceAtLeast(0)) * rate / 1_000_000L).toInt().coerceIn(0, pcm.frameCount)
+            val n = (pcm.frameCount - skip).coerceAtMost(want).coerceAtLeast(0)
+            os.deckbridge.logic.DecodedPcm(pcm.left.copyOfRange(skip, skip + n), pcm.right.copyOfRange(skip, skip + n), rate)
+        } catch (_: Exception) {
+            null
+        } finally {
+            runCatching { decoder?.stop() }
+            runCatching { decoder?.release() }
+            runCatching { extractor.release() }
+        }
+    }
+
     private companion object {
         const val MAX_MINUTES = 15
     }

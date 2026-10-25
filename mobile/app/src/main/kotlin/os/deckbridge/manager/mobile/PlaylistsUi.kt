@@ -112,6 +112,7 @@ private fun PlaylistTracks(app: ManagerApp, p: PlaylistItem, onBack: (() -> Unit
             Text(p.name, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false))
             Text("${ids.size}", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(start = 8.dp).weight(1f))
             if (m.target == p.id) Text("ALVO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 6.dp))
+            if (ids.size >= 2) OutlinedButton(onClick = { app.sets.open(p.id) }, modifier = Modifier.height(38.dp)) { Text("SET", fontSize = 12.sp) }
             // Tudo que não é usado o tempo todo fica no ⋯.
             TextButton(onClick = { show(PlaylistDialog.More(p)) }) { Text("⋯", fontSize = 22.sp) }
         }

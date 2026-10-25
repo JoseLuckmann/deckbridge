@@ -47,7 +47,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
             // A pré-escuta é da faixa na tela: fechou a faixa ou passou para outra, para.
             val onScreen = app.triage?.getOrNull(app.triageAt) ?: app.detailId
             androidx.compose.runtime.LaunchedEffect(onScreen) {
-                if (app.preview.playingId != null && app.preview.playingId != onScreen) app.preview.stop()
+                if (app.sets.playlistId == null && app.preview.playingId != null && app.preview.playingId != onScreen) app.preview.stop()
             }
             val detailTab = app.tab == Tab.LIBRARY || app.tab == Tab.PLAYLISTS
             if (wide) {
@@ -79,6 +79,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                 }
             }
             if (app.triage != null) TriageScreen(app)
+            if (app.sets.playlistId != null) SetScreen(app)
             JobOverlay(app)
             NoticeToast(app)
         }

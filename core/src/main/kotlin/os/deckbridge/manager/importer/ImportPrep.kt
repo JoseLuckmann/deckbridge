@@ -29,6 +29,9 @@ class MonoAudio(val samples: FloatArray, val rate: Int)
 interface PlatformDecoder {
     fun probe(file: File): AudioInfo?
     fun mono(file: File): MonoAudio?
+
+    /** Um trecho estéreo, em qualidade de escuta (para a prévia de transições). */
+    fun segment(file: File, startMs: Int, lengthMs: Int): os.deckbridge.logic.DecodedPcm? = null
 }
 
 /**
@@ -132,6 +135,24 @@ object AudioIo {
 
     private fun le16(b: ByteArray, at: Int) = (b[at].toInt() and 0xFF) or ((b[at + 1].toInt() and 0xFF) shl 8)
     private fun le32(b: ByteArray, at: Int) = le16(b, at) or (le16(b, at + 2) shl 16)
+
+    /**
+     * Um trecho estéreo de [lengthMs] a partir de [startMs], para ouvir (prévia de transições). WAV é lido aqui; o resto
+     * vai pelo decodificador da plataforma ou pelo ffmpeg. Null se não deu para ler.
+     */
+    fun segment(file: File, startMs: Int, lengthMs: Int): os.deckbridge.logic.DecodedPcm? {
+        if (file.extension.lowercase() == "wav") os.deckbridge.logic.decodeWavSegment(file.readBytes(), startMs / 1000.0, lengthMs / 1000.0)?.let { return it }
+        platform?.segment(file, startMs, lengthMs)?.let { return it }
+        if (!ffmpeg) return null
+        val p = ProcessBuilder("ffmpeg", "-v", "error", "-ss", "%.3f".format(java.util.Locale.ROOT, startMs / 1000.0), "-t", "%.3f".format(java.util.Locale.ROOT, lengthMs / 1000.0), "-i", file.path, "-vn", "-ac", "2", "-ar", "44100", "-f", "s16le", "pipe:1")
+            .redirectError(ProcessBuilder.Redirect.DISCARD).start()
+        val raw = p.inputStream.readBytes()
+        if (!p.waitFor(120, TimeUnit.SECONDS) || p.exitValue() != 0 || raw.size < 4) return null
+        val n = raw.size / 4
+        val l = FloatArray(n) { (((raw[it * 4].toInt() and 0xFF) or (raw[it * 4 + 1].toInt() shl 8)).toShort()) / 32768f }
+        val r = FloatArray(n) { (((raw[it * 4 + 2].toInt() and 0xFF) or (raw[it * 4 + 3].toInt() shl 8)).toShort()) / 32768f }
+        return os.deckbridge.logic.DecodedPcm(l, r, 44100)
+    }
 
     /** Áudio mono para a análise, até ~24 kHz. */
     fun mono(file: File): MonoAudio {

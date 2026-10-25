@@ -17,6 +17,10 @@ import os.deckbridge.manager.pdb.TrackItem
 class Preview(private val app: ManagerApp) {
     var playingId by mutableStateOf<Int?>(null)
         private set
+
+    /** Prévia montada (transição ou mix de teste) tocando agora: a chave que quem pediu deu. */
+    var playingKey by mutableStateOf<String?>(null)
+        private set
     private var player: MediaPlayer? = null
     private val audio: AudioManager? = app.context.getSystemService(AudioManager::class.java)
 
@@ -42,11 +46,25 @@ class Preview(private val app: ManagerApp) {
             app.notice = os.deckbridge.manager.Banner("O áudio de \"${t.title}\" não está no aparelho.", true)
             return
         }
-        if (audio != null && audio.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-            app.notice = os.deckbridge.manager.Banner("Áudio ocupado", true)
+        if (start(file, t.title, fromMs)) playingId = t.id
+    }
+
+    /** Toca um WAV montado (prévia de transição ou mix de teste); tocar a mesma chave de novo para. */
+    fun toggleFile(file: File, key: String, title: String) {
+        if (playingKey == key) {
+            stop()
             return
         }
-        try {
+        stop()
+        if (start(file, title, 0)) playingKey = key
+    }
+
+    private fun start(file: File, title: String, fromMs: Int): Boolean {
+        if (audio != null && audio.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            app.notice = os.deckbridge.manager.Banner("Áudio ocupado", true)
+            return false
+        }
+        return try {
             val p = MediaPlayer()
             p.setDataSource(file.absolutePath)
             p.setOnCompletionListener { stop() }
@@ -58,10 +76,11 @@ class Preview(private val app: ManagerApp) {
             if (fromMs > 0) p.seekTo(fromMs)
             p.start()
             player = p
-            playingId = t.id
+            true
         } catch (e: Exception) {
             stop()
-            app.notice = os.deckbridge.manager.Banner("Não consegui tocar \"${t.title}\": ${e.message}", true)
+            app.notice = os.deckbridge.manager.Banner("Não consegui tocar \"$title\": ${e.message}", true)
+            false
         }
     }
 
@@ -70,6 +89,7 @@ class Preview(private val app: ManagerApp) {
         val p = player
         player = null
         playingId = null
+        playingKey = null
         if (p != null) {
             runCatching { p.stop() }
             runCatching { p.release() }

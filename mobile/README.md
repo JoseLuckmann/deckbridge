@@ -37,6 +37,19 @@ O núcleo (`core/`) é o mesmo do programa de computador. Nenhum outro código e
 - **Ordenar playlist** por BPM, nota ou ordem harmônica (roda Camelot + BPM).
 - **Antes de exportar**: verificação com o botão que resolve (analisar todas, apagar playlists vazias); falta de áudio bloqueia.
 
+## Planejar o set (rodada 7)
+
+Na playlist, **SET** abre o planejador. Entre cada par de faixas aparece a transição: tom → tom (verde se igual ou
+vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída.
+
+- **▶** monta e toca a transição: 12 s antes, os compassos juntos, 12 s depois. A que entra toca no andamento da que sai,
+  com a entrada caindo na batida da saída. Sem master tempo: o tom muda junto.
+- **✎** ajusta compassos (4/8/16/32), estilo (Troca de grave, Mistura, Eco, Corte), saída e entrada (‹ › um compasso,
+  « » quatro, ou um cue). **AUTO** volta ao automático (cue "Outro" ou perto do fim; primeiro compasso da que entra).
+- **▶ OUVIR** no topo: todas as transições em sequência, para ouvir o set de ponta a ponta.
+- **PRÓXIMA**: três faixas que combinam com a última (tom e BPM primeiro, depois nota). ▶ ouve, ＋ põe no fim.
+- O plano fica em `sets/` ao lado da biblioteca do aparelho; o pendrive e o banco do rekordbox não mudam.
+
 ## Ícone e integração com o Android
 
 Ícone adaptativo e temático (disco nas cores do player), abertura preta, nome "Biblioteca DJ" no lançador. Segurar o ícone: Triagem, Importar, Exportar. "Compartilhar" áudio de outro app importa direto. Deslizar a linha para a direita põe a faixa na playlist alvo.
