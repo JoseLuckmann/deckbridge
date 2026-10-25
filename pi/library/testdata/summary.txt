@@ -1,0 +1,516 @@
+# Gerado por RekordboxGoldenTest (Kotlin): o que o app lê do volume em testdata/usb.
+T 1|Click 120|1|1|1|1|12000|8|48000|CONTENTS/faixa-120.wav|faixa-120.wav|PIONEER/USBANLZ/ANLZ0001.DAT|1
+T 2|Click 100|2|1|1|2|10000|8|48000|CONTENTS/faixa-100.wav|faixa-100.wav|PIONEER/USBANLZ/ANLZ0002.DAT|0
+T 3|Night Bus|3|2|1|3|12400|32|22050|CONTENTS/night-bus.wav|night-bus.wav|PIONEER/USBANLZ/ANLZ0003.DAT|3
+T 4|Glasshouse|4|3|1|4|12200|32|22050|CONTENTS/glasshouse.wav|glasshouse.wav|PIONEER/USBANLZ/ANLZ0004.DAT|4
+T 5|Harbor Line|5|4|1|5|12800|32|22050|CONTENTS/harbor-line.wav|harbor-line.wav|PIONEER/USBANLZ/ANLZ0005.DAT|5
+T 6|Copper Room|6|2|1|6|11800|32|22050|CONTENTS/copper-room.wav|copper-room.wav|PIONEER/USBANLZ/ANLZ0006.DAT|6
+T 7|Soft Alarm|3|3|1|7|11000|32|22050|CONTENTS/soft-alarm.wav|soft-alarm.wav|PIONEER/USBANLZ/ANLZ0007.DAT|7
+T 8|Marble Stairs|4|4|1|8|12600|32|22050|CONTENTS/marble-stairs.wav|marble-stairs.wav|PIONEER/USBANLZ/ANLZ0008.DAT|8
+T 9|Late Signal|5|2|1|9|13200|32|22050|CONTENTS/late-signal.wav|late-signal.wav|PIONEER/USBANLZ/ANLZ0009.DAT|9
+T 10|Paper Lantern|6|3|1|10|10000|32|22050|CONTENTS/paper-lantern.wav|paper-lantern.wav|PIONEER/USBANLZ/ANLZ0010.DAT|10
+T 11|North Pier|3|4|1|11|9600|18|22050|CONTENTS/north-pier.wav|north-pier.wav|PIONEER/USBANLZ/ANLZ0011.DAT|11
+T 12|Low Ceiling|4|2|1|12|13800|18|22050|CONTENTS/low-ceiling.wav|low-ceiling.wav|PIONEER/USBANLZ/ANLZ0012.DAT|12
+T 13|Amber Yard|5|3|1|13|10400|18|22050|CONTENTS/amber-yard.wav|amber-yard.wav|PIONEER/USBANLZ/ANLZ0013.DAT|13
+T 14|Static Garden|6|4|1|14|11600|18|22050|CONTENTS/static-garden.wav|static-garden.wav|PIONEER/USBANLZ/ANLZ0014.DAT|14
+T 15|Red Thread|3|2|1|3|14000|18|22050|CONTENTS/red-thread.wav|red-thread.wav|PIONEER/USBANLZ/ANLZ0015.DAT|15
+T 16|Cold Open|4|3|1|4|10800|18|22050|CONTENTS/cold-open.wav|cold-open.wav|PIONEER/USBANLZ/ANLZ0016.DAT|16
+T 17|Second Room|5|4|1|5|11200|18|22050|CONTENTS/second-room.wav|second-room.wav|PIONEER/USBANLZ/ANLZ0017.DAT|17
+T 18|Afterimage|6|2|1|6|9900|18|22050|CONTENTS/afterimage.wav|afterimage.wav|PIONEER/USBANLZ/ANLZ0018.DAT|18
+T 19|Small Hours|3|3|1|7|9000|18|22050|CONTENTS/small-hours.wav|small-hours.wav|PIONEER/USBANLZ/ANLZ0019.DAT|19
+T 20|Drift Key|4|4|1|8|12100|18|22050|CONTENTS/drift-key.wav|drift-key.wav|PIONEER/USBANLZ/ANLZ0020.DAT|20
+T 21|Side Door|5|2|1|9|13000|18|22050|CONTENTS/side-door.wav|side-door.wav|PIONEER/USBANLZ/ANLZ0021.DAT|21
+T 22|Warm Concrete|6|3|1|10|10200|18|22050|CONTENTS/warm-concrete.wav|warm-concrete.wav|PIONEER/USBANLZ/ANLZ0022.DAT|22
+T 23|Last Tram|3|4|1|11|13600|18|22050|CONTENTS/last-tram.wav|last-tram.wav|PIONEER/USBANLZ/ANLZ0023.DAT|23
+T 24|Blue Circuit|4|2|1|12|9400|18|22050|CONTENTS/blue-circuit.wav|blue-circuit.wav|PIONEER/USBANLZ/ANLZ0024.DAT|24
+T 25|Quarto Escuro|3|2|1|3|12400|200|22050|CONTENTS/quarto-escuro.wav|quarto-escuro.wav|PIONEER/USBANLZ/ANLZ0025.DAT|25
+T 26|Linha Alta|4|3|1|5|12800|210|22050|CONTENTS/linha-alta.wav|linha-alta.wav|PIONEER/USBANLZ/ANLZ0026.DAT|26
+N artist 1|João Sintetico|0
+N artist 2|Casa|0
+N artist 3|Nara Vale|0
+N artist 4|Lumen K|0
+N artist 5|Otis March|0
+N artist 6|Kite Room|0
+N album 1|Sessao|1
+N album 2|North Line|1
+N album 3|Second Shift|1
+N album 4|Warm Concrete|1
+N genre 1|House|0
+N key 1|8A|0
+N key 2|4A|0
+N key 3|Am|0
+N key 4|Ebm|0
+N key 5|F#m|0
+N key 6|Dm|0
+N key 7|Gm|0
+N key 8|Cm|0
+N key 9|Bb|0
+N key 10|F|0
+N key 11|Em|0
+N key 12|Bm|0
+N key 13|C|0
+N key 14|Abm|0
+P 1|0|Sets|true|0
+P 2|1|Abertura|false|1
+P 3|0|Todas|false|2
+P 4|1|Warmup|false|3
+P 5|1|Peak|false|4
+P 6|1|Close|false|5
+E 2|1|0
+E 2|2|1
+E 3|1|0
+E 3|2|1
+E 3|3|2
+E 3|4|3
+E 3|5|4
+E 3|6|5
+E 3|7|6
+E 3|8|7
+E 3|9|8
+E 3|10|9
+E 3|11|10
+E 3|12|11
+E 3|13|12
+E 3|14|13
+E 3|15|14
+E 3|16|15
+E 3|17|16
+E 3|18|17
+E 3|19|18
+E 3|20|19
+E 3|21|20
+E 3|22|21
+E 3|23|22
+E 3|24|23
+E 3|25|24
+E 3|26|25
+E 4|3|0
+E 4|4|1
+E 4|5|2
+E 4|6|3
+E 4|7|4
+E 4|8|5
+E 4|9|6
+E 4|10|7
+E 5|11|0
+E 5|12|1
+E 5|13|2
+E 5|14|3
+E 5|15|4
+E 5|16|5
+E 5|17|6
+E 5|18|7
+E 6|19|0
+E 6|20|1
+E 6|21|2
+E 6|22|3
+E 6|23|4
+E 6|24|5
+E 6|25|6
+E 6|26|7
+A 1|PIONEER/Artwork/0001.png
+A 3|PIONEER/Artwork/0003.png
+A 4|PIONEER/Artwork/0004.png
+A 5|PIONEER/Artwork/0005.png
+A 6|PIONEER/Artwork/0006.png
+A 7|PIONEER/Artwork/0007.png
+A 8|PIONEER/Artwork/0008.png
+A 9|PIONEER/Artwork/0009.png
+A 10|PIONEER/Artwork/0010.png
+A 11|PIONEER/Artwork/0011.png
+A 12|PIONEER/Artwork/0012.png
+A 13|PIONEER/Artwork/0013.png
+A 14|PIONEER/Artwork/0014.png
+A 15|PIONEER/Artwork/0015.png
+A 16|PIONEER/Artwork/0016.png
+A 17|PIONEER/Artwork/0017.png
+A 18|PIONEER/Artwork/0018.png
+A 19|PIONEER/Artwork/0019.png
+A 20|PIONEER/Artwork/0020.png
+A 21|PIONEER/Artwork/0021.png
+A 22|PIONEER/Artwork/0022.png
+A 23|PIONEER/Artwork/0023.png
+A 24|PIONEER/Artwork/0024.png
+A 25|PIONEER/Artwork/0025.png
+A 26|PIONEER/Artwork/0026.png
+Z 1 source=PWV7 issues=
+  beats 16 b9581cda
+  cue -|500|-|Memoria|0
+  cue 0|0|-|Intro|16721960
+  cue 1|2000|-|Meio|2667775
+  wave 64:2fbe5280 blueP 64:5e92152d blueD 1200:db20fc67
+  rgbD 1200:db20fc67:f155b9cd:PWV5:15000 rgbP 1200:a22f1665:141a42b4:PWV4:0
+  bandD 1200:2ac45d2b:d323ffb7:e10da58b bandP 1200:2ac45d2b:d323ffb7:e10da58b bands 1200:2ac45d2b:d323ffb7:e10da58b
+  mood 
+Z 2 source=PWV7 issues=
+  beats 13 d48f8746
+  cue -|600|-|Entrada|0
+  cue -|1200|2400|Loop|0
+  cue 0|0|-|A|16762880
+  cue 2|3000|-|C|51280
+  wave 64:e0addd49 blueP 64:5fa8fbe9 blueD 1200:60c69804
+  rgbD 1200:60c69804:d29dcd8:PWV5:15000 rgbP 1200:4ac67d9d:c225a21d:PWV4:0
+  bandD 1200:ac24a353:ccac3e22:d9b24813 bandP 1200:ac24a353:ccac3e22:d9b24813 bands 1200:ac24a353:ccac3e22:d9b24813
+  mood 
+Z 3 source=PWV7 issues=
+  beats 66 689f40db
+  cue -|200|-|Memoria|14428200
+  cue -|7740|9672|Break1|4054122
+  cue 0|0|-|Intro|16726843
+  cue 1|3870|-|Phase A 1|3072255
+  cue 2|7740|-|Break1|4054122
+  cue 3|11610|-|Build|11816447
+  cue 4|15480|-|Drop|4054122
+  cue 5|19350|-|Groove|16747038
+  cue 6|23220|-|Fill|3894527
+  cue 7|27090|-|Outro|16769354
+  wave 1200:449c5f3b blueP 1200:591ebead blueD 4800:1a3c76e9
+  rgbD 4800:1a3c76e9:de703370:PWV5:15000 rgbP 1200:8c21c72e:51b76528:PWV4:0
+  bandD 4800:964b0172:482effdc:c1582d30 bandP 1200:b4be43f1:81338ab8:e369893a bands 4800:964b0172:482effdc:c1582d30
+  mood 
+Z 4 source=PWV7 issues=
+  beats 65 f5e6c4d9
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|3934|-|Phase A 1|3072255
+  cue 2|7868|-|Break1|4054122
+  cue 3|11802|-|Build|11816447
+  cue 4|15736|-|Drop|4054122
+  cue 5|19670|-|Groove|16747038
+  cue 6|23604|-|Fill|3894527
+  cue 7|27538|-|Outro|16769354
+  wave 1200:1e4d36fb blueP 1200:461c7f4a blueD 4800:4f77a3b4
+  rgbD 4800:4f77a3b4:5da67f7:PWV5:15000 rgbP 1200:1a352793:fa44aa77:PWV4:0
+  bandD 4800:2c46d038:d881c4a8:79e0bcd9 bandP 1200:4112d7f0:c321b474:379f7807 bands 4800:2c46d038:d881c4a8:79e0bcd9
+  mood 
+Z 5 source=PWV7 issues=
+  beats 68 a585b013
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|3750|-|Phase A 1|3072255
+  cue 2|7500|-|Break1|4054122
+  cue 3|11250|-|Build|11816447
+  cue 4|15000|-|Drop|4054122
+  cue 5|18750|-|Groove|16747038
+  cue 6|22500|-|Fill|3894527
+  cue 7|26250|-|Outro|16769354
+  wave 1200:980a5a09 blueP 1200:1fb8db5c blueD 4800:728c12da
+  rgbD 4800:728c12da:e5a6c70:PWV5:15000 rgbP 1200:92ec9709:64c7a4cd:PWV4:0
+  bandD 4800:2a4a87cf:1f5d6c18:eb3492d4 bandP 1200:c77384a4:379dad0e:72a7ce02 bands 4800:2a4a87cf:1f5d6c18:eb3492d4
+  mood 
+Z 6 source=PWV7 issues=
+  beats 62 49d7a428
+  cue -|200|-|Memoria|14428200
+  cue -|8132|10164|Break1|4054122
+  cue 0|0|-|Intro|16726843
+  cue 1|4066|-|Phase A 1|3072255
+  cue 2|8132|-|Break1|4054122
+  cue 3|12198|-|Build|11816447
+  cue 4|16264|-|Drop|4054122
+  cue 5|20330|-|Groove|16747038
+  cue 6|24396|-|Fill|3894527
+  cue 7|28462|-|Outro|16769354
+  wave 1200:2062f284 blueP 1200:48cda150 blueD 4800:50309e59
+  rgbD 4800:50309e59:44e07089:PWV5:15000 rgbP 1200:8b90fb54:f531f3d3:PWV4:0
+  bandD 4800:cf359218:8eebd0f3:6180fdfb bandP 1200:13ee994c:61eaf744:7aab65c4 bands 4800:cf359218:8eebd0f3:6180fdfb
+  mood 
+Z 7 source=PWV7 issues=
+  beats 58 3d43c3cf
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|4362|-|Phase A 1|3072255
+  cue 2|8724|-|Break1|4054122
+  cue 3|13086|-|Build|11816447
+  cue 4|17448|-|Drop|4054122
+  cue 5|21810|-|Groove|16747038
+  cue 6|26172|-|Fill|3894527
+  cue 7|30534|-|Outro|16769354
+  wave 1200:d7fbdaa8 blueP 1200:74853900 blueD 4800:408da80
+  rgbD 4800:408da80:f6dfc6b:PWV5:15000 rgbP 1200:ef1f857c:c1e33962:PWV4:0
+  bandD 4800:96303582:321c131d:ca4dd426 bandP 1200:2a578b5c:340cdd3a:7986726a bands 4800:96303582:321c131d:ca4dd426
+  mood 
+Z 8 source=PWV7 issues=
+  beats 67 79521238
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|3808|-|Phase A 1|3072255
+  cue 2|7616|-|Break1|4054122
+  cue 3|11424|-|Build|11816447
+  cue 4|15232|-|Drop|4054122
+  cue 5|19040|-|Groove|16747038
+  cue 6|22848|-|Fill|3894527
+  cue 7|26656|-|Outro|16769354
+  wave 1200:efddd2a4 blueP 1200:da83a50a blueD 4800:c7c8b215
+  rgbD 4800:c7c8b215:f79c3364:PWV5:15000 rgbP 1200:df4cc783:e67685b9:PWV4:0
+  bandD 4800:fa26b0c0:929a58a2:dd82a3de bandP 1200:1b92d91f:b067dce9:69e5297a bands 4800:fa26b0c0:929a58a2:dd82a3de
+  mood 
+Z 9 source=PWV7 issues=
+  beats 70 f3a94390
+  cue -|200|-|Memoria|14428200
+  cue -|7272|9088|Break1|4054122
+  cue 0|0|-|Intro|16726843
+  cue 1|3636|-|Phase A 1|3072255
+  cue 2|7272|-|Break1|4054122
+  cue 3|10908|-|Build|11816447
+  cue 4|14544|-|Drop|4054122
+  cue 5|18180|-|Groove|16747038
+  cue 6|21816|-|Fill|3894527
+  cue 7|25452|-|Outro|16769354
+  wave 1200:d2078ca2 blueP 1200:a0778786 blueD 4800:31467159
+  rgbD 4800:31467159:afe193e1:PWV5:15000 rgbP 1200:6918d558:d95516c2:PWV4:0
+  bandD 4800:865f9b6e:d1b97f55:e9b44783 bandP 1200:b55479cd:b8450d23:d9123192 bands 4800:865f9b6e:d1b97f55:e9b44783
+  mood 
+Z 10 source=PWV7 issues=
+  beats 53 c188cde0
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|4800|-|Phase A 1|3072255
+  cue 2|9600|-|Break1|4054122
+  cue 3|14400|-|Build|11816447
+  cue 4|19200|-|Drop|4054122
+  cue 5|24000|-|Groove|16747038
+  cue 6|28800|-|Fill|3894527
+  cue 7|31950|-|Outro|16769354
+  wave 1200:13d6b7ef blueP 1200:9127e1e3 blueD 4800:ee3c9b6d
+  rgbD 4800:ee3c9b6d:25b60145:PWV5:15000 rgbP 1200:c4031435:6e1443b2:PWV4:0
+  bandD 4800:e442352a:30d55da:369928f bandP 1200:471c4905:3423d64:135a3cf7 bands 4800:e442352a:30d55da:369928f
+  mood 
+Z 11 source=PWV7 issues=
+  beats 28 663ca27f
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|5000|-|Phase A 1|3072255
+  cue 2|10000|-|Break1|4054122
+  cue 3|15000|-|Build|11816447
+  cue 4|17950|-|Drop|4054122
+  cue 5|17950|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:b86031fd blueP 1200:7dfe70a1 blueD 2700:d603c081
+  rgbD 2700:d603c081:9453af26:PWV5:15000 rgbP 1200:22726a01:d2b11352:PWV4:0
+  bandD 2700:53c878f:8f590719:d42ffc8f bandP 1200:ae6a1edf:50913085:b50ac5d5 bands 2700:53c878f:8f590719:d42ffc8f
+  mood 
+Z 12 source=PWV7 issues=
+  beats 41 59ae1490
+  cue -|200|-|Memoria|14428200
+  cue -|6956|8692|Break1|4054122
+  cue 0|0|-|Intro|16726843
+  cue 1|3478|-|Phase A 1|3072255
+  cue 2|6956|-|Break1|4054122
+  cue 3|10434|-|Build|11816447
+  cue 4|13912|-|Drop|4054122
+  cue 5|17390|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:fbddab2c blueP 1200:b9a21df0 blueD 2700:3274d7a
+  rgbD 2700:3274d7a:a77b2ab0:PWV5:15000 rgbP 1200:233f623d:90171b9d:PWV4:0
+  bandD 2700:ce50675b:cd67df91:4f1fbf57 bandP 1200:e8f789b:d12052a9:1eb0fb7f bands 2700:ce50675b:cd67df91:4f1fbf57
+  mood 
+Z 13 source=PWV7 issues=
+  beats 31 d8b78f25
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|4614|-|Phase A 1|3072255
+  cue 2|9228|-|Break1|4054122
+  cue 3|13842|-|Build|11816447
+  cue 4|17950|-|Drop|4054122
+  cue 5|17950|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:21c9b889 blueP 1200:533447f9 blueD 2700:3a2e92c8
+  rgbD 2700:3a2e92c8:f709b360:PWV5:15000 rgbP 1200:d11f0cd1:a171c5d5:PWV4:0
+  bandD 2700:ee1cdd42:a471f6d4:e4df1a1f bandP 1200:dfc4dfa5:9ff51877:4f086fca bands 2700:ee1cdd42:a471f6d4:e4df1a1f
+  mood 
+Z 14 source=PWV7 issues=
+  beats 34 623f1a20
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|4136|-|Phase A 1|3072255
+  cue 2|8272|-|Break1|4054122
+  cue 3|12408|-|Build|11816447
+  cue 4|16544|-|Drop|4054122
+  cue 5|17950|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:633983d7 blueP 1200:b2ad4765 blueD 2700:d2ea5f52
+  rgbD 2700:d2ea5f52:5e107e96:PWV5:15000 rgbP 1200:864d4c16:1b0c2a23:PWV4:0
+  bandD 2700:98219589:a0ec9e0:db1291dd bandP 1200:4c58b7f:6c2da0ed:64bffba bands 2700:98219589:a0ec9e0:db1291dd
+  mood 
+Z 15 source=PWV7 issues=
+  beats 42 532be7aa
+  cue -|200|-|Memoria|14428200
+  cue -|6856|8568|Break1|4054122
+  cue 0|0|-|Intro|16726843
+  cue 1|3428|-|Phase A 1|3072255
+  cue 2|6856|-|Break1|4054122
+  cue 3|10284|-|Build|11816447
+  cue 4|13712|-|Drop|4054122
+  cue 5|17140|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:e429c413 blueP 1200:791b7738 blueD 2700:f4fc0292
+  rgbD 2700:f4fc0292:2fa64409:PWV5:15000 rgbP 1200:c6c3dcba:d222c563:PWV4:0
+  bandD 2700:21cb4fc7:4fef3a51:59872bc0 bandP 1200:a6fbd7e3:30b4ddf6:1ade5138 bands 2700:21cb4fc7:4fef3a51:59872bc0
+  mood 
+Z 16 source=PWV7 issues=
+  beats 32 d8022967
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|4444|-|Phase A 1|3072255
+  cue 2|8888|-|Break1|4054122
+  cue 3|13332|-|Build|11816447
+  cue 4|17776|-|Drop|4054122
+  cue 5|17950|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:3b7927ca blueP 1200:eb57a306 blueD 2700:7925f699
+  rgbD 2700:7925f699:835737d0:PWV5:15000 rgbP 1200:9c4ecae3:e2f71159:PWV4:0
+  bandD 2700:81bdd3a5:99e9d1b5:ca520039 bandP 1200:91a82b3e:71c60cf5:43ca2aee bands 2700:81bdd3a5:99e9d1b5:ca520039
+  mood 
+Z 17 source=PWV7 issues=
+  beats 33 c0aebfff
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|4284|-|Phase A 1|3072255
+  cue 2|8568|-|Break1|4054122
+  cue 3|12852|-|Build|11816447
+  cue 4|17136|-|Drop|4054122
+  cue 5|17950|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:34d780b8 blueP 1200:a013544 blueD 2700:df3e9e42
+  rgbD 2700:df3e9e42:24c0d4c0:PWV5:15000 rgbP 1200:635160e1:dc1ae036:PWV4:0
+  bandD 2700:f14ee8a3:d29c3f0e:5a0dfa0e bandP 1200:7eeddf:3b0420cf:fcd93a2b bands 2700:f14ee8a3:d29c3f0e:5a0dfa0e
+  mood 
+Z 18 source=PWV7 issues=
+  beats 29 1da479ea
+  cue -|200|-|Memoria|14428200
+  cue -|9696|12120|Break1|4054122
+  cue 0|0|-|Intro|16726843
+  cue 1|4848|-|Phase A 1|3072255
+  cue 2|9696|-|Break1|4054122
+  cue 3|14544|-|Build|11816447
+  cue 4|17950|-|Drop|4054122
+  cue 5|17950|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:c7fab451 blueP 1200:f45a7309 blueD 2700:f3915500
+  rgbD 2700:f3915500:96f3e9dd:PWV5:15000 rgbP 1200:be5ffc3d:acea5cbe:PWV4:0
+  bandD 2700:bf4a8759:c6962f4f:573ac6cb bandP 1200:de34fd9e:3bda7563:51cf1133 bands 2700:bf4a8759:c6962f4f:573ac6cb
+  mood 
+Z 19 source=PWV7 issues=
+  beats 27 13f280eb
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|5332|-|Phase A 1|3072255
+  cue 2|10664|-|Break1|4054122
+  cue 3|15996|-|Build|11816447
+  cue 4|17950|-|Drop|4054122
+  cue 5|17950|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:21abed3 blueP 1200:de42b278 blueD 2700:9a8d2083
+  rgbD 2700:9a8d2083:4a130da9:PWV5:15000 rgbP 1200:4bea713c:6b94341a:PWV4:0
+  bandD 2700:49520718:d200a7fd:e5eb2ebb bandP 1200:b178cce0:84d9be5d:6ac62e24 bands 2700:49520718:d200a7fd:e5eb2ebb
+  mood 
+Z 20 source=PWV7 issues=
+  beats 36 c2504a00
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|3966|-|Phase A 1|3072255
+  cue 2|7932|-|Break1|4054122
+  cue 3|11898|-|Build|11816447
+  cue 4|15864|-|Drop|4054122
+  cue 5|17950|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:7098c714 blueP 1200:1bd94363 blueD 2700:a8ca13fd
+  rgbD 2700:a8ca13fd:7565e8b9:PWV5:15000 rgbP 1200:721943fc:76abbedf:PWV4:0
+  bandD 2700:867ddcb8:5dac46df:f2fd166f bandP 1200:42f8a1c:71baeb9:66f80387 bands 2700:867ddcb8:5dac46df:f2fd166f
+  mood 
+Z 21 source=PWV7 issues=
+  beats 39 f50dd68e
+  cue -|200|-|Memoria|14428200
+  cue -|7384|9228|Break1|4054122
+  cue 0|0|-|Intro|16726843
+  cue 1|3692|-|Phase A 1|3072255
+  cue 2|7384|-|Break1|4054122
+  cue 3|11076|-|Build|11816447
+  cue 4|14768|-|Drop|4054122
+  cue 5|17950|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:a91da41e blueP 1200:e9292ab3 blueD 2700:734253ad
+  rgbD 2700:734253ad:cc577e8e:PWV5:15000 rgbP 1200:58fec19b:20494bbf:PWV4:0
+  bandD 2700:6c163a5c:d574d126:b7cdb33b bandP 1200:9dee0723:a3f6682b:665d0c58 bands 2700:6c163a5c:d574d126:b7cdb33b
+  mood 
+Z 22 source=PWV7 issues=
+  beats 30 8cbdbe93
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|4704|-|Phase A 1|3072255
+  cue 2|9408|-|Break1|4054122
+  cue 3|14112|-|Build|11816447
+  cue 4|17950|-|Drop|4054122
+  cue 5|17950|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:eb580d58 blueP 1200:5089cf48 blueD 2700:a71b4a9d
+  rgbD 2700:a71b4a9d:8bad9510:PWV5:15000 rgbP 1200:5988aaf0:a94ae52c:PWV4:0
+  bandD 2700:9b3a18c2:7a6c3e75:68a76522 bandP 1200:7c02785d:a17ed366:ff25bd85 bands 2700:9b3a18c2:7a6c3e75:68a76522
+  mood 
+Z 23 source=PWV7 issues=
+  beats 40 dc6573f4
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|3528|-|Phase A 1|3072255
+  cue 2|7056|-|Break1|4054122
+  cue 3|10584|-|Build|11816447
+  cue 4|14112|-|Drop|4054122
+  cue 5|17640|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:56ec2c93 blueP 1200:96c85619 blueD 2700:65ec9603
+  rgbD 2700:65ec9603:4bac8d1:PWV5:15000 rgbP 1200:ed9f8703:4f5cb33e:PWV4:0
+  bandD 2700:e3690129:7fed7573:4a16005c bandP 1200:13845aea:6cee2904:9e69e7aa bands 2700:e3690129:7fed7573:4a16005c
+  mood 
+Z 24 source=PWV7 issues=
+  beats 28 2d2c5e57
+  cue -|200|-|Memoria|14428200
+  cue -|10212|12764|Break1|4054122
+  cue 0|0|-|Intro|16726843
+  cue 1|5106|-|Phase A 1|3072255
+  cue 2|10212|-|Break1|4054122
+  cue 3|15318|-|Build|11816447
+  cue 4|17950|-|Drop|4054122
+  cue 5|17950|-|Groove|16747038
+  cue 6|17950|-|Fill|3894527
+  cue 7|17950|-|Outro|16769354
+  wave 1200:fc2c3968 blueP 1200:3b313f85 blueD 2700:e24f717e
+  rgbD 2700:e24f717e:ee0b3fa1:PWV5:15000 rgbP 1200:167af7df:5af4bc65:PWV4:0
+  bandD 2700:7c45d63b:3797acf1:7c306d8d bandP 1200:a24af1b1:b43f7c65:d159f8e6 bands 2700:7c45d63b:3797acf1:7c306d8d
+  mood 
+Z 25 source=PWV7 issues=
+  beats 413 d3914821
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|36000|-|Build|3072255
+  cue 2|80000|-|Drop|4054122
+  cue 3|136000|-|Break|11816447
+  cue 4|168000|-|Outro|4054122
+  wave 1200:4d059c7c blueP 1200:4b990965 blueD 30000:24c7b49
+  rgbD 30000:24c7b49:edfe93b9:PWV5:15000 rgbP 1200:66a4bfc0:3f4f9a12:PWV4:0
+  bandD 30000:42b95178:de7d45a6:41623c69 bandP 1200:793c9abf:6b76a9ad:6357f234 bands 30000:42b95178:de7d45a6:41623c69
+  mood 
+Z 26 source=PWV7 issues=
+  beats 448 1d338b10
+  cue -|200|-|Memoria|14428200
+  cue 0|0|-|Intro|16726843
+  cue 1|37800|-|Build|3072255
+  cue 2|84000|-|Drop|4054122
+  cue 3|142800|-|Break|11816447
+  cue 4|176400|-|Outro|4054122
+  wave 1200:f0f9bb1b blueP 1200:4ba070f6 blueD 31500:9f7be830
+  rgbD 31500:9f7be830:7d3acab3:PWV5:15000 rgbP 1200:a0f214f7:4e9d37ac:PWV4:0
+  bandD 31500:baa61be4:c0cb2cb0:fee1f39a bandP 1200:6c6a2f13:b6630741:ea3c6892 bands 31500:baa61be4:c0cb2cb0:fee1f39a
+  mood 
