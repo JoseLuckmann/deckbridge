@@ -3,11 +3,14 @@
 // a posição, os x-runs, as falhas de bloco, a CPU do processo e a RAM residente.
 //
 //   deckbridge_pi [--device hw:DDJ400] [--period 256] [--seconds 30] [--wav a.wav] [--wav b.wav] [--fx]
+//                 [--midi DDJ] [--map ddj400-map.json]   (DDJ-400 pelo ALSA rawmidi; ADR-0008)
 //
 // O pendrive do rekordbox é só leitura: este programa só lê os arquivos que recebe e não grava nada.
 
 #define DECKBRIDGE_NO_JNI 1
 #include "../android/app/src/main/cpp/engine.cpp"
+#include "control/deck_control.h"
+#include "control/midi_in.h"
 
 #include <sys/mman.h>
 #include <sys/resource.h>
@@ -146,6 +149,9 @@ int main(int argc, char **argv) {
     int seconds = 20;
     bool fx = false;
     std::vector<std::string> wavs;
+    std::string midiFilter;
+    bool midi = false;
+    std::string mapPath = "ddj400-map.json";
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
@@ -155,8 +161,12 @@ int main(int argc, char **argv) {
         else if (arg == "--seconds") seconds = std::max(1, std::atoi(next().c_str()));
         else if (arg == "--wav") wavs.push_back(next());
         else if (arg == "--fx") fx = true;
+        else if (arg == "--midi") {
+            midi = true;
+            midiFilter = next();
+        } else if (arg == "--map") mapPath = next();
         else {
-            std::fprintf(stderr, "uso: %s [--device NOME] [--period N] [--periods N] [--seconds N] [--wav a.wav] [--wav b.wav] [--fx]\n", argv[0]);
+            std::fprintf(stderr, "uso: %s [--device NOME] [--period N] [--periods N] [--seconds N] [--wav a.wav] [--wav b.wav] [--fx] [--midi FILTRO] [--map ARQ]\n", argv[0]);
             return 2;
         }
     }
@@ -188,6 +198,25 @@ int main(int argc, char **argv) {
     engine.transport(1, true);
     if (fx) engine.setBeatFx(15, true, 90, 2, 128.f, 1.f);  // SHIMMER no master: carga pesada de teste.
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // DDJ-400: bytes do rawmidi → mapa oficial → ação → motor, na thread do MIDI (a mesma regra do app Android).
+    deckbridge::control::MidiIn midiIn;
+    deckbridge::control::DeckControl<ToneEngine> control(engine);
+    deckbridge::control::TempoAssembler tempo;
+    std::atomic<long> midiMessages{0};
+    if (midi) {
+        static const deckbridge::control::MidiMap map = deckbridge::control::MidiMap::fromFile(mapPath);
+        if (map.all().empty()) {
+            std::fprintf(stderr, "mapa MIDI vazio ou ausente: %s\n", mapPath.c_str());
+            return 1;
+        }
+        control.setBpm(0, 128.0);
+        control.setBpm(1, 128.0);
+        const std::string port = midiIn.open(midiFilter, [&](const deckbridge::control::MidiMessage &m) {
+            midiMessages.fetch_add(1);
+            if (auto action = deckbridge::control::interpretPerformance(map.lookup(m.status, m.data1), m.data2, tempo)) control.apply(*action);
+        });
+        std::printf("MIDI: %s\n", port.empty() ? "nenhuma porta de entrada encontrada (DECKBRIDGE_MIDI_DEVICE ou --midi FILTRO)" : port.c_str());
+    }
     std::printf("tempo real: %s\n", oboe::AlsaConfig::lastRealtime.load() ? "sim (SCHED_FIFO)" : "não (sem permissão de rtprio)");
     double lastCpu = cpuSeconds();
     auto lastWall = std::chrono::steady_clock::now();
@@ -199,8 +228,8 @@ int main(int argc, char **argv) {
         lastCpu = cpu;
         lastWall = wall;
         const std::string st = engine.stats();
-        std::printf("t=%3ds deck1=%6.2fs deck2=%6.2fs xruns=%s falhas=%d cpu=%5.1f%% rss=%ld KB\n", s, engine.positionSeconds(0),
-                    engine.positionSeconds(1), field(st, "xruns").c_str(), engine.glitchCount(), share * 100.0, rssKb());
+        std::printf("t=%3ds deck1=%6.2fs deck2=%6.2fs xruns=%s falhas=%d cpu=%5.1f%% rss=%ld KB midi=%ld\n", s, engine.positionSeconds(0),
+                    engine.positionSeconds(1), field(st, "xruns").c_str(), engine.glitchCount(), share * 100.0, rssKb(), midiMessages.load());
         std::fflush(stdout);
     }
     engine.stop();

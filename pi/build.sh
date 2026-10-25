@@ -16,7 +16,13 @@ if [ "${1:-}" = "arm64" ]; then
         -o "$OUT/deckbridge_pi.arm64" pi/deckbridge_pi.cpp \
         -L/usr/lib/aarch64-linux-gnu -Wl,-rpath-link,/usr/lib/aarch64-linux-gnu -lasound
     echo "$OUT/deckbridge_pi.arm64"
+    g++ -std=c++17 -O2 -o "$OUT/controller_test" pi/control/controller_test.cpp
+    "$OUT/controller_test" .
 else
     g++ $FLAGS -o "$OUT/deckbridge_pi" pi/deckbridge_pi.cpp -lasound
     echo "$OUT/deckbridge_pi"
+    g++ -std=c++17 -O2 -o "$OUT/controller_test" pi/control/controller_test.cpp
+    "$OUT/controller_test" .
 fi
+# O mapa da DDJ-400 vai junto do binário (--map, padrão ./ddj400-map.json).
+cp android/app/src/main/resources/ddj400-map.json "$OUT/"

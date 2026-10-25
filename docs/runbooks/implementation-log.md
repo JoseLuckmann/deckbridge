@@ -680,3 +680,20 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - Compose Desktop: 151–243 MB de RSS, 128–180 MB privados, 29–39 % de CPU.
   - Decisão (ADR-0008): interface nativa em C++ com SDL2 no Pi, com a lógica de controle portada e verificada por vetores de referência gerados do Kotlin.
 - Nota de ambiente: o Gradle, baixando em paralelo pelo proxy deste ambiente, dava "Could not find" em artefatos que existem; `--max-workers=1` resolveu. Nada disso afeta o build do app, que roda `--offline`.
+
+## 2026-10-25 — Pi, fase 2a: DDJ-400 no Linux (lógica de controle em C++ e rawmidi)
+
+- Mudança:
+  - `pi/control/controller.h`: porta, regra por regra, de MidiMap, MidiAssembler, TempoAssembler e interpretPerformance. O mapa vira uma tabela O(1) por (status, nota).
+  - `pi/control/deck_control.h`: aplica as ações ao motor com a regra do `onPerformance` do DeckPage. Cobre mesa, transporte, prato em modo vinil, pitch e SYNC por BPM. O que ainda não é suportado é contado.
+  - `pi/control/midi_in.h`: rawmidi do ALSA, com a porta escolhida por filtro de nome ou `DECKBRIDGE_MIDI_DEVICE`.
+  - `deckbridge_pi --midi --map`.
+- Verificação:
+  - `ControllerGoldenTest` (Kotlin) grava `pi/control/testdata/golden.txt`: 6000 pacotes MIDI com running status, note-off, SysEx, clock, system common e lixo.
+  - `pi/control/controller_test.cpp` exige as mesmas ações: 4617 mensagens e 2763 ações, todas iguais.
+  - O teste Kotlin falha se o arquivo ficar velho em relação ao Kotlin.
+  - O redutor recebe as 2763 ações num motor falso e só passa valores finitos.
+  - Custo: 78–99 ns por mensagem de prato no x86.
+  - Suíte JVM com 143 testes e 0 falhas. Build aarch64 ok.
+- Não verificado: leitura rawmidi de uma DDJ-400 real (este PC não tem porta MIDI) (`BLOCKED_HARDWARE`).
+- Ambiente: o Maven Central devolveu 429 (limite de pedidos) depois do download do protótipo Compose. Uma tentativa com `--refresh-dependencies` gravou artefatos como ausentes no cache do Gradle; a resolução em série (`--max-workers=1`), depois de esperar, recuperou o build offline.
