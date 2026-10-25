@@ -107,12 +107,16 @@ class TrackRow private constructor(private val head: ByteArray, private val blob
     var filePath: String by text(20)
 
     fun encode(): ByteArray {
+        // Nos exports reais, toda string longa (0x40 ou 0x90, a dos acentos) começa num deslocamento múltiplo de 4,
+        // com zeros antes (conferido em 1.275 strings de 3.886 faixas).
+        fun isLong(b: ByteArray) = b.isNotEmpty() && (b[0].toInt() and 0xFF).let { it == 0x40 || it == 0x90 }
         var size = HEAD
-        for (b in blobs) size += b.size
+        for (b in blobs) size = (if (isLong(b)) align4(size) else size) + b.size
         val row = ByteArray(align4(size))
         head.copyInto(row)
         var cursor = HEAD
         blobs.forEachIndexed { slot, b ->
+            if (isLong(b)) cursor = align4(cursor)
             row.putU16(94 + slot * 2, cursor)
             b.copyInto(row, cursor)
             cursor += b.size
@@ -209,16 +213,22 @@ object NameRows {
         return DeviceString.decode(row, ofs, row.size)
     }
 
-    /** Artista novo, ou renomeado a partir de [like]. `indexShift` é 0x20 por posição na página, convenção observada. */
+    private fun isLong(text: ByteArray) = (text[0].toInt() and 0xFF).let { it == 0x40 || it == 0x90 }
+
+    /**
+     * Artista novo, ou renomeado a partir de [like]. `indexShift` é 0x20 × a posição da linha na página (o gravador
+     * de páginas o refaz). Nome curto (ASCII) começa no byte 10; nome longo (com acento, UTF-16) no 12, alinhado.
+     */
     fun artist(id: Int, name: String, indexShift: Int, like: ByteArray? = null): ByteArray {
         val text = DeviceString.encode(name)
-        val row = ByteArray(align4(10 + text.size))
+        val at = if (isLong(text)) 12 else 10
+        val row = ByteArray(align4(at + text.size))
         row.putU16(0, 0x60)
         row.putU16(2, indexShift)
         row.putU32(4, id)
         row[8] = (like?.u8(8) ?: 0x03).toByte()
-        row[9] = 10
-        text.copyInto(row, 10)
+        row[9] = at.toByte()
+        text.copyInto(row, at)
         return row
     }
 
@@ -233,7 +243,8 @@ object NameRows {
 
     fun album(id: Int, artistId: Int, name: String, indexShift: Int, like: ByteArray? = null): ByteArray {
         val text = DeviceString.encode(name)
-        val row = ByteArray(align4(22 + text.size))
+        val at = if (isLong(text)) 24 else 22
+        val row = ByteArray(align4(at + text.size))
         row.putU16(0, 0x80)
         row.putU16(2, indexShift)
         if (like != null && like.size >= 20) {
@@ -243,8 +254,8 @@ object NameRows {
         row.putU32(8, artistId)
         row.putU32(12, id)
         row[20] = (like?.u8(20) ?: 0x03).toByte()
-        row[21] = 22
-        text.copyInto(row, 22)
+        row[21] = at.toByte()
+        text.copyInto(row, at)
         return row
     }
 

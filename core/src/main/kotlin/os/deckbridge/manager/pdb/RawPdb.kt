@@ -130,7 +130,7 @@ class RawPdb(
          * páginas de dados (ou o índice e uma página zerada, se não há linhas) e, por fim, os números reservados de
          * "página vazia", que não existem fisicamente. [header0] fornece os bytes da página 0 que não conhecemos.
          */
-        fun build(pageLen: Int, tables: List<Pair<Int, List<ByteArray>>>, unknown16: Int, sequence: Int, header0: ByteArray = ByteArray(pageLen)): ByteArray {
+        fun build(pageLen: Int, tables: List<Pair<Int, List<ByteArray>>>, unknown16: Int, sequence: Int, header0: ByteArray = ByteArray(pageLen), dataSequences: Map<Int, Int> = emptyMap()): ByteArray {
             val pages = ArrayList<ByteArray>()
             pages += header0.copyOf(pageLen)
             class T(val type: Int, val head: Int, val data: IntArray, val chunks: List<List<ByteArray>>)
@@ -145,17 +145,24 @@ class RawPdb(
                 laid += T(type, head, data, chunks)
             }
             var reserved = next
+            // O rekordbox numera primeiro a "página vazia" da última tabela com linhas e depois as demais, em ordem.
+            val firstReserved = laid.lastOrNull { it.chunks.isNotEmpty() }
+            val reservedFor = HashMap<Int, Int>()
+            if (firstReserved != null) reservedFor[firstReserved.type] = reserved++
+            for (t in laid) if (t.chunks.isNotEmpty() && t !== firstReserved) reservedFor[t.type] = reserved++
             val dir = ArrayList<IntArray>()
             for (t in laid) {
                 val has = t.chunks.isNotEmpty()
-                val candidate = if (has) reserved++ else t.head + 1
-                pages += Pages.indexPage(pageLen, t.head, t.type, if (has) t.data.first() else NO_NEXT_PAGE, 1)
-                if (has) t.chunks.forEachIndexed { n, chunk -> pages += Pages.dataPage(pageLen, t.data[n], t.type, if (n == t.chunks.lastIndex) candidate else t.data[n + 1], sequence, chunk) }
+                val candidate = if (has) reservedFor.getValue(t.type) else t.head + 1
+                pages += Pages.indexPage(pageLen, t.head, t.type, if (has) t.data.first() else candidate, 1, entryNext = if (has) t.data.first() else NO_NEXT_PAGE)
+                if (has) t.chunks.forEachIndexed { n, chunk -> pages += Pages.dataPage(pageLen, t.data[n], t.type, if (n == t.chunks.lastIndex) candidate else t.data[n + 1], dataSequences[t.type] ?: sequence, chunk) }
                 else pages += ByteArray(pageLen)
                 dir += intArrayOf(t.type, candidate, t.head, if (has) t.data.last() else t.head)
             }
-            val out = ByteArray(pages.size * pageLen)
-            pages.forEachIndexed { n, page -> page.copyInto(out, n * pageLen) }
+            // Quando a última tabela está vazia, o arquivo real termina na página de índice dela, sem a página zerada.
+            val physical = if (laid.lastOrNull()?.chunks?.isEmpty() == true) pages.size - 1 else pages.size
+            val out = ByteArray(physical * pageLen)
+            for (n in 0 until physical) pages[n].copyInto(out, n * pageLen)
             out.fill(0, 0, 28 + dir.size * 16)
             out.putU32(4, pageLen)
             out.putU32(8, dir.size)
@@ -295,7 +302,7 @@ internal object Pages {
     }
 
     /** Página de índice (`0x64`) sem entradas: o que os exports reais têm nas tabelas sem páginas indexadas. */
-    fun indexPage(pageLen: Int, index: Int, type: Int, nextPage: Int, sequence: Int): ByteArray {
+    fun indexPage(pageLen: Int, index: Int, type: Int, nextPage: Int, sequence: Int, entryNext: Int = nextPage): ByteArray {
         val p = ByteArray(pageLen)
         p.putU32(4, index)
         p.putU32(8, type)
@@ -307,7 +314,7 @@ internal object Pages {
         p.putU16(36, (pageLen - 80) / 4)
         p.putU16(38, 0)
         p.putU32(40, index)
-        p.putU32(44, nextPage)
+        p.putU32(44, entryNext)
         p.putU32(48, 0x03FFFFFF)
         p.putU16(56, 0)
         p.putU16(58, 0x1FFF)
