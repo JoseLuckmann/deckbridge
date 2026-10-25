@@ -32,12 +32,15 @@ fun UsbTab(app: ManagerApp, actions: Actions) {
     val usb = app.usb
     var confirm by remember { mutableStateOf<Confirm?>(null) }
     var withAudio by remember { mutableStateOf(true) }
+    val issues = preflightIssues(app)
+    val blocked = issues.any { it.blocking }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Card("1 · Biblioteca do aparelho") {
             val v = m.view
             Text("${v?.tracks?.size ?: 0} faixas · ${v?.playlists?.count { !it.folder } ?: 0} playlists", color = Palette.text, fontSize = 16.sp)
             Text(if (m.dirty) "Há mudanças não salvas. Salve antes de exportar." else "Tudo salvo no aparelho.", color = if (m.dirty) Palette.warn else Palette.muted, fontSize = 13.sp)
         }
+        Preflight(app)
         Card("2 · Pendrive") {
             if (usb == null) {
                 Text("Conecte o pendrive no celular (cabo OTG ou adaptador USB-C) e escolha a pasta raiz dele.", color = Palette.muted, fontSize = 13.sp)
@@ -55,7 +58,7 @@ fun UsbTab(app: ManagerApp, actions: Actions) {
             Text("Copia as músicas e análises que faltam e grava o banco por último, no formato do rekordbox. Depois confere relendo o pendrive.", color = Palette.muted, fontSize = 13.sp)
             Button(
                 onClick = { if (usb?.existing != null) confirm = Confirm.EXPORT else app.export() },
-                enabled = usb != null && usb.problem == null && !m.dirty && (m.view?.tracks?.isNotEmpty() == true),
+                enabled = usb != null && usb.problem == null && !m.dirty && !blocked,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
             ) { Text("Exportar para o pendrive") }
         }
@@ -95,5 +98,33 @@ private fun Card(title: String, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Palette.surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, color = Palette.accent2, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         content()
+    }
+}
+
+
+private fun preflightIssues(app: ManagerApp): List<os.deckbridge.manager.smart.Smart.Issue> {
+    val m = app.model
+    val v = m.view ?: return emptyList()
+    return os.deckbridge.manager.smart.Smart.preflight(v, { m.hasAnalysis(it) }, { t -> java.io.File(app.root, t.filePath.replace('\\', '/').trimStart('/')).isFile })
+}
+
+/** Antes de exportar: o que está faltando, com o botão que resolve. Só o que é bloqueante impede o botão de exportar. */
+@Composable
+private fun Preflight(app: ManagerApp) {
+    val issues = preflightIssues(app)
+    Card(if (issues.isEmpty()) "Verificação antes de exportar" else "Antes de exportar") {
+        if (issues.isEmpty()) {
+            Text("✓ Tudo pronto: todas as faixas têm áudio e análise.", color = Palette.accent, fontSize = 14.sp)
+        }
+        issues.forEach { i ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text((if (i.blocking) "✕ " else "! ") + i.text, color = if (i.blocking) Palette.danger else Palette.warn, fontSize = 14.sp)
+                when (i.fix) {
+                    os.deckbridge.manager.smart.Smart.Fix.ANALYZE_ALL -> OutlinedButton(onClick = { app.analyzeAll() }, modifier = Modifier.fillMaxWidth().height(44.dp)) { Text("Analisar todas agora") }
+                    os.deckbridge.manager.smart.Smart.Fix.REMOVE_EMPTY_PLAYLISTS -> OutlinedButton(onClick = { val n = app.model.removeEmptyPlaylists(); app.did("$n playlist(s) vazia(s) apagada(s)") }, modifier = Modifier.fillMaxWidth().height(44.dp)) { Text("Apagar as vazias") }
+                    null -> {}
+                }
+            }
+        }
     }
 }

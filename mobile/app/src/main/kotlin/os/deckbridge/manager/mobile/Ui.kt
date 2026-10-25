@@ -73,6 +73,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                     }
                 }
             }
+            if (app.triage != null) TriageScreen(app)
             JobOverlay(app)
             NoticeToast(app)
         }
@@ -106,15 +107,23 @@ private fun TopBar(app: ManagerApp, actions: Actions, compact: Boolean) {
 @Composable
 private fun SaveBar(app: ManagerApp) {
     val m = app.model
-    if (!m.dirty) return
-    Row(Modifier.fillMaxWidth().background(Palette.surfaceHigh).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text("${m.pending.size} mudança(s) não salva(s)", color = Palette.warn, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Text(m.pending.last().text, color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    if (!m.dirty && m.redoStack.isEmpty()) return
+    Column(Modifier.fillMaxWidth().background(Palette.surfaceHigh).padding(horizontal = 12.dp, vertical = 2.dp)) {
+        if (m.dirty) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${m.pending.size} não salva(s):", color = Palette.warn, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(m.pending.last().text, color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 6.dp).weight(1f))
+            }
+        } else Text("Tudo desfeito", color = Palette.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { m.undo() }, enabled = m.dirty) { Text("↶ Desfazer", fontSize = 13.sp) }
+            if (m.redoStack.isNotEmpty()) TextButton(onClick = { m.redo() }) { Text("↷ Refazer", fontSize = 13.sp) }
+            Spacer(Modifier.weight(1f))
+            if (m.dirty) {
+                TextButton(onClick = { m.discard() }) { Text("Descartar", color = Palette.danger, fontSize = 13.sp) }
+                Button(onClick = { app.save() }, modifier = Modifier.height(40.dp)) { Text("Salvar") }
+            }
         }
-        TextButton(onClick = { m.undo() }) { Text("Desfazer") }
-        TextButton(onClick = { m.discard() }) { Text("Descartar", color = Palette.danger) }
-        Button(onClick = { app.save() }, modifier = Modifier.height(44.dp)) { Text("Salvar") }
     }
 }
 
@@ -179,6 +188,7 @@ private fun NoticeToast(app: ManagerApp) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(n.text, Modifier.weight(1f), color = Palette.bg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            if (app.noticeUndo && app.model.dirty) TextButton(onClick = { app.undoFromNotice() }) { Text("DESFAZER", color = Palette.bg, fontWeight = FontWeight.Bold) }
             TextButton(onClick = { app.notice = null }) { Text("OK", color = Palette.bg) }
         }
     }

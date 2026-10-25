@@ -151,4 +151,56 @@ class ManagerModelTest {
         assertEquals(tracks, m.view!!.tracks)
         assertTrue(m.view!!.entries.isNotEmpty())
     }
+
+    @Test
+    fun redoReplaysUndoneChangesAndAnyNewChangeClearsIt() {
+        val m = model()
+        m.open(TestVolumes.synthetic())
+        val t = m.view!!.tracks[0]
+        m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = 4)), "a")
+        m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = 2)), "b")
+        m.undo()
+        m.undo()
+        assertFalse(m.dirty)
+        assertTrue(m.redo())
+        assertEquals(4, m.view!!.track(t.id)!!.rating)
+        assertTrue(m.redo())
+        assertEquals(2, m.view!!.track(t.id)!!.rating)
+        assertFalse(m.redo())
+        m.undo()
+        m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = 5)), "c")
+        assertFalse(m.redo(), "mudança nova esvazia o refazer")
+    }
+
+    @Test
+    fun targetPlaylistAddsAndRemovesWithOneCallAndFiltersNarrowTheList() {
+        val m = model()
+        m.open(TestVolumes.synthetic())
+        val v = m.view!!
+        assertEquals(null, m.toggleInTarget(v.tracks[0].id), "sem alvo não faz nada")
+        val id = m.nextPlaylistId()
+        m.submit(Edit.CreatePlaylist(id, 0, "Alvo", false), "nova")
+        m.target = id
+        val a = v.tracks[0].id
+        assertTrue(m.toggleInTarget(a)!!.startsWith("Adicionada"))
+        assertEquals(listOf(a), m.view!!.entries[id])
+        assertTrue(m.toggleInTarget(a)!!.startsWith("Tirada"))
+        assertEquals(emptyList(), m.view!!.entries[id].orEmpty())
+        // Filtro rápido + busca com token: a lista é a interseção.
+        m.filter = os.deckbridge.manager.smart.QuickFilter.UNRATED
+        val unrated = m.rows()
+        assertTrue(unrated.all { it.rating == 0 })
+        m.query = "bpm:>0"
+        assertTrue(m.rows().all { it.bpm > 0 && it.rating == 0 })
+        // Salvar a lista como playlist leva exatamente as faixas mostradas.
+        val shown = m.rows().map { it.id }
+        val pid = m.saveListAsPlaylist("Lista salva")!!
+        assertEquals(shown, m.view!!.entries[pid])
+        // Ordenar e apagar vazias.
+        m.sortPlaylist(pid, os.deckbridge.manager.smart.Smart.SortMode.BPM_DOWN)
+        val bpms = m.view!!.entries[pid]!!.map { m.view!!.track(it)!!.bpm }
+        assertEquals(bpms.sortedDescending(), bpms)
+        m.submit(Edit.CreatePlaylist(m.nextPlaylistId(), 0, "Vazia", false), "vazia")
+        assertEquals(2, m.removeEmptyPlaylists(), "a alvo e a nova estão vazias")
+    }
 }

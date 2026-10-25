@@ -53,7 +53,7 @@ As **etiquetas dentro dos arquivos de áudio (ID3 e semelhantes) não são alter
 
 ## Verificação (25/10/2026)
 
-Desktop: 6 testes (interface). O núcleo, com 75 testes, vive em `core/` (ADR-0010). No PC (Linux x86_64), 0 falhas, 0 ignorados:
+Desktop: 6 testes (interface). O núcleo, com 83 testes, vive em `core/` (ADR-0010). No PC (Linux x86_64), 0 falhas, 0 ignorados:
 
 | Teste | O que prova |
 |---|---|
@@ -99,3 +99,7 @@ O teste do Kaitai precisa de `KAITAI_PARSERS` (veja `tools/setup_kaitai.sh`); se
 - "Abrir a biblioteca local" cria (se não existir) e abre `~/.deckbridge/library`, no mesmo formato de um pendrive do rekordbox. Os dois bancos nascem do gerador (`ExportFactory`), que reproduz byte a byte, nas tabelas fixas, o export vazio gerado pelo rekordbox (teste `ExportFactoryTest`, só com `REAL_EXPORT`).
 - "Exportar para pendrive…": copia áudio e análises que faltam e grava o banco por último; backup local do banco antigo; relê e confere. "Trazer de pendrive…" substitui a biblioteca aberta pela do pendrive (backup antes) e só lê o pendrive.
 - Juntar duas bibliotecas não existe: exportar e trazer substituem.
+
+## Atalhos (rodada de UX 1)
+
+Filtros rápidos com contagem (Sem análise, Sem nota, Fora de playlists, 4 ou 5 estrelas, Recentes…), busca com `bpm:120-128 tom:8A nota:4 cor:verde genero:house`, "Salvar lista como playlist", ordenar playlist por BPM, nota ou ordem harmônica, e Refazer ao lado de Desfazer. A lógica é a mesma do celular (`core/smart`, testada em `SmartTest` e `ManagerModelTest`).

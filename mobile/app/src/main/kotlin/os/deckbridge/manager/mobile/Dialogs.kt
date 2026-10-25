@@ -25,6 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 
 @Composable
 fun ConfirmDialog(title: String, text: String, confirm: String, danger: Boolean = false, onConfirm: () -> Unit, onClose: () -> Unit) {
@@ -93,7 +96,7 @@ fun ColorDialog(onPick: (Int) -> Unit, onClose: () -> Unit) {
 
 /** Escolhe uma playlist (não pasta) ou cria uma nova com as faixas selecionadas. */
 @Composable
-fun PlaylistPicker(app: ManagerApp, onPick: (Int) -> Unit, onCreate: (String) -> Unit, onClose: () -> Unit) {
+fun PlaylistPicker(app: ManagerApp, title: String = "Adicionar à playlist", onPick: (Int) -> Unit, onCreate: (String) -> Unit, onClose: () -> Unit) {
     var creating by remember { mutableStateOf(false) }
     if (creating) {
         NameDialog("Nova playlist", confirm = "Criar", onName = onCreate, onClose = { creating = false })
@@ -102,7 +105,7 @@ fun PlaylistPicker(app: ManagerApp, onPick: (Int) -> Unit, onCreate: (String) ->
     val lists = app.model.view?.playlists?.filter { !it.folder }.orEmpty()
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Adicionar à playlist") },
+        title = { Text(title) },
         text = {
             Column {
                 Text("+ Nova playlist…", color = Palette.accent, fontSize = 18.sp, modifier = Modifier.fillMaxWidth().clickable { creating = true }.padding(vertical = 12.dp))
@@ -116,6 +119,100 @@ fun PlaylistPicker(app: ManagerApp, onPick: (Int) -> Unit, onCreate: (String) ->
         },
         confirmButton = {},
         dismissButton = { TextButton(onClick = onClose) { Text("Cancelar") } },
+        containerColor = Palette.surfaceHigh,
+    )
+}
+
+
+/** Edita vários campos de várias faixas de uma vez. Só os campos preenchidos mudam; os vazios ficam como estão. */
+@Composable
+fun BatchEditDialog(count: Int, onApply: (os.deckbridge.manager.pdb.TrackPatch) -> Unit, onClose: () -> Unit) {
+    var artist by remember { mutableStateOf("") }
+    var album by remember { mutableStateOf("") }
+    var genre by remember { mutableStateOf("") }
+    var comment by remember { mutableStateOf("") }
+    val any = listOf(artist, album, genre, comment).any { it.isNotBlank() }
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Editar $count faixa(s)") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Só o que você preencher muda. O resto fica como está.", color = Palette.muted, fontSize = 13.sp)
+                OutlinedTextField(artist, { artist = it }, label = { Text("Artista") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(album, { album = it }, label = { Text("Álbum") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(genre, { genre = it }, label = { Text("Gênero") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(comment, { comment = it }, label = { Text("Comentário") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = any, onClick = {
+                onApply(os.deckbridge.manager.pdb.TrackPatch(artist = artist.trim().ifEmpty { null }, album = album.trim().ifEmpty { null }, genre = genre.trim().ifEmpty { null }, comment = comment.trim().ifEmpty { null }))
+            }) { Text("Aplicar") }
+        },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancelar") } },
+        containerColor = Palette.surfaceHigh,
+    )
+}
+
+@Composable
+fun SearchHelpDialog(onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Buscar e filtrar") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Escreva palavras para buscar em título, artista, álbum, gênero, tom e comentário. Combine com filtros:", color = Palette.muted, fontSize = 14.sp)
+                listOf(
+                    "bpm:120-128" to "andamento entre 120 e 128",
+                    "bpm:>124" to "acima de 124 (ou bpm:<124)",
+                    "tom:8A" to "tom 8A ou Am (as duas notações)",
+                    "nota:4" to "4 estrelas ou mais",
+                    "cor:verde" to "cor da faixa",
+                    "genero:house" to "gênero contém house",
+                ).forEach { (k, v) ->
+                    Row { Text(k, color = Palette.accent, fontSize = 14.sp, modifier = Modifier.width(120.dp)); Text(v, color = Palette.text, fontSize = 14.sp) }
+                }
+                Text("Exemplo: aurora bpm:120-128 nota:4", color = Palette.muted, fontSize = 13.sp)
+                Text("Dica: com uma busca ou filtro ativo, \"Salvar lista como playlist\" cria a playlist com o que está na tela.", color = Palette.muted, fontSize = 13.sp)
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Entendi") } },
+        containerColor = Palette.surfaceHigh,
+    )
+}
+
+/** "Arrumar tudo": ajustes sugeridos por regras (espaços, maiúsculas, nome do arquivo). Tudo marcado por padrão; nada muda sem confirmar. */
+@Composable
+fun TidyDialog(app: ManagerApp, all: List<os.deckbridge.manager.organize.Suggestion>) {
+    val on = remember(all) { androidx.compose.runtime.mutableStateListOf<Boolean>().apply { addAll(all.map { it.defaultOn }) } }
+    AlertDialog(
+        onDismissRequest = { app.tidy = null },
+        title = { Text("Arrumar tudo") },
+        text = {
+            if (all.isEmpty()) {
+                Text("Nada para arrumar: espaços, maiúsculas e nomes estão em ordem.", color = Palette.muted)
+            } else {
+                Column {
+                    Text("Sugestões por regras simples (não é IA). Desmarque o que não quiser.", color = Palette.muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp))
+                    LazyColumn(Modifier.height(320.dp)) {
+                        items(all.indices.toList()) { i ->
+                            val s = all[i]
+                            Row(Modifier.fillMaxWidth().clickable { on[i] = !on[i] }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.Checkbox(checked = on[i], onCheckedChange = { on[i] = it })
+                                Column(Modifier.padding(start = 6.dp)) {
+                                    Text("${s.rule.title}: ${s.title}", color = Palette.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                    Text(s.detail, color = Palette.muted, fontSize = 12.sp, maxLines = 3)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (all.isNotEmpty()) TextButton(onClick = { app.applyTidy(all.filterIndexed { i, _ -> on[i] }) }, enabled = on.any { it }) { Text("Aplicar ${on.count { it }}") }
+        },
+        dismissButton = { TextButton(onClick = { app.tidy = null }) { Text(if (all.isEmpty()) "Fechar" else "Cancelar") } },
         containerColor = Palette.surfaceHigh,
     )
 }

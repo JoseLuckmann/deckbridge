@@ -13,6 +13,23 @@ App Android (`os.deckbridge.manager`) para organizar a biblioteca no celular e e
 
 O núcleo (`core/`) é o mesmo do programa de computador. Nenhum outro código escreve no pendrive além do exportador (ADR-0009/0010).
 
+## Atalhos para o que se repete (rodada de UX 1)
+
+- **Primeiros passos**: importar → analisar → marcar → playlists → exportar, com o próximo passo em um botão. Recolhido por padrão depois do primeiro passo; "Ocultar" some de vez.
+- **Filtros rápidos com contagem**: Sem análise, Sem nota, Fora de playlists, Sem gênero, Sem artista, 4 ou 5 estrelas, Recentes. Respondem "o que ainda falta?".
+- **Busca com filtros escritos**: `bpm:120-128`, `bpm:>124`, `tom:8A` (aceita Am e 8A), `nota:4`, `cor:verde`, `genero:house`, combináveis com palavras. O "?" na busca explica.
+- **Salvar lista como playlist**: com busca ou filtro ativo, cria a playlist com o que está na tela.
+- **Playlist alvo**: definida uma vez, cada faixa ganha um "+" de um toque (e "✓" para tirar); também na triagem e em "＋ ao alvo" na seleção.
+- **Estrelas na própria linha**: tocar numa estrela marca sem abrir a faixa.
+- **Triagem**: uma faixa por vez, botões grandes de nota (avança sozinho), cor, adicionar ao alvo, ouvir; em pé e deitado.
+- **Editar em lote**: vários campos de várias faixas; só o preenchido muda.
+- **Arrumar tudo**: sugestões por regras (espaços, maiúsculas, nome do arquivo), todas visíveis e desmarcáveis; não é IA.
+- **Analisar todas** as faixas sem análise de uma vez (em lotes de 6, cancelável).
+- **Desfazer/Refazer** sempre à mão; cada ação rápida mostra um aviso com "DESFAZER".
+- **Navegar entre faixas** com ‹ › nos detalhes, na ordem da lista atual.
+- **Ordenar playlist** por BPM, nota ou ordem harmônica (roda Camelot + BPM).
+- **Antes de exportar**: verificação com o botão que resolve (analisar todas, apagar playlists vazias); falta de áudio bloqueia.
+
 ## Build e testes
 
 ```
@@ -20,7 +37,7 @@ cd mobile
 LC_ALL=C.UTF-8 ./gradlew :app:testDebugUnitTest :app:assembleDebug   # APK em app/build/outputs/apk/debug
 ```
 
-Testes (11, JVM/Robolectric, SDK 33): `ScreenshotTest` (8 capturas em `docs/ui/mobile-*.png`), `SafStorageTest` (3: gravar/trocar arquivos, recusa de renomeação que devolve o antigo, exportar uma biblioteca inteira e trazê-la de volta por um provedor de documentos de brinquedo).
+Testes (JVM/Robolectric, SDK 33): `ScreenshotTest` (12 capturas em `docs/ui/mobile-*.png`), `UxFlowTest` (toques de verdade: "+" do alvo com DESFAZER, estrela na linha, triagem até o fim, filtro rápido), `SafStorageTest` (3: gravar/trocar arquivos, recusa de renomeação que devolve o antigo, exportar uma biblioteca inteira e trazê-la de volta por um provedor de documentos de brinquedo).
 
 ## Não verificado (`BLOCKED_HARDWARE`)
 
@@ -28,4 +45,6 @@ Testes (11, JVM/Robolectric, SDK 33): `ScreenshotTest` (8 capturas em `docs/ui/m
 - MP3/FLAC/AAC dependem do MediaCodec do aparelho (`MediaDecoder`); nos testes só WAV é decodificado.
 - Pendrive USB real pelo seletor do Android (provedores reais podem se comportar diferente do de brinquedo, por exemplo ao renomear) e o espaço livre (o SAF não informa; uma falta de espaço aparece como erro de gravação, com o banco antigo intacto porque o banco é escrito por último).
 - Nenhum player nem o rekordbox leu o que o app grava.
+- A pré-escuta (`Preview`, MediaPlayer) e a triagem com áudio só valem em aparelho: nos testes não há codec.
+- Se os atalhos realmente aceleram o uso é hipótese até alguém usar com a biblioteca real; os testes provam que funcionam, não que são a melhor ordem.
 - Importar muitas faixas de uma vez mantém as análises na memória até gravar.

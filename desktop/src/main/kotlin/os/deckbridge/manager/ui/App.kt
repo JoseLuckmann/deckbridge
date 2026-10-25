@@ -55,6 +55,8 @@ import kotlin.concurrent.thread
 import os.deckbridge.manager.Column as Col
 import os.deckbridge.manager.ManagerModel
 import os.deckbridge.manager.VolumeDetector
+import os.deckbridge.manager.smart.QuickFilter
+import os.deckbridge.manager.smart.Smart
 import os.deckbridge.manager.pdb.Edit
 import os.deckbridge.manager.pdb.PlaylistItem
 import os.deckbridge.manager.pdb.TrackItem
@@ -315,7 +317,7 @@ private fun Center(model: ManagerModel, ui: UiState, modifier: Modifier) {
     val inTrackPlaylist = open != null && !open.folder
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextBox(model.query, { model.query = it }, Modifier.weight(1f), placeholder = "Buscar título, artista, álbum, gênero…")
+            TextBox(model.query, { model.query = it }, Modifier.weight(1f), placeholder = "Buscar… ou filtrar: bpm:120-128 tom:8A nota:4 cor:verde")
             Box {
                 Btn("Adicionar à playlist ▾", { ui.addMenu = !ui.addMenu }, enabled = model.selection.isNotEmpty() && view.playlists.any { !it.folder })
                 if (ui.addMenu) AddMenu(model, ui)
@@ -337,6 +339,20 @@ private fun Center(model: ManagerModel, ui: UiState, modifier: Modifier) {
                 Btn("▲", { moveInPlaylist(model, open, sel, -1) }, enabled = ordered && sel.size == 1 && ids.indexOf(sel.first()) > 0)
                 Btn("▼", { moveInPlaylist(model, open, sel, +1) }, enabled = ordered && sel.size == 1 && ids.indexOf(sel.first()) in 0 until ids.lastIndex)
                 Btn("Remover da playlist", { model.submit(Edit.RemoveFromPlaylist(open.id, sel), "Remover ${sel.size} faixa${if (sel.size == 1) "" else "s"} de \"${open.name}\""); model.selection = emptySet() }, danger = true, enabled = sel.isNotEmpty())
+            }
+        }
+        // Filtros rápidos: "o que ainda falta fazer?" com um clique, com a contagem.
+        val counts = model.filterCounts()
+        Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            QuickFilter.values().filter { it == QuickFilter.ALL || it == model.filter || (counts[it] ?: 0) > 0 }.forEach { f ->
+                Btn(if (f == QuickFilter.ALL) f.title else "${f.title} · ${counts[f] ?: 0}", { model.filter = f }, primary = model.filter == f)
+            }
+            if ((model.query.isNotBlank() || model.filter != QuickFilter.ALL) && rows.isNotEmpty()) {
+                Btn("Salvar lista como playlist", { ui.prompt = Prompt("Nome da playlist (${rows.size} faixa${if (rows.size == 1) "" else "s"})", "", "Criar") { n -> model.saveListAsPlaylist(n.trim()) } })
+            }
+            if (inTrackPlaylist) {
+                Label("Ordenar:", Pal.Muted, 12.sp, modifier = Modifier.padding(start = 10.dp))
+                Smart.SortMode.values().filter { it != Smart.SortMode.TITLE && it != Smart.SortMode.ARTIST }.forEach { mode -> Btn(mode.title, { model.sortPlaylist(open!!.id, mode) }) }
             }
         }
         Label(
@@ -582,6 +598,7 @@ private fun PendingBar(model: ManagerModel, ui: UiState) {
         if (n == 0) Label("Nenhuma mudança na fila.", Pal.Muted, 13.sp, modifier = Modifier.weight(1f))
         else Label("$n mudança${if (n == 1) "" else "s"} na fila · última: ${model.pending.last().text}", Pal.Orange, 13.sp, modifier = Modifier.weight(1f))
         Btn("Desfazer a última", { model.undo() }, enabled = n > 0)
+        if (model.redoStack.isNotEmpty()) Btn("Refazer", { model.redo() })
         Btn("Descartar tudo", { ui.confirm = ConfirmAsk("Descartar ${model.pending.size} mudanças?", "As mudanças da fila somem. O pendrive não foi tocado.", "Descartar", true) { model.discard() } }, danger = true, enabled = n > 0)
         Btn("Revisar e aplicar…", { ui.review = true }, primary = true, enabled = n > 0)
     }

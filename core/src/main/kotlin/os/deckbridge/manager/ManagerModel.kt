@@ -18,6 +18,8 @@ import os.deckbridge.manager.volume.PDB_RELATIVE
 import os.deckbridge.manager.volume.SafeWriter
 import os.deckbridge.manager.volume.VolumeException
 import os.deckbridge.manager.volume.Volumes
+import os.deckbridge.manager.smart.QuickFilter
+import os.deckbridge.manager.smart.Smart
 
 /** Uma mudança na fila: a edição e o texto que a tela e o backup mostram. */
 data class PendingChange(val edit: Edit, val text: String)
@@ -47,6 +49,13 @@ class ManagerModel(val backups: Backups = Backups()) {
     var openPlaylist by mutableStateOf<Int?>(null)
     var query by mutableStateOf("")
     var sort by mutableStateOf(Sort(Column.ARTIST))
+    /** Filtro rápido ativo ("Sem análise", "Sem nota"…). */
+    var filter by mutableStateOf(QuickFilter.ALL)
+
+    /** Playlist alvo: com ela definida, adicionar uma faixa a ela é um toque. */
+    var target by mutableStateOf<Int?>(null)
+    var redoStack by mutableStateOf<List<PendingChange>>(emptyList())
+        private set
     var busy by mutableStateOf<String?>(null)
     var lastReport by mutableStateOf<ApplyReport?>(null)
 
@@ -59,9 +68,12 @@ class ManagerModel(val backups: Backups = Backups()) {
         val vol = Volumes.open(root)
         volume = vol
         pending = emptyList()
+        redoStack = emptyList()
         editor = PdbEditor(vol.raw, vol.root)
         view = editor!!.view()
         selection = emptySet()
+        filter = QuickFilter.ALL
+        if (target != null && view!!.playlists.none { it.id == target }) target = null
         anchor = null
         openPlaylist = null
         query = ""
@@ -84,6 +96,7 @@ class ManagerModel(val backups: Backups = Backups()) {
         return try {
             e.apply(edit)
             pending = pending + PendingChange(edit, text)
+            redoStack = emptyList()
             view = e.view()
             true
         } catch (ex: EditException) {
@@ -93,8 +106,18 @@ class ManagerModel(val backups: Backups = Backups()) {
         }
     }
 
+    /** Refaz a última mudança desfeita. Qualquer mudança nova esvazia a pilha de refazer. */
+    fun redo(): Boolean {
+        val next = redoStack.lastOrNull() ?: return false
+        val keep = redoStack.dropLast(1)
+        if (!submit(next.edit, next.text)) return false
+        redoStack = keep
+        return true
+    }
+
     fun undo() {
         if (pending.isEmpty()) return
+        redoStack = redoStack + pending.last()
         pending = pending.dropLast(1)
         editor = rebuild()
         view = editor!!.view()
@@ -105,6 +128,7 @@ class ManagerModel(val backups: Backups = Backups()) {
     fun discard() {
         if (volume == null) return
         pending = emptyList()
+        redoStack = emptyList()
         editor = PdbEditor(volume!!.raw, volume!!.root)
         view = editor!!.view()
         if (openPlaylist != null && view!!.playlists.none { it.id == openPlaylist }) openPlaylist = null
@@ -190,6 +214,53 @@ class ManagerModel(val backups: Backups = Backups()) {
         }
     }
 
+    /** Contagem de cada filtro rápido, para os números nos botões. */
+    fun filterCounts(): Map<QuickFilter, Int> = view?.let { v -> Smart.counts(v, { hasAnalysis(it) }) } ?: emptyMap()
+
+    /** Um toque: põe a faixa na playlist alvo, ou a tira se já estiver nela. Devolve o texto do que fez, ou null se não há alvo. */
+    fun toggleInTarget(trackId: Int): String? {
+        val id = target ?: return null
+        val p = playlist(id) ?: return null
+        val t = view?.track(trackId) ?: return null
+        val has = trackId in view?.entries?.get(id).orEmpty()
+        return if (has) {
+            if (submit(Edit.RemoveFromPlaylist(id, listOf(trackId)), "Tirar \"${t.title}\" de \"${p.name}\"")) "Tirada de \"${p.name}\"" else null
+        } else {
+            if (submit(Edit.AddToPlaylist(id, listOf(trackId)), "Adicionar \"${t.title}\" a \"${p.name}\"")) "Adicionada a \"${p.name}\"" else null
+        }
+    }
+
+    /** Cria uma playlist com as faixas que a lista mostra agora (busca e filtro incluídos). */
+    fun saveListAsPlaylist(name: String): Int? {
+        val ids = rows().map { it.id }
+        if (ids.isEmpty()) {
+            banner = Banner("A lista está vazia: não há o que salvar.", error = true)
+            return null
+        }
+        val id = nextPlaylistId()
+        if (!submit(Edit.CreatePlaylist(id, 0, name, false), "Criar playlist \"$name\"")) return null
+        if (!submit(Edit.AddToPlaylist(id, ids), "Adicionar ${ids.size} faixa(s) a \"$name\"")) return null
+        return id
+    }
+
+    /** Ordena a playlist [id] pelo critério. Não faz nada (e diz false) se já estiver nessa ordem. */
+    fun sortPlaylist(id: Int, mode: Smart.SortMode): Boolean {
+        val p = playlist(id) ?: return false
+        val current = view?.entries?.get(id).orEmpty()
+        val order = Smart.sorted(view ?: return false, current, mode)
+        if (order == current) return false
+        return submit(Edit.ReorderPlaylist(id, order), "Ordenar \"${p.name}\": ${mode.title}")
+    }
+
+    /** Apaga as playlists vazias (não pastas). Devolve quantas. */
+    fun removeEmptyPlaylists(): Int {
+        val v = view ?: return 0
+        val empty = v.playlists.filter { !it.folder && v.entries[it.id].orEmpty().isEmpty() }
+        var n = 0
+        for (p in empty) if (submit(Edit.DeletePlaylist(p.id), "Apagar playlist vazia \"${p.name}\"")) n++
+        return n
+    }
+
     fun nextPlaylistId(): Int = (view?.playlists?.maxOfOrNull { it.id } ?: 0) + 1
 
     /** Faixas com alguma edição de campo na fila (marcadas na tabela). */
@@ -214,9 +285,10 @@ class ManagerModel(val backups: Backups = Backups()) {
     /** A lista da tela: escopo, busca e ordenação. Dentro de uma playlist, `sort.column == null` é a ordem da playlist. */
     fun rows(): List<TrackItem> {
         val v = view ?: return emptyList()
-        val q = query.trim().lowercase()
+        val q = Smart.parseQuery(query)
         var list = scopeTrackIds().mapNotNull { v.track(it) }
-        if (q.isNotEmpty()) list = list.filter { t -> listOf(t.title, t.artist, t.album, t.genre, t.key, t.comment, t.fileName).any { it.lowercase().contains(q) } }
+        if (!q.isEmpty) list = list.filter { Smart.matches(q, it) }
+        if (filter != QuickFilter.ALL) list = Smart.apply(filter, v, { hasAnalysis(it) }, list)
         val column = sort.column ?: return list
         val cmp: Comparator<TrackItem> = when (column) {
             Column.ID -> compareBy { it.id }

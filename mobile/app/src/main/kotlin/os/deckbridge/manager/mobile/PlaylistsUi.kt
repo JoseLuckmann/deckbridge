@@ -112,7 +112,21 @@ private fun PlaylistTracks(app: ManagerApp, p: PlaylistItem, onBack: (() -> Unit
                 Text(p.name, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("${ids.size} faixa(s)", color = Palette.muted, fontSize = 12.sp)
             }
+            TextButton(onClick = { m.target = p.id; app.did("\"${p.name}\" é a playlist alvo. Na Biblioteca, um toque no + adiciona.") }, enabled = m.target != p.id) { Text(if (m.target == p.id) "Alvo ✓" else "Usar como alvo", fontSize = 12.sp) }
             TextButton(onClick = { show(PlaylistDialog.Delete(p)) }) { Text("Apagar", color = Palette.danger) }
+        }
+        if (ids.size > 1) {
+            var menu by remember { mutableStateOf(false) }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Ordenar:", color = Palette.muted, fontSize = 13.sp)
+                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 8.dp)) {
+                    items(os.deckbridge.manager.smart.Smart.SortMode.values().toList()) { mode ->
+                        androidx.compose.material3.AssistChip(onClick = {
+                            if (m.sortPlaylist(p.id, mode)) app.did("\"${p.name}\" ordenada: ${mode.title}") else app.notice = os.deckbridge.manager.Banner("Já está nessa ordem.", false)
+                        }, label = { Text(mode.title, fontSize = 12.sp) })
+                    }
+                }
+            }
         }
         if (ids.isEmpty()) {
             Hint("Playlist vazia. Na Biblioteca, segure uma faixa para selecionar e toque em \"Playlist\".")

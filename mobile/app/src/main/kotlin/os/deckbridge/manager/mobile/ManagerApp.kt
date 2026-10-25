@@ -12,6 +12,9 @@ import os.deckbridge.manager.ManagerModel
 import os.deckbridge.manager.importer.AudioIo
 import os.deckbridge.manager.importer.ImportPrep
 import os.deckbridge.manager.organize.OnDemand
+import os.deckbridge.manager.organize.Organizer
+import os.deckbridge.manager.organize.Suggestion
+import os.deckbridge.manager.smart.Smart
 import os.deckbridge.manager.pdb.Edit
 import os.deckbridge.manager.pdb.TrackItem
 import os.deckbridge.manager.transfer.Cancelled
@@ -51,6 +54,34 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     var lastTransfer by mutableStateOf<TransferReport?>(null)
     var notice by mutableStateOf<Banner?>(null)
 
+    /** Verdadeiro quando o aviso atual veio de uma mudança que o botão "Desfazer" do aviso desfaz. */
+    var noticeUndo by mutableStateOf(false)
+
+    // Triagem: passar pelas faixas uma a uma marcando (nota, cor, playlist alvo).
+    var triage by mutableStateOf<List<Int>?>(null)
+    var triageAt by mutableStateOf(0)
+
+    // "Arrumar tudo": sugestões por regra.
+    var tidy by mutableStateOf<List<Suggestion>?>(null)
+
+    val preview = Preview(this)
+
+    private val prefs = context.getSharedPreferences("biblioteca", Context.MODE_PRIVATE)
+    var guideHidden by mutableStateOf(prefs.getBoolean("guiaOculto", false))
+        private set
+    var exportedOnce by mutableStateOf(prefs.getBoolean("exportou", false))
+        private set
+
+    fun hideGuide() {
+        guideHidden = true
+        prefs.edit().putBoolean("guiaOculto", true).apply()
+    }
+
+    fun showGuide() {
+        guideHidden = false
+        prefs.edit().putBoolean("guiaOculto", false).apply()
+    }
+
     init {
         AudioIo.platform = MediaDecoder()
     }
@@ -60,8 +91,87 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         model.open(root)
     }
 
-    private fun say(text: String, error: Boolean = false) {
+    private fun say(text: String, error: Boolean = false, undo: Boolean = false) {
         notice = Banner(text, error)
+        noticeUndo = undo
+    }
+
+    /** Avisa o que uma ação rápida fez, com "Desfazer" no aviso. */
+    fun did(text: String?) {
+        if (text != null) say(text, undo = true)
+    }
+
+    fun undoFromNotice() {
+        model.undo()
+        notice = null
+        noticeUndo = false
+    }
+
+    // --- Triagem -------------------------------------------------------------------------------
+
+    fun startTriage() {
+        val v = model.view ?: return
+        val ids = Smart.triageQueue(v)
+        if (ids.isEmpty()) return
+        triage = ids
+        triageAt = 0
+        detailId = null
+    }
+
+    fun endTriage() {
+        triage = null
+        preview.stop()
+    }
+
+    // --- Arrumar tudo --------------------------------------------------------------------------
+
+    fun openTidy() {
+        val v = model.view ?: return
+        tidy = Organizer.suggest(v) { model.hasAnalysis(it) }.filter { it.edit != null }
+    }
+
+    fun applyTidy(chosen: List<Suggestion>) {
+        tidy = null
+        val n = model.submitAll(chosen.mapNotNull { s -> s.edit?.let { it to "${s.rule.title}: ${s.title}" } })
+        if (n > 0) say("$n ajuste(s) aplicado(s). Revise e salve.", undo = true)
+    }
+
+    // --- Analisar todas ------------------------------------------------------------------------
+
+    fun analyzeAll() {
+        val v = model.view ?: return
+        val todo = v.tracks.filter { !model.hasAnalysis(it) }
+        if (todo.isEmpty()) {
+            say("Todas as faixas já têm análise.")
+            return
+        }
+        background("Analisando ${todo.size} faixa(s)") { j ->
+            var done = 0
+            var failed = 0
+            val edits = ArrayList<Pair<Edit, String>>()
+            for ((n, t) in todo.withIndex()) {
+                if (j.cancelled) break
+                j.text = "${n + 1}/${todo.size}: ${t.title}"
+                val out = OnDemand.analyze(root, t)
+                val sug = OnDemand.suggestion(out, hasAnalysis = false, force = false)
+                if (sug?.edit != null) {
+                    edits += sug.edit!! to "Analisar \"${t.title}\""
+                    done++
+                } else failed++
+                // Em lotes: segura poucas análises na memória e já guarda no aparelho.
+                if (edits.size >= 6) {
+                    model.submitAll(edits)
+                    edits.clear()
+                    model.apply(null) { j.text = it }
+                }
+            }
+            if (edits.isNotEmpty()) {
+                model.submitAll(edits)
+                model.apply(null) { j.text = it }
+            }
+            pruneBackups()
+            say("$done faixa(s) analisada(s)" + (if (failed > 0) ", $failed sem áudio ou ilegível" else "") + ".", error = done == 0 && failed > 0)
+        }
     }
 
     /** Roda [block] numa thread própria, com [Job] visível. Erros viram aviso; nada derruba o app. */
@@ -119,7 +229,15 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
             val cache = File(context.cacheDir, "importar").apply { deleteRecursively(); mkdirs() }
             val edits = ArrayList<Pair<Edit, String>>()
             var failed = 0
+            var imported = 0
             val firstError = StringBuilder()
+            // Em lotes de 6: grava no aparelho e solta as análises da memória antes de seguir.
+            fun flush() {
+                if (edits.isEmpty()) return
+                imported += model.submitAll(edits)
+                edits.clear()
+                model.apply(null) { j.text = it }
+            }
             try {
                 uris.forEachIndexed { n, uri ->
                     if (j.cancelled) throw Cancelled()
@@ -130,20 +248,21 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
                         context.contentResolver.openInputStream(uri)!!.use { i -> copy.outputStream().use { i.copyTo(it) } }
                         val p = ImportPrep.prepare(copy)
                         edits += Edit.ImportTrack(p, p.info.title, p.info.artist, p.info.album, p.info.genre, p.read.keyName, p.info.year, p.info.trackNumber, p.suggestedCues) to "Importar \"${p.info.title}\""
+                        if (edits.size >= 6) {
+                            flush()
+                            copy.parentFile?.listFiles()?.forEach { f -> if (f != copy) f.delete() }
+                        }
+                    } catch (e: Cancelled) {
+                        throw e
                     } catch (e: Exception) {
                         failed++
                         if (firstError.isEmpty()) firstError.append("$name: ${e.message}")
                     }
                 }
-                if (edits.isNotEmpty()) {
-                    val ok = model.submitAll(edits)
-                    j.text = "Gravando no aparelho"
-                    model.apply(null) { j.text = it }
-                    pruneBackups()
-                    say("$ok faixa(s) importada(s)." + if (failed > 0) " $failed falhou: $firstError" else "", error = ok == 0)
-                } else {
-                    say("Nada importado. $firstError", error = true)
-                }
+                flush()
+                pruneBackups()
+                if (imported > 0) say("$imported faixa(s) importada(s)." + if (failed > 0) " $failed falhou: $firstError" else "", undo = false)
+                else say("Nada importado. $firstError", error = true)
             } finally {
                 cache.deleteRecursively()
             }
@@ -197,6 +316,8 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         background("Exportando para o pendrive") { j ->
             val report = UsbExporter(backupsDir).export(root, choice.storage, replaceExisting = true, progress = { j.text = it }, cancelled = { j.cancelled })
             lastTransfer = report
+            exportedOnce = true
+            prefs.edit().putBoolean("exportou", true).apply()
             usb = UsbChoice(choice.tree, choice.label, choice.storage, UsbExporter(backupsDir).inspect(choice.storage), null)
             say("Exportado: ${report.tracks} faixas, ${report.copied} arquivo(s) copiado(s).")
         }

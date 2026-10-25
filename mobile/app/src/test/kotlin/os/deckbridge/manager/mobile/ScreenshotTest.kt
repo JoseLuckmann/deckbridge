@@ -91,4 +91,40 @@ class ScreenshotTest {
         a.tab = Tab.USB
         shot("mobile-08-horizontal-pendrive", a)
     }
+
+    @Test @Config(qualifiers = "w411dp-h891dp-port-560dpi")
+    fun portraitTargetAndFilters() {
+        val a = app()
+        a.hideGuide()
+        a.model.target = 1
+        a.model.query = "bpm:120-128"
+        a.model.filter = os.deckbridge.manager.smart.QuickFilter.UNRATED
+        shot("mobile-09-vertical-filtros-e-alvo", a)
+    }
+
+    @Test @Config(qualifiers = "w411dp-h891dp-port-560dpi")
+    fun portraitTriage() {
+        val a = app()
+        a.model.target = 2
+        a.startTriage()
+        a.triageAt = 3
+        shot("mobile-10-vertical-triagem", a)
+    }
+
+    @Test @Config(qualifiers = "w891dp-h411dp-land-560dpi")
+    fun landscapeTriage() {
+        val a = app()
+        a.model.target = 2
+        a.startTriage()
+        a.triageAt = 3
+        shot("mobile-11-horizontal-triagem", a)
+    }
+
+    @Test @Config(qualifiers = "w411dp-h891dp-port-560dpi")
+    fun portraitPreflight() {
+        val a = app()
+        a.model.submit(os.deckbridge.manager.pdb.Edit.CreatePlaylist(a.model.nextPlaylistId(), 0, "Rascunho", false), "x")
+        a.tab = Tab.USB
+        shot("mobile-12-vertical-pendrive-checagem", a)
+    }
 }

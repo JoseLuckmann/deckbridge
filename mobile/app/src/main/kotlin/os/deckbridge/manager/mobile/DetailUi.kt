@@ -65,6 +65,12 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
                 Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text(t.artist.ifEmpty { "sem artista" }, color = Palette.muted, fontSize = 13.sp, maxLines = 1)
             }
+            val list = m.rows().map { it.id }
+            val at = list.indexOf(t.id)
+            if (at >= 0) {
+                TextButton(onClick = { app.preview.stop(); app.detailId = list[at - 1] }, enabled = at > 0) { Text("‹", fontSize = 26.sp) }
+                TextButton(onClick = { app.preview.stop(); app.detailId = list[at + 1] }, enabled = at < list.lastIndex) { Text("›", fontSize = 26.sp) }
+            }
             if (onBack == null) TextButton(onClick = { app.detailId = null }) { Text("Fechar") }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -117,7 +123,10 @@ private fun AnalysisSection(app: ManagerApp, t: TrackItem) {
             Stat("Tempo", formatDuration(t.durationSeconds))
             Stat("Grade", if (has) "sim" else "não")
         }
-        OutlinedButton(onClick = { app.analyze(t, force = has) }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(if (has) "Reanalisar com o app" else "Analisar agora") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { app.preview.toggle(t) }, modifier = Modifier.weight(1f).height(48.dp)) { Text(if (app.preview.playingId == t.id) "■ Parar" else "▶ Ouvir") }
+            OutlinedButton(onClick = { app.analyze(t, force = has) }, modifier = Modifier.weight(1.4f).height(48.dp)) { Text(if (has) "Reanalisar com o app" else "Analisar agora") }
+        }
         if (!has) Text("Sem análise a faixa toca, mas sem grade nem cues no player.", color = Palette.muted, fontSize = 12.sp)
     }
 }
@@ -151,6 +160,7 @@ private fun CueSection(app: ManagerApp, t: TrackItem) {
             Spacer(Modifier.width(8.dp))
             OutlinedButton(onClick = { pos = beats.firstOrNull { it > pos + 5 } ?: pos }, modifier = Modifier.height(44.dp)) { Text("batida ▶") }
         }
+        OutlinedButton(onClick = { app.preview.toggle(t, fromMs = pos.coerceAtLeast(1)) }, modifier = Modifier.fillMaxWidth().height(44.dp)) { Text("▶ Ouvir daqui") }
         Text("Hot cue nesta posição", color = Palette.muted, fontSize = 12.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for (hot in 1..8) {

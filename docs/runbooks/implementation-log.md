@@ -827,3 +827,12 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Achado: o `query` antigo do Robolectric é recusado pelo `DocumentsProvider` real; o teste usa um provedor próprio (`FakeDocumentsProvider`).
 - Não verificado (`BLOCKED_HARDWARE`): app no S25 Ultra; MP3/FLAC no MediaCodec; pendrive USB real por SAF; qualquer player lendo o resultado. Detalhe em `mobile/README.md`.
 - Próximo: teste no aparelho e em cópia de pendrive; importação em lotes menores; juntar bibliotecas (hoje exportar/trazer substituem).
+
+## 2026-10-25 — Rodada de UX 1: atalhos para o que se repete
+
+- Pedido do dono: processo longo de melhoria da interface, muito intuitiva, com mecanismos para operações repetitivas e comuns. Esta é a primeira rodada (a lista do que sai dela e do que ficou está abaixo).
+- Entregue em `core/smart` (compartilhado) e no celular/desktop: filtros rápidos com contagem; busca com filtros escritos; salvar lista como playlist; playlist alvo; ordenar playlist (BPM, nota, harmônica); refazer; "Primeiros passos"; pré-checagem de exportação com correção em um toque; triagem (celular); estrelas na linha; editar em lote; Arrumar tudo; analisar todas; navegar entre faixas; aviso com DESFAZER; importação e análise em lotes de 6.
+- Evidência (PC x86_64): core 83 testes, desktop 6, mobile 19 (inclui `UxFlowTest`, com toques simulados), 0 falhas. 12 capturas do celular em `docs/ui/mobile-*.png` (S25 Ultra em pé e deitado).
+- Achados vistos nas capturas e corrigidos: guia ocupava metade da tela (agora recolhe), barra de salvar espremia o texto, botões da triagem cortados no celular deitado, cores cortadas no painel lateral, linha de ordenação sobrando (virou um botão).
+- Não verificado (`BLOCKED_HARDWARE`): uso real no S25 Ultra; pré-escuta (MediaPlayer). Também não medido: se os atalhos de fato aceleram o trabalho; precisa de uso com a biblioteca real.
+- Próximas rodadas candidatas: gestos (deslizar na linha), importar de pasta inteira, mesclar bibliotecas, padrões de nome salvos, ações em lote na triagem por teclado/fones, teste de usabilidade com a biblioteca real.
