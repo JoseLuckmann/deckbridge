@@ -66,17 +66,29 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
                 TextButton(onClick = { app.preview.stop(); app.detailId = list[at - 1] }, enabled = at > 0) { Text("‹", fontSize = 26.sp) }
                 TextButton(onClick = { app.preview.stop(); app.detailId = list[at + 1] }, enabled = at < list.lastIndex) { Text("›", fontSize = 26.sp) }
             }
-            if (onBack == null) TextButton(onClick = { app.detailId = null }) { Text("Fechar") }
+            if (onBack == null) TextButton(onClick = { app.detailId = null }) { Text("✕", fontSize = 16.sp) }
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Marking(app, t)
-            AnalysisSection(app, t)
-            CueSection(app, t)
-            Fields(m, t)
-            Spacer(Modifier.height(24.dp))
+        // Três abas curtas no lugar de uma página longa.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            DetailPage.values().forEach { pg ->
+                FilterChip(selected = app.detailPage == pg, onClick = { app.detailPage = pg }, label = { Text(pg.title) }, modifier = Modifier.weight(1f))
+            }
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            when (app.detailPage) {
+                DetailPage.MARK -> {
+                    Marking(app, t)
+                    AnalysisSection(app, t)
+                }
+                DetailPage.CUES -> CueSection(app, t)
+                DetailPage.INFO -> Fields(app, t)
+            }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
+
+enum class DetailPage(val title: String) { MARK("MARCAR"), CUES("CUES"), INFO("INFO") }
 
 @Composable
 private fun SectionTitle(text: String) = Text(text.uppercase(), color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
@@ -85,7 +97,6 @@ private fun SectionTitle(text: String) = Text(text.uppercase(), color = Palette.
 private fun Marking(app: ManagerApp, t: TrackItem) {
     val m = app.model
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionTitle("Marcar")
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
             for (n in 1..5) {
                 Text(
@@ -111,18 +122,18 @@ private fun AnalysisSection(app: ManagerApp, t: TrackItem) {
     val m = app.model
     val has = m.hasAnalysis(t)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionTitle("Análise")
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Stat("BPM", if (t.bpm > 0) "%.2f".format(t.bpm) else "—")
             Stat("Tom", t.key.ifEmpty { "—" })
             Stat("Tempo", formatDuration(t.durationSeconds))
-            Stat("Grade", if (has) "sim" else "não")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { app.preview.toggle(t) }, modifier = Modifier.weight(1f).height(48.dp)) { Text(if (app.preview.playingId == t.id) "■ Parar" else "▶ Ouvir") }
-            OutlinedButton(onClick = { app.analyze(t, force = has) }, modifier = Modifier.weight(1.4f).height(48.dp)) { Text(if (has) "Reanalisar" else "Analisar agora") }
+            Box(Modifier.weight(1f).height(48.dp).clip(RbShape).background(if (app.preview.playingId == t.id) Palette.surfaceHigh else Palette.playBg).clickable { app.preview.toggle(t) }, contentAlignment = Alignment.Center) {
+                Text(if (app.preview.playingId == t.id) "■ PARAR" else "▶ OUVIR", color = if (app.preview.playingId == t.id) Palette.blue else Palette.playInk, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+            }
+            // Só aparece quando falta a análise; reanalisar fica em INFO.
+            if (!has) OutlinedButton(onClick = { app.analyze(t, force = false) }, modifier = Modifier.weight(1f).height(48.dp)) { Text("ANALISAR") }
         }
-        if (!has) Text("Sem análise a faixa toca, mas sem grade nem cues no player.", color = Palette.muted, fontSize = 12.sp)
     }
 }
 
@@ -140,7 +151,6 @@ private fun CueSection(app: ManagerApp, t: TrackItem) {
     val files = remember(t.id, t.analyzePath, m.pending.size) { m.trackFiles(t) }
     var pos by remember(t.id) { mutableIntStateOf(0) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionTitle("Grade e cues")
         val problem = files.error
         if (problem != null) {
             Text(problem, color = Palette.muted, fontSize = 13.sp)
@@ -148,16 +158,18 @@ private fun CueSection(app: ManagerApp, t: TrackItem) {
         }
         val duration = files.durationMs.coerceAtLeast(1)
         Wave(files.wave, files.beats.map { it.timeMs to it.inBar }, files.cues, duration, pos) { pos = it }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(formatMs(pos), color = Palette.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        // Posição, pulo de batida e ouvir daqui numa linha só.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(formatMs(pos), color = Palette.text, fontSize = 15.sp, fontFamily = Mono, modifier = Modifier.weight(1f))
             val beats = files.beats.map { it.timeMs }
-            OutlinedButton(onClick = { pos = beats.lastOrNull { it < pos - 5 } ?: 0 }, modifier = Modifier.height(44.dp)) { Text("◀ batida") }
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { pos = beats.firstOrNull { it > pos + 5 } ?: pos }, modifier = Modifier.height(44.dp)) { Text("batida ▶") }
+            OutlinedButton(onClick = { pos = beats.lastOrNull { it < pos - 5 } ?: 0 }, modifier = Modifier.height(42.dp)) { Text("◀") }
+            OutlinedButton(onClick = { pos = beats.firstOrNull { it > pos + 5 } ?: pos }, modifier = Modifier.height(42.dp)) { Text("▶") }
+            Box(Modifier.height(42.dp).clip(RbShape).background(Palette.playBg).clickable { app.preview.toggle(t, fromMs = pos.coerceAtLeast(1)) }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                Text("▶ OUVIR", color = Palette.playInk, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
         }
-        OutlinedButton(onClick = { app.preview.toggle(t, fromMs = pos.coerceAtLeast(1)) }, modifier = Modifier.fillMaxWidth().height(44.dp)) { Text("▶ Ouvir daqui") }
-        // HOT CUE A: grade 2×4 como no player. Cada célula é escura, com a letra na cor do pad; tocar grava o hot cue nesta posição.
-        Text("HOT CUE · toque grava na posição marcada", color = Palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+        // HOT CUE: grade 2×4 como no player; tocar grava o cue na posição marcada.
+        SectionTitle("Hot cue")
         for (rowStart in listOf(1, 5)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 for (hot in rowStart until rowStart + 4) {
@@ -178,14 +190,14 @@ private fun CueSection(app: ManagerApp, t: TrackItem) {
         OutlinedButton(
             onClick = { m.submit(Edit.SetCues(t.id, files.cues + Cue(0, pos)), "Cue de memória em \"${t.title}\"") },
             modifier = Modifier.fillMaxWidth().height(44.dp),
-        ) { Text("Cue de memória aqui") }
+        ) { Text("＋ MEMÓRIA") }
         files.cues.forEach { c ->
             Row(Modifier.fillMaxWidth().clickable { pos = c.timeMs }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(28.dp).background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.orange), RbShape), contentAlignment = Alignment.Center) {
                     Text(hotLetter(c.hot), color = if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.orange, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
                 Text(formatMs(c.timeMs) + if (c.isLoop) "  → ${formatMs(c.loopEndMs!!)}" else "", color = Palette.text, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.weight(1f).padding(start = 12.dp))
-                TextButton(onClick = { m.submit(Edit.SetCues(t.id, files.cues - c), "Apagar cue de \"${t.title}\"") }) { Text("Apagar", color = Palette.danger) }
+                TextButton(onClick = { m.submit(Edit.SetCues(t.id, files.cues - c), "Apagar cue de \"${t.title}\"") }) { Text("✕", color = Palette.danger, fontSize = 16.sp) }
             }
         }
         GridEditor(m, t, files, pos)
@@ -197,14 +209,13 @@ private fun GridEditor(m: ManagerModel, t: TrackItem, files: ManagerModel.TrackF
     var bpmText by remember(t.id, t.bpm) { mutableStateOf(if (t.bpm > 0) "%.2f".format(t.bpm) else "") }
     val bpm = bpmText.replace(',', '.').toDoubleOrNull()
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Grade regular", color = Palette.muted, fontSize = 12.sp)
+        SectionTitle("Grade")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(bpmText, { bpmText = it }, label = { Text("BPM") }, singleLine = true, modifier = Modifier.weight(1f))
             Button(onClick = { m.submit(Edit.SetGrid(t.id, bpm!!, pos), "Grade de \"${t.title}\": %.2f BPM começando em ${formatMs(pos)}".format(bpm)) }, enabled = bpm != null && bpm in 40.0..250.0, modifier = Modifier.height(56.dp)) {
-                Text("Primeira batida aqui", fontSize = 12.sp)
+                Text("1ª BATIDA AQUI", fontSize = 12.sp)
             }
         }
-        Text("Move a primeira batida para a posição marcada na onda e recalcula as batidas.", color = Palette.muted, fontSize = 12.sp)
     }
 }
 
@@ -245,7 +256,8 @@ private fun Wave(wave: ByteArray, beats: List<Pair<Int, Int>>, cues: List<Cue>, 
 }
 
 @Composable
-private fun Fields(m: ManagerModel, t: TrackItem) {
+private fun Fields(app: ManagerApp, t: TrackItem) {
+    val m = app.model
     var title by remember(t) { mutableStateOf(t.title) }
     var artist by remember(t) { mutableStateOf(t.artist) }
     var album by remember(t) { mutableStateOf(t.album) }
@@ -253,7 +265,6 @@ private fun Fields(m: ManagerModel, t: TrackItem) {
     var comment by remember(t) { mutableStateOf(t.comment) }
     val changed = title != t.title || artist != t.artist || album != t.album || genre != t.genre || comment != t.comment
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionTitle("Informações")
         OutlinedTextField(title, { title = it }, label = { Text("Título") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(artist, { artist = it }, label = { Text("Artista") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(album, { album = it }, label = { Text("Álbum") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -268,7 +279,8 @@ private fun Fields(m: ManagerModel, t: TrackItem) {
                 m.submit(Edit.SetTracks(listOf(t.id), patch), "Editar \"${t.title}\"")
             },
             enabled = changed, modifier = Modifier.fillMaxWidth().height(48.dp),
-        ) { Text("Aplicar mudanças") }
-        Text("Arquivo: ${t.filePath}", color = Palette.muted, fontSize = 11.sp)
+        ) { Text("APLICAR") }
+        OutlinedButton(onClick = { app.analyze(t, force = m.hasAnalysis(t)) }, modifier = Modifier.fillMaxWidth().height(44.dp)) { Text(if (m.hasAnalysis(t)) "REANALISAR" else "ANALISAR") }
+        Text(t.filePath.substringAfterLast('/'), color = Palette.muted, fontSize = 11.sp, maxLines = 1)
     }
 }

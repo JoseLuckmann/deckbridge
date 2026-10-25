@@ -135,7 +135,6 @@ fun BatchEditDialog(count: Int, onApply: (os.deckbridge.manager.pdb.TrackPatch) 
         title = { Text("Editar $count faixa(s)") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Só o que você preencher muda. O resto fica como está.", color = Palette.muted, fontSize = 13.sp)
                 OutlinedTextField(artist, { artist = it }, label = { Text("Artista") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(album, { album = it }, label = { Text("Álbum") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(genre, { genre = it }, label = { Text("Gênero") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -159,19 +158,17 @@ fun SearchHelpDialog(onClose: () -> Unit) {
         title = { Text("Buscar e filtrar") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Escreva palavras para buscar em título, artista, álbum, gênero, tom e comentário. Combine com filtros:", color = Palette.muted, fontSize = 14.sp)
                 listOf(
-                    "bpm:120-128" to "andamento entre 120 e 128",
-                    "bpm:>124" to "acima de 124 (ou bpm:<124)",
-                    "tom:8A" to "tom 8A ou Am (as duas notações)",
-                    "nota:4" to "4 estrelas ou mais",
-                    "cor:verde" to "cor da faixa",
-                    "genero:house" to "gênero contém house",
+                    "bpm:120-128" to "andamento",
+                    "bpm:>124" to "acima de",
+                    "tom:8A" to "tom (ou Am)",
+                    "nota:4" to "4★ ou mais",
+                    "cor:verde" to "cor",
+                    "genero:house" to "gênero",
                 ).forEach { (k, v) ->
                     Row { Text(k, color = Palette.orange, fontSize = 14.sp, modifier = Modifier.width(120.dp)); Text(v, color = Palette.text, fontSize = 14.sp) }
                 }
                 Text("Exemplo: aurora bpm:120-128 nota:4", color = Palette.muted, fontSize = 13.sp)
-                Text("Dica: com uma busca ou filtro ativo, \"Salvar lista como playlist\" cria a playlist com o que está na tela.", color = Palette.muted, fontSize = 13.sp)
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text("Entendi") } },
@@ -188,10 +185,9 @@ fun TidyDialog(app: ManagerApp, all: List<os.deckbridge.manager.organize.Suggest
         title = { Text("Arrumar tudo") },
         text = {
             if (all.isEmpty()) {
-                Text("Nada para arrumar: espaços, maiúsculas e nomes estão em ordem.", color = Palette.muted)
+                Text("Nada a arrumar ✓", color = Palette.keyInk)
             } else {
                 Column {
-                    Text("Sugestões por regras simples (não é IA). Desmarque o que não quiser.", color = Palette.muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp))
                     LazyColumn(Modifier.height(320.dp)) {
                         items(all.indices.toList()) { i ->
                             val s = all[i]

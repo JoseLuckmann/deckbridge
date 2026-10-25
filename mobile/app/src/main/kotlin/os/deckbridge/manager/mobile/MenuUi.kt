@@ -30,17 +30,16 @@ fun MenuTab(app: ManagerApp, actions: Actions) {
     val counts = m.filterCounts()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Section("Biblioteca")
-        Line("Importar músicas", "WAV · MP3 · FLAC · AAC") { actions.pickAudio() }
-        Line("Analisar todas as sem análise", "${counts[QuickFilter.UNANALYZED] ?: 0} faixas") { app.analyzeAll() }
-        Line("Arrumar tudo", "espaços · maiúsculas · nomes") { app.openTidy() }
-        Line("Triagem", "${counts[QuickFilter.UNRATED] ?: 0} sem nota") { app.startTriage() }
+        Line("Importar músicas", "") { actions.pickAudio() }
+        Line("Analisar todas", "${counts[QuickFilter.UNANALYZED] ?: 0}") { app.analyzeAll() }
+        Line("Arrumar nomes", "") { app.openTidy() }
+        Line("Triagem", "${counts[QuickFilter.UNRATED] ?: 0}") { app.startTriage() }
+        Line("Descartar mudanças", if (m.dirty) "${m.pending.size}" else "") { m.discard() }
         Section("Ajuda")
-        Line("Primeiros passos", if (app.guideHidden) "oculto" else "visível") { if (app.guideHidden) app.showGuide() else app.hideGuide() }
-        Line("Buscar e filtrar", "bpm:  tom:  nota:  cor:") { app.tab = Tab.LIBRARY; app.helpRequested = true }
+        Line("Próximo passo", if (app.guideHidden) "oculto" else "visível") { if (app.guideHidden) app.showGuide() else app.hideGuide() }
+        Line("Buscar e filtrar", "") { app.tab = Tab.LIBRARY; app.helpRequested = true }
         Section("Segurança")
-        Line("Cópias de segurança", "${m.backupList().size} no aparelho") {}
-        Line("Pasta da biblioteca", app.root.path.takeLast(36)) {}
-        Line("Pendrive", "só escreve ao exportar") { app.tab = Tab.USB }
+        Line("Cópias de segurança", "${m.backupList().size}") {}
     }
 }
 

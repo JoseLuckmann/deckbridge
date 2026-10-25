@@ -48,6 +48,8 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
 
     var tab by mutableStateOf(Tab.LIBRARY)
     var detailId by mutableStateOf<Int?>(null)
+    var searchOpen by mutableStateOf(false)
+    var detailPage by mutableStateOf(DetailPage.MARK)
     var selecting by mutableStateOf(false)
     var job by mutableStateOf<Job?>(null)
     var usb by mutableStateOf<UsbChoice?>(null)
@@ -143,7 +145,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     fun applyTidy(chosen: List<Suggestion>) {
         tidy = null
         val n = model.submitAll(chosen.mapNotNull { s -> s.edit?.let { it to "${s.rule.title}: ${s.title}" } })
-        if (n > 0) say("$n ajuste(s) aplicado(s). Revise e salve.", undo = true)
+        if (n > 0) say("$n ajustes", undo = true)
     }
 
     // --- Analisar todas ------------------------------------------------------------------------
@@ -152,7 +154,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         val v = model.view ?: return
         val todo = v.tracks.filter { !model.hasAnalysis(it) }
         if (todo.isEmpty()) {
-            say("Todas as faixas já têm análise.")
+            say("Tudo analisado")
             return
         }
         background("Analisando ${todo.size} faixa(s)") { j ->
@@ -180,7 +182,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
                 model.apply(null) { j.text = it }
             }
             pruneBackups()
-            say("$done faixa(s) analisada(s)" + (if (failed > 0) ", $failed sem áudio ou ilegível" else "") + ".", error = done == 0 && failed > 0)
+            say("$done analisadas" + (if (failed > 0) " · $failed falharam" else ""), error = done == 0 && failed > 0)
         }
     }
 
@@ -193,7 +195,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
             try {
                 block(j)
             } catch (_: Cancelled) {
-                say("Cancelado.")
+                say("Cancelado")
             } catch (e: ExportException) {
                 say(e.message ?: e.code, error = true)
             } catch (e: Exception) {
@@ -214,7 +216,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
             val report = model.apply(null) { j.text = it }
             if (report != null) {
                 pruneBackups()
-                say("Salvo no aparelho.")
+                say("Salvo ✓")
             } else {
                 say(model.banner?.text ?: "Não consegui salvar.", error = true)
             }
@@ -271,8 +273,8 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
                 }
                 flush()
                 pruneBackups()
-                if (imported > 0) say("$imported faixa(s) importada(s)." + if (failed > 0) " $failed falhou: $firstError" else "", undo = false)
-                else say("Nada importado. $firstError", error = true)
+                if (imported > 0) say("$imported importadas" + if (failed > 0) " · $failed falharam" else "", undo = false)
+                else say("Não importou: $firstError", error = true)
             } finally {
                 cache.deleteRecursively()
             }
@@ -295,9 +297,9 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
             }
             val sug = OnDemand.suggestion(outcome, model.hasAnalysis(track), force)
             if (sug?.edit == null) {
-                say("A faixa já tem análise. Use \"Reanalisar\" para trocar pela do app.")
+                say("Já analisada")
             } else if (model.submit(sug.edit!!, "Analisar \"${track.title}\"")) {
-                say("Análise pronta: ${"%.1f".format(outcome.prepared!!.read.bpm)} BPM, tom ${outcome.prepared!!.read.keyName}. Salve para gravar.")
+                say("${"%.1f".format(outcome.prepared!!.read.bpm)} BPM · ${outcome.prepared!!.read.keyName}", undo = true)
             }
         }
     }
@@ -317,33 +319,35 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         }
     }
 
+    /** Exporta; se houver mudanças na fila, grava antes no aparelho, na mesma tarefa. */
     fun export() {
         val choice = usb ?: return
-        if (model.dirty) {
-            say("Salve as mudanças antes de exportar.", error = true)
-            return
-        }
-        background("Exportando para o pendrive") { j ->
+        background("Exportando") { j ->
+            if (model.dirty) {
+                j.text = "Salvando"
+                if (model.apply(null) { j.text = it } == null) throw ExportException("E_SAVE", model.banner?.text ?: "Não consegui salvar.")
+                pruneBackups()
+            }
             val report = UsbExporter(backupsDir).export(root, choice.storage, replaceExisting = true, progress = { j.text = it }, cancelled = { j.cancelled })
             lastTransfer = report
             exportedOnce = true
             prefs.edit().putBoolean("exportou", true).apply()
             usb = UsbChoice(choice.tree, choice.label, choice.storage, UsbExporter(backupsDir).inspect(choice.storage), null)
-            say("Exportado: ${report.tracks} faixas, ${report.copied} arquivo(s) copiado(s).")
+            say("Exportado ✓")
         }
     }
 
     fun importFromUsb(includeAudio: Boolean) {
         val choice = usb ?: return
         if (model.dirty) {
-            say("Salve ou descarte as mudanças antes de trazer outra biblioteca.", error = true)
+            say("Salve antes", error = true)
             return
         }
         background("Trazendo do pendrive") { j ->
             val report = UsbImporter(backupsDir).import(choice.storage, root, includeAudio, progress = { j.text = it }, cancelled = { j.cancelled })
             lastTransfer = report
             model.open(root)
-            say("Trouxe ${report.tracks} faixas do pendrive. A biblioteca anterior do aparelho foi guardada em backup.")
+            say("${report.tracks} faixas trazidas ✓")
         }
     }
 

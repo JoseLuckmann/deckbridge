@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -97,41 +98,40 @@ private fun Tab.short() = when (this) {
     Tab.MENU -> "MENU"
 }
 
-/** Faixa do topo: "SOURCE"-style em azul, nome em branco, nota em laranja. */
+/** Topo: o nome da área em azul, a contagem em laranja e, à direita, só os botões da área. */
 @Composable
 private fun TopBar(app: ManagerApp, actions: Actions) {
-    val count = app.model.view?.tracks?.size ?: 0
-    Row(Modifier.fillMaxWidth().background(Palette.bg).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(app.tab.title.uppercase(), color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-        Text("Neste aparelho", color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
-        Text("$count faixas", color = Palette.orange, fontSize = 12.sp, modifier = Modifier.padding(start = 10.dp).weight(1f))
+    val v = app.model.view
+    val count = when (app.tab) {
+        Tab.LIBRARY -> app.model.rows().size
+        Tab.PLAYLISTS -> v?.playlists?.count { !it.folder } ?: 0
+        else -> null
+    }
+    Row(Modifier.fillMaxWidth().height(52.dp).background(Palette.bg).border(BorderStroke(1.dp, Palette.line)).padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(app.tab.short(), color = Palette.blue, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+        if (count != null) Text("$count", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(start = 8.dp))
+        Spacer(Modifier.weight(1f))
         if (app.tab == Tab.LIBRARY) {
-            OutlinedButton(onClick = actions.pickAudio, modifier = Modifier.height(36.dp)) { Text("IMPORTAR", fontSize = 12.sp) }
+            TextButton(onClick = { app.searchOpen = !app.searchOpen }) { Text("⌕", fontSize = 22.sp) }
+            OutlinedButton(onClick = actions.pickAudio, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp)) { Text("＋", fontSize = 18.sp) }
         }
     }
 }
 
-/** Mudanças ainda não gravadas: texto em laranja (como valor alterado) e botões do player. Some quando não há nada pendente. */
+/** Mudanças não gravadas: uma linha só. Some quando não há nada pendente. */
 @Composable
 private fun SaveBar(app: ManagerApp) {
     val m = app.model
     if (!m.dirty && m.redoStack.isEmpty()) return
-    Column(Modifier.fillMaxWidth().background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 12.dp, vertical = 2.dp)) {
+    Row(Modifier.fillMaxWidth().height(48.dp).background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.line)).padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         if (m.dirty) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                Text("${m.pending.size} NA FILA", color = Palette.orange, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-                Text(m.pending.last().text, color = Palette.mutedBright, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
-            }
-        } else Text("TUDO DESFEITO", color = Palette.muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { m.undo() }, enabled = m.dirty) { Text("↶ DESFAZER", fontSize = 12.sp) }
-            if (m.redoStack.isNotEmpty()) TextButton(onClick = { m.redo() }) { Text("↷ REFAZER", fontSize = 12.sp) }
-            Spacer(Modifier.weight(1f))
-            if (m.dirty) {
-                TextButton(onClick = { m.discard() }) { Text("DESCARTAR", color = Palette.danger, fontSize = 12.sp) }
-                Button(onClick = { app.save() }, modifier = Modifier.height(38.dp)) { Text("SALVAR", fontSize = 13.sp) }
-            }
+            Box(Modifier.size(8.dp).background(Palette.orange, RbShape))
+            Text("${m.pending.size}", color = Palette.orange, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.padding(start = 8.dp))
         }
+        Spacer(Modifier.weight(1f))
+        TextButton(onClick = { m.undo() }, enabled = m.dirty) { Text("↶", fontSize = 20.sp) }
+        if (m.redoStack.isNotEmpty()) TextButton(onClick = { m.redo() }) { Text("↷", fontSize = 20.sp) }
+        if (m.dirty) Button(onClick = { app.save() }, modifier = Modifier.height(38.dp)) { Text("SALVAR", fontSize = 13.sp) }
     }
 }
 

@@ -59,7 +59,7 @@ fun TriageScreen(app: ManagerApp) {
                 TextButton(onClick = { app.endTriage() }) { Text("‹ SAIR", fontSize = 13.sp) }
                 Text("TRIAGEM", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
                 Text("${at + 1} de ${ids.size}", color = Palette.orange, fontSize = 15.sp, fontFamily = Mono, modifier = Modifier.padding(start = 10.dp).weight(1f))
-                if (m.dirty) TextButton(onClick = { app.save() }) { Text("Salvar") }
+                if (m.dirty) TextButton(onClick = { m.undo() }) { Text("↶", fontSize = 20.sp) }
             }
             LinearProgressIndicator(progress = { (at + 1f) / ids.size }, modifier = Modifier.fillMaxWidth(), color = Palette.blue, trackColor = Palette.line)
             if (wide) {
@@ -105,7 +105,7 @@ private fun Controls(app: ManagerApp, t: TrackItem, at: Int, total: Int, compact
         m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = n)), "Nota $n em \"${t.title}\"")
         advance()
     }
-    Text("NOTA · AVANÇA SOZINHO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+    Text("NOTA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (n in 1..5) {
             Box(Modifier.weight(1f).height(big).clip(RbShape).background(if (t.rating == n) Palette.blueActiveFill else Palette.surfaceHigh).border(androidx.compose.foundation.BorderStroke(1.dp, if (t.rating == n) Palette.blue else Palette.line), RbShape).clickable { rate(n) }, contentAlignment = Alignment.Center) {
@@ -124,15 +124,12 @@ private fun Controls(app: ManagerApp, t: TrackItem, at: Int, total: Int, compact
     val target = m.target?.let { m.playlist(it) }
     if (target != null) {
         val inIt = t.id in m.view?.entries?.get(target.id).orEmpty()
-        Button(onClick = { m.toggleInTarget(t.id) }, modifier = Modifier.fillMaxWidth().height(mid)) { Text(if (inIt) "✓ Em \"${target.name}\" (tocar para tirar)" else "＋ Adicionar a \"${target.name}\"") }
-    } else {
-        OutlinedButton(onClick = { app.notice = os.deckbridge.manager.Banner("Defina a playlist alvo na Biblioteca para adicionar com um toque.", false) }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Sem playlist alvo") }
+        Button(onClick = { m.toggleInTarget(t.id) }, modifier = Modifier.fillMaxWidth().height(mid)) { Text(if (inIt) "✓ ${target.name}" else "＋ ${target.name}") }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { app.preview.stop(); app.triageAt = (at - 1).coerceAtLeast(0) }, enabled = at > 0, modifier = Modifier.weight(1f).height(mid)) { Text("‹ Voltar") }
+        OutlinedButton(onClick = { app.preview.stop(); app.triageAt = (at - 1).coerceAtLeast(0) }, enabled = at > 0, modifier = Modifier.weight(1f).height(mid)) { Text("‹") }
         OutlinedButton(onClick = { advance() }, modifier = Modifier.weight(1f).height(mid)) { Text(if (at >= total - 1) "Concluir" else "Pular ›") }
     }
-    if (!compact) TextButton(onClick = { m.undo() }, enabled = m.dirty) { Text("Desfazer última mudança") }
 }
 
 @Composable

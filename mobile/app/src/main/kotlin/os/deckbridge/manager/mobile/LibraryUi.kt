@@ -54,40 +54,26 @@ fun LibraryTab(app: ManagerApp, actions: Actions) {
     var dialog by remember { mutableStateOf<Dialog?>(null) }
     val rows = m.rows()
     val counts = m.filterCounts()
-    val unrated = counts[QuickFilter.UNRATED] ?: 0
-    val unanalyzed = counts[QuickFilter.UNANALYZED] ?: 0
     if (app.helpRequested) { app.helpRequested = false; dialog = Dialog.SearchHelp }
     val narrowed = m.query.isNotBlank() || m.filter != QuickFilter.ALL
     Column(Modifier.fillMaxWidth()) {
+        if (app.searchOpen || m.query.isNotEmpty()) SearchField(app) { dialog = Dialog.SearchHelp }
+        // Uma única fileira: filtros, a playlist alvo (se houver) e "salvar" quando a lista está filtrada.
+        LazyRow(Modifier.padding(vertical = 6.dp), contentPadding = PaddingValues(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            m.target?.let { id -> m.playlist(id) }?.let { p ->
+                item { FilterChip(selected = true, onClick = { dialog = Dialog.PickTarget }, label = { Text("≡ ${p.name}", maxLines = 1) }) }
+            }
+            items(QuickFilter.values().filter { it == QuickFilter.ALL || it == m.filter || (counts[it] ?: 0) > 0 }) { f ->
+                FilterChip(selected = m.filter == f, onClick = { m.filter = f }, label = {
+                    Text(f.short(), maxLines = 1)
+                    if (f != QuickFilter.ALL) Text(" ${counts[f] ?: 0}", color = Palette.orange, fontFamily = Mono, maxLines = 1)
+                })
+            }
+            if (narrowed && rows.isNotEmpty()) item { FilterChip(selected = false, onClick = { dialog = Dialog.SaveList }, label = { Text("＋ Playlist", maxLines = 1) }) }
+        }
+        NextStep(app, actions)
+        if (rows.isNotEmpty()) ListHeader(app)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 8.dp)) {
-            item(key = "guide") { GuideCard(app, actions) }
-            item(key = "search") {
-                OutlinedTextField(
-                    value = m.query, onValueChange = { m.query = it }, singleLine = true,
-                    placeholder = { Text("Buscar ou filtrar: bpm:120-128 tom:8A nota:4", maxLines = 1) },
-                    trailingIcon = { if (m.query.isNotEmpty()) TextButton(onClick = { m.query = "" }) { Text("✕", fontSize = 18.sp) } else TextButton(onClick = { dialog = Dialog.SearchHelp }) { Text("?", fontSize = 18.sp) } },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                )
-            }
-            item(key = "actions") {
-                LazyRow(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (m.view?.tracks?.isNotEmpty() == true) {
-                        item { ActionChip(if (unrated > 0) "▶ Triagem · $unrated sem nota" else "▶ Triagem", primary = unrated > 0) { app.startTriage() } }
-                        if (unanalyzed > 0) item { ActionChip("Analisar $unanalyzed", primary = false) { app.analyzeAll() } }
-                        item { ActionChip("✨ Arrumar tudo", primary = false) { app.openTidy() } }
-                    }
-                    if (narrowed && rows.isNotEmpty()) item { ActionChip("Salvar lista como playlist", primary = false) { dialog = Dialog.SaveList } }
-                }
-            }
-            item(key = "filters") {
-                LazyRow(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(QuickFilter.values().filter { it == QuickFilter.ALL || it == m.filter || (counts[it] ?: 0) > 0 }) { f ->
-                        FilterChip(selected = m.filter == f, onClick = { m.filter = f }, label = { Text(if (f == QuickFilter.ALL) f.title else "${f.title} · ${counts[f] ?: 0}") })
-                    }
-                }
-            }
-            item(key = "target") { TargetBar(app) { dialog = Dialog.PickTarget } }
-            if (rows.isNotEmpty()) item(key = "header") { ListHeader(app) }
             if (rows.isEmpty()) {
                 item(key = "empty") { EmptyList(app, actions) }
             } else {
@@ -99,10 +85,59 @@ fun LibraryTab(app: ManagerApp, actions: Actions) {
     LibraryDialogs(app, dialog) { dialog = null }
 }
 
+/** Rótulo curto de cada filtro rápido (o celular não tem espaço para frases). */
+fun QuickFilter.short() = when (this) {
+    QuickFilter.ALL -> "Todas"
+    QuickFilter.UNANALYZED -> "Sem análise"
+    QuickFilter.UNRATED -> "Sem nota"
+    QuickFilter.NO_PLAYLIST -> "Sem playlist"
+    QuickFilter.NO_GENRE -> "Sem gênero"
+    QuickFilter.NO_ARTIST -> "Sem artista"
+    QuickFilter.TOP -> "★4+"
+    QuickFilter.RECENT -> "Recentes"
+}
+
 @Composable
-private fun ActionChip(text: String, primary: Boolean, onClick: () -> Unit) {
-    if (primary) Button(onClick = onClick, modifier = Modifier.height(38.dp)) { Text(text, fontSize = 12.sp, maxLines = 1) }
-    else OutlinedButton(onClick = onClick, modifier = Modifier.height(38.dp)) { Text(text, fontSize = 12.sp, maxLines = 1) }
+private fun SearchField(app: ManagerApp, help: () -> Unit) {
+    val m = app.model
+    OutlinedTextField(
+        value = m.query, onValueChange = { m.query = it }, singleLine = true,
+        placeholder = { Text("Buscar", maxLines = 1) },
+        trailingIcon = {
+            Row {
+                TextButton(onClick = help) { Text("?", fontSize = 16.sp) }
+                TextButton(onClick = { m.query = ""; app.searchOpen = false }) { Text("✕", fontSize = 16.sp) }
+            }
+        },
+        modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 6.dp),
+    )
+}
+
+/** Uma linha só com o próximo passo do caminho importar → analisar → marcar → playlist → exportar. */
+@Composable
+private fun NextStep(app: ManagerApp, actions: Actions) {
+    val m = app.model
+    val v = m.view ?: return
+    if (app.guideHidden) return
+    val next = Smart.journey(v, { m.hasAnalysis(it) }, app.exportedOnce).firstOrNull { !it.done } ?: return
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 6.dp).clip(RbShape).background(Palette.surface).border(BorderStroke(1.dp, Palette.line), RbShape)
+            .clickable {
+                when (next.action) {
+                    Smart.StepAction.IMPORT -> actions.pickAudio()
+                    Smart.StepAction.ANALYZE -> app.analyzeAll()
+                    Smart.StepAction.TRIAGE -> app.startTriage()
+                    Smart.StepAction.PLAYLIST -> app.tab = Tab.PLAYLISTS
+                    Smart.StepAction.EXPORT -> app.tab = Tab.USB
+                }
+            }.padding(start = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("PRÓXIMO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+        Text(next.title, color = Palette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp).weight(1f), maxLines = 1)
+        Text("›", color = Palette.blue, fontSize = 20.sp)
+        TextButton(onClick = { app.hideGuide() }) { Text("✕", color = Palette.muted, fontSize = 14.sp) }
+    }
 }
 
 @Composable
@@ -121,61 +156,7 @@ private fun EmptyList(app: ManagerApp, actions: Actions) {
     }
 }
 
-/** "Primeiros passos": o caminho importar → analisar → marcar → playlist → exportar, com o próximo passo em destaque. */
-@Composable
-private fun GuideCard(app: ManagerApp, actions: Actions) {
-    val m = app.model
-    val v = m.view ?: return
-    val steps = Smart.journey(v, { m.hasAnalysis(it) }, app.exportedOnce)
-    if (app.guideHidden || steps.all { it.done }) return
-    val next = steps.first { !it.done }
-    val doneCount = steps.count { it.done }
-    var expanded by remember { mutableStateOf(doneCount == 0) }
-    Column(Modifier.fillMaxWidth().padding(10.dp).rbPanel().padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
-            Text("PRIMEIROS PASSOS · $doneCount DE ${steps.size}", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.weight(1f).padding(vertical = 10.dp))
-            Text(if (expanded) "▲" else "▼", color = Palette.muted, fontSize = 12.sp)
-            TextButton(onClick = { app.hideGuide() }) { Text("OCULTAR", fontSize = 11.sp) }
-        }
-        if (expanded) steps.forEach { s ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(18.dp).border(BorderStroke(1.dp, if (s.done) Palette.keyInk else if (s === next) Palette.blue else Palette.line), RbShape).background(if (s.done) Palette.keyFill else Palette.bg, RbShape), contentAlignment = Alignment.Center) {
-                    if (s.done) Text("✓", color = Palette.keyInk, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                Text(s.title, color = if (s.done) Palette.muted else Palette.text, fontSize = 14.sp, fontWeight = if (s === next) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.padding(start = 10.dp, top = 3.dp, bottom = 3.dp).weight(1f))
-                Text(s.detail, color = Palette.orange, fontSize = 12.sp)
-            }
-        }
-        Button(onClick = {
-            when (next.action) {
-                Smart.StepAction.IMPORT -> actions.pickAudio()
-                Smart.StepAction.ANALYZE -> app.analyzeAll()
-                Smart.StepAction.TRIAGE -> app.startTriage()
-                Smart.StepAction.PLAYLIST -> app.tab = Tab.PLAYLISTS
-                Smart.StepAction.EXPORT -> app.tab = Tab.USB
-            }
-        }, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("PRÓXIMO: ${next.title.uppercase()} →", fontSize = 13.sp) }
-    }
-}
-
-@Composable
-private fun TargetBar(app: ManagerApp, pick: () -> Unit) {
-    val m = app.model
-    val name = m.target?.let { m.playlist(it)?.name }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (name == null) {
-            TextButton(onClick = pick) { Text("＋ PLAYLIST ALVO (UM TOQUE PARA ADICIONAR)", fontSize = 12.sp) }
-        } else {
-            Text("ALVO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-            Box(Modifier.padding(start = 8.dp).clip(RbShape).background(Palette.blueActiveFill).border(BorderStroke(1.dp, Palette.blue), RbShape).clickable(onClick = pick).padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text("≡ $name · ${m.view?.entries?.get(m.target!!)?.size ?: 0}", color = Palette.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            }
-            TextButton(onClick = { m.target = null }) { Text("✕", fontSize = 16.sp) }
-        }
-    }
-}
-
-/** Cabeçalho da lista como no player: # TÍTULO … BPM TOM; tocar ordena e tocar de novo inverte. */
+/** Cabeçalho da lista como no player: TÍTULO … BPM TOM; tocar ordena e tocar de novo inverte. */
 @Composable
 private fun ListHeader(app: ManagerApp) {
     val m = app.model
@@ -183,42 +164,27 @@ private fun ListHeader(app: ManagerApp) {
         val on = m.sort.column == col
         Text(
             label + if (on) (if (m.sort.ascending) " ▲" else " ▼") else "",
-            color = if (on) Palette.orange else Palette.muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp,
+            color = if (on) Palette.orange else Palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, maxLines = 1,
             modifier = mod.clickable {
                 if (on) m.toggleSort(col) else m.sort = os.deckbridge.manager.Sort(col, col != TrackColumn.ID && col != TrackColumn.RATING && col != TrackColumn.BPM)
-            }.padding(vertical = 10.dp),
+            }.padding(vertical = 8.dp),
         )
     }
-    Row(Modifier.fillMaxWidth().background(Palette.surface).border(BorderStroke(0.5.dp, Palette.line)).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        head("TÍTULO", TrackColumn.ARTIST, Modifier.weight(1f).padding(start = 98.dp))
-        head("NOTA", TrackColumn.RATING, Modifier.padding(end = 14.dp))
-        head("BPM", TrackColumn.BPM, Modifier.padding(end = 12.dp))
-        head("TOM", TrackColumn.KEY, Modifier.padding(end = 38.dp))
+    Row(Modifier.fillMaxWidth().background(Palette.surface).border(BorderStroke(0.5.dp, Palette.line)).padding(start = 58.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        head("TÍTULO", TrackColumn.ARTIST, Modifier.weight(1f))
+        head("NOTA", TrackColumn.RATING, Modifier.padding(end = 12.dp))
+        head("BPM", TrackColumn.BPM, Modifier.width(52.dp))
+        head("TOM", TrackColumn.KEY, Modifier.width(40.dp))
     }
 }
 
 /** Disco da faixa como na lista do player: quadrado na cor da faixa com o anel branco e o ponto. */
 @Composable
 private fun Disc(color: Color?) {
-    Canvas(Modifier.size(36.dp).background(color ?: Palette.surfaceHigh)) {
+    Canvas(Modifier.size(40.dp).background(color ?: Palette.surfaceHigh)) {
         val c = Offset(size.width / 2, size.height / 2)
         drawCircle(Palette.text, radius = size.minDimension * 0.36f, center = c, style = Stroke(width = 3f))
         drawCircle(Palette.text, radius = size.minDimension * 0.07f, center = c)
-    }
-}
-
-/** Miniatura da onda (a prévia do ANLZ), com cache por arquivo de análise. */
-@Composable
-private fun MiniWave(app: ManagerApp, t: TrackItem) {
-    val wave = remember(t.id, t.analyzePath) { app.waveFor(t) }
-    Canvas(Modifier.width(52.dp).height(36.dp).background(Palette.waveBg)) {
-        if (wave.isEmpty()) return@Canvas
-        val col = size.width / 52f
-        for (i in 0 until 52) {
-            val v = (wave[(i * wave.size / 52).coerceAtMost(wave.size - 1)].toInt() and 0xFF) / 255f
-            val h = (v * size.height * 0.9f).coerceAtLeast(1f)
-            drawRect(Palette.wave, Offset(i * col, (size.height - h) / 2), Size(col.coerceAtLeast(1f), h))
-        }
     }
 }
 
@@ -231,8 +197,9 @@ fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean, edited: Boolean) 
     // Tom compatível com a faixa aberta: célula verde, como o tom compatível com o deck master no player.
     val master = app.detailId?.let { m.view?.track(it) }
     val compatible = master != null && master.id != t.id && Smart.camelot(master.key)?.let { a -> Smart.camelot(t.key)?.let { b -> Smart.harmonicDistance(a, b) <= 1 } } == true
+    val analyzed = m.hasAnalysis(t)
     Row(
-        Modifier.fillMaxWidth()
+        Modifier.fillMaxWidth().height(60.dp)
             .background(if (selected || open) Palette.selectedRow else Color.Transparent)
             .combinedClickable(
                 onClick = {
@@ -246,7 +213,7 @@ fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean, edited: Boolean) 
                     m.selection = m.selection + t.id
                 },
             )
-            .padding(start = 10.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (app.selecting) {
@@ -256,34 +223,25 @@ fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean, edited: Boolean) 
             Spacer(Modifier.width(8.dp))
         }
         Disc(Palette.trackColors.getOrNull(t.colorId - 1))
-        Spacer(Modifier.width(4.dp))
-        MiniWave(app, t)
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                listOf(t.artist, t.album).filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { "sem artista" },
-                color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Estrelas tocáveis na própria linha: marcar sem abrir a faixa.
-                for (n in 1..5) {
-                    Box(Modifier.width(28.dp).height(30.dp).clickable { m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = if (t.rating == n) 0 else n)), "Nota ${if (t.rating == n) 0 else n} em \"${t.title}\"") }, contentAlignment = Alignment.CenterStart) {
-                        Text(if (n <= t.rating) "★" else "☆", color = if (n <= t.rating) Palette.orange else Palette.muted, fontSize = 17.sp)
-                    }
-                }
-                val flags = (if (edited) "EDITADA " else "") + (if (!m.hasAnalysis(t)) "SEM ANÁLISE" else "")
-                if (flags.isNotBlank()) Text(flags.trim(), color = Palette.orange, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
+                Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                // Ponto laranja: mudança não salva.
+                if (edited) Box(Modifier.padding(start = 6.dp).size(6.dp).background(Palette.orange, RbShape))
             }
+            Text(t.artist.ifEmpty { "—" }, color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(if (t.bpm > 0) "%.1f".format(t.bpm) else "—", color = Palette.text, fontSize = 15.sp, fontFamily = Mono, modifier = Modifier.padding(start = 6.dp))
-        Box(Modifier.padding(start = 8.dp).width(40.dp).height(24.dp).background(if (compatible) Palette.keyFill else Color.Transparent), contentAlignment = Alignment.Center) {
-            Text(t.key.ifEmpty { "—" }, color = if (compatible) Palette.keyInk else Palette.text, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        if (t.rating > 0) Text("★".repeat(t.rating), color = Palette.orange, fontSize = 11.sp, modifier = Modifier.padding(start = 6.dp, end = 8.dp))
+        // Sem análise: o BPM fica apagado, sem texto extra.
+        Text(if (t.bpm > 0) "%.1f".format(t.bpm) else "—", color = if (analyzed) Palette.text else Palette.muted, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.width(52.dp))
+        Box(Modifier.width(40.dp).height(24.dp).background(if (compatible) Palette.keyFill else Color.Transparent), contentAlignment = Alignment.Center) {
+            Text(t.key.ifEmpty { "—" }, color = if (compatible) Palette.keyInk else Palette.mutedBright, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
         if (m.target != null && !app.selecting) {
             Box(Modifier.size(52.dp).clickable { app.did(m.toggleInTarget(t.id)) }, contentAlignment = Alignment.Center) {
-                Box(Modifier.size(34.dp).border(BorderStroke(1.dp, if (inTarget) Palette.blue else Palette.line), RbShape).background(if (inTarget) Palette.blueActiveFill else Palette.surfaceHigh), contentAlignment = Alignment.Center) {
-                    Text(if (inTarget) "✓" else "+", color = if (inTarget) Palette.text else Palette.blue, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Box(Modifier.size(32.dp).border(BorderStroke(1.dp, if (inTarget) Palette.blue else Palette.line), RbShape).background(if (inTarget) Palette.blueActiveFill else Palette.surfaceHigh), contentAlignment = Alignment.Center) {
+                    Text(if (inTarget) "✓" else "+", color = if (inTarget) Palette.text else Palette.blue, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
         } else Spacer(Modifier.width(10.dp))
@@ -394,8 +352,8 @@ private fun LibraryDialogs(app: ManagerApp, dialog: Dialog?, close: () -> Unit) 
             close()
         }, onClose = close)
         Dialog.Remove -> ConfirmDialog(
-            title = "Remover ${ids.size} faixa(s) da biblioteca?",
-            text = "Elas saem do banco, das playlists e do histórico. Os arquivos de áudio não são apagados. Dá para desfazer até salvar.",
+            title = "Remover ${ids.size}?",
+            text = "Os arquivos de áudio ficam.",
             confirm = "Remover", danger = true,
             onConfirm = {
                 m.submit(Edit.RemoveTracks(ids), "Remover ${ids.size} faixa(s)")

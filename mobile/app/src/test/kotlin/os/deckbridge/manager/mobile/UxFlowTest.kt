@@ -2,6 +2,7 @@ package os.deckbridge.manager.mobile
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -46,18 +47,21 @@ class UxFlowTest {
         assertEquals(before, a.model.view!!.entries[2].orEmpty().size)
     }
 
-    @Test fun tappingAStarOnTheRowRatesWithoutOpeningTheTrack() {
+    @Test fun searchIsHiddenUntilAskedAndClosingClearsIt() {
         val a = app()
         a.hideGuide()
-        val first = a.model.rows().first { it.rating == 0 }
         rule.setContent { ManagerRoot(a, noActions) }
-        // Cada linha tem 5 estrelas; a primeira linha sem nota: toca a 3ª estrela (☆ vazias, todas iguais), então acha pela ordem.
-        val index = a.model.rows().indexOf(first)
-        rule.onAllNodesWithText("☆")[0].performClick()
+        rule.onAllNodesWithText("Buscar").assertCountEquals(0)
+        rule.onNodeWithText("⌕").performClick()
         rule.waitForIdle()
-        assertNull(a.detailId, "tocar na estrela não abre a faixa")
-        assertTrue(a.model.dirty)
-        assertTrue(a.model.pending.isNotEmpty() && index >= 0)
+        assertTrue(a.searchOpen)
+        a.model.query = "aurora"
+        rule.waitForIdle()
+        assertTrue(a.model.rows().all { it.artist.contains("Aurora") })
+        rule.onNodeWithText("✕").performClick()
+        rule.waitForIdle()
+        assertEquals("", a.model.query)
+        assertTrue(!a.searchOpen)
     }
 
     @Test fun triageAdvancesAfterRatingAndFinishesWithAMessage() {
@@ -83,7 +87,7 @@ class UxFlowTest {
         val a = app()
         rule.setContent { ManagerRoot(a, noActions) }
         // Guia visível: o próximo passo não concluído é "Marcar" ou "Exportar"; o botão leva até lá.
-        rule.onNodeWithText("PRIMEIROS PASSOS", substring = true).assertExists()
+        rule.onNodeWithText("PRÓXIMO", substring = true).assertExists()
         a.model.filter = os.deckbridge.manager.smart.QuickFilter.TOP
         rule.waitForIdle()
         assertTrue(a.model.rows().all { it.rating >= 4 })

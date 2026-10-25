@@ -127,4 +127,19 @@ class ScreenshotTest {
         a.tab = Tab.USB
         shot("mobile-12-vertical-pendrive-checagem", a)
     }
+
+    @Test @Config(qualifiers = "w411dp-h891dp-port-560dpi")
+    fun portraitDetailCues() {
+        val a = app()
+        a.detailId = a.model.view!!.tracks.first { it.title == "Night Signal" }.id
+        a.detailPage = DetailPage.CUES
+        shot("mobile-13-vertical-faixa-cues", a)
+    }
+
+    @Test @Config(qualifiers = "w411dp-h891dp-port-560dpi")
+    fun portraitMenu() {
+        val a = app()
+        a.tab = Tab.MENU
+        shot("mobile-14-vertical-menu", a)
+    }
 }

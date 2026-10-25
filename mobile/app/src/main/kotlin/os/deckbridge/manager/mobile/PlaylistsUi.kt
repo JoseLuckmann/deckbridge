@@ -48,7 +48,7 @@ fun PlaylistsTab(app: ManagerApp) {
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.width(260.dp).fillMaxHeight()) { PlaylistList(app) { dialog = it } }
                 Box(Modifier.weight(1f).fillMaxHeight().background(Palette.bg)) {
-                    if (open != null && !open.folder) PlaylistTracks(app, open, onBack = null) { dialog = it } else Hint("Escolha uma playlist.")
+                    if (open != null && !open.folder) PlaylistTracks(app, open, onBack = null) { dialog = it } else Hint("")
                 }
             }
         } else if (open != null && !open.folder) {
@@ -57,13 +57,15 @@ fun PlaylistsTab(app: ManagerApp) {
             PlaylistList(app) { dialog = it }
         }
     }
-    PlaylistDialogs(app, dialog) { dialog = null }
+    PlaylistDialogs(app, dialog, { dialog = it }) { dialog = null }
 }
 
 sealed interface PlaylistDialog {
     data object New : PlaylistDialog
     data class Rename(val p: PlaylistItem) : PlaylistDialog
     data class Delete(val p: PlaylistItem) : PlaylistDialog
+    data class More(val p: PlaylistItem) : PlaylistDialog
+    data class Sort(val p: PlaylistItem) : PlaylistDialog
 }
 
 @Composable
@@ -77,7 +79,7 @@ private fun PlaylistList(app: ManagerApp, show: (PlaylistDialog) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         OutlinedButton(onClick = { show(PlaylistDialog.New) }, modifier = Modifier.fillMaxWidth().padding(10.dp).height(46.dp)) { Text("+ NOVA PLAYLIST", fontSize = 13.sp) }
         if (lists.isEmpty()) {
-            Hint("Nenhuma playlist ainda. Crie uma aqui ou selecione faixas na Biblioteca e use \"Playlist\".")
+            Hint("Nenhuma playlist")
         } else {
             LazyColumn(Modifier.weight(1f)) {
                 items(lists, key = { it.id }) { p ->
@@ -89,9 +91,10 @@ private fun PlaylistList(app: ManagerApp, show: (PlaylistDialog) -> Unit) {
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text((if (p.folder) "▸ " else "") + p.name, color = Palette.text, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(if (p.folder) "pasta" else "$count faixa(s)", color = Palette.muted, fontSize = 12.sp)
+                            
                         }
-                        TextButton(onClick = { show(PlaylistDialog.Rename(p)) }) { Text("Renomear", fontSize = 12.sp) }
+                        Text(if (p.folder) "" else "$count", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono)
+                        if (m.target == p.id) Text("  ALVO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -106,28 +109,14 @@ private fun PlaylistTracks(app: ManagerApp, p: PlaylistItem, onBack: (() -> Unit
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line)).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) TextButton(onClick = onBack) { Text("‹ VOLTAR", fontSize = 13.sp) }
-            Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                Text(p.name, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${ids.size} faixa(s)", color = Palette.muted, fontSize = 12.sp)
-            }
-            TextButton(onClick = { m.target = p.id; app.did("\"${p.name}\" é a playlist alvo. Na Biblioteca, um toque no + adiciona.") }, enabled = m.target != p.id) { Text(if (m.target == p.id) "Alvo ✓" else "Usar como alvo", fontSize = 12.sp) }
-            TextButton(onClick = { show(PlaylistDialog.Delete(p)) }) { Text("Apagar", color = Palette.danger) }
-        }
-        if (ids.size > 1) {
-            var menu by remember { mutableStateOf(false) }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("ORDENAR", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 8.dp)) {
-                    items(os.deckbridge.manager.smart.Smart.SortMode.values().toList()) { mode ->
-                        AssistChip(onClick = {
-                            if (m.sortPlaylist(p.id, mode)) app.did("\"${p.name}\" ordenada: ${mode.title}") else app.notice = os.deckbridge.manager.Banner("Já está nessa ordem.", false)
-                        }, label = { Text(mode.title, fontSize = 12.sp) })
-                    }
-                }
-            }
+            Text(p.name, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false))
+            Text("${ids.size}", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(start = 8.dp).weight(1f))
+            if (m.target == p.id) Text("ALVO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 6.dp))
+            // Tudo que não é usado o tempo todo fica no ⋯.
+            TextButton(onClick = { show(PlaylistDialog.More(p)) }) { Text("⋯", fontSize = 22.sp) }
         }
         if (ids.isEmpty()) {
-            Hint("Playlist vazia. Na Biblioteca, segure uma faixa para selecionar e toque em \"Playlist\".")
+            Hint("Vazia")
         } else {
             LazyColumn(Modifier.weight(1f)) {
                 items(ids.withIndex().toList(), key = { it.value }) { (n, id) ->
@@ -162,7 +151,7 @@ private fun swap(app: ManagerApp, p: PlaylistItem, ids: List<Int>, a: Int, b: In
 }
 
 @Composable
-private fun PlaylistDialogs(app: ManagerApp, dialog: PlaylistDialog?, close: () -> Unit) {
+private fun PlaylistDialogs(app: ManagerApp, dialog: PlaylistDialog?, show: (PlaylistDialog) -> Unit, close: () -> Unit) {
     val m = app.model
     when (dialog) {
         PlaylistDialog.New -> NameDialog("Nova playlist", confirm = "Criar", onName = { name ->
@@ -175,13 +164,32 @@ private fun PlaylistDialogs(app: ManagerApp, dialog: PlaylistDialog?, close: () 
             close()
         }, onClose = close)
         is PlaylistDialog.Delete -> ConfirmDialog(
-            "Apagar \"${dialog.p.name}\"?", "As faixas continuam na biblioteca. Dá para desfazer até salvar.", "Apagar", danger = true,
+            "Apagar \"${dialog.p.name}\"?", "As faixas ficam na biblioteca.", "Apagar", danger = true,
             onConfirm = {
                 m.submit(Edit.DeletePlaylist(dialog.p.id), "Apagar playlist \"${dialog.p.name}\"")
                 m.openPlaylist = null
                 close()
             }, onClose = close,
         )
+        is PlaylistDialog.More -> {
+            val p = dialog.p
+            val options = listOf(if (m.target == p.id) "Deixar de ser alvo" else "Usar como alvo", "Ordenar…", "Renomear", "Apagar")
+            ChoiceDialog(p.name, options, onPick = { n ->
+                when (n) {
+                    0 -> { m.target = if (m.target == p.id) null else p.id; close() }
+                    1 -> show(PlaylistDialog.Sort(p))
+                    2 -> show(PlaylistDialog.Rename(p))
+                    else -> show(PlaylistDialog.Delete(p))
+                }
+            }, onClose = close)
+        }
+        is PlaylistDialog.Sort -> {
+            val modes = os.deckbridge.manager.smart.Smart.SortMode.values().toList()
+            ChoiceDialog("Ordenar", modes.map { it.title }, onPick = { n ->
+                if (m.sortPlaylist(dialog.p.id, modes[n])) app.did("Ordenada")
+                close()
+            }, onClose = close)
+        }
         null -> {}
     }
 }
