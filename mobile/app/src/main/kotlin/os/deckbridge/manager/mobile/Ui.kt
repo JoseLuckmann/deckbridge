@@ -44,6 +44,11 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg)) {
             val wide = maxWidth >= WIDE_DP.dp
             val open = app.detailId?.let { app.model.view?.track(it) }
+            // A pré-escuta é da faixa na tela: fechou a faixa ou passou para outra, para.
+            val onScreen = app.triage?.getOrNull(app.triageAt) ?: app.detailId
+            androidx.compose.runtime.LaunchedEffect(onScreen) {
+                if (app.preview.playingId != null && app.preview.playingId != onScreen) app.preview.stop()
+            }
             val detailTab = app.tab == Tab.LIBRARY || app.tab == Tab.PLAYLISTS
             if (wide) {
                 Row(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {

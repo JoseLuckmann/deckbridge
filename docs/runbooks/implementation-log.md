@@ -852,3 +852,12 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Removido da frente (continua no MENU): Arrumar nomes, Analisar todas, Descartar mudanças, ajuda de busca. Estrelas tocáveis na linha saíram (nota pela triagem, pelo detalhe ou pela seleção).
 - Evidência: mobile 25 testes, 0 falhas (inclui `UxFlowTest` novo: busca escondida até pedir e ✕ limpa). Capturas `docs/ui/mobile-*.png` (14).
 - Não verificado: uso real no S25 Ultra; se os textos curtos continuam claros para quem nunca usou.
+
+## 2026-10-25 — Bug no S25 Ultra: a pré-escuta continuava tocando depois de fechar o app
+
+- Relato do dono (primeiro uso no aparelho): fechou o app e a música ficou tocando para sempre.
+- Causa: o `MediaPlayer` da pré-escuta não era parado quando a tela saía (`onStop`/`onDestroy`). Pior: cada recriação da tela criava um `ManagerApp` novo, e o player do antigo ficava órfão, sem nenhum botão que o alcançasse.
+- Correção: a tela para a pré-escuta em `onStop` e `onDestroy`; `ManagerApp.get()` dá um só estado por processo (a tela recriada reencontra o mesmo player); a pré-escuta pede foco de áudio e para quando outro app pega o som (ligação, música); fone desconectado (`ACTION_AUDIO_BECOMING_NOISY`) para na hora; fechar a faixa ou passar para outra também para.
+- Prova: `PreviewLifecycleTest` (4 testes, player simulado do Robolectric). Com a correção retirada, os dois testes de sair/fechar falham; com ela, passam.
+- Achado no caminho: a classe que abre a atividade de verdade deixava estado que fazia as capturas seguintes esperarem para sempre por "ocioso" (explica também a falha intermitente vista antes). Testes agora rodam uma JVM por classe (`forkEvery = 1`); a causa exata dentro do Compose/Robolectric não foi isolada.
+- Evidência: mobile 29 testes, 0 falhas. Não verificado no aparelho: precisa confirmar no S25 Ultra que fechar, trocar de app, ligação e desconectar o fone param o som.

@@ -352,6 +352,16 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     }
 
     companion object {
+        @Volatile private var instance: ManagerApp? = null
+
+        /**
+         * Um só estado por processo. Se a tela é destruída e recriada com o processo vivo, ela reencontra o mesmo
+         * [ManagerApp] (e o mesmo player), em vez de criar outro e deixar o antigo tocando sem controle.
+         */
+        fun get(context: Context): ManagerApp = instance ?: synchronized(this) {
+            instance ?: ManagerApp(context.applicationContext).also { instance = it }
+        }
+
         fun defaultRoot(context: Context): File = File(context.getExternalFilesDir(null) ?: context.filesDir, "biblioteca/dados")
     }
 }

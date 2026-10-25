@@ -54,6 +54,9 @@ android {
 
 tasks.withType<Test>().configureEach {
     testLogging { events("passed", "failed") }
+    // Uma JVM por classe de teste: a classe que abre a atividade de verdade (PreviewLifecycleTest) deixava estado do
+    // Compose/Robolectric que fazia as capturas seguintes esperarem para sempre por "ocioso". Isoladas, todas passam.
+    forkEvery = 1
     maxHeapSize = "2g"
     environment("LC_ALL", "C.UTF-8")
     systemProperty("roborazzi.test.record", "true")
