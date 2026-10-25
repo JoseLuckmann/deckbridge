@@ -88,49 +88,16 @@ class MidiMap(private val controls: List<ControlHit>) {
     }
 }
 
+/** Montador de mensagens MIDI. A regra (running status, SysEx, tempo real, system common, note-off) está em C++,
+ *  `cpp/controller.h`, a mesma do Pi; esta classe só segura o estado nativo. */
 class MidiAssembler {
-    private var runningStatus: Int? = null
-    private val pending = ArrayList<Int>()
-    private var inSysEx = false
+    private val handle = ControllerCore.newAssembler()
 
     fun push(bytes: ByteArray): List<MidiMessage> {
-        val messages = mutableListOf<MidiMessage>()
-        bytes.forEach { raw ->
-            val value = raw.toInt() and 0xff
-            if (inSysEx) {
-                if (value == 0xF7) inSysEx = false
-                return@forEach
-            }
-            if (value == 0xF0) {
-                inSysEx = true
-                pending.clear()
-                return@forEach
-            }
-            if (value >= 0xF8) return@forEach
-            // System common (0xF1..0xF7): cancela o running status e os dados que vierem depois são ignorados.
-            if (value >= 0xF1) {
-                runningStatus = null
-                pending.clear()
-                return@forEach
-            }
-            if (value >= 0x80) {
-                runningStatus = value
-                pending.clear()
-                pending += value
-                return@forEach
-            }
-            val status = runningStatus ?: return@forEach
-            if (pending.isEmpty()) pending += status
-            pending += value
-            val needed = if (status in 0xC0..0xDF) 2 else 3
-            if (pending.size >= needed) {
-                val data2 = if (needed == 3) pending[2] else 0
-                // Note-off (0x8n) vira note-on com velocidade 0, que é como o mapa oficial descreve o soltar.
-                messages += if (pending[0] in 0x80..0x8F) MidiMessage(pending[0] + 0x10, pending[1], 0) else MidiMessage(pending[0], pending[1], data2)
-                pending.clear()
-            }
-        }
-        return messages
+        if (bytes.isEmpty()) return emptyList()
+        val out = IntArray(bytes.size * 3 + 3)
+        val count = ControllerCore.assemblerPush(handle, bytes, out)
+        return List(count) { MidiMessage(out[it * 3], out[it * 3 + 1], out[it * 3 + 2]) }
     }
 }
 

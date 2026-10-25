@@ -216,3 +216,20 @@ A constituição 1.1.0 está em `.specify/memory/constitution.md`. A emenda é a
 - Fuzz dos parsers da biblioteca: nenhuma exceção. A carga não muda nem cria arquivos num volume sem permissão de escrita (hash antes e depois). A exportação do histórico para o pendrive da biblioteca passou a ser recusada.
 - Bring-up: checklist das 121 mensagens do mapa, lista do que chega fora do mapa e remapeamento aprendido na tela de diagnóstico. Passo 25 do roteiro.
 - Suíte JVM: 141 testes, 0 falhas. Nada disto foi ouvido no tablet nem na DDJ-400 (`BLOCKED_HARDWARE`).
+
+## Atualização de 25/10/2026 (Raspberry Pi, opção C)
+
+- Decisões do dono e ADRs:
+  - ADR-0007 aceita: o motor próprio num Pi Zero 2 W ou Pi 3, com Raspberry Pi OS 64 bit. O Mixxx (opção A) continua sendo a trilha normativa do alvo 2.
+  - ADR-0008: tela nativa em SDL2, medida contra o Compose Desktop. A SDL2 usa de 9 a 18 vezes menos memória privada.
+- `pi/`:
+  - Motor do app sobre ALSA.
+  - DDJ-400 por rawmidi: entrada e LEDs.
+  - Leitor do pendrive em C++, só leitura.
+  - WAV, MP3 e FLAC direto para int16.
+  - Tela no layout do app em 1024×600 e 800×480.
+  - Build aarch64 com testes sob qemu.
+  - Ver `pi/README.md` e `docs/ui/pi-*.png`.
+- Lógica única: o controle e os LEDs da DDJ-400 agora são uma implementação só, em C++, para o app e para o Pi. O motor já era um só.
+- Duplicado de propósito: o leitor do pendrive (Kotlin no app, C++ no Pi). Os dois estão presos pelo `RekordboxGoldenTest`.
+- Nada disto rodou num Pi, num tablet nem na DDJ-400 (`BLOCKED_HARDWARE`).

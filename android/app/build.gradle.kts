@@ -123,7 +123,26 @@ androidComponents {
     }
 }
 
+// A lógica de controle da DDJ-400 é C++ (src/main/cpp/controller.h), a mesma do app e do Pi. Nos testes JVM ela
+// roda de verdade: este passo compila o mesmo código como biblioteca do host (Linux, g++), e o ControllerCore a carrega.
+val hostControlLib = layout.buildDirectory.file("host/libdeckbridge_control_host.so")
+val buildHostControl by tasks.registering(Exec::class) {
+    val sources = listOf(file("src/main/cpp/controller_jni.cpp"), file("src/main/cpp/controller.h"), file("src/main/cpp/leds.h"))
+    inputs.files(sources)
+    outputs.file(hostControlLib)
+    val jdk = System.getProperty("java.home")
+    val output = hostControlLib.get().asFile
+    doFirst { output.parentFile.mkdirs() }
+    commandLine(
+        "g++", "-std=c++17", "-O2", "-fwrapv", "-shared", "-fPIC",
+        "-I$jdk/include", "-I$jdk/include/linux",
+        "-o", output.absolutePath, sources[0].absolutePath,
+    )
+}
+
 tasks.withType<Test>().configureEach {
+    dependsOn(buildHostControl)
+    systemProperty("deckbridge.controlLib", hostControlLib.get().asFile.absolutePath)
     // O worker padrão (~512 MB) estoura no lowpass das faixas longas depois
     // das 248 análises de tom. O algoritmo em si cabe; o heap do teste não.
     maxHeapSize = "2g"

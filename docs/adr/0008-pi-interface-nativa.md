@@ -49,5 +49,11 @@ A porta é verificada contra o Kotlin com vetores de referência. Os mesmos byte
 
 ## Consequências
 
-- Duas implementações da lógica de controle, Kotlin e C++. Os vetores de referência gerados do Kotlin entram como teste das duas, para não divergirem.
+- Atualização de 2026-10-25: a lógica de controle e os LEDs têm uma implementação só, em C++ (`android/app/src/main/cpp/controller.h` e `leds.h`).
+  - O app Android usa por JNI (`ControllerCore.kt`, `controller_jni.cpp`).
+  - Os testes JVM rodam o mesmo C++ como biblioteca do host, compilada pelo Gradle (`buildHostControl`).
+  - O Pi inclui direto.
+  - As classes Kotlin (`MidiAssembler`, `TempoAssembler`, `interpretPerformance`, `LedDiff`...) ficaram só como fachada, com a mesma API.
+  - Os vetores gravados quando a regra era Kotlin seguem como teste de regressão nos dois lados.
+- O leitor do pendrive ainda tem duas implementações: a Kotlin, no app, e a C++, no Pi (`pi/library/rekordbox.h`). O `RekordboxGoldenTest` e o `rekordbox_test` as prendem ao mesmo resumo. A decodificação é de propósito diferente por plataforma: MediaCodec no Android, dr_mp3/dr_flac no Pi.
 - O motor e a interface ficam no mesmo processo. A interface nunca segura o lock do áudio por mais que um setter.

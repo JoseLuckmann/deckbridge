@@ -1,8 +1,9 @@
-// Lógica de controle da DDJ-400 em C++ para o Pi (ADR-0008). É a porta, regra por regra, de MidiMap.kt
+// Lógica de controle da DDJ-400: a única implementação do projeto. O app Android usa por JNI (controller_jni.cpp,
+// ControllerCore.kt) e o Pi direto (ADR-0008). Nasceu como porta, regra por regra, de MidiMap.kt
 // (MidiMap, MidiAssembler) e MixMath.kt (TempoAssembler, performanceAction, surfaceAction, interpretPerformance).
-// A verificação é por vetores de referência: o teste Kotlin ControllerGoldenTest grava bytes MIDI e as ações que o
-// app tira deles (pi/control/testdata/golden.txt); pi/control/controller_test.cpp exige as mesmas ações daqui.
-// Mudou uma regra no Kotlin? Regrave o arquivo (DECKBRIDGE_WRITE_GOLDEN=1) e acompanhe aqui.
+// Os vetores de pi/control/testdata/golden.txt (gravados quando a regra ainda era Kotlin) seguem como teste de
+// regressão: o ControllerGoldenTest (JVM, que agora chama este código por JNI) e o pi/control/controller_test.cpp.
+// Mudou uma regra de propósito? Regrave o arquivo (DECKBRIDGE_WRITE_GOLDEN=1) e confira a diferença.
 #pragma once
 
 #include <algorithm>

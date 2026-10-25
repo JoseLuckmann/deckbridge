@@ -11,7 +11,7 @@
 #define DECKBRIDGE_NO_JNI 1
 #include "../android/app/src/main/cpp/engine.cpp"
 #include "control/deck_control.h"
-#include "control/leds.h"
+#include "leds.h"
 #include "control/midi_in.h"
 #include "app/session.h"
 

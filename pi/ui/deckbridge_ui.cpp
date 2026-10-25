@@ -10,7 +10,7 @@
 #include "../../android/app/src/main/cpp/engine.cpp"
 #include "../app/session.h"
 #include "../control/deck_control.h"
-#include "../control/leds.h"
+#include "leds.h"
 #include "../control/midi_in.h"
 
 #include <SDL2/SDL.h>

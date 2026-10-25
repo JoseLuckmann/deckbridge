@@ -739,3 +739,18 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - TSan na tela com a demonstração: 0 avisos.
   - Revisão manual achou `pitch` e `bpm` lidos por outra thread no `DeckControl`. Viraram atômicos.
 - Não verificado (`BLOCKED_HARDWARE`): Pi real com KMSDRM, tela de 7", toque e DDJ-400.
+
+## 2026-10-25 — Lógica única: controle e LEDs da DDJ-400 em C++ para o app e o Pi
+
+- Pedido do dono: "a lógica e o motor é um só no projeto né?". Antes desta mudança o motor era um só, mas o controle tinha duas implementações (Kotlin e C++).
+- Mudança:
+  - `controller.h` e `leds.h` foram para `android/app/src/main/cpp/`.
+  - `controller_jni.cpp` entra no `libdeckbridge-engine.so`.
+  - `ControllerCore.kt` carrega a biblioteca nativa, ou, nos testes JVM, a biblioteca do host que o Gradle compila (`buildHostControl`, g++). Robolectric com outro classloader: carrega uma cópia.
+  - `MidiAssembler`, `TempoAssembler`, `interpretPerformance`, `performanceAction`, `surfaceAction`, `pitchFromTempo14`, `nextTempoRange`, `ledTargets`, `LedDiff` e `beatLoopIndex` viraram fachadas com a mesma API. A regra Kotlin saiu.
+  - R8: `-keep` explícito do ControllerCore. O dex da release mantém os nomes.
+- Evidência:
+  - 145 testes JVM com 0 falhas, já rodando o C++. Inclui o `MidiFuzzTest` no DeckPage real, o golden do controle e o dos LEDs.
+  - O APK leva as 8 funções JNI novas, além das 41 do motor.
+  - Testes do Pi passam com os arquivos movidos.
+- Continua com duas implementações: o leitor do pendrive (Kotlin no app, C++ no Pi). O `RekordboxGoldenTest` e o `rekordbox_test` os prendem ao mesmo resumo.

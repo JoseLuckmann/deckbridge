@@ -133,7 +133,7 @@ class RekordboxTest {
         assertEquals(PerformanceAction.Kind.HOT_CUE, actions[3].kind)
         assertEquals(0, actions[3].hotIndex)
         assertEquals(PerformanceAction.Kind.JOG, actions[4].kind)
-        assertEquals(6 * JOG_BEND_SCALE, actions[4].slider!!, 0.0001)
+        assertEquals(6 * 0.8, actions[4].slider!!, 0.0001) // escala do prato do script oficial (controller.h)
         assertEquals(0.0, actions[5].slider!!, 0.0001)
         assertEquals(1220.0, advancePlayhead(2390.0, 30.0, 1200.0, 2400.0), 0.001)
         assertEquals(15.0, advancePlayhead(10.0, 5.0, -1.0, -1.0), 0.001)

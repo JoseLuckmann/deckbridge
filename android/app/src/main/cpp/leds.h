@@ -1,5 +1,5 @@
-// LEDs da DDJ-400 em C++: porta de DdjLeds.kt (ledTargets e LedDiff), verificada pelos vetores de LedGoldenTest
-// (pi/control/testdata/leds.txt). Os bytes vêm do mapa pinado do Mixxx 2.5.6; não é captura da controladora.
+// LEDs da DDJ-400: a única implementação do projeto (app Android por JNI, ControllerCore.kt; Pi direto). Nasceu como
+// porta de DdjLeds.kt; os vetores de pi/control/testdata/leds.txt (LedGoldenTest) seguem como teste de regressão. Os bytes vêm do mapa pinado do Mixxx 2.5.6; não é captura da controladora.
 #pragma once
 
 #include <algorithm>

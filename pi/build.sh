@@ -22,12 +22,12 @@ if [ "${1:-}" = "arm64" ]; then
             -L/usr/lib/aarch64-linux-gnu -Wl,-rpath-link,/usr/lib/aarch64-linux-gnu $libs
         echo "$OUT/$(basename $prog).arm64"
     done
-    for t in control/controller_test control/leds_test library/rekordbox_test; do g++ -std=c++17 -O2 -o "$OUT/$(basename $t)" pi/$t.cpp && "$OUT/$(basename $t)" .; done
+    for t in control/controller_test control/leds_test library/rekordbox_test; do g++ -std=c++17 -O2 -I android/app/src/main/cpp -o "$OUT/$(basename $t)" pi/$t.cpp && "$OUT/$(basename $t)" .; done
 else
     g++ $FLAGS -o "$OUT/deckbridge_pi" pi/deckbridge_pi.cpp -lasound
     g++ $FLAGS -o "$OUT/deckbridge_ui" pi/ui/deckbridge_ui.cpp -lasound $(sdl2-config --cflags --libs) -lSDL2_ttf
     echo "$OUT/deckbridge_pi $OUT/deckbridge_ui"
-    for t in control/controller_test control/leds_test library/rekordbox_test; do g++ -std=c++17 -O2 -o "$OUT/$(basename $t)" pi/$t.cpp && "$OUT/$(basename $t)" .; done
+    for t in control/controller_test control/leds_test library/rekordbox_test; do g++ -std=c++17 -O2 -I android/app/src/main/cpp -o "$OUT/$(basename $t)" pi/$t.cpp && "$OUT/$(basename $t)" .; done
 fi
 # O mapa da DDJ-400 vai junto do binário (--map, padrão ./ddj400-map.json).
 cp android/app/src/main/resources/ddj400-map.json "$OUT/"
