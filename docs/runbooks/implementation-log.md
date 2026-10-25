@@ -650,3 +650,21 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - Suíte JVM com 142 testes e 0 falhas. APK compila para arm64, armeabi-v7a e x86_64.
 - Não verificado:
   - Nada medido no tablet nem num Pi (`BLOCKED_HARDWARE`). Os números do Pi são estimativas.
+
+## 2026-10-25 — Pi, opção C, fase 1: motor no Linux/ALSA
+
+- Decisão do dono: opção C da ADR-0007, agora aceita (`docs/adr/0007-pi-motor-proprio.md`). O motor próprio vai num Pi Zero 2 W ou Pi 3 com Raspberry Pi OS 64 bit. O Mixxx (opção A) continua sendo a trilha normativa do alvo 2.
+- Mudança:
+  - `pi/alsa/oboe/Oboe.h`: um Oboe sobre ALSA. Thread SCHED_FIFO; formato float, S32, S24_3LE ou S16; x-runs; desconexão chamando `onErrorAfterClose` fora da thread de áudio.
+  - `pi/deckbridge_pi.cpp`: o mesmo `engine.cpp`, sem tela, com `mlockall`, WAV direto para int16 e o estado impresso a cada segundo.
+  - `pi/build.sh` para nativo e para aarch64.
+  - `pi/deckbridge.service` (systemd com rtprio e memlock) e `pi/README.md`.
+  - `engine.cpp`: só um `#ifndef DECKBRIDGE_NO_JNI` em volta do JNI. O APK continua exportando as 41 funções JNI.
+- Evidência:
+  - x86 com o PCM `null`: 2 decks em tempo real, 0 x-runs, 0 falhas. CPU de 1,4 %, ou 2,5 % com SHIMMER.
+  - Captura pelo plugin `file`: master nos canais 1–2 (RMS 0,27, pico 0,98) e fone em silêncio.
+  - aarch64 sob qemu: abre e toca com 0 x-runs.
+  - `engine_host_test` FAILS 0. APK compila.
+- Ferramentas, todas pelo apt assinado: g++-aarch64-linux-gnu 13.3.0, libasound2-dev(:arm64) 1.2.11-1ubuntu0.3 (ports.ubuntu.com para o arm64), qemu-user 8.2.2.
+- Não verificado: Pi, DDJ-400 no Pi, latência e temperatura (`BLOCKED_HARDWARE`).
+- Próximo: MIDI da DDJ-400 por ALSA e uma ADR da interface com medida.

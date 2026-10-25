@@ -1,7 +1,7 @@
-# ADR-0007 — Raspberry Pi 1 Model B com o motor próprio (proposta)
+# ADR-0007 — Raspberry Pi com o motor próprio
 
 **Data:** 2026-10-24  
-**Estado:** PROPOSTA. Depende de decisão do dono. Não muda a ordem do AGENTS.md enquanto não for aceita.
+**Estado:** ACEITA em 2026-10-25, opção C (decisão do dono: "vamos de C"). Trilha paralela; a opção A (Mixxx upstream) continua sendo a trilha normativa do alvo 2 no AGENTS.md.
 
 ## Contexto
 
@@ -59,9 +59,20 @@ As otimizações feitas para o tablet são o mesmo trabalho que qualquer opção
 
 Ver `docs/performance/README.md`.
 
-## Pergunta ao dono
+## Decisão
 
-1. Aceita abrir a opção B ou a C como trilha paralela ao alvo 2 do AGENTS.md? A opção A continua sendo a trilha normativa.
-2. Se sim, o modo reduzido da B é aceitável (sem o set completo de FX e RMX)? Ou prefere a C (Pi Zero 2 W ou Pi 3) para manter os efeitos?
+Opção C: o motor próprio num Pi Zero 2 W ou num Pi 3, com Raspberry Pi OS 64 bit (aarch64, Cortex-A53). Isso segue a D-06. O Pi 1 Model B fica fora.
 
-Até a resposta, nada de código específico do Pi entra no repositório.
+Plano em fases, cada uma com prova antes da seguinte:
+1. **Motor no Linux** (feito em 2026-10-25, `pi/`):
+   - `engine.cpp` sem mudança de lógica, sobre um `Oboe.h` feito em ALSA.
+   - Thread SCHED_FIFO, conversão de formato e contagem de x-runs.
+   - Desconexão no mesmo caminho do Oboe.
+   - Build aarch64 por compilação cruzada.
+2. **MIDI da DDJ-400 no Linux** (ALSA rawmidi) e **decisão da interface** numa ADR própria, com medida. As candidatas são Compose Multiplatform Desktop, reaproveitando a lógica Kotlin, e uma interface nativa.
+3. **Imagem e serviço**:
+   - systemd com rtprio e memlock.
+   - Núcleo reservado ao áudio.
+   - Governor de CPU em `performance`.
+   - Pendrive montado só leitura, como a OD-23.
+4. **HIL** num Pi de verdade: o roteiro do tablet adaptado. Até lá, `BLOCKED_HARDWARE`.

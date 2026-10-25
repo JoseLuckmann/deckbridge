@@ -1,0 +1,21 @@
+# Serviço do motor no Raspberry Pi OS (fase 1, sem tela). Copiar para /etc/systemd/system/ e ajustar o aparelho.
+[Unit]
+Description=DeckBridge (motor de áudio, fase 1)
+After=sound.target
+
+[Service]
+Type=simple
+User=deckbridge
+SupplementaryGroups=audio
+# Nome do PCM da DDJ-400: confira com `aplay -l` no aparelho (não supomos o nome do cartão).
+Environment=DECKBRIDGE_ALSA_DEVICE=hw:CARD=DDJ400
+ExecStart=/opt/deckbridge/deckbridge_pi --seconds 86400
+# Tempo real e RAM travada para a thread de áudio (SCHED_FIFO e mlockall do programa).
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+Nice=-10
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

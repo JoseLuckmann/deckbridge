@@ -5,7 +5,10 @@
 #include <oboe/Oboe.h>
 
 #include <android/log.h>
+// Fora do Android (Linux/ALSA, testes de host) o motor compila sem JNI: DECKBRIDGE_NO_JNI.
+#ifndef DECKBRIDGE_NO_JNI
 #include <jni.h>
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -997,7 +1000,7 @@ ToneEngine &engine() {
     return instance;
 }
 
-std::string startSafe(int deviceId, int route) {
+[[maybe_unused]] std::string startSafe(int deviceId, int route) {
     try {
         return engine().start(deviceId, route);
     } catch (const std::exception &ex) {
@@ -1010,6 +1013,8 @@ std::string startSafe(int deviceId, int route) {
 }
 
 }  // namespace
+
+#ifndef DECKBRIDGE_NO_JNI
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeStart(JNIEnv *env, jobject, jint deviceId, jint route) {
@@ -1287,3 +1292,5 @@ Java_os_deckbridge_android_NativeEngine_nativeRecordPull(JNIEnv *env, jobject, j
     env->ReleaseFloatArrayElements(dest, data, 0);
     return frames;
 }
+
+#endif  // DECKBRIDGE_NO_JNI
