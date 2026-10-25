@@ -52,3 +52,6 @@ pi/build/
 # Library Manager de desktop
 desktop/.gradle/
 desktop/.kotlin/
+core/.gradle/
+core/.kotlin/
+core/build/

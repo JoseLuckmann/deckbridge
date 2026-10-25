@@ -229,7 +229,7 @@ fun OrganizeModal(model: ManagerModel, st: OrganizeState, onClose: () -> Unit) {
                         val outcome = OnDemand.analyze(root, t)
                         val s = OnDemand.suggestion(outcome, model.hasAnalysis(t), st.force)
                         if (s != null) st.items.add(s to mutableStateOf(true))
-                        else if (outcome.error != null) st.items.add(Suggestion(Rule.ANALYSIS, listOf(t.id), "\"${t.title}\" não foi analisada", outcome.error, null) to mutableStateOf(false))
+                        else outcome.error?.let { why -> st.items.add(Suggestion(Rule.ANALYSIS, listOf(t.id), "\"${t.title}\" não foi analisada", why, null) to mutableStateOf(false)) }
                     }
                     st.busy = null
                 }

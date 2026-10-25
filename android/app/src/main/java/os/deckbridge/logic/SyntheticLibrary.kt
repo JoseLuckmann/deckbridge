@@ -653,7 +653,7 @@ private fun ByteArray.putBe32(at: Int, value: Int) {
     this[at + 3] = (value and 0xFF).toByte()
 }
 
-internal fun click(bpm: Double, seconds: Int, rate: Int, freq: Double): FloatArray {
+fun click(bpm: Double, seconds: Int, rate: Int, freq: Double): FloatArray {
     val total = seconds * rate
     val out = FloatArray(total)
     val beat = 60.0 / bpm

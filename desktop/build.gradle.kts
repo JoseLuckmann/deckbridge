@@ -11,13 +11,10 @@ version = "0.1.0"
 
 kotlin {
     jvmToolchain(21)
-    sourceSets.main {
-        // Os leitores e a análise do app (puro JVM, sem import de Android) são os mesmos nos dois programas.
-        kotlin.srcDir("../android/app/src/main/java/os/deckbridge/logic")
-    }
 }
 
 dependencies {
+    implementation("os.deckbridge:core")
     implementation(compose.desktop.currentOs)
     testImplementation(kotlin("test"))
 }

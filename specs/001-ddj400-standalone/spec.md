@@ -450,6 +450,7 @@ São o que o dono pediu e o que o app 0.14.1 faz. A escuta de cada uma continua 
 | OD-23 | O USB do rekordbox é somente leitura no alvo 1 e no alvo 2. | ADR-0002. O Android é quem monta o volume. O app não pede escrita e não grava `export.pdb`, ANLZ nem áudio nesse volume. |
 | OD-24 | O analisador publica a medida e não finge o alvo. | Tempo, 58 faixas GiantSteps: Acc1 0,655, Acc2 0,724. Tom nas mesmas 58: MIREX 0,586, exato 0,466. Holdout (16): MIREX 0,456, exato 0,312. Extra (190): MIREX 0,519. Frases: 16 de 26 a 1 compasso. Os alvos 0,85 / 0,95 / 0,65 não foram atingidos. |
 | OD-25 | O Library Manager de desktop pode escrever no pendrive rekordbox. Performance (Android, Pi, Mixxx) continua somente leitura. | ADR-0009. Emenda a OD-23 só para o programa de desktop: pedido explícito, backup local, troca atômica, verificação, restauração. Decisão do dono, 2026-10-25. Nenhum player leu um banco gravado por ele (`BLOCKED_HARDWARE`). |
+| OD-26 | O Library Manager mantém a biblioteca também no aparelho (formato do rekordbox), tem versão de celular (retrato e paisagem, S25 Ultra como referência) e exporta para o pendrive, criando o export do zero quando preciso. | ADR-0010. Revoga o item 7 do ADR-0009. O app de celular é separado do de performance. Nenhum player leu um banco gerado do zero (`BLOCKED_HARDWARE`). Decisão do dono, 2026-10-25. |
 
 #### Ainda abertas — `OWNER_DECISION` (não impedem P0/P1)
 

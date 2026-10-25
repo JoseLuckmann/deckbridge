@@ -15,3 +15,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "deckbridge-manager"
+
+// O núcleo (banco, ANLZ, gravação segura, importação, organizar) é compartilhado com o app Android.
+includeBuild("../core")

@@ -75,8 +75,9 @@ fun CueEditorModal(model: ManagerModel, track: TrackItem, onClose: () -> Unit) {
     var firstText by remember(key) { mutableStateOf((first?.timeMs ?: 0).toString()) }
 
     Modal("Cues e grade — ${track.title}", 1040.dp, onClose) {
-        if (files.error != null) {
-            Label(files.error, Pal.Red, 13.sp, maxLines = 3)
+        val problem0 = files.error
+        if (problem0 != null) {
+            Label(problem0, Pal.Red, 13.sp, maxLines = 3)
             Btn("Fechar", onClose)
             return@Modal
         }
