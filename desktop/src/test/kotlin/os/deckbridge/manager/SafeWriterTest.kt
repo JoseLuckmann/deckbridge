@@ -21,7 +21,7 @@ import os.deckbridge.manager.volume.Volumes
 import os.deckbridge.manager.volume.sha256
 
 class SafeWriterTest {
-    private val backupDir = Files.createTempDirectory("dbm-bk").toFile()
+    private val backupDir = TestVolumes.tempDir("dbm-bk")
     private val backups = Backups(backupDir)
 
     private fun tree(dir: File): Map<String, String> =
@@ -56,7 +56,7 @@ class SafeWriterTest {
         val original = sha256(File(dir, PDB_RELATIVE).readBytes())
         val vol = Volumes.open(dir)
         val report = SafeWriter.apply(vol, edited(vol), listOf("x"), backups)
-        val undo = backups.restore(report.backup, dir)
+        val undo = backups.restore(report.backup, dir).before
         assertEquals(original, sha256(File(dir, PDB_RELATIVE).readBytes()))
         backups.restore(undo, dir)
         assertEquals(report.shaAfter, sha256(File(dir, PDB_RELATIVE).readBytes()))
@@ -109,7 +109,7 @@ class SafeWriterTest {
 
     @Test
     fun notAnExportedVolumeIsRefused() {
-        val empty = Files.createTempDirectory("dbm-empty").toFile()
+        val empty = TestVolumes.tempDir("dbm-empty")
         assertEquals("E_RB_EXPORT_NOT_FOUND", assertFailsWith<VolumeException> { Volumes.open(empty) }.code)
         File(empty, PDB_RELATIVE).apply { parentFile.mkdirs() }.writeBytes(ByteArray(100) { 7 })
         assertFailsWith<VolumeException> { Volumes.open(empty) }

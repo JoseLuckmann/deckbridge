@@ -35,5 +35,7 @@ compose.desktop {
 
 tasks.test {
     useJUnit()
+    // Nomes de arquivo com acento exigem um locale UTF-8 no processo de teste.
+    environment("LC_ALL", "C.UTF-8")
     maxHeapSize = "1g"
 }

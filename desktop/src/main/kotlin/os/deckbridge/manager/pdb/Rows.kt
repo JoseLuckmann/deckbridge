@@ -96,9 +96,11 @@ class TrackRow private constructor(private val head: ByteArray, private val blob
     var colorId: Int by u8(88)
     var rating: Int by u8(89)
 
+    var dateAdded: String by text(10)
     var releaseDate: String by text(11)
     var mixName: String by text(12)
     var analyzePath: String by text(14)
+    var analyzeDate: String by text(15)
     var comment: String by text(16)
     var title: String by text(17)
     var fileName: String by text(19)
@@ -155,6 +157,31 @@ class TrackRow private constructor(private val head: ByteArray, private val blob
                 if (ofs >= HEAD) end = maxOf(end, ofs + size)
             }
             return end
+        }
+
+        /**
+         * Linha de faixa nova. Com [template] (uma faixa existente do mesmo banco), herda as constantes que o rekordbox
+         * escreve em campos que não conhecemos e zera tudo o que é da faixa. Sem modelo, usa as constantes do formato.
+         */
+        fun blank(template: ByteArray?): TrackRow {
+            val head = ByteArray(HEAD)
+            val base = template?.takeIf { it.size >= HEAD }
+            if (base != null) {
+                base.copyInto(head, 0, 0, HEAD)
+                // Campos da faixa: zerados. Os offsets das strings são refeitos em encode().
+                for (at in listOf(8, 12, 16, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72)) head.putU32(at, 0)
+                for (at in listOf(76, 78, 80, 82, 84)) head.putU16(at, 0)
+                head[88] = 0
+                head[89] = 0
+            } else {
+                head.putU16(0, 0x24)
+                head.putU16(24, 19048)
+                head.putU16(26, 30967)
+                head.putU16(86, 41)
+                head.putU16(90, 1)
+                head.putU16(92, 2)
+            }
+            return TrackRow(head, Array(STRINGS) { DeviceString.encode("") })
         }
 
         fun parse(row: ByteArray): TrackRow? {

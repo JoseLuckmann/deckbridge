@@ -33,7 +33,7 @@ class ScreenshotTest {
         assumeTrue("SHOTS_DIR não definido", dir != null)
         val out = File(dir!!).apply { mkdirs() }
         val usb = TestVolumes.synthetic()
-        val backups = Backups(Files.createTempDirectory("dbm-shots").toFile())
+        val backups = Backups(TestVolumes.tempDir("dbm-shots"))
 
         shoot(out, "01-boas-vindas", ManagerModel(backups))
 

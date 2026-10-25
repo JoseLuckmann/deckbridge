@@ -1,5 +1,18 @@
 package os.deckbridge.manager.pdb
 
+import java.io.File
+import java.time.LocalDate
+import kotlin.math.roundToInt
+import os.deckbridge.manager.anlz.AnlzBuild
+import os.deckbridge.manager.anlz.AnlzFormatException
+import os.deckbridge.manager.anlz.AnlzModel
+import os.deckbridge.manager.anlz.Cue
+import os.deckbridge.manager.anlz.CueIo
+import os.deckbridge.manager.anlz.GridIo
+import os.deckbridge.manager.importer.PreparedTrack
+import os.deckbridge.manager.volume.FileOp
+import os.deckbridge.manager.volume.FileOverlay
+
 data class TrackItem(
     val id: Int,
     val title: String,
@@ -112,13 +125,45 @@ sealed interface Edit {
     data class AddToPlaylist(val id: Int, val trackIds: List<Int>) : Edit
     data class RemoveFromPlaylist(val id: Int, val trackIds: List<Int>) : Edit
     data class ReorderPlaylist(val id: Int, val order: List<Int>) : Edit
+
+    /** Tira faixas da biblioteca (e das playlists, do histórico e das tags). O áudio e o ANLZ ficam no pendrive. */
+    data class RemoveTracks(val trackIds: List<Int>) : Edit
+
+    /** Grade regular a [bpm] com a primeira batida em [firstBeatMs]: reescreve o PQTZ do .DAT e o tempo do banco. */
+    data class SetGrid(val trackId: Int, val bpm: Double, val firstBeatMs: Int) : Edit
+
+    /** A lista completa de cues da faixa (memória, loops e hot cues A–H). Reescreve PCOB no .DAT e PCO2 no .EXT. */
+    data class SetCues(val trackId: Int, val cues: List<Cue>) : Edit
+
+    /** [newPath] é relativo à raiz do pendrive (ex.: `Contents/Artista/Álbum/Título.mp3`). */
+    data class FileRename(val trackId: Int, val newPath: String)
+
+    data class RenameFiles(val renames: List<FileRename>) : Edit
+
+    /** Copia o áudio para o pendrive, cria o ANLZ da análise e acrescenta a faixa ao banco. */
+    data class ImportTrack(
+        val prepared: PreparedTrack,
+        val title: String,
+        val artist: String,
+        val album: String,
+        val genre: String,
+        val key: String,
+        val year: Int,
+        val trackNumber: Int,
+        val cues: List<Cue>,
+    ) : Edit
 }
 
 /**
  * Aplica edições às linhas em memória. O arquivo original nunca é alterado: [changedTables] diz quais tabelas ficaram
  * diferentes e com que linhas, para [RawPdb.write] montar o banco novo.
  */
-class PdbEditor(private val raw: RawPdb) {
+class PdbEditor(private val raw: RawPdb, root: File? = null) {
+    /** Arquivos que as edições vão criar, trocar ou renomear (ainda em memória). */
+    val files = FileOverlay(root)
+
+    fun fileOps(): List<FileOp> = files.ops()
+
     private val rows = HashMap<Int, MutableList<ByteArray>>()
 
     /** Linhas de nome criadas nesta sessão (por tipo): se ficarem sem uso, saem também. */
@@ -152,6 +197,11 @@ class PdbEditor(private val raw: RawPdb) {
             is Edit.AddToPlaylist -> addToPlaylist(edit)
             is Edit.RemoveFromPlaylist -> removeFromPlaylist(edit)
             is Edit.ReorderPlaylist -> reorderPlaylist(edit)
+            is Edit.RemoveTracks -> removeTracks(edit)
+            is Edit.SetGrid -> setGrid(edit)
+            is Edit.SetCues -> setCues(edit)
+            is Edit.RenameFiles -> renameFiles(edit)
+            is Edit.ImportTrack -> importTrack(edit)
         }
     }
 
@@ -412,5 +462,189 @@ class PdbEditor(private val raw: RawPdb) {
         if (edit.order.sorted() != current.sorted()) throw EditException("A nova ordem precisa ter exatamente as mesmas faixas da playlist.")
         if (edit.order == current) return
         replaceEntries(edit.id, edit.order)
+    }
+
+    // ---- arquivos: faixas, grade, cues, nomes ------------------------------------------------------------------
+
+    private fun norm(p: String) = p.replace('\\', '/').trim().trimStart('/')
+
+    private fun lead(sample: String) = if (sample.replace('\\', '/').trim().startsWith("/")) "/" else ""
+
+    private fun parseRow(at: Int): TrackRow = TrackRow.parse(rowsOf(PdbType.TRACKS)[at]) ?: throw EditException("A linha da faixa está malformada.")
+
+    private fun datRel(row: TrackRow): String {
+        val rel = norm(row.analyzePath)
+        if (rel.isEmpty()) throw EditException("A faixa \"${row.title}\" não tem arquivo de análise. Importe-a de novo ou analise no rekordbox.")
+        return rel
+    }
+
+    private fun sibling(datRel: String, ext: String): String {
+        val tail = datRel.takeLast(3)
+        return datRel.dropLast(3) + if (tail == tail.uppercase()) ext.uppercase() else ext.lowercase()
+    }
+
+    private fun loadAnlz(rel: String): AnlzModel? {
+        val bytes = files.read(rel) ?: return null
+        return try {
+            AnlzModel.parse(bytes)
+        } catch (e: AnlzFormatException) {
+            throw EditException("O arquivo de análise $rel é inválido: ${e.message}")
+        }
+    }
+
+    private fun removeTracks(edit: Edit.RemoveTracks) {
+        val ids = edit.trackIds.distinct()
+        if (ids.isEmpty()) return
+        ids.forEach { trackIndex(it) }
+        rowsOf(PdbType.TRACKS).removeAll { it.u32(72) in ids }
+        if (raw.table(PdbType.PLAYLIST_ENTRIES) != null) {
+            val affected = rowsOf(PdbType.PLAYLIST_ENTRIES).filter { PlaylistRows.entryTrack(it) in ids }.map { PlaylistRows.entryPlaylist(it) }.distinct()
+            for (p in affected) replaceEntries(p, entriesOf(p).map { PlaylistRows.entryTrack(it) }.filter { it !in ids })
+        }
+        if (raw.table(PdbType.HISTORY_ENTRIES) != null) rowsOf(PdbType.HISTORY_ENTRIES).removeAll { it.u32(0) in ids }
+        val extRel = "PIONEER/rekordbox/exportExt.pdb"
+        files.read(extRel)?.let { bytes ->
+            val ext = try {
+                RawPdb.parse(bytes)
+            } catch (e: PdbFormatException) {
+                throw EditException("O exportExt.pdb não pôde ser lido: ${e.message}")
+            }
+            val links = ext.table(4)?.rows
+            if (links != null && links.any { it.u32(4) in ids }) files.put(extRel, ext.write(mapOf(4 to links.filter { it.u32(4) !in ids })))
+        }
+        dropOrphans()
+    }
+
+    private fun setGrid(e: Edit.SetGrid) {
+        if (e.bpm !in 20.0..400.0) throw EditException("O andamento tem de ficar entre 20 e 400 BPM.")
+        if (e.firstBeatMs < 0) throw EditException("A primeira batida não pode ser negativa.")
+        val at = trackIndex(e.trackId)
+        val row = parseRow(at)
+        val rel = datRel(row)
+        val dat = loadAnlz(rel) ?: throw EditException("O arquivo de análise $rel não está no pendrive.")
+        val last = GridIo.read(dat).maxOfOrNull { it.timeMs } ?: 0
+        val durationMs = maxOf(row.duration * 1000 + 500, last)
+        files.put(rel, GridIo.write(dat, GridIo.regular(e.bpm, e.firstBeatMs, durationMs)).write())
+        row.tempo = (e.bpm * 100).roundToInt().coerceIn(1, 65535)
+        rowsOf(PdbType.TRACKS)[at] = row.encode()
+    }
+
+    private fun setCues(e: Edit.SetCues) {
+        val at = trackIndex(e.trackId)
+        val row = parseRow(at)
+        val limit = row.duration * 1000 + 2000
+        val hot = e.cues.filter { it.isHot }
+        if (hot.map { it.hot }.distinct().size != hot.size) throw EditException("Cada hot cue (A a H) só pode aparecer uma vez.")
+        for (c in e.cues) {
+            if (c.hot !in 0..8) throw EditException("Hot cue inválido: ${c.hot}.")
+            if (c.timeMs !in 0..limit) throw EditException("O cue \"${c.comment}\" em ${c.timeMs} ms está fora da faixa.")
+            if (c.loopEndMs != null && c.loopEndMs <= c.timeMs) throw EditException("O fim do loop tem de vir depois do começo.")
+            if (c.comment.length > 200) throw EditException("Comentário de cue longo demais.")
+            if (c.isHot && c.isLoop) throw EditException("Loops ficam na lista de memória, não nos hot cues.")
+        }
+        val rel = datRel(row)
+        val dat = loadAnlz(rel) ?: throw EditException("O arquivo de análise $rel não está no pendrive.")
+        val extRel = sibling(rel, "EXT")
+        val ext = loadAnlz(extRel)
+        val (d, x) = CueIo.write(dat, ext, CueIo.read(dat, ext), e.cues)
+        files.put(rel, d.write())
+        files.put(extRel, x.write())
+    }
+
+    private fun cleanPath(newPath: String, oldRel: String): String {
+        val rel = newPath.replace('\\', '/').trim('/').trim()
+        val parts = rel.split('/')
+        if (rel.isEmpty() || parts.any { it.isEmpty() || it == "." || it == ".." }) throw EditException("Caminho inválido: \"$newPath\".")
+        for (part in parts) {
+            if (part.any { it in "<>:\"|?*" || it.code < 32 }) throw EditException("O nome \"$part\" tem caracteres que o pendrive não aceita.")
+            if (part.length > 120 || part.endsWith(" ") || part.endsWith(".")) throw EditException("Nome inválido: \"$part\".")
+        }
+        if (rel.length > 240) throw EditException("Caminho longo demais.")
+        if (rel.substringAfterLast('.', "").lowercase() != oldRel.substringAfterLast('.', "").lowercase()) throw EditException("Renomear não troca a extensão do arquivo.")
+        if (!parts.first().equals(oldRel.substringBefore('/'), ignoreCase = true)) throw EditException("O arquivo tem de continuar dentro de \"${oldRel.substringBefore('/')}\".")
+        return rel
+    }
+
+    private fun renameFiles(e: Edit.RenameFiles) {
+        val list = rowsOf(PdbType.TRACKS)
+        val seen = HashSet<String>()
+        for (r in e.renames) {
+            val at = trackIndex(r.trackId)
+            val row = parseRow(at)
+            val oldRel = norm(row.filePath)
+            val newRel = cleanPath(r.newPath, oldRel)
+            if (newRel == oldRel) continue
+            if (!seen.add(newRel.lowercase())) throw EditException("Dois arquivos iriam para o mesmo nome: $newRel")
+            if (!files.exists(oldRel)) throw EditException("O áudio de \"${row.title}\" não está no pendrive ($oldRel).")
+            if (!newRel.equals(oldRel, ignoreCase = true) && files.exists(newRel)) throw EditException("Já existe um arquivo em $newRel.")
+            files.move(oldRel, newRel)
+            val prefix = lead(row.filePath)
+            row.filePath = prefix + newRel
+            row.fileName = newRel.substringAfterLast('/')
+            list[at] = row.encode()
+            val dat = norm(row.analyzePath)
+            if (dat.isNotEmpty()) for (name in listOf(dat, sibling(dat, "EXT"))) {
+                val model = runCatching { loadAnlz(name) }.getOrNull() ?: continue
+                if (model.first("PPTH") != null) files.put(name, model.replacing(setOf("PPTH"), listOf(AnlzBuild.path("/$newRel"))).write())
+            }
+        }
+    }
+
+    private fun safeName(text: String, fallback: String): String {
+        val cleaned = text.replace(Regex("[\\\\/:*?\"<>|\\u0000-\\u001f]"), "_").replace(Regex("\\s+"), " ").trim().trimEnd('.', ' ').take(100)
+        return cleaned.ifEmpty { fallback }
+    }
+
+    private fun importTrack(e: Edit.ImportTrack) {
+        val title = e.title.trim()
+        if (title.isEmpty()) throw EditException("A faixa importada precisa de um título.")
+        if (!e.prepared.source.isFile) throw EditException("O arquivo ${e.prepared.source.path} não existe mais.")
+        val tracks = rowsOf(PdbType.TRACKS)
+        val templateBytes = tracks.firstOrNull()
+        val template = templateBytes?.let(TrackRow::parse)
+        val id = (tracks.maxOfOrNull { it.u32(72) } ?: 0) + 1
+        val prefix = template?.filePath?.let(::lead) ?: "/"
+        val templatePath = template?.filePath?.let(::norm).orEmpty()
+        val top = if ('/' in templatePath) templatePath.substringBefore('/') else "Contents"
+        val ext = e.prepared.source.extension.lowercase().ifEmpty { throw EditException("O arquivo precisa de extensão.") }
+        val folder = listOf(top, safeName(e.artist, "Sem artista"), safeName(e.album, "Sem álbum")).joinToString("/")
+        val base = safeName(title, "Faixa")
+        var rel = "$folder/$base.$ext"
+        var n = 2
+        while (files.exists(rel)) rel = "$folder/$base ($n).$ext".also { n++ }
+        var analyzeId = id
+        fun datPath(i: Int) = "PIONEER/USBANLZ/PDBM/%08X/ANLZ0000.DAT".format(i)
+        while (files.exists(datPath(analyzeId))) analyzeId++
+        val dat = datPath(analyzeId)
+        val durationMs = e.prepared.info.durationSec * 1000
+        val set = AnlzBuild.fullSet("/$rel", e.prepared.read, e.prepared.waves, durationMs, e.cues)
+        files.copyIn(rel, e.prepared.source)
+        files.put(dat, set.dat)
+        files.put(sibling(dat, "EXT"), set.ext)
+        files.put(sibling(dat, "2EX"), set.ex2)
+
+        val row = TrackRow.blank(templateBytes)
+        val info = e.prepared.info
+        row.id = id
+        row.sampleRate = info.sampleRate
+        row.fileSize = info.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        row.bitrate = info.bitrateKbps
+        row.sampleDepth = 16
+        row.duration = info.durationSec
+        row.tempo = (e.prepared.read.bpm * 100).roundToInt().coerceIn(0, 65535)
+        row.year = e.year
+        row.trackNumber = e.trackNumber
+        row.title = title
+        row.artistId = nameId(PdbType.ARTISTS, e.artist.trim(), 0)
+        row.albumId = nameId(PdbType.ALBUMS, e.album.trim(), row.artistId)
+        row.genreId = nameId(PdbType.GENRES, e.genre.trim(), 0)
+        row.keyId = nameId(PdbType.KEYS, e.key.trim(), 0)
+        row.filePath = prefix + rel
+        row.fileName = rel.substringAfterLast('/')
+        row.analyzePath = prefix + dat
+        val today = LocalDate.now().toString()
+        row.dateAdded = today
+        row.analyzeDate = today
+        tracks += row.encode()
     }
 }

@@ -13,7 +13,7 @@ import os.deckbridge.manager.volume.PDB_RELATIVE
 import os.deckbridge.manager.volume.sha256
 
 class ManagerModelTest {
-    private fun model() = ManagerModel(Backups(Files.createTempDirectory("dbm-mm").toFile()))
+    private fun model() = ManagerModel(Backups(TestVolumes.tempDir("dbm-mm")))
 
     @Test
     fun editingQueuesWithoutTouchingTheUsbAndUndoDiscardWork() {

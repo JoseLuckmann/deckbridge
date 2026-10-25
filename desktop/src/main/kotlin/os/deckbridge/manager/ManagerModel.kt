@@ -59,7 +59,7 @@ class ManagerModel(val backups: Backups = Backups()) {
         val vol = Volumes.open(root)
         volume = vol
         pending = emptyList()
-        editor = PdbEditor(vol.raw)
+        editor = PdbEditor(vol.raw, vol.root)
         view = editor!!.view()
         selection = emptySet()
         anchor = null
@@ -73,7 +73,7 @@ class ManagerModel(val backups: Backups = Backups()) {
     }
 
     private fun rebuild(): PdbEditor {
-        val fresh = PdbEditor(volume!!.raw)
+        val fresh = PdbEditor(volume!!.raw, volume!!.root)
         pending.forEach { fresh.apply(it.edit) }
         return fresh
     }
@@ -105,7 +105,7 @@ class ManagerModel(val backups: Backups = Backups()) {
     fun discard() {
         if (volume == null) return
         pending = emptyList()
-        editor = PdbEditor(volume!!.raw)
+        editor = PdbEditor(volume!!.raw, volume!!.root)
         view = editor!!.view()
         if (openPlaylist != null && view!!.playlists.none { it.id == openPlaylist }) openPlaylist = null
     }
@@ -196,9 +196,14 @@ class ManagerModel(val backups: Backups = Backups()) {
     fun restore(record: BackupRecord): Boolean {
         val vol = volume ?: return false
         return try {
-            backups.restore(record, vol.root)
+            val result = backups.restore(record, vol.root)
             open(vol.root)
-            banner = Banner("Pendrive restaurado para o estado de ${record.created}.", error = false)
+            val extra = buildList {
+                if (result.movedBack > 0) add("${result.movedBack} arquivo(s) voltaram ao nome antigo")
+                if (result.removedAnalysis > 0) add("${result.removedAnalysis} arquivo(s) de análise criados foram removidos")
+                if (result.keptAudio.isNotEmpty()) add("${result.keptAudio.size} áudio(s) importados continuam no pendrive (nada de áudio é apagado)")
+            }
+            banner = Banner("Pendrive restaurado para o estado de ${record.created}." + if (extra.isEmpty()) "" else " " + extra.joinToString("; ") + ".", error = false)
             true
         } catch (ex: VolumeException) {
             banner = Banner(ex.message ?: ex.code, error = true)
