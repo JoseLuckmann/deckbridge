@@ -72,7 +72,7 @@ class RawPdbTest {
         for (t in raw.tables) {
             val c = fresh.table(t.type)!!
             assertEquals(t.rows.size, c.rows.size)
-            t.rows.indices.forEach { assertTrue(Verifier.sameRow(t.rows[it], c.rows[it]), "tabela ${t.type} linha $it") }
+            assertTrue(Verifier.sameRows(t.type, t.rows, c.rows), "tabela ${t.type}")
         }
         assertTrue(fresh.warnings.isEmpty(), fresh.warnings.toString())
         assertEquals(TestVolumes.trackIds(raw), TestVolumes.trackIds(fresh))

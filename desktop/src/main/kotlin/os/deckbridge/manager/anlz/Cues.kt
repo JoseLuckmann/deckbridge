@@ -119,7 +119,8 @@ object CueIo {
         val body = ByteArray(12 + entries.sumOf { it.size })
         body.putBe32(0, type)
         body.putBe16(6, entries.size)
-        body.putBe32(8, entries.size)
+        // Lista vazia: 0xFFFFFFFF (visto nos ANLZ reais). Com cues, o campo guarda o número deles (não confirmado).
+        body.putBe32(8, if (entries.isEmpty()) -1 else entries.size)
         var at = 12
         entries.forEach { it.copyInto(body, at); at += it.size }
         return section("PCOB", body)
@@ -143,9 +144,13 @@ object CueIo {
         val hot = cues.filter { it.isHot }.sortedBy { it.hot }
         fun datBytes(c: Cue) = current.datRaw[c.copy(comment = "", rgb = null)] ?: plainEntry(c)
         fun extBytes(c: Cue) = current.extRaw[c] ?: extendedEntry(c)
-        val newDat = dat.replacing(setOf("PCOB"), listOf(pcob(0, memory.map(::datBytes)), pcob(1, hot.filter { it.hot <= 3 }.map(::datBytes))), after = "PQTZ")
-        val freshExt = listOf(pco2(0, memory.map(::extBytes)), pco2(1, hot.map(::extBytes)))
-        val newExt = (ext ?: AnlzModel.fresh(emptyList())).replacing(setOf("PCO2"), freshExt)
+        // Nos arquivos reais a lista de hot cues (tipo 1) vem antes da de memória (tipo 0), no DAT e no EXT.
+        val hotDat = hot.filter { it.hot <= 3 }.map(::datBytes)
+        val memDat = memory.map(::datBytes)
+        val newDat = dat.replacing(setOf("PCOB"), listOf(pcob(1, hotDat), pcob(0, memDat)), after = "PQTZ")
+        val extModel = ext ?: AnlzModel.fresh(emptyList())
+        val withPcob = extModel.replacing(setOf("PCOB"), listOf(pcob(1, hotDat), pcob(0, memDat)))
+        val newExt = withPcob.replacing(setOf("PCO2"), listOf(pco2(1, hot.map(::extBytes)), pco2(0, memory.map(::extBytes))), after = "PCOB")
         return newDat to newExt
     }
 }

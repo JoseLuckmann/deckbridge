@@ -532,6 +532,10 @@ class PdbEditor(private val raw: RawPdb, root: File? = null) {
         val last = GridIo.read(dat).maxOfOrNull { it.timeMs } ?: 0
         val durationMs = maxOf(row.duration * 1000 + 500, last)
         files.put(rel, GridIo.write(dat, GridIo.regular(e.bpm, e.firstBeatMs, durationMs)).write())
+        // O EXT real traz uma segunda grade (PQT2) que não sabemos reescrever. Deixá-la com os valores velhos faria os
+        // players mais novos usarem a grade antiga, então ela sai e eles voltam para a PQTZ.
+        val extRel = sibling(rel, "EXT")
+        loadAnlz(extRel)?.let { ext -> if (ext.first("PQT2") != null) files.put(extRel, ext.replacing(setOf("PQT2"), emptyList()).write()) }
         row.tempo = (e.bpm * 100).roundToInt().coerceIn(1, 65535)
         rowsOf(PdbType.TRACKS)[at] = row.encode()
     }

@@ -67,7 +67,7 @@ out["playlists"].sort(key=lambda x: x["id"])
 out["entries"].sort(key=lambda x: (x["playlist"], x["index"], x["track"]))
 if "--tsv" in sys.argv:
     def clean(v):
-        return str(v).replace("\t", " ").replace("\n", " ")
+        return str(v).replace("\t", " ").replace("\n", " ").replace("\r", " ")
 
     def name(table, i):
         return out[table].get(str(i), "") if i else ""

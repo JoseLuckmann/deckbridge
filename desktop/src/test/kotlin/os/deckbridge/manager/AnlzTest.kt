@@ -53,7 +53,7 @@ class AnlzTest {
         val e = newExt.write()
 
         // O que não é cue fica byte a byte igual.
-        for (tag in ext.sections.map { it.tag }.distinct().filter { it != "PCO2" }) assertContentEquals(ext.first(tag)!!.bytes, newExt.first(tag)!!.bytes, tag)
+        for (tag in ext.sections.map { it.tag }.distinct().filter { it != "PCO2" && it != "PCOB" }) assertContentEquals(ext.first(tag)!!.bytes, newExt.first(tag)!!.bytes, tag)
         for (tag in dat.sections.map { it.tag }.distinct().filter { it != "PCOB" }) assertContentEquals(dat.first(tag)!!.bytes, newDat.first(tag)!!.bytes, tag)
         assertEquals(datBytes.size.let { AnlzModel.parse(d).sections.sumOf { s -> s.bytes.size } + 28 }, d.size)
 

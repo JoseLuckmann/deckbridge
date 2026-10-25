@@ -631,6 +631,8 @@ inline AnlzFile parseAnlz(const Bytes &b) {
         f.issues.push_back("E_ANLZ_HEADER");
         return f;
     }
+    // Os ANLZ reais guardam os mesmos cues em PCOB (básico) e em PCO2 (estendido): vale um só, o estendido.
+    std::vector<AnlzCue> basicCues;
     std::optional<Bytes> phraseTag;
     std::optional<WaveBands> pwv7, pwv6, pwb3;
     std::optional<ColorWave> pwv5, pwv4;
@@ -649,7 +651,7 @@ inline AnlzFile parseAnlz(const Bytes &b) {
             f.beats.insert(f.beats.end(), more.begin(), more.end());
         } else if (tag == "PCOB") {
             auto more = detail::readCues(b, body, bodyEnd);
-            f.cues.insert(f.cues.end(), more.begin(), more.end());
+            basicCues.insert(basicCues.end(), more.begin(), more.end());
         } else if (tag == "PCO2") {
             auto more = detail::readCues2(b, body, bodyEnd);
             f.cues.insert(f.cues.end(), more.begin(), more.end());
@@ -682,6 +684,7 @@ inline AnlzFile parseAnlz(const Bytes &b) {
     f.bandDetail = pwv7;
     f.bandPreview = pwv6;
     f.blueDetail = pwv3;
+    if (f.cues.empty()) f.cues = basicCues;
     return f;
 }
 

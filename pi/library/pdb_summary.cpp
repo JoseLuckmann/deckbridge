@@ -10,6 +10,14 @@
 
 using namespace deckbridge::library;
 
+// Tabulação e quebra de linha dentro de um campo (há comentários reais com um dump em várias linhas) viram espaço.
+static std::string tsv(std::string text) {
+    for (char &c : text) {
+        if (c == '\t' || c == '\n' || c == '\r') c = ' ';
+    }
+    return text;
+}
+
 static int anlzMode(int argc, char **argv) {
     std::vector<AnlzFile> files;
     for (int i = 2; i < argc; ++i) {
@@ -61,12 +69,12 @@ int main(int argc, char **argv) {
     auto tracks = db.tracks;
     std::sort(tracks.begin(), tracks.end(), [](const PdbTrack &a, const PdbTrack &b) { return a.id < b.id; });
     for (const auto &t : tracks) {
-        std::printf("T\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n", t.id, t.title.c_str(), name(artists, t.artistId).c_str(), name(albums, t.albumId).c_str(),
-                    name(genres, t.genreId).c_str(), name(keys, t.keyId).c_str(), t.filePath.c_str());
+        std::printf("T\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n", t.id, tsv(t.title).c_str(), tsv(name(artists, t.artistId)).c_str(), tsv(name(albums, t.albumId)).c_str(),
+                    tsv(name(genres, t.genreId)).c_str(), tsv(name(keys, t.keyId)).c_str(), tsv(t.filePath).c_str());
     }
     auto playlists = db.playlists;
     std::sort(playlists.begin(), playlists.end(), [](const PdbPlaylist &a, const PdbPlaylist &b) { return a.id < b.id; });
-    for (const auto &p : playlists) std::printf("P\t%d\t%d\t%s\t%d\t%d\n", p.id, p.parentId, p.name.c_str(), p.folder ? 1 : 0, p.sortOrder);
+    for (const auto &p : playlists) std::printf("P\t%d\t%d\t%s\t%d\t%d\n", p.id, p.parentId, tsv(p.name).c_str(), p.folder ? 1 : 0, p.sortOrder);
     auto entries = db.entries;
     std::sort(entries.begin(), entries.end(), [](const PdbEntry &a, const PdbEntry &b) {
         return std::tie(a.playlistId, a.position, a.trackId) < std::tie(b.playlistId, b.position, b.trackId);

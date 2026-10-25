@@ -44,7 +44,9 @@ private fun parseAnlzBody(bytes: ByteArray): AnlzFile {
         return AnlzFile(emptyList(), emptyList(), ByteArray(0), issues = listOf("E_ANLZ_HEADER"))
     }
     val beats = mutableListOf<AnlzBeat>()
+    // Os ANLZ reais guardam os mesmos cues em PCOB (básico) e em PCO2 (estendido, com nome e cor): vale um só, o estendido.
     val cues = mutableListOf<AnlzCue>()
+    val basicCues = mutableListOf<AnlzCue>()
     val issues = mutableListOf<String>()
     var waveform = ByteArray(0)
     var phraseTag: ByteArray? = null
@@ -66,7 +68,7 @@ private fun parseAnlzBody(bytes: ByteArray): AnlzFile {
         val bodyEnd = cursor + lenTag
         when (tag) {
             "PQTZ" -> beats += readBeats(bytes, body, bodyEnd)
-            "PCOB" -> cues += readCues(bytes, body, bodyEnd)
+            "PCOB" -> basicCues += readCues(bytes, body, bodyEnd)
             "PCO2" -> cues += readCues2(bytes, body, bodyEnd)
             "PWAV", "PWV2" -> if (waveform.isEmpty()) waveform = readWave(bytes, body, bodyEnd)
             "PWV5" -> pwv5 = readPwv5(bytes, cursor, bodyEnd)
@@ -80,6 +82,7 @@ private fun parseAnlzBody(bytes: ByteArray): AnlzFile {
         }
         cursor += lenTag
     }
+    if (cues.isEmpty()) cues += basicCues
     val bands = pwv7 ?: pwb3
     val source = when {
         pwv7 != null -> "PWV7"

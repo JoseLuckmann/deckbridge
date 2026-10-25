@@ -34,8 +34,8 @@ object Verifier {
             val want = expected[table.type]
             if (want == null) {
                 if (table.firstPage != before.firstPage || table.lastPage != before.lastPage) problems += "a tabela ${table.type} não devia ter mudado"
-                if (!sameRows(before.rows, table.rows)) problems += "as linhas da tabela ${table.type} mudaram sem ter sido pedido"
-            } else if (!sameRows(want, table.rows)) {
+                if (!sameRows(table.type, before.rows, table.rows)) problems += "as linhas da tabela ${table.type} mudaram sem ter sido pedido"
+            } else if (!sameRows(table.type, want, table.rows)) {
                 problems += "a tabela ${table.type} gravada difere do plano (${table.rows.size} linhas lidas, ${want.size} planejadas)"
             }
         }
@@ -52,7 +52,20 @@ object Verifier {
         return problems
     }
 
-    private fun sameRows(a: List<ByteArray>, b: List<ByteArray>): Boolean = a.size == b.size && a.indices.all { sameRow(a[it], b[it]) }
+    private val SHIFTED = setOf(0, 2, 3)
+
+    fun sameRows(type: Int, a: List<ByteArray>, b: List<ByteArray>): Boolean = a.size == b.size && a.indices.all { sameRow(type, a[it], b[it]) }
+
+    /**
+     * Como [sameRow], mas nas tabelas de faixas, artistas e álbuns ignora o `index_shift` (bytes 2 e 3), que vale
+     * 0x20 × a posição da linha na página e por isso muda quando a tabela é remontada.
+     */
+    fun sameRow(type: Int, a: ByteArray, b: ByteArray): Boolean {
+        if (type !in SHIFTED || a.size < 4 || b.size < 4) return sameRow(a, b)
+        val x = a.copyOf().also { it[2] = 0; it[3] = 0 }
+        val y = b.copyOf().also { it[2] = 0; it[3] = 0 }
+        return sameRow(x, y)
+    }
 
     /** Iguais a menos de zeros de enchimento no fim (a página alinha as linhas em 4 bytes). */
     fun sameRow(a: ByteArray, b: ByteArray): Boolean {

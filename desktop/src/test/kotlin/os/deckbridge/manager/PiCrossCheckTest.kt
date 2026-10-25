@@ -21,7 +21,8 @@ class PiCrossCheckTest {
     private fun summaryBinary(): File {
         val out = File(System.getProperty("java.io.tmpdir"), "dbm-pdb-summary")
         val src = File(repo, "pi/library/pdb_summary.cpp")
-        if (!out.isFile || out.lastModified() < src.lastModified()) {
+        val header = File(repo, "pi/library/rekordbox.h")
+        if (!out.isFile || out.lastModified() < maxOf(src.lastModified(), header.lastModified())) {
             val proc = ProcessBuilder("g++", "-std=c++17", "-O1", "-I", File(repo, "android/app/src/main/cpp").path, "-o", out.path, src.path).redirectErrorStream(true).start()
             val log = proc.inputStream.bufferedReader().readText()
             assumeTrue("g++ não compilou o resumo do Pi: $log", proc.waitFor() == 0)

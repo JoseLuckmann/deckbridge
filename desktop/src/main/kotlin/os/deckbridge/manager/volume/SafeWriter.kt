@@ -307,7 +307,7 @@ object SafeWriter {
         val problems = ArrayList<String>()
         for (t in source.raw.tables) {
             val other = fresh.table(t.type)
-            if (other == null || other.rows.size != t.rows.size || t.rows.indices.any { !Verifier.sameRow(t.rows[it], other.rows[it]) }) problems += "a tabela ${t.type} mudou ao compactar"
+            if (other == null || !Verifier.sameRows(t.type, t.rows, other.rows)) problems += "a tabela ${t.type} mudou ao compactar"
         }
         problems += fresh.warnings.filter { it !in source.raw.warnings }
         val app = os.deckbridge.logic.parseExportPdb(compact).database
