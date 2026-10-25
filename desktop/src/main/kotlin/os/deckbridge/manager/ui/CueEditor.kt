@@ -28,6 +28,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import os.deckbridge.logic.StagePalette
 import kotlin.math.roundToInt
 import os.deckbridge.manager.ManagerModel
 import os.deckbridge.manager.anlz.Beat
@@ -50,8 +51,8 @@ fun parseMs(text: String): Int? {
 
 fun formatMs(ms: Int): String = "%d:%02d.%03d".format(ms / 60000, ms / 1000 % 60, ms % 1000)
 
-private val hotColors = listOf(0xFF3B3B, 0x2EC5FF, 0x3DDC6A, 0xB44DFF, 0x3DDC6A, 0xFF8A1E, 0x3B6CFF, 0xFFE03B)
-private val palette = listOf(0xFF3B3B, 0xFF8A1E, 0xFFE03B, 0x3DDC6A, 0x2EC5FF, 0x3B6CFF, 0xB44DFF, 0xFF4DB8)
+private val hotColors = StagePalette.pads.map { it and 0xFFFFFF }
+private val palette = StagePalette.pads.map { it and 0xFFFFFF }
 
 fun hotLetter(hot: Int) = if (hot in 1..8) ('A' + hot - 1).toString() else "M"
 
@@ -161,7 +162,7 @@ private fun Wave(wave: ByteArray, beats: List<Beat>, cues: List<Cue>, durationMs
             for (c in 0 until columns) {
                 val v = (wave[c].toInt() and 0xFF) / 255f
                 val bar = (v * (h - 22f)).coerceAtLeast(1f)
-                drawRect(Color(0xFF2E6BCC), Offset(c * step, h / 2 + 4 - bar / 2), Size(step.coerceAtLeast(1f), bar))
+                drawRect(Color(StagePalette.wave), Offset(c * step, h / 2 + 4 - bar / 2), Size(step.coerceAtLeast(1f), bar))
             }
         }
         for (b in beats) {
@@ -172,7 +173,7 @@ private fun Wave(wave: ByteArray, beats: List<Beat>, cues: List<Cue>, durationMs
         }
         for (c in cues) {
             val x = c.timeMs / total * w
-            val color = if (c.isHot) Color(0xFF000000 or (c.rgb ?: hotColors[c.hot - 1]).toLong()) else Color(0xFFDC2828)
+            val color = if (c.isHot) Color(0xFF000000 or (c.rgb ?: hotColors[c.hot - 1]).toLong()) else Color(StagePalette.danger)
             c.loopEndMs?.let { end -> drawRect(Color(0x553DDC6A), Offset(x, 0f), Size(((end - c.timeMs) / total * w).coerceAtLeast(2f), h)) }
             drawRect(color, Offset(x, 0f), Size(2f, h))
             drawRect(color, Offset(x, 0f), Size(14f, 14f))

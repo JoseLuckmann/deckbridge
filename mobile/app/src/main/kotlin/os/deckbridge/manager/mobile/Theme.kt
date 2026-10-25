@@ -1,39 +1,92 @@
 package os.deckbridge.manager.mobile
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import os.deckbridge.logic.StagePalette
 
+/**
+ * O design system é o do player, não um novo: `StagePalette` (fundo preto, painéis quase pretos, texto azul-claro nos
+ * botões, laranja para o que pede atenção, linha de lista selecionada em azul, tom compatível em verde). Aqui só há
+ * apelidos para ele. Nenhuma cor é escrita à mão fora deste arquivo (o teste `DesignSystemTest` confere), então o
+ * celular não se afasta da referência sem que um teste falhe.
+ */
 object Palette {
-    val bg = Color(0xFF0B1020)
-    val surface = Color(0xFF141B2E)
-    val surfaceHigh = Color(0xFF1C2540)
-    val line = Color(0xFF2A3556)
-    val text = Color(0xFFF1F4FA)
-    val muted = Color(0xFF9AA7C2)
-    val accent = Color(0xFF3DDC97)
-    val accent2 = Color(0xFF2EC5FF)
-    val warn = Color(0xFFFFB454)
-    val danger = Color(0xFFFF6B6B)
+    private fun c(argb: Int) = Color(argb)
 
-    /** Cores de faixa do rekordbox, na ordem dos ids 1–8. */
-    val trackColors = listOf(
-        Color(0xFFE91E8C), Color(0xFFEF4444), Color(0xFFF97316), Color(0xFFEAB308),
-        Color(0xFF22C55E), Color(0xFF06B6D4), Color(0xFF3B82F6), Color(0xFFA855F7),
-    )
+    val bg = c(StagePalette.bg)
+    val surface = c(StagePalette.panel)
+    val surfaceHigh = c(StagePalette.panelRaised)
+    val line = c(StagePalette.line)
+    val text = c(StagePalette.ink)
+    val muted = c(StagePalette.mutedInk)
+    val mutedBright = c(StagePalette.inkMuted)
+
+    /** Azul de rótulo e de botão. */
+    val blue = c(StagePalette.accentBlue)
+    val blueActiveFill = c(StagePalette.activeFill)
+    val blueActiveLine = c(StagePalette.activeLine)
+    val selectedRow = c(StagePalette.selectedRow)
+
+    /** Laranja: valor em destaque, mudança pendente, aviso. */
+    val orange = c(StagePalette.accentOrange)
+    val danger = c(StagePalette.danger)
+    val dangerBg = c(StagePalette.dangerBg)
+    val onAir = c(StagePalette.onAir)
+
+    /** Botão de tocar e tom compatível: verde-claro sobre verde-escuro, como no player. */
+    val playBg = c(StagePalette.playBg)
+    val playInk = c(StagePalette.playInk)
+    val keyFill = c(StagePalette.keyFill)
+    val keyInk = c(StagePalette.keyInk)
+
+    /** Faixa de simulação/aviso do player: fundo âmbar-escuro, texto âmbar-claro. */
+    val noteBg = c(StagePalette.simBg)
+    val noteInk = c(StagePalette.simInk)
+
+    val wave = c(StagePalette.wave)
+    val waveBg = c(StagePalette.waveBg)
+    val waveLow = c(StagePalette.waveLow)
+    val waveMid = c(StagePalette.waveMid)
+    val waveHigh = c(StagePalette.waveHigh)
+    val deckA = c(StagePalette.deckA)
+    val deckB = c(StagePalette.deckB)
+
+    /** Cores dos pads de hot cue (A–H), as mesmas do player. */
+    val pads = StagePalette.pads.map { c(it) }
+
+    /** Cores de faixa do rekordbox, ids 1–8: rosa, vermelho, laranja, amarelo, verde, água, azul, roxo. */
+    val trackColors = listOf(pads[7], pads[0], pads[1], pads[2], pads[3], pads[4], pads[5], pads[6])
     val trackColorNames = listOf("Rosa", "Vermelho", "Laranja", "Amarelo", "Verde", "Água", "Azul", "Roxo")
+
+    // Apelidos que as telas já usavam; apontam para as cores do player.
+    val accent get() = blue
+    val accent2 get() = blue
+    val warn get() = orange
 }
+
+/** Cor gravada num cue (RGB sem alfa) como cor de tela. */
+fun rgb(v: Int?, fallback: Color = Color.Gray): Color = if (v == null) fallback else Color(0xFF000000.toInt() or (v and 0xFFFFFF))
+
+/** Cor do pad de hot cue (1 = A … 8 = H), a mesma do player, como RGB gravável no cue. */
+fun padRgb(hot: Int): Int = StagePalette.pads[(hot - 1).coerceIn(0, 7)] and 0xFFFFFF
+
+/** Cantos quase retos, como os botões e painéis do player. */
+val RbShape = RoundedCornerShape(3.dp)
 
 @Composable
 fun ManagerTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = Palette.accent, onPrimary = Palette.bg, secondary = Palette.accent2, background = Palette.bg, onBackground = Palette.text,
+            primary = Palette.blue, onPrimary = Palette.bg, secondary = Palette.blue, background = Palette.bg, onBackground = Palette.text,
             surface = Palette.surface, onSurface = Palette.text, surfaceVariant = Palette.surfaceHigh, onSurfaceVariant = Palette.muted,
-            outline = Palette.line, error = Palette.danger,
+            outline = Palette.line, outlineVariant = Palette.line, error = Palette.danger,
         ),
+        shapes = Shapes(extraSmall = RbShape, small = RbShape, medium = RbShape, large = RbShape, extraLarge = RbShape),
         content = content,
     )
 }

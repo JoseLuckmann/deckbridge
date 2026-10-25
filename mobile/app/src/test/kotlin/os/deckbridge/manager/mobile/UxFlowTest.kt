@@ -83,7 +83,7 @@ class UxFlowTest {
         val a = app()
         rule.setContent { ManagerRoot(a, noActions) }
         // Guia visível: o próximo passo não concluído é "Marcar" ou "Exportar"; o botão leva até lá.
-        rule.onNodeWithText("Primeiros passos", substring = true).assertExists()
+        rule.onNodeWithText("PRIMEIROS PASSOS", substring = true).assertExists()
         a.model.filter = os.deckbridge.manager.smart.QuickFilter.TOP
         rule.waitForIdle()
         assertTrue(a.model.rows().all { it.rating >= 4 })

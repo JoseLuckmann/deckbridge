@@ -27,7 +27,7 @@ import os.deckbridge.manager.transfer.UsbExporter
 import os.deckbridge.manager.transfer.UsbImporter
 import os.deckbridge.manager.volume.Backups
 
-enum class Tab(val title: String) { LIBRARY("Biblioteca"), PLAYLISTS("Playlists"), USB("Pendrive") }
+enum class Tab(val title: String) { LIBRARY("Biblioteca"), PLAYLISTS("Playlists"), USB("Pendrive"), MENU("Menu") }
 
 /** Um trabalho longo em andamento (importar, analisar, exportar). A tela mostra o texto e o botão de cancelar. */
 class Job(val title: String) {
@@ -63,6 +63,9 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
 
     // "Arrumar tudo": sugestões por regra.
     var tidy by mutableStateOf<List<Suggestion>?>(null)
+
+    /** Pedido do MENU para abrir a ajuda de busca na Biblioteca. */
+    var helpRequested by mutableStateOf(false)
 
     val preview = Preview(this)
 
@@ -108,6 +111,13 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     }
 
     // --- Triagem -------------------------------------------------------------------------------
+
+    private val waves = HashMap<String, ByteArray>()
+
+    /** Prévia da onda de uma faixa (do ANLZ), com cache. Vazio se a faixa não tem análise legível. */
+    fun waveFor(t: TrackItem): ByteArray = synchronized(waves) {
+        waves.getOrPut(t.analyzePath + "|" + model.hasAnalysis(t)) { runCatching { model.trackFiles(t).wave }.getOrDefault(ByteArray(0)) }
+    }
 
     fun startTriage() {
         val v = model.view ?: return

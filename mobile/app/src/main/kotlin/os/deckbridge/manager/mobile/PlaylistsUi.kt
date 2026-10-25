@@ -1,6 +1,7 @@
 package os.deckbridge.manager.mobile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,10 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,7 +75,7 @@ private fun PlaylistList(app: ManagerApp, show: (PlaylistDialog) -> Unit) {
     val view = m.view
     val lists = view?.playlists.orEmpty().sortedWith(compareBy({ it.parentId }, { it.sort }, { it.id }))
     Column(Modifier.fillMaxSize()) {
-        Button(onClick = { show(PlaylistDialog.New) }, modifier = Modifier.fillMaxWidth().padding(12.dp).height(48.dp)) { Text("+ Nova playlist") }
+        OutlinedButton(onClick = { show(PlaylistDialog.New) }, modifier = Modifier.fillMaxWidth().padding(10.dp).height(46.dp)) { Text("+ NOVA PLAYLIST", fontSize = 13.sp) }
         if (lists.isEmpty()) {
             Hint("Nenhuma playlist ainda. Crie uma aqui ou selecione faixas na Biblioteca e use \"Playlist\".")
         } else {
@@ -86,7 +84,7 @@ private fun PlaylistList(app: ManagerApp, show: (PlaylistDialog) -> Unit) {
                     val count = view?.entries?.get(p.id)?.size ?: 0
                     val on = m.openPlaylist == p.id
                     Row(
-                        Modifier.fillMaxWidth().background(if (on) Palette.surfaceHigh else Color.Transparent).clickable { m.openPlaylist = p.id }.padding(horizontal = 16.dp, vertical = 12.dp),
+                        Modifier.fillMaxWidth().background(if (on) Palette.selectedRow else Color.Transparent).clickable { m.openPlaylist = p.id }.padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -106,8 +104,8 @@ private fun PlaylistTracks(app: ManagerApp, p: PlaylistItem, onBack: (() -> Unit
     val m = app.model
     val ids = m.view?.entries?.get(p.id).orEmpty().filter { m.view?.track(it) != null }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().background(Palette.surface).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (onBack != null) TextButton(onClick = onBack) { Text("‹ Voltar", fontSize = 16.sp) }
+        Row(Modifier.fillMaxWidth().background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line)).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (onBack != null) TextButton(onClick = onBack) { Text("‹ VOLTAR", fontSize = 13.sp) }
             Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
                 Text(p.name, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("${ids.size} faixa(s)", color = Palette.muted, fontSize = 12.sp)
@@ -118,10 +116,10 @@ private fun PlaylistTracks(app: ManagerApp, p: PlaylistItem, onBack: (() -> Unit
         if (ids.size > 1) {
             var menu by remember { mutableStateOf(false) }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Ordenar:", color = Palette.muted, fontSize = 13.sp)
+                Text("ORDENAR", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
                 androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 8.dp)) {
                     items(os.deckbridge.manager.smart.Smart.SortMode.values().toList()) { mode ->
-                        androidx.compose.material3.AssistChip(onClick = {
+                        AssistChip(onClick = {
                             if (m.sortPlaylist(p.id, mode)) app.did("\"${p.name}\" ordenada: ${mode.title}") else app.notice = os.deckbridge.manager.Banner("Já está nessa ordem.", false)
                         }, label = { Text(mode.title, fontSize = 12.sp) })
                     }

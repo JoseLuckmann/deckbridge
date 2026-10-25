@@ -10,11 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,7 +33,7 @@ fun ConfirmDialog(title: String, text: String, confirm: String, danger: Boolean 
         onDismissRequest = onClose,
         title = { Text(title) },
         text = { Text(text, color = Palette.muted) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(confirm, color = if (danger) Palette.danger else Palette.accent) } },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(confirm, color = if (danger) Palette.danger else Palette.blue) } },
         dismissButton = { TextButton(onClick = onClose) { Text("Cancelar") } },
         containerColor = Palette.surfaceHigh,
     )
@@ -82,7 +80,7 @@ fun ColorDialog(onPick: (Int) -> Unit, onClose: () -> Unit) {
                 Text("Sem cor", color = Palette.text, fontSize = 18.sp, modifier = Modifier.fillMaxWidth().clickable { onPick(0) }.padding(vertical = 10.dp))
                 Palette.trackColors.forEachIndexed { n, c ->
                     Row(Modifier.fillMaxWidth().clickable { onPick(n + 1) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.foundation.layout.Box(Modifier.size(22.dp).clip(CircleShape).background(c))
+                        androidx.compose.foundation.layout.Box(Modifier.size(22.dp).clip(RbShape).background(c))
                         Text(Palette.trackColorNames[n], color = Palette.text, fontSize = 18.sp, modifier = Modifier.padding(start = 14.dp))
                     }
                 }
@@ -108,7 +106,7 @@ fun PlaylistPicker(app: ManagerApp, title: String = "Adicionar à playlist", onP
         title = { Text(title) },
         text = {
             Column {
-                Text("+ Nova playlist…", color = Palette.accent, fontSize = 18.sp, modifier = Modifier.fillMaxWidth().clickable { creating = true }.padding(vertical = 12.dp))
+                Text("+ Nova playlist…", color = Palette.blue, fontSize = 18.sp, modifier = Modifier.fillMaxWidth().clickable { creating = true }.padding(vertical = 12.dp))
                 if (lists.isEmpty()) Text("Ainda não há playlists.", color = Palette.muted)
                 LazyColumn(Modifier.padding(top = 4.dp)) {
                     items(lists, key = { it.id }) { p ->
@@ -170,7 +168,7 @@ fun SearchHelpDialog(onClose: () -> Unit) {
                     "cor:verde" to "cor da faixa",
                     "genero:house" to "gênero contém house",
                 ).forEach { (k, v) ->
-                    Row { Text(k, color = Palette.accent, fontSize = 14.sp, modifier = Modifier.width(120.dp)); Text(v, color = Palette.text, fontSize = 14.sp) }
+                    Row { Text(k, color = Palette.orange, fontSize = 14.sp, modifier = Modifier.width(120.dp)); Text(v, color = Palette.text, fontSize = 14.sp) }
                 }
                 Text("Exemplo: aurora bpm:120-128 nota:4", color = Palette.muted, fontSize = 13.sp)
                 Text("Dica: com uma busca ou filtro ativo, \"Salvar lista como playlist\" cria a playlist com o que está na tela.", color = Palette.muted, fontSize = 13.sp)

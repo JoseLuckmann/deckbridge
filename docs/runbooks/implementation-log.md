@@ -836,3 +836,11 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Achados vistos nas capturas e corrigidos: guia ocupava metade da tela (agora recolhe), barra de salvar espremia o texto, botões da triagem cortados no celular deitado, cores cortadas no painel lateral, linha de ordenação sobrando (virou um botão).
 - Não verificado (`BLOCKED_HARDWARE`): uso real no S25 Ultra; pré-escuta (MediaPlayer). Também não medido: se os atalhos de fato aceleram o trabalho; precisa de uso com a biblioteca real.
 - Próximas rodadas candidatas: gestos (deslizar na linha), importar de pasta inteira, mesclar bibliotecas, padrões de nome salvos, ações em lote na triagem por teclado/fones, teste de usabilidade com a biblioteca real.
+
+## 2026-10-25 — Correção: o celular tinha saído do design system do player
+
+- Observação do dono: o app de biblioteca fugiu do design system de referência (rekordbox/player). Procedente: eu havia criado paleta própria (verde, cantos arredondados, componentes Material), e o `Pal` do desktop também tinha valores diferentes do `StagePalette` apesar do comentário dizer o contrário.
+- Correção: `Palette` do celular e `Pal` do desktop passaram a derivar do `StagePalette` (tokens novos adicionados a ele: `selectedRow`, `activeFill`, `activeLine`, `keyFill`, `keyInk`, `mutedInk`, `danger`, `dangerBg`). Botões retos com texto azul e ativo azul-escuro com contorno; fileira de botões iguais embaixo e coluna de ícones deitado; lista com disco, miniatura de onda, BPM monoespaçado e tom compatível em verde; cabeçalho que ordena ao toque; hot cue 2×4; faixa âmbar para avisos; MENU em linhas rótulo/valor. Seção 6 do `docs/ui-spec.md` documenta a tabela.
+- Guarda contra nova deriva: `DesignSystemTest` (4 testes) falha com cor escrita à mão, `RoundedCornerShape`/`CircleShape`/botões do Material fora do tema, ou valores diferentes do `StagePalette`; confere contraste (texto, botão azul, texto secundário, tom compatível).
+- Achado no caminho: um conjunto de capturas falhou por "Compose não ficou ocioso" quando duas execuções do Gradle rodaram ao mesmo tempo; sozinhas, as mesmas 12 capturas passam. Não rodar duas ao mesmo tempo.
+- Não verificado: comparação lado a lado com o rekordbox real (só com as telas do player do projeto e com a descrição do `ui-spec.md`); uso no S25 Ultra.

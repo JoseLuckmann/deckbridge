@@ -2,6 +2,10 @@
 
 App Android (`os.deckbridge.manager`) para organizar a biblioteca no celular e exportá-la para um pendrive, no formato do rekordbox. Referência: Samsung Galaxy S25 Ultra (1440×3120, ≈411×891 dp), em pé e deitado. Decisão e limites: `docs/adr/0010-biblioteca-local-e-mobile.md`.
 
+## Design system
+
+O mesmo do player (`StagePalette`): fundo preto, botões retos com texto azul-claro, ativo em azul-escuro com contorno azul, valores em laranja, tom compatível em verde, hot cue em grade 2×4, lista com disco, miniatura da onda e BPM monoespaçado, fileira de botões iguais embaixo (coluna de ícones quando deitado). `DesignSystemTest` impede cor à mão e formas arredondadas do Material. Tabela completa em `docs/ui-spec.md` §6.
+
 ## O que faz
 
 - **Biblioteca no aparelho** (`getExternalFilesDir/biblioteca/dados`), mesmo formato de um pendrive; mudanças ficam numa fila (barra "Salvar / Desfazer / Descartar") e são gravadas com cópia de segurança; ao sair do app o que estiver pendente é salvo.
@@ -37,7 +41,7 @@ cd mobile
 LC_ALL=C.UTF-8 ./gradlew :app:testDebugUnitTest :app:assembleDebug   # APK em app/build/outputs/apk/debug
 ```
 
-Testes (JVM/Robolectric, SDK 33): `ScreenshotTest` (12 capturas em `docs/ui/mobile-*.png`), `UxFlowTest` (toques de verdade: "+" do alvo com DESFAZER, estrela na linha, triagem até o fim, filtro rápido), `SafStorageTest` (3: gravar/trocar arquivos, recusa de renomeação que devolve o antigo, exportar uma biblioteca inteira e trazê-la de volta por um provedor de documentos de brinquedo).
+Testes (JVM/Robolectric, SDK 33): `DesignSystemTest` (4), `ScreenshotTest` (12 capturas em `docs/ui/mobile-*.png`), `UxFlowTest` (toques de verdade: "+" do alvo com DESFAZER, estrela na linha, triagem até o fim, filtro rápido), `SafStorageTest` (3: gravar/trocar arquivos, recusa de renomeação que devolve o antigo, exportar uma biblioteca inteira e trazê-la de volta por um provedor de documentos de brinquedo).
 
 ## Não verificado (`BLOCKED_HARDWARE`)
 

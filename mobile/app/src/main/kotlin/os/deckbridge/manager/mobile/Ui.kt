@@ -1,6 +1,8 @@
 package os.deckbridge.manager.mobile
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,13 +18,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,8 +33,9 @@ import androidx.compose.ui.unit.sp
 const val WIDE_DP = 600
 
 /**
- * A raiz. No celular em pé: barra do topo, conteúdo e navegação embaixo; a faixa aberta ocupa a tela toda.
- * Deitado (Galaxy S25 Ultra ≈ 892×412 dp): trilho de navegação à esquerda, lista no meio e detalhes ao lado.
+ * A raiz, no estilo do player: fundo preto, faixa do topo com rótulo azul em caixa alta, e embaixo uma fileira de botões
+ * iguais (como SOURCE / BROWSE / PLAYLIST / MENU), o ativo em azul-escuro com contorno azul. Deitado (Galaxy S25 Ultra
+ * ≈ 892×412 dp), a fileira vira uma coluna de ícones à esquerda, a lista fica no meio e os detalhes ao lado.
  */
 @Composable
 fun ManagerRoot(app: ManagerApp, actions: Actions) {
@@ -45,15 +43,16 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg)) {
             val wide = maxWidth >= WIDE_DP.dp
             val open = app.detailId?.let { app.model.view?.track(it) }
+            val detailTab = app.tab == Tab.LIBRARY || app.tab == Tab.PLAYLISTS
             if (wide) {
                 Row(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                     NavRail(app)
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        TopBar(app, actions, compact = true)
+                        TopBar(app, actions)
                         Row(Modifier.weight(1f)) {
                             Box(Modifier.weight(1f).fillMaxHeight()) { TabContent(app, actions) }
                             if (app.tab == Tab.LIBRARY || (app.tab == Tab.PLAYLISTS && open != null)) {
-                                Box(Modifier.width(360.dp).fillMaxHeight().background(Palette.surface)) {
+                                Box(Modifier.width(360.dp).fillMaxHeight().background(Palette.surface).border(BorderStroke(1.dp, Palette.line))) {
                                     if (open != null) DetailPanel(app, open) else EmptyDetail()
                                 }
                             }
@@ -63,10 +62,10 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                 }
             } else {
                 Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                    if (open != null && (app.tab == Tab.LIBRARY || app.tab == Tab.PLAYLISTS)) {
+                    if (open != null && detailTab) {
                         DetailPanel(app, open, onBack = { app.detailId = null })
                     } else {
-                        TopBar(app, actions, compact = false)
+                        TopBar(app, actions)
                         Box(Modifier.weight(1f)) { TabContent(app, actions) }
                         SaveBar(app)
                         NavBar(app)
@@ -86,74 +85,87 @@ private fun TabContent(app: ManagerApp, actions: Actions) {
         Tab.LIBRARY -> LibraryTab(app, actions)
         Tab.PLAYLISTS -> PlaylistsTab(app)
         Tab.USB -> UsbTab(app, actions)
+        Tab.MENU -> MenuTab(app, actions)
     }
 }
 
+/** Rótulo curto de cada área, em caixa alta, como a fileira de botões do player. */
+private fun Tab.short() = when (this) {
+    Tab.LIBRARY -> "FAIXAS"
+    Tab.PLAYLISTS -> "PLAYLISTS"
+    Tab.USB -> "PENDRIVE"
+    Tab.MENU -> "MENU"
+}
+
+/** Faixa do topo: "SOURCE"-style em azul, nome em branco, nota em laranja. */
 @Composable
-private fun TopBar(app: ManagerApp, actions: Actions, compact: Boolean) {
+private fun TopBar(app: ManagerApp, actions: Actions) {
     val count = app.model.view?.tracks?.size ?: 0
-    Row(Modifier.fillMaxWidth().background(Palette.surface).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(app.tab.title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Palette.text)
-            if (app.tab == Tab.LIBRARY) Text("$count faixas · salva no aparelho", fontSize = 12.sp, color = Palette.muted)
-        }
+    Row(Modifier.fillMaxWidth().background(Palette.bg).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(app.tab.title.uppercase(), color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+        Text("Neste aparelho", color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
+        Text("$count faixas", color = Palette.orange, fontSize = 12.sp, modifier = Modifier.padding(start = 10.dp).weight(1f))
         if (app.tab == Tab.LIBRARY) {
-            Button(onClick = actions.pickAudio, contentPadding = ButtonDefaults.ButtonWithIconContentPadding, modifier = Modifier.height(44.dp)) { Text("+ Importar") }
+            OutlinedButton(onClick = actions.pickAudio, modifier = Modifier.height(36.dp)) { Text("IMPORTAR", fontSize = 12.sp) }
         }
     }
 }
 
-/** Faixa com as mudanças ainda não gravadas: salvar ou desfazer. Some quando não há nada pendente. */
+/** Mudanças ainda não gravadas: texto em laranja (como valor alterado) e botões do player. Some quando não há nada pendente. */
 @Composable
 private fun SaveBar(app: ManagerApp) {
     val m = app.model
     if (!m.dirty && m.redoStack.isEmpty()) return
-    Column(Modifier.fillMaxWidth().background(Palette.surfaceHigh).padding(horizontal = 12.dp, vertical = 2.dp)) {
+    Column(Modifier.fillMaxWidth().background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 12.dp, vertical = 2.dp)) {
         if (m.dirty) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${m.pending.size} não salva(s):", color = Palette.warn, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Text(m.pending.last().text, color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 6.dp).weight(1f))
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                Text("${m.pending.size} NA FILA", color = Palette.orange, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                Text(m.pending.last().text, color = Palette.mutedBright, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
             }
-        } else Text("Tudo desfeito", color = Palette.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+        } else Text("TUDO DESFEITO", color = Palette.muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { m.undo() }, enabled = m.dirty) { Text("↶ Desfazer", fontSize = 13.sp) }
-            if (m.redoStack.isNotEmpty()) TextButton(onClick = { m.redo() }) { Text("↷ Refazer", fontSize = 13.sp) }
+            TextButton(onClick = { m.undo() }, enabled = m.dirty) { Text("↶ DESFAZER", fontSize = 12.sp) }
+            if (m.redoStack.isNotEmpty()) TextButton(onClick = { m.redo() }) { Text("↷ REFAZER", fontSize = 12.sp) }
             Spacer(Modifier.weight(1f))
             if (m.dirty) {
-                TextButton(onClick = { m.discard() }) { Text("Descartar", color = Palette.danger, fontSize = 13.sp) }
-                Button(onClick = { app.save() }, modifier = Modifier.height(40.dp)) { Text("Salvar") }
+                TextButton(onClick = { m.discard() }) { Text("DESCARTAR", color = Palette.danger, fontSize = 12.sp) }
+                Button(onClick = { app.save() }, modifier = Modifier.height(38.dp)) { Text("SALVAR", fontSize = 13.sp) }
             }
         }
     }
 }
 
+/** Fileira de botões iguais, como SOURCE / BROWSE / TAG LIST / PLAYLIST / SEARCH / MENU. O ativo: azul-escuro, contorno azul. */
 @Composable
 private fun NavBar(app: ManagerApp) {
-    Row(Modifier.fillMaxWidth().background(Palette.surface)) {
-        Tab.values().forEach { t ->
-            val on = app.tab == t
-            Column(
-                Modifier.weight(1f).clickable { app.tab = t }.padding(vertical = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Box(Modifier.width(48.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(if (on) Palette.accent else Palette.surface))
-                Spacer(Modifier.height(6.dp))
-                Text(t.title, color = if (on) Palette.accent else Palette.muted, fontSize = 13.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal)
-            }
+    Row(Modifier.fillMaxWidth().background(Palette.bg).padding(horizontal = 6.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        listOf(Tab.LIBRARY, Tab.PLAYLISTS, null, Tab.USB, Tab.MENU).forEach { t ->
+            val on = t != null && app.tab == t
+            val label = t?.short() ?: "TRIAGEM"
+            Box(
+                Modifier.weight(1f).height(48.dp).clip(RbShape).background(if (on) Palette.blueActiveFill else Palette.surfaceHigh)
+                    .border(BorderStroke(1.dp, if (on) Palette.blue else Palette.line), RbShape)
+                    .clickable { if (t == null) app.startTriage() else app.tab = t },
+                contentAlignment = Alignment.Center,
+            ) { Text(label, color = if (on) Palette.text else Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1) }
         }
     }
 }
 
+/** Coluna de ícones à esquerda, como o menu lateral da lista do player: ícone e três a quatro letras, o ativo em azul com barra. */
 @Composable
 private fun NavRail(app: ManagerApp) {
-    Column(Modifier.width(88.dp).fillMaxHeight().background(Palette.surface).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Tab.values().forEach { t ->
-            val on = app.tab == t
+    Column(Modifier.width(64.dp).fillMaxHeight().background(Palette.bg).border(BorderStroke(1.dp, Palette.line)).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        data class Item(val tab: Tab?, val glyph: String, val label: String)
+        listOf(Item(Tab.LIBRARY, "≡", "LIST"), Item(Tab.PLAYLISTS, "♫", "PLAY"), Item(null, "▶", "TRIA"), Item(Tab.USB, "⎘", "USB"), Item(Tab.MENU, "⋯", "MENU")).forEach { it ->
+            val on = it.tab != null && app.tab == it.tab
             Column(
-                Modifier.width(80.dp).clip(RoundedCornerShape(12.dp)).background(if (on) Palette.surfaceHigh else Palette.surface).clickable { app.tab = t }.padding(vertical = 14.dp),
+                Modifier.fillMaxWidth().clickable { if (it.tab == null) app.startTriage() else app.tab = it.tab }.padding(vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(t.title, color = if (on) Palette.accent else Palette.muted, fontSize = 12.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal)
+                Text(it.glyph, color = if (on) Palette.blue else Palette.mutedBright, fontSize = 20.sp)
+                Text(it.label, color = if (on) Palette.blue else Palette.mutedBright, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp)
+                Box(Modifier.padding(top = 3.dp).width(26.dp).height(2.dp).background(if (on) Palette.blue else Palette.bg))
             }
         }
     }
@@ -169,27 +181,29 @@ private fun EmptyDetail() {
 @Composable
 private fun JobOverlay(app: ManagerApp) {
     val j = app.job ?: return
-    Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(0xAA000000)).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
-        Column(Modifier.padding(32.dp).clip(RoundedCornerShape(16.dp)).background(Palette.surfaceHigh).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(j.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Palette.text)
-            if (j.text.isNotEmpty()) Text(j.text, fontSize = 13.sp, color = Palette.muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            LinearProgressIndicator(Modifier.fillMaxWidth())
-            OutlinedButton(onClick = { j.cancelled = true }) { Text("Cancelar") }
+    Box(Modifier.fillMaxSize().background(Palette.bg.copy(alpha = 0.78f)).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
+        Column(Modifier.padding(32.dp).rbPanel().background(Palette.surfaceHigh).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(j.title.uppercase(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Palette.blue, letterSpacing = 0.6.sp)
+            if (j.text.isNotEmpty()) Text(j.text, fontSize = 13.sp, color = Palette.mutedBright, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            LinearProgressIndicator(Modifier.fillMaxWidth(), color = Palette.blue, trackColor = Palette.line)
+            OutlinedButton(onClick = { j.cancelled = true }) { Text("CANCELAR", fontSize = 12.sp) }
         }
     }
 }
 
+/** Aviso na faixa âmbar do player (SIMULAÇÃO…); erro em vermelho com contorno. */
 @Composable
 private fun NoticeToast(app: ManagerApp) {
     val n = app.notice ?: return
-    Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.BottomCenter) {
+    Box(Modifier.fillMaxSize().padding(8.dp), contentAlignment = Alignment.BottomCenter) {
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (n.error) Palette.danger else Palette.accent).padding(start = 16.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
+            Modifier.fillMaxWidth().clip(RbShape).background(if (n.error) Palette.dangerBg else Palette.noteBg).border(BorderStroke(1.dp, if (n.error) Palette.danger else Palette.noteInk.copy(alpha = 0.4f)), RbShape)
+                .padding(start = 12.dp, top = 2.dp, bottom = 2.dp, end = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(n.text, Modifier.weight(1f), color = Palette.bg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            if (app.noticeUndo && app.model.dirty) TextButton(onClick = { app.undoFromNotice() }) { Text("DESFAZER", color = Palette.bg, fontWeight = FontWeight.Bold) }
-            TextButton(onClick = { app.notice = null }) { Text("OK", color = Palette.bg) }
+            Text(n.text, Modifier.weight(1f), color = if (n.error) Palette.danger else Palette.noteInk, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            if (app.noticeUndo && app.model.dirty) TextButton(onClick = { app.undoFromNotice() }) { Text("DESFAZER", color = Palette.noteInk, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+            TextButton(onClick = { app.notice = null }) { Text("OK", color = if (n.error) Palette.danger else Palette.noteInk, fontSize = 12.sp) }
         }
     }
 }

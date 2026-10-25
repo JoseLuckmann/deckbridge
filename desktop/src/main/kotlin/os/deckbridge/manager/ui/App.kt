@@ -54,6 +54,7 @@ import java.io.File
 import kotlin.concurrent.thread
 import os.deckbridge.manager.Column as Col
 import os.deckbridge.manager.ManagerModel
+import os.deckbridge.logic.StagePalette
 import os.deckbridge.manager.VolumeDetector
 import os.deckbridge.manager.smart.QuickFilter
 import os.deckbridge.manager.smart.Smart
@@ -198,7 +199,7 @@ private fun TopBar(model: ManagerModel, ui: UiState) {
 
 @Composable
 private fun Banner(text: String, error: Boolean, onClose: () -> Unit) {
-    Row(Modifier.fillMaxWidth().background(if (error) Color(0xFF3A0F0F) else Color(0xFF0F2A18)).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(if (error) Color(StagePalette.dangerBg) else Color(StagePalette.keyFill)).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Label(text, if (error) Pal.Red else Pal.Green, 12.sp, modifier = Modifier.weight(1f), maxLines = 3)
         Label("✕", Pal.Muted, 14.sp, modifier = Modifier.clickable(onClick = onClose).padding(start = 12.dp))
     }
@@ -296,7 +297,7 @@ private fun SideRow(name: String, count: String, depth: Int, selected: Boolean, 
     Row(
         Modifier.fillMaxWidth()
             .onGloballyPositioned { if (playlistId != null) ui.rects["pl:$playlistId"] = it.boundsInWindow() }
-            .background(if (hover) Pal.Orange.copy(alpha = 0.35f) else if (selected) Pal.Blue.copy(alpha = 0.22f) else Color.Transparent)
+            .background(if (hover) Pal.Orange.copy(alpha = 0.35f) else if (selected) Pal.SelectedRow else Color.Transparent)
             .clickable(onClick = onClick).padding(start = (14 + depth * 16).dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -436,7 +437,7 @@ private fun TrackRowView(
     var at by remember { mutableStateOf(Offset.Zero) }
     DisposableEffect(t.id) { onDispose { ui.rects.remove("row:${t.id}") } }
     Row(
-        Modifier.fillMaxWidth().height(28.dp).background(if (selected) Pal.Blue.copy(alpha = 0.25f) else Color.Transparent)
+        Modifier.fillMaxWidth().height(28.dp).background(if (selected) Pal.SelectedRow else Color.Transparent)
             .onGloballyPositioned {
                 origin = it.positionInWindow()
                 ui.rects["row:${t.id}"] = it.boundsInWindow()

@@ -27,19 +27,23 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import os.deckbridge.logic.StagePalette
 
-/** Cores da tela de performance (StagePalette do app e `deckbridge_ui`). */
+/** Cores do design system do player (`StagePalette`, compartilhado com o app e o Pi): nenhuma cor própria. */
 object Pal {
-    val Bg = Color(0xFF000000)
-    val Panel = Color(0xFF121216)
-    val Raised = Color(0xFF1E1F24)
-    val Line = Color(0xFF34363C)
-    val Ink = Color(0xFFEBEBEE)
-    val Muted = Color(0xFF8C8F96)
-    val Orange = Color(0xFFFF8A1E)
-    val Blue = Color(0xFF4C8CFF)
-    val Red = Color(0xFFFF2A2A)
-    val Green = Color(0xFF3DDC6A)
+    val Bg = Color(StagePalette.bg)
+    val Panel = Color(StagePalette.panel)
+    val Raised = Color(StagePalette.panelRaised)
+    val Line = Color(StagePalette.line)
+    val Ink = Color(StagePalette.ink)
+    val Muted = Color(StagePalette.mutedInk)
+    val Orange = Color(StagePalette.accentOrange)
+    val Blue = Color(StagePalette.accentBlue)
+    val Red = Color(StagePalette.danger)
+    val Green = Color(StagePalette.keyInk)
+    val ActiveFill = Color(StagePalette.activeFill)
+    val SelectedRow = Color(StagePalette.selectedRow)
+    val KeyFill = Color(StagePalette.keyFill)
 }
 
 @Composable
@@ -58,12 +62,10 @@ fun Caption(text: String, modifier: Modifier = Modifier) = Label(text.uppercase(
 
 @Composable
 fun Btn(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, primary: Boolean = false, danger: Boolean = false, enabled: Boolean = true) {
-    val fill = when {
-        primary -> Pal.Orange
-        else -> Pal.Raised
-    }
+    // Botão principal = o "ativo" do player: azul-escuro com contorno azul e texto branco.
+    val fill = if (primary) Pal.ActiveFill else Pal.Raised
     val ink = when {
-        primary -> Pal.Bg
+        primary -> Pal.Ink
         danger -> Pal.Red
         else -> Pal.Blue
     }
@@ -72,7 +74,7 @@ fun Btn(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, primar
             .alpha(if (enabled) 1f else 0.35f)
             .height(30.dp)
             .background(fill)
-            .border(1.dp, if (primary) Pal.Orange else Pal.Line)
+            .border(1.dp, if (primary) Pal.Blue else Pal.Line)
             .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,

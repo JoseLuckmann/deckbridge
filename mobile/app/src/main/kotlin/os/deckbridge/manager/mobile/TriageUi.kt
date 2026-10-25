@@ -14,15 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,12 +55,13 @@ fun TriageScreen(app: ManagerApp) {
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg)) {
         val wide = maxWidth >= WIDE_DP.dp
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().background(Palette.surface).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { app.endTriage() }) { Text("‹ Sair", fontSize = 16.sp) }
-                Text("Triagem · ${at + 1} de ${ids.size}", color = Palette.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Row(Modifier.fillMaxWidth().background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { app.endTriage() }) { Text("‹ SAIR", fontSize = 13.sp) }
+                Text("TRIAGEM", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+                Text("${at + 1} de ${ids.size}", color = Palette.orange, fontSize = 15.sp, fontFamily = Mono, modifier = Modifier.padding(start = 10.dp).weight(1f))
                 if (m.dirty) TextButton(onClick = { app.save() }) { Text("Salvar") }
             }
-            LinearProgressIndicator(progress = { (at + 1f) / ids.size }, modifier = Modifier.fillMaxWidth())
+            LinearProgressIndicator(progress = { (at + 1f) / ids.size }, modifier = Modifier.fillMaxWidth(), color = Palette.blue, trackColor = Palette.line)
             if (wide) {
                 Row(Modifier.weight(1f).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) { TrackCard(app, t) }
@@ -83,8 +80,8 @@ fun TriageScreen(app: ManagerApp) {
 @Composable
 private fun TrackCard(app: ManagerApp, t: TrackItem) {
     val playing = app.preview.playingId == t.id
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Palette.surface).padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    Column(Modifier.fillMaxWidth().rbPanel().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(t.artist.ifEmpty { "sem artista" } + if (t.album.isNotEmpty()) " · ${t.album}" else "", color = Palette.muted, fontSize = 16.sp, maxLines = 2)
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.padding(top = 8.dp)) {
             Stat("BPM", if (t.bpm > 0) "%.1f".format(t.bpm) else "—")
@@ -92,7 +89,10 @@ private fun TrackCard(app: ManagerApp, t: TrackItem) {
             Stat("Tempo", formatDuration(t.durationSeconds))
             Stat("Gênero", t.genre.ifEmpty { "—" })
         }
-        Button(onClick = { app.preview.toggle(t) }, modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 6.dp)) { Text(if (playing) "■ Parar" else "▶ Ouvir") }
+        // Botão de tocar na cor do PLAY do player: verde-claro com texto escuro.
+        Box(Modifier.fillMaxWidth().padding(top = 6.dp).height(52.dp).clip(RbShape).background(if (playing) Palette.surfaceHigh else Palette.playBg).clickable { app.preview.toggle(t) }, contentAlignment = Alignment.Center) {
+            Text(if (playing) "■ PARAR" else "▶ OUVIR", color = if (playing) Palette.blue else Palette.playInk, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+        }
     }
 }
 
@@ -105,20 +105,20 @@ private fun Controls(app: ManagerApp, t: TrackItem, at: Int, total: Int, compact
         m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = n)), "Nota $n em \"${t.title}\"")
         advance()
     }
-    Text("NOTA (avança sozinho)", color = Palette.accent2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+    Text("NOTA · AVANÇA SOZINHO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (n in 1..5) {
-            Box(Modifier.weight(1f).height(big).clip(RoundedCornerShape(12.dp)).background(if (t.rating == n) Palette.warn else Palette.surfaceHigh).clickable { rate(n) }, contentAlignment = Alignment.Center) {
-                Text("$n★", color = if (t.rating == n) Palette.bg else Palette.warn, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Box(Modifier.weight(1f).height(big).clip(RbShape).background(if (t.rating == n) Palette.blueActiveFill else Palette.surfaceHigh).border(androidx.compose.foundation.BorderStroke(1.dp, if (t.rating == n) Palette.blue else Palette.line), RbShape).clickable { rate(n) }, contentAlignment = Alignment.Center) {
+                Text("$n★", color = Palette.orange, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
-    Text("COR", color = Palette.accent2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+    Text("COR", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Palette.trackColors.forEachIndexed { n, c ->
-            Box(Modifier.weight(1f).height(if (compact) 38.dp else 48.dp).clip(CircleShape).background(c).clickable {
+            Box(Modifier.weight(1f).height(if (compact) 38.dp else 48.dp).clip(RbShape).background(c).clickable {
                 m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(colorId = if (t.colorId == n + 1) 0 else n + 1)), "Cor em \"${t.title}\"")
-            }, contentAlignment = Alignment.Center) { if (t.colorId == n + 1) Text("✓", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold) }
+            }, contentAlignment = Alignment.Center) { if (t.colorId == n + 1) Text("✓", color = Palette.bg, fontWeight = FontWeight.Bold) }
         }
     }
     val target = m.target?.let { m.playlist(it) }
@@ -138,7 +138,7 @@ private fun Controls(app: ManagerApp, t: TrackItem, at: Int, total: Int, compact
 @Composable
 private fun Stat(label: String, value: String) {
     Column {
-        Text(value, color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        Text(label, color = Palette.muted, fontSize = 12.sp)
+        Text(value, color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, fontFamily = Mono)
+        Text(label.uppercase(), color = Palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
     }
 }

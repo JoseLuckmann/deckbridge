@@ -2,6 +2,7 @@ package os.deckbridge.manager.mobile
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -17,14 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -52,17 +48,16 @@ fun formatMs(ms: Int): String = "%d:%02d.%03d".format(ms / 60000, ms / 1000 % 60
 /** A–H para hot cues; "M" para cue de memória. */
 fun hotLetter(hot: Int) = if (hot in 1..8) ('A' + hot - 1).toString() else "M"
 
-private val cueColors = listOf(0xFF3B3B, 0x2EC5FF, 0x3DDC6A, 0xB44DFF, 0xFF8A1E, 0xFFD23B, 0x4D7CFF, 0xFF5CC8)
 
 /** Detalhes da faixa: marcar (nota, cor, comentário), editar campos, analisar e mexer em grade e cues. */
 @Composable
 fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
     val m = app.model
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().background(Palette.surface).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (onBack != null) TextButton(onClick = onBack) { Text("‹ Voltar", fontSize = 16.sp) }
+        Row(Modifier.fillMaxWidth().background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line)).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (onBack != null) TextButton(onClick = onBack) { Text("‹ VOLTAR", fontSize = 13.sp) }
             Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text(t.artist.ifEmpty { "sem artista" }, color = Palette.muted, fontSize = 13.sp, maxLines = 1)
             }
             val list = m.rows().map { it.id }
@@ -84,7 +79,7 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun SectionTitle(text: String) = Text(text.uppercase(), color = Palette.accent2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+private fun SectionTitle(text: String) = Text(text.uppercase(), color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
 
 @Composable
 private fun Marking(app: ManagerApp, t: TrackItem) {
@@ -94,7 +89,7 @@ private fun Marking(app: ManagerApp, t: TrackItem) {
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
             for (n in 1..5) {
                 Text(
-                    if (n <= t.rating) "★" else "☆", color = if (n <= t.rating) Palette.warn else Palette.muted, fontSize = 32.sp,
+                    if (n <= t.rating) "★" else "☆", color = if (n <= t.rating) Palette.orange else Palette.muted, fontSize = 32.sp,
                     modifier = Modifier.size(48.dp).clickable { m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = if (t.rating == n) 0 else n)), "Nota ${if (t.rating == n) 0 else n} em \"${t.title}\"") },
                 )
             }
@@ -103,9 +98,9 @@ private fun Marking(app: ManagerApp, t: TrackItem) {
             Palette.trackColors.forEachIndexed { n, c ->
                 val on = t.colorId == n + 1
                 Box(
-                    Modifier.size(32.dp).clip(CircleShape).background(c).clickable { m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(colorId = if (on) 0 else n + 1)), "Cor em \"${t.title}\"") },
+                    Modifier.size(32.dp).clip(RbShape).background(c).clickable { m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(colorId = if (on) 0 else n + 1)), "Cor em \"${t.title}\"") },
                     contentAlignment = Alignment.Center,
-                ) { if (on) Text("✓", color = Color.White, fontWeight = FontWeight.Bold) }
+                ) { if (on) Text("✓", color = Palette.bg, fontWeight = FontWeight.Bold) }
             }
         }
     }
@@ -125,7 +120,7 @@ private fun AnalysisSection(app: ManagerApp, t: TrackItem) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { app.preview.toggle(t) }, modifier = Modifier.weight(1f).height(48.dp)) { Text(if (app.preview.playingId == t.id) "■ Parar" else "▶ Ouvir") }
-            OutlinedButton(onClick = { app.analyze(t, force = has) }, modifier = Modifier.weight(1.4f).height(48.dp)) { Text(if (has) "Reanalisar com o app" else "Analisar agora") }
+            OutlinedButton(onClick = { app.analyze(t, force = has) }, modifier = Modifier.weight(1.4f).height(48.dp)) { Text(if (has) "Reanalisar" else "Analisar agora") }
         }
         if (!has) Text("Sem análise a faixa toca, mas sem grade nem cues no player.", color = Palette.muted, fontSize = 12.sp)
     }
@@ -134,8 +129,8 @@ private fun AnalysisSection(app: ManagerApp, t: TrackItem) {
 @Composable
 private fun Stat(label: String, value: String) {
     Column {
-        Text(value, color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Text(label, color = Palette.muted, fontSize = 12.sp)
+        Text(value, color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, fontFamily = Mono)
+        Text(label.uppercase(), color = Palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
     }
 }
 
@@ -161,17 +156,23 @@ private fun CueSection(app: ManagerApp, t: TrackItem) {
             OutlinedButton(onClick = { pos = beats.firstOrNull { it > pos + 5 } ?: pos }, modifier = Modifier.height(44.dp)) { Text("batida ▶") }
         }
         OutlinedButton(onClick = { app.preview.toggle(t, fromMs = pos.coerceAtLeast(1)) }, modifier = Modifier.fillMaxWidth().height(44.dp)) { Text("▶ Ouvir daqui") }
-        Text("Hot cue nesta posição", color = Palette.muted, fontSize = 12.sp)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (hot in 1..8) {
-                val exists = files.cues.any { it.hot == hot }
-                Box(
-                    Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF000000 or cueColors[hot - 1].toLong())).clickable {
-                        val rest = files.cues.filter { it.hot != hot }
-                        m.submit(Edit.SetCues(t.id, rest + Cue(hot, pos, comment = "", rgb = cueColors[hot - 1])), "Hot cue ${hotLetter(hot)} em \"${t.title}\"")
-                    },
-                    contentAlignment = Alignment.Center,
-                ) { Text(hotLetter(hot) + if (exists) "•" else "", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+        // HOT CUE A: grade 2×4 como no player. Cada célula é escura, com a letra na cor do pad; tocar grava o hot cue nesta posição.
+        Text("HOT CUE · toque grava na posição marcada", color = Palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+        for (rowStart in listOf(1, 5)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                for (hot in rowStart until rowStart + 4) {
+                    val existing = files.cues.firstOrNull { it.hot == hot }
+                    Row(
+                        Modifier.weight(1f).height(48.dp).background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, if (existing != null) rgb(padRgb(hot)) else Palette.line), RbShape).clickable {
+                            val rest = files.cues.filter { it.hot != hot }
+                            m.submit(Edit.SetCues(t.id, rest + Cue(hot, pos, comment = "", rgb = padRgb(hot))), "Hot cue ${hotLetter(hot)} em \"${t.title}\"")
+                        }.padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(hotLetter(hot), color = rgb(padRgb(hot)), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(existing?.let { "${it.timeMs / 60000}:%02d".format(it.timeMs / 1000 % 60) } ?: "", color = Palette.mutedBright, fontSize = 11.sp, fontFamily = Mono, modifier = Modifier.padding(start = 6.dp), maxLines = 1)
+                    }
+                }
             }
         }
         OutlinedButton(
@@ -180,10 +181,10 @@ private fun CueSection(app: ManagerApp, t: TrackItem) {
         ) { Text("Cue de memória aqui") }
         files.cues.forEach { c ->
             Row(Modifier.fillMaxWidth().clickable { pos = c.timeMs }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)).background(if (c.isHot) Color(0xFF000000 or (c.rgb ?: 0x888888).toLong()) else Palette.line), contentAlignment = Alignment.Center) {
-                    Text(hotLetter(c.hot), color = if (c.isHot) Color.Black else Palette.text, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Box(Modifier.size(28.dp).background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.orange), RbShape), contentAlignment = Alignment.Center) {
+                    Text(hotLetter(c.hot), color = if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.orange, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
-                Text(formatMs(c.timeMs) + if (c.isLoop) "  → ${formatMs(c.loopEndMs!!)}" else "", color = Palette.text, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                Text(formatMs(c.timeMs) + if (c.isLoop) "  → ${formatMs(c.loopEndMs!!)}" else "", color = Palette.text, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.weight(1f).padding(start = 12.dp))
                 TextButton(onClick = { m.submit(Edit.SetCues(t.id, files.cues - c), "Apagar cue de \"${t.title}\"") }) { Text("Apagar", color = Palette.danger) }
             }
         }
@@ -211,7 +212,7 @@ private fun GridEditor(m: ManagerModel, t: TrackItem, files: ManagerModel.TrackF
 @Composable
 private fun Wave(wave: ByteArray, beats: List<Pair<Int, Int>>, cues: List<Cue>, durationMs: Int, pos: Int, onPos: (Int) -> Unit) {
     Canvas(
-        Modifier.fillMaxWidth().height(110.dp).clip(RoundedCornerShape(10.dp)).background(Palette.bg)
+        Modifier.fillMaxWidth().height(110.dp).background(Palette.waveBg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line))
             .pointerInput(durationMs) { detectTapGestures { o -> onPos((o.x / size.width * durationMs).toInt().coerceIn(0, durationMs)) } }
             .pointerInput(durationMs) { detectDragGestures { change, _ -> onPos((change.position.x / size.width * durationMs).toInt().coerceIn(0, durationMs)) } },
     ) {
@@ -222,23 +223,24 @@ private fun Wave(wave: ByteArray, beats: List<Pair<Int, Int>>, cues: List<Cue>, 
             for (c in wave.indices) {
                 val v = (wave[c].toInt() and 0xFF) / 255f
                 val bar = (v * h * 0.9f).coerceAtLeast(1f)
-                drawRect(Palette.accent2.copy(alpha = 0.75f), Offset(c * col, (h - bar) / 2), Size(col.coerceAtLeast(1f), bar))
+                drawRect(Palette.wave, Offset(c * col, (h - bar) / 2), Size(col.coerceAtLeast(1f), bar))
             }
         } else {
             drawLine(Palette.line, Offset(0f, h / 2), Offset(w, h / 2), 2f)
         }
         for ((ms, inBar) in beats) {
             val x = ms.toFloat() / durationMs * w
-            drawLine(if (inBar == 1) Color(0x88FFFFFF) else Color(0x33FFFFFF), Offset(x, 0f), Offset(x, h), if (inBar == 1) 2f else 1f)
+            // Início de compasso em vermelho e as demais batidas em branco fraco, como a grade do player.
+            drawLine(if (inBar == 1) Palette.danger else Palette.text.copy(alpha = 0.35f), Offset(x, 0f), Offset(x, if (inBar == 1) h else h * 0.18f), if (inBar == 1) 2f else 1f)
         }
         for (c in cues) {
             val x = c.timeMs.toFloat() / durationMs * w
-            val color = if (c.isHot) Color(0xFF000000 or (c.rgb ?: 0xFFFFFF).toLong()) else Color(0xFFFFB454)
+            val color = if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.orange
             drawLine(color, Offset(x, 0f), Offset(x, h), 3f)
             drawRect(color, Offset(x, 0f), Size(14f, 14f))
         }
         val px = pos.toFloat() / durationMs * w
-        drawLine(Palette.accent, Offset(px, 0f), Offset(px, h), 3f)
+        drawLine(Palette.text, Offset(px, 0f), Offset(px, h), 3f)
     }
 }
 

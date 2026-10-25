@@ -53,6 +53,7 @@ android {
 }
 
 tasks.withType<Test>().configureEach {
+    testLogging { events("passed", "failed") }
     maxHeapSize = "2g"
     environment("LC_ALL", "C.UTF-8")
     systemProperty("roborazzi.test.record", "true")

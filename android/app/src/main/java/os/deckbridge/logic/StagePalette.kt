@@ -27,6 +27,19 @@ object StagePalette {
     val waveHigh = 0xFFF7F8FA.toInt()
     val wave = 0xFF3D7CFF.toInt()
     val waveBg = 0xFF08090B.toInt()
+    /** Linha selecionada de lista e botão ativo (preenchimento azul-escuro com contorno azul), como na tela de navegação. */
+    val selectedRow = 0xFF123E86.toInt()
+    val activeFill = 0xFF1A3A68.toInt()
+    val activeLine = 0xFF315A93.toInt()
+
+    /** Tom compatível com o deck master: célula verde-escura com texto verde-claro. */
+    val keyFill = 0xFF12381C.toInt()
+    val keyInk = 0xFFB6FFC8.toInt()
+
+    /** Texto secundário mais discreto que [inkMuted], e o vermelho de erro (texto) com seu fundo. */
+    val mutedInk = 0xFF8C8F96.toInt()
+    val danger = 0xFFE5484D.toInt()
+    val dangerBg = 0xFF3A1014.toInt()
     val navSelected = 0xFFF4F7FB.toInt()
     val navSelectedInk = 0xFF10141A.toInt()
 
