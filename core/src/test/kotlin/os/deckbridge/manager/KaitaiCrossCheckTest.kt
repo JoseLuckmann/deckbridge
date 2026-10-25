@@ -69,4 +69,15 @@ class KaitaiCrossCheckTest {
         assertEquals(want.entries.filterValues { it.isNotEmpty() }, entries)
         assertTrue(entries.getValue(next) == ids.take(5).reversed())
     }
+
+    @Test
+    fun kaitaiReadsALibraryBornFromTheGeneratorAfterExport() {
+        val local = TestVolumes.fromScratch(TestVolumes.tempDir("dbm-kt-bk"))
+        val usb = TestVolumes.tempDir("dbm-kt-usb")
+        os.deckbridge.manager.transfer.UsbExporter(TestVolumes.tempDir("dbm-kt-bk2")).export(local, os.deckbridge.manager.transfer.FileStorage(usb), replaceExisting = false)
+        val lines = kaitai(File(usb, "PIONEER/rekordbox/export.pdb"))
+        assertEquals(listOf("Primeira", "Segunda"), lines.filter { it[0] == "T" }.map { it[2] }.sorted())
+        assertTrue(lines.any { it[0] == "P" && it.contains("Sexta") }, lines.filter { it[0] != "T" }.toString())
+        assertEquals(2, lines.count { it[0] == "E" })
+    }
 }

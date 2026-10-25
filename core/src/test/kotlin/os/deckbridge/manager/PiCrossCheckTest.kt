@@ -132,4 +132,16 @@ class PiCrossCheckTest {
         val summary = run(bin, File(dir, "PIONEER/rekordbox/export.pdb"))
         assertTrue(summary.any { it[0] == "T" && it[2] == "Teste" && it[3] == "Banda" && it[4] == "Disco" })
     }
+
+    @Test
+    fun thePiReaderSeesALibraryBornFromTheGeneratorAfterExport() {
+        val bin = summaryBinary()
+        val local = TestVolumes.fromScratch(TestVolumes.tempDir("dbm-pi-bk3"))
+        val usb = TestVolumes.tempDir("dbm-pi-usb")
+        os.deckbridge.manager.transfer.UsbExporter(TestVolumes.tempDir("dbm-pi-bk4")).export(local, os.deckbridge.manager.transfer.FileStorage(usb), replaceExisting = false)
+        val lines = run(bin, File(usb, "PIONEER/rekordbox/export.pdb"))
+        val titles = lines.filter { it[0] == "T" }.map { it[2] }
+        assertEquals(listOf("Primeira", "Segunda"), titles.sorted())
+        assertTrue(lines.any { it[0] == "P" && it.contains("Sexta") }, lines.filter { it[0] != "T" }.toString())
+    }
 }
