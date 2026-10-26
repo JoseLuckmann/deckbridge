@@ -105,6 +105,67 @@ class TrackAnalysisTest {
         assertTrue("bpm ${read.bpm} primeira batida $first erro ${delta * 1000.0} ms", abs(delta) < 0.020)
     }
 
+    /** Bumbo com clique e corpo, a [bpm], o clique começando em [firstSec] + k·período. */
+    private fun kickTrack(rate: Int, bpm: Double, seconds: Int, firstSec: Double): FloatArray {
+        val samples = FloatArray(rate * seconds)
+        val period = 60.0 / bpm
+        val random = java.util.Random(3)
+        var k = 0
+        while (firstSec + k * period < seconds - 0.3) {
+            val at = ((firstSec + k * period) * rate).toInt()
+            for (offset in 0 until (0.2 * rate).toInt()) {
+                val t = offset.toDouble() / rate
+                val body = sin(2.0 * PI * (50.0 + 80.0 * kotlin.math.exp(-t * 40.0)) * t) * kotlin.math.exp(-t * 15.0) * 0.6
+                val click = if (offset < (0.004 * rate).toInt()) (random.nextDouble() * 2.0 - 1.0) * 0.5 else 0.0
+                samples[at + offset] += (body + click).toFloat()
+            }
+            k += 1
+        }
+        return samples
+    }
+
+    @Test
+    fun aGridOffTheClickIsMovedOntoItAndMadeRegular() {
+        // Grade de partida 14 ms depois do clique e com período um pouco errado (como a de uma faixa em que a batida
+        // era recolada nos picos do fluxo): a passada final põe no início do clique e acerta o andamento.
+        val rate = 22050
+        val bpm = 126.0
+        val first = 0.300
+        val samples = kickTrack(rate, bpm, 90, first)
+        val wrongPeriod = 60.0 / 125.99
+        val start = List(180) { k -> AnlzBeat(k % 4 + 1, 125.99, ((first + 0.014 + k * wrongPeriod) * 1000).roundToInt()) }
+        val (beats, newBpm) = alignGridToClick(samples, rate, start, 125.99)!!
+        assertEquals(126.0, newBpm, 0.005)
+        val errors = beats.map { b -> val k = ((b.timeMs / 1000.0 - first) / (60.0 / bpm)).roundToInt(); b.timeMs / 1000.0 - (first + k * 60.0 / bpm) }
+        val worst = errors.maxOf { abs(it) } * 1000
+        assertTrue("pior batida a $worst ms do clique", worst < 2.5)
+        assertEquals(start.map { it.beatInBar }.take(beats.size), beats.map { it.beatInBar })
+    }
+
+    @Test
+    fun withoutAClearKickTheGridIsLeftAlone() {
+        val rate = 22050
+        val samples = FloatArray(rate * 60) { (0.3 * sin(2.0 * PI * 220.0 * it / rate)).toFloat() }
+        val start = List(120) { k -> AnlzBeat(k % 4 + 1, 120.0, k * 500) }
+        assertEquals(null, alignGridToClick(samples, rate, start, 120.0))
+    }
+
+    @Test
+    fun theWholeAnalysisPutsTwoDifferentKicksOnTheirClicks() {
+        // Duas faixas com bumbos diferentes: a grade das duas tem de cair no clique, para o sync alinhar os bumbos.
+        val rate = 22050
+        for ((bpm, first) in listOf(126.0 to 0.137, 128.0 to 0.412)) {
+            val read = analyzeTrack(kickTrack(rate, bpm, 60, first), rate)
+            val period = 60.0 / read.bpm
+            val offsets = read.beats.drop(4).map { b ->
+                val k = ((b.timeMs / 1000.0 - first) / period).roundToInt()
+                (b.timeMs / 1000.0 - (first + k * period)) * 1000
+            }.sorted()
+            val median = offsets[offsets.size / 2]
+            assertTrue("$bpm BPM: mediana $median ms do clique", abs(median) < 2.5)
+        }
+    }
+
     @Test
     fun sineAt440IsA() {
         val rate = 22050

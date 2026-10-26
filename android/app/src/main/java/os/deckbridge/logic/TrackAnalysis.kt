@@ -62,20 +62,25 @@ fun analyzeTrack(samples: FloatArray, rate: Int): TrackRead {
     // Com a fase corrigida, os picos de referência passam a ser os da figura que escolhemos.
     val gridPeaks = phaseFix?.second ?: peaks
     // Fase corrigida pelo ataque: grade regular, sem recolar nos picos do fluxo (que caem alguns ms depois do início).
-    val beats = beatGrid(if (phaseFix == null) peaks else DoubleArray(0), bpmPick, samples.size.toDouble() / rate)
-    val kickError = kickGridError(gridPeaks, beats, bpmPick.bpm)
+    val firstBeats = beatGrid(if (phaseFix == null) peaks else DoubleArray(0), bpmPick, samples.size.toDouble() / rate)
+    // Última passada: a grade no início do clique do bumbo, medido na faixa inteira (cada caminho acima chegava a uma
+    // distância diferente dele, de -16 a +29 ms, e duas faixas sincronizadas embolavam o grave).
+    val aligned = alignGridToClick(samples, rate, firstBeats, bpmPick.bpm)
+    val beats = aligned?.first ?: firstBeats
+    val bpm = aligned?.second ?: bpmPick.bpm
+    val kickError = kickGridError(gridPeaks, beats, bpm)
     val fullError = fullBandGridError(full.values, full.rate, beats)
     val key = detectKey(samples, rate)
     val duration = samples.size.toDouble() / rate
     // Frases presas à grade (primeira batida 1); sem grade, o detector antigo por janelas.
     val downbeat = beats.firstOrNull { it.beatInBar == 1 }?.timeMs?.div(1000.0)
-    val sections = (if (downbeat != null) phraseSections(samples, rate, bpmPick.bpm, downbeat) else null)
-        ?: detectSections(structureEnv.low, structureEnv.high, structureEnv.windowSec, bpmPick.bpm, duration)
+    val sections = (if (downbeat != null) phraseSections(samples, rate, bpm, downbeat) else null)
+        ?: detectSections(structureEnv.low, structureEnv.high, structureEnv.windowSec, bpm, duration)
     val loudness = integratedLufs(samples, rate)
     val energy = energyLevel(samples)
     val elapsed = (System.nanoTime() - started) / 1_000_000
     return TrackRead(
-        bpmPick.bpm,
+        bpm,
         bpmPick.confidence,
         kickError.first,
         kickError.second,
@@ -241,6 +246,101 @@ private fun refineGridPhase(samples: FloatArray, rate: Int, bpm: Double, phase: 
     if (fixed < 0.0) fixed += period
     if (fixed > period - 0.012) fixed = 0.0
     return fixed.coerceAtLeast(0.0) to clickPeaks
+}
+
+/**
+ * A grade no início do clique do bumbo (envelope de 1 ms de 1 a 5 kHz passando de 25% do pico, a mesma regra de
+ * [onsetCorrection]), medido em todas as batidas da faixa e não só nas primeiras, e regular (sem recolar cada batida
+ * num pico do fluxo, que fica alguns ms depois do ataque e varia com o bumbo).
+ *
+ * Só mexe quando a medida é firme: pelo menos 32 batidas com bumbo (corpo de 40 a 150 Hz na mesma batida), metade do meio
+ * das medidas dentro de 15 ms, e o deslocamento até 40 ms. O período sai da reta pelos ataques se ficar a até 0,05% do
+ * escolhido (assim 128,003 vira 128,000); senão fica o escolhido. Faixas sem bumbo claro ficam como estavam.
+ * Devolve as batidas (mesmos números de tempo no compasso) e o BPM, ou null para manter a grade.
+ */
+internal fun alignGridToClick(samples: FloatArray, rate: Int, beats: List<AnlzBeat>, bpm: Double, why: (String) -> Unit = {}): Pair<List<AnlzBeat>, Double>? {
+    if (beats.size < 32 || bpm < 40.0 || rate < 16000) return null
+    val click = bandpass(samples, rate, 1000.0, 5000.0)
+    val low = bandpass(samples, rate, 40.0, 150.0)
+    val width = max(1, rate / 1000)
+    fun envelope(x: FloatArray, w: Int): FloatArray {
+        val out = FloatArray(x.size)
+        var acc = 0f
+        for (index in x.indices) {
+            acc += abs(x[index])
+            if (index >= w) acc -= abs(x[index - w])
+            out[index] = acc / w
+        }
+        return out
+    }
+    val clickEnv = envelope(click, width)
+    val lowEnv = envelope(low, 3 * width)
+    val before = (0.040 * rate).toInt()
+    val after = (0.070 * rate).toInt()
+    val attacks = DoubleArray(beats.size) { Double.NaN }
+    val bodies = DoubleArray(beats.size)
+    for ((k, beat) in beats.withIndex()) {
+        val center = (beat.timeMs / 1000.0 * rate).toInt()
+        val from = center - before
+        val to = center + after
+        if (from < 0 || to >= clickEnv.size) continue
+        var peakAt = from
+        var body = 0f
+        for (index in from..to) {
+            if (clickEnv[index] > clickEnv[peakAt]) peakAt = index
+            if (lowEnv[index] > body) body = lowEnv[index]
+        }
+        bodies[k] = body.toDouble()
+        val peak = clickEnv[peakAt]
+        if (peak <= 1e-6f) continue
+        var edge = peakAt
+        while (edge > from && clickEnv[edge] > 0.25f * peak) edge -= 1
+        if (edge > from) attacks[k] = edge.toDouble() / rate
+    }
+    // Só batidas com bumbo: corpo grave de pelo menos metade da mediana das batidas.
+    val bodyGate = bodies.filter { it > 0.0 }.sorted().let { if (it.isEmpty()) return null else it[it.size / 2] * 0.5 }
+    val period = 60.0 / bpm
+    val usable = beats.indices.filter { !attacks[it].isNaN() && bodies[it] >= bodyGate }
+    if (usable.size < 32) return null.also { why("poucas batidas com bumbo: ${usable.size}") }
+    // Desvio de cada ataque para a grade regular de partida (fase da primeira batida, período escolhido). Um período um
+    // pouco fora (119,994 em vez de 120) faz o desvio crescer ao longo da faixa: tira-se a tendência pelas medianas dos
+    // quatro quartos antes de julgar se a medida é firme.
+    val origin = beats.first().timeMs / 1000.0
+    fun residual(k: Int) = attacks[k] - (origin + k * period)
+    val quarters = usable.chunked((usable.size + 3) / 4).filter { it.size >= 8 }.map { part ->
+        part.average() to part.map(::residual).sorted()[part.size / 2]
+    }
+    val trend = if (quarters.size >= 2) {
+        val mx = quarters.sumOf { it.first } / quarters.size
+        val my = quarters.sumOf { it.second } / quarters.size
+        val sxx = quarters.sumOf { (it.first - mx) * (it.first - mx) }
+        if (sxx > 0) quarters.sumOf { (it.first - mx) * (it.second - my) } / sxx else 0.0
+    } else 0.0
+    // A tendência só vale se for um ajuste pequeno de período (até 0,05%).
+    val drift = if (abs(trend / period) <= 0.0005) trend else 0.0
+    val residuals = usable.map { residual(it) - drift * it }.sorted()
+    val median = residuals[residuals.size / 2]
+    val spread = residuals[residuals.size * 3 / 4] - residuals[residuals.size / 4]
+    why("mediana %+.1f ms, meio %.1f ms, deriva %.4f%%, n=%d".format(median * 1000, spread * 1000, drift / period * 100, usable.size))
+    if (spread > 0.015 || abs(median) > 0.040) return null
+    // Reta pelos ataques que concordam (até 12 ms da linha): fase e, se coerente, período.
+    val kept = usable.filter { abs(residual(it) - drift * it - median) <= 0.012 }
+    if (kept.size < 32) return null.also { why("poucas concordam: ${kept.size}") }
+    val meanK = kept.sumOf { it.toDouble() } / kept.size
+    val meanT = kept.sumOf { attacks[it] } / kept.size
+    val sxx = kept.sumOf { (it - meanK) * (it - meanK) }
+    val slope = if (sxx > 0) kept.sumOf { (it - meanK) * (attacks[it] - meanT) } / sxx else period
+    val step = if (abs(slope / period - 1.0) <= 0.0005) slope else period
+    val start = if (step == slope) meanT - meanK * step else origin + median
+    // Mesmo que já esteja certo, a grade fica regular; o tempo no compasso de cada batida não muda.
+    val duration = samples.size.toDouble() / rate
+    val out = beats.indices.mapNotNull { k ->
+        // Uma batida que cai poucos ms antes do início fica no zero: tirá-la mudaria qual é o primeiro tempo 1, e as frases
+        // são contadas a partir dele.
+        val time = (start + k * step).let { if (it < 0.0 && it > -0.050) 0.0 else it }
+        if (time < 0.0 || time > duration) null else AnlzBeat(beats[k].beatInBar, 60.0 / step, (time * 1000.0).roundToInt())
+    }
+    return if (out.size < 32) null else out to 60.0 / step
 }
 
 /**
