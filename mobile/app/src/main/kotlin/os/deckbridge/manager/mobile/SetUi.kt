@@ -101,7 +101,8 @@ fun SetScreen(app: ManagerApp) {
             issues = issues.map { it.fromId to it.toId }.distinct().size,
             redo = plan.count { it.mark == Transition.Mark.REDO },
             master = desk.masterFixed,
-            onRehearse = { desk.startRehearsal(plan) },
+            onRehearse = { app.seen("rehearse"); desk.startRehearsal(plan) },
+            rehearseSpot = !app.hint("hear") && app.hint("rehearse"),
             onSort = if (poolAt == null) ({ sortOpen = true }) else null,
             onMaster = { masterOpen = true },
         )
@@ -135,6 +136,8 @@ fun SetScreen(app: ManagerApp) {
                             rehearsing = desk.rehearsal?.let { plan.getOrNull(it) } == tr,
                             onPlay = { desk.play(tr) }, onEdit = { desk.openMix(tr) },
                             onBridge = if (here.any { it.bridgeable }) ({ bridgeFor = id to tr.toId }) else null,
+                            // Quem nunca ouviu uma transição: o ▶ da primeira mostra por onde começar.
+                            spot = n == 0 && app.hint("hear"),
                         )
                     }
                 }
@@ -201,9 +204,11 @@ fun SetScreen(app: ManagerApp) {
 
 /** Ensaiar, ordenar e o resumo dos avisos, logo abaixo da curva. */
 @Composable
-private fun ActionsRow(issues: Int, redo: Int, master: Double?, onRehearse: () -> Unit, onSort: (() -> Unit)?, onMaster: () -> Unit) {
+private fun ActionsRow(
+    issues: Int, redo: Int, master: Double?, onRehearse: () -> Unit, onSort: (() -> Unit)?, onMaster: () -> Unit, rehearseSpot: Boolean = false,
+) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Button(onClick = onRehearse, modifier = Modifier.height(40.dp)) { Text("ENSAIAR", fontSize = 12.sp) }
+        Button(onClick = onRehearse, modifier = Modifier.spotlight(rehearseSpot).height(40.dp)) { Text("ENSAIAR", fontSize = 12.sp) }
         // Numa pool a ordem é decidida na hora: não há o que ordenar.
         if (onSort != null) OutlinedButton(onClick = onSort, modifier = Modifier.height(40.dp)) { Text("ORDENAR", fontSize = 12.sp) }
         OutlinedButton(onClick = onMaster, modifier = Modifier.height(40.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) {
@@ -243,9 +248,9 @@ private fun RehearsalBar(app: ManagerApp, at: Int, plan: List<Transition>, tr: T
 }
 
 @Composable
-private fun PlayButton(on: Boolean, enabled: Boolean = true, label: String? = null, onClick: () -> Unit) {
+private fun PlayButton(on: Boolean, enabled: Boolean = true, label: String? = null, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
-        Modifier.height(38.dp).clip(RbShape).background(if (on) Palette.blueActiveFill else Palette.playBg)
+        modifier.height(38.dp).clip(RbShape).background(if (on) Palette.blueActiveFill else Palette.playBg)
             .border(BorderStroke(1.dp, if (on) Palette.blue else Palette.playInk.copy(alpha = 0.4f)), RbShape)
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -452,7 +457,7 @@ private fun fitText(f: Fit): String = if (f.bpmDiffPct == 0.0) "=" else "%+.1f%%
 @Composable
 private fun TransitionRow(
     a: TrackItem, b: TrackItem, tr: Transition, fit: Fit, stretch: Double, playing: Boolean, issues: List<os.deckbridge.manager.mix.SetIssue>, rehearsing: Boolean,
-    onPlay: () -> Unit, onEdit: () -> Unit, onBridge: (() -> Unit)?,
+    onPlay: () -> Unit, onEdit: () -> Unit, onBridge: (() -> Unit)?, spot: Boolean = false,
 ) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 52.dp).background(if (rehearsing) Palette.blueActiveFill else Palette.bg).clickable(onClick = onEdit)
@@ -476,7 +481,11 @@ private fun TransitionRow(
                 )
             }
             Text("${tr.style.title} · ${tr.bars} comp. · ${mmss(tr.outMs)}", color = Palette.muted, fontSize = 12.sp, maxLines = 1)
-            if (issues.isNotEmpty()) Text("⚠ " + issues.joinToString(" · ") { it.text }, color = Palette.orange, fontSize = 11.sp, maxLines = 2)
+            // Um aviso só, numa linha (o primeiro); a cor do fio já diz que algo pede atenção.
+            if (issues.isNotEmpty()) Text(
+                "⚠ " + issues.first().text + if (issues.size > 1) " +${issues.size - 1}" else "", color = Palette.orange, fontSize = 11.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
         }
         if (onBridge != null) {
             OutlinedButton(onClick = onBridge, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) { Text("PONTE", fontSize = 10.sp) }
@@ -484,7 +493,7 @@ private fun TransitionRow(
         }
         OutlinedButton(onClick = onEdit, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("MIX", fontSize = 11.sp) }
         Spacer(Modifier.width(6.dp))
-        PlayButton(on = playing, onClick = onPlay)
+        PlayButton(on = playing, modifier = Modifier.spotlight(spot), onClick = onPlay)
     }
 }
 

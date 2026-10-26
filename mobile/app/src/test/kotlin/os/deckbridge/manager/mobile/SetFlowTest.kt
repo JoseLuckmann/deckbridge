@@ -44,7 +44,7 @@ class SetFlowTest {
         a.tab = Tab.PLAYLISTS
         a.model.openPlaylist = 1
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
-        rule.onNodeWithText("SET").performClick()
+        rule.onNodeWithText("MIXAR").performClick()
         rule.waitForIdle()
         assertEquals(1, a.sets.playlistId)
         val plan = a.sets.plan()

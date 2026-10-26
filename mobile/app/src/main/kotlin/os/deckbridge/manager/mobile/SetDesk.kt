@@ -547,6 +547,7 @@ class SetDesk(private val app: ManagerApp) {
 
     /** Monta (se ainda não tem) e toca a prévia de uma transição; tocar de novo para. */
     fun play(tr: Transition) {
+        app.seen("hear")
         val key = keyOf(tr)
         if (app.preview.playingKey == key) return app.preview.stop()
         val ready = cacheFile(key)

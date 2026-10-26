@@ -17,6 +17,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -72,3 +73,20 @@ fun AssistChip(onClick: () -> Unit, label: @Composable () -> Unit, modifier: Mod
 fun Modifier.rbPanel(): Modifier = this.clip(RbShape).background(Palette.surface).border(BorderStroke(1.dp, Palette.line), RbShape)
 
 fun Modifier.rbPad(h: Int, v: Int): Modifier = this.padding(horizontal = h.dp, vertical = v.dp)
+
+/**
+ * Destaque do próximo controle: um segundo contorno azul por fora, parado (sem piscar). Diz "é aqui" sem texto; some
+ * quando a pessoa usa o controle uma vez (ver [ManagerApp.hint]).
+ */
+fun Modifier.spotlight(on: Boolean): Modifier =
+    if (!on) this else this.drawWithContent {
+        drawContent()
+        // Desenhado por fora do controle: não muda o tamanho de nada (a fileira de botões fica alinhada).
+        val gap = 3.dp.toPx()
+        val w = 2.dp.toPx()
+        drawRoundRect(
+            Palette.blue, topLeft = androidx.compose.ui.geometry.Offset(-gap, -gap),
+            size = androidx.compose.ui.geometry.Size(size.width + 2 * gap, size.height + 2 * gap),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(w),
+        )
+    }

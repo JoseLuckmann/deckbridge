@@ -35,10 +35,10 @@ fun MenuTab(app: ManagerApp, actions: Actions) {
         Line("Analisar todas", "${counts[QuickFilter.UNANALYZED] ?: 0}") { app.analyzeAll() }
         Line("Arrumar nomes", "") { app.openTidy() }
         Line("Refazer grades", "") { app.refreshGrids() }
-        Line("Triagem", "${counts[QuickFilter.UNRATED] ?: 0}") { app.startTriage() }
+        Line("Marcar (ouvir e dar nota)", "${counts[QuickFilter.UNRATED] ?: 0}") { app.startTriage() }
         Line("Descartar mudanças", if (m.dirty) "${m.pending.size}" else "") { m.discard() }
         Section("Ajuda")
-        Line("Próximo passo", if (app.guideHidden) "oculto" else "visível") { if (app.guideHidden) app.showGuide() else app.hideGuide() }
+        Line("Guia para começar", if (app.guideHidden) "desligado" else "ligado") { if (app.guideHidden) app.showGuide() else app.hideGuide() }
         Line("Buscar e filtrar", "") { app.tab = Tab.LIBRARY; app.helpRequested = true }
         Section("Aparelho")
         Line("Teste de áudio", app.audioCheckResult.substringAfter("· ").ifEmpty { "" }) { app.audioCheck() }

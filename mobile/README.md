@@ -81,6 +81,14 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
 - **POOL**: cada faixa mostra com quantas outras liga. Toque **AGORA** na que está tocando: as outras vêm na ordem da
   melhor troca a partir dela, as tocadas vão para o fim. ZERAR recomeça.
 
+## Para quem está começando
+
+- O **guia** abaixo do topo mostra os 4 passos (Importar · Marcar · Playlist · Pendrive): feito ✓, o de agora em azul.
+  Toque num passo para ir até ele. Some quando tudo foi feito (ou no ✕; MENU → "Guia para começar" traz de volta).
+- O **contorno azul** marca o próximo botão a usar; some depois que você usa uma vez.
+- Abas na ordem do trabalho: **MÚSICAS · MARCAR · PLAYLISTS · PENDRIVE**. Numa playlist, **＋** põe músicas (cada linha
+  ganha um ＋) e **MIXAR** abre o set.
+
 ## Teste de áudio
 
 MENU → APARELHO → **Teste de áudio**: lê 30 s de uma música da biblioteca pelo decodificador do Android e monta uma

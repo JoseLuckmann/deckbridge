@@ -145,7 +145,7 @@ class JourneyVideoTest {
         // 2. Marcar: triagem, uma nota por faixa (a triagem passa sozinha para a próxima).
         step("2 · Marcar: nota em cada faixa")
         val stars = mapOf("Imagination" to 5, "See You Again" to 5, "Shinjuku" to 4, "How Does It Feel" to 4, "Fuck It" to 3)
-        tapText("TRIAGEM")
+        tapText("MARCAR")
         hold(1.2)
         while (app.triage != null) {
             val id = app.triage!![app.triageAt]
@@ -158,7 +158,7 @@ class JourneyVideoTest {
         app.notice = null
         hold(1.5)
 
-        // 3. Montar a playlist: criar, usar como alvo e pôr as faixas na ordem do set.
+        // 3. Montar a playlist: criar, tocar no ＋ dela e pôr as faixas na ordem do set.
         step("3 · Montar a playlist")
         tapText("PLAYLISTS")
         hold(0.8)
@@ -167,11 +167,7 @@ class JourneyVideoTest {
         check(app.model.submit(os.deckbridge.manager.pdb.Edit.CreatePlaylist(app.model.nextPlaylistId(), 0, "Sexta à noite", false), "Criar playlist"))
         app.model.openPlaylist = app.model.view!!.playlists.first { it.name == "Sexta à noite" }.id
         hold(1.2)
-        tapText("⋯")
-        hold(0.5)
-        tapText("Usar como alvo")
-        hold(0.8)
-        tapText("FAIXAS")
+        tapText("＋")
         hold(1.0)
         val order = listOf("Imagination", "See You Again", "How Does It Feel", "Shinjuku")
         for (word in order) tapPlusOf(v0.track(idOf(word))!!.title)
@@ -184,7 +180,7 @@ class JourneyVideoTest {
 
         // 4. Planejar a mixagem: o SET da playlist e o teste da primeira transição, tocando.
         step("4 · Planejar a mixagem")
-        tapText("SET")
+        tapText("MIXAR")
         hold(2.5)
         tap(rule.onAllNodes(hasText("MIX"))[0])
         val until = System.currentTimeMillis() + 300_000

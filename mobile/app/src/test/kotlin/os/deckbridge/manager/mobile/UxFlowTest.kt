@@ -88,8 +88,8 @@ class UxFlowTest {
     @Test fun quickFilterChipNarrowsTheListAndTheGuideLeadsToTheNextStep() {
         val a = app()
         rule.setContent { ManagerRoot(a, noActions) }
-        // Guia visível: o próximo passo não concluído é "Marcar" ou "Exportar"; o botão leva até lá.
-        rule.onNodeWithText("PRÓXIMO", substring = true).assertExists()
+        // Guia visível: os quatro passos, o de agora destacado; tocar leva até lá.
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Passo 4: Pendrive")).assertExists()
         a.model.filter = os.deckbridge.manager.smart.QuickFilter.TOP
         rule.waitForIdle()
         assertTrue(a.model.rows().all { it.rating >= 4 })
@@ -131,7 +131,7 @@ class UxFlowTest {
         a.tab = Tab.PLAYLISTS
         a.model.openPlaylist = 2
         rule.setContent { ManagerRoot(a, noActions) }
-        rule.onNodeWithText("FAIXAS").performClick()
+        rule.onNodeWithText("MÚSICAS").performClick()
         rule.waitForIdle()
         assertEquals(a.model.view!!.tracks.size, a.model.rows().size)
         rule.onNodeWithText("Night Signal").assertExists()

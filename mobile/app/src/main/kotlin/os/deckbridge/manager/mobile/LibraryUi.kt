@@ -59,10 +59,11 @@ fun LibraryTab(app: ManagerApp, actions: Actions) {
     val narrowed = m.query.isNotBlank() || m.filter != QuickFilter.ALL
     Column(Modifier.fillMaxWidth()) {
         if (app.searchOpen || m.query.isNotEmpty()) SearchField(app) { dialog = Dialog.SearchHelp }
-        // Uma única fileira: filtros, a playlist alvo (se houver) e "salvar" quando a lista está filtrada.
-        LazyRow(Modifier.padding(vertical = 6.dp), contentPadding = PaddingValues(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // Uma única fileira: filtros, a playlist alvo (se houver) e "salvar" quando a lista está filtrada. Sem músicas, nada.
+        if (m.view?.tracks?.isNotEmpty() == true) LazyRow(Modifier.padding(vertical = 6.dp), contentPadding = PaddingValues(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             m.target?.let { id -> m.playlist(id) }?.let { p ->
-                item { FilterChip(selected = true, onClick = { dialog = Dialog.PickTarget }, label = { Text("≡ ${p.name}", maxLines = 1) }) }
+                // Para onde vai o "+" de cada linha.
+                item { FilterChip(selected = true, onClick = { dialog = Dialog.PickTarget }, label = { Text("＋ ${p.name}", maxLines = 1) }) }
             }
             items(QuickFilter.values().filter { it == QuickFilter.ALL || it == m.filter || (counts[it] ?: 0) > 0 }) { f ->
                 FilterChip(selected = m.filter == f, onClick = { m.filter = f }, label = {
@@ -72,7 +73,6 @@ fun LibraryTab(app: ManagerApp, actions: Actions) {
             }
             if (narrowed && rows.isNotEmpty()) item { FilterChip(selected = false, onClick = { dialog = Dialog.SaveList }, label = { Text("＋ Playlist", maxLines = 1) }) }
         }
-        NextStep(app, actions)
         if (rows.isNotEmpty()) ListHeader(app)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 8.dp)) {
             if (rows.isEmpty()) {
@@ -114,42 +114,17 @@ private fun SearchField(app: ManagerApp, help: () -> Unit) {
     )
 }
 
-/** Uma linha só com o próximo passo do caminho importar → analisar → marcar → playlist → exportar. */
-@Composable
-private fun NextStep(app: ManagerApp, actions: Actions) {
-    val m = app.model
-    val v = m.view ?: return
-    if (app.guideHidden) return
-    val next = Smart.journey(v, { m.hasAnalysis(it) }, app.exportedOnce).firstOrNull { !it.done } ?: return
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 6.dp).clip(RbShape).background(Palette.surface).border(BorderStroke(1.dp, Palette.line), RbShape)
-            .clickable {
-                when (next.action) {
-                    Smart.StepAction.IMPORT -> actions.pickAudio()
-                    Smart.StepAction.ANALYZE -> app.analyzeAll()
-                    Smart.StepAction.TRIAGE -> app.startTriage()
-                    Smart.StepAction.PLAYLIST -> app.tab = Tab.PLAYLISTS
-                    Smart.StepAction.EXPORT -> app.tab = Tab.USB
-                }
-            }.padding(start = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("PRÓXIMO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-        Text(next.title, color = Palette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp).weight(1f), maxLines = 1)
-        Text("›", color = Palette.blue, fontSize = 20.sp)
-        TextButton(onClick = { app.hideGuide() }) { Text("✕", color = Palette.muted, fontSize = 14.sp) }
-    }
-}
-
 @Composable
 private fun EmptyList(app: ManagerApp, actions: Actions) {
     val m = app.model
     Column(Modifier.fillMaxWidth().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (m.view?.tracks?.isEmpty() == true) {
-            Text("A biblioteca está vazia.", color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text("WAV · MP3 · FLAC · AAC", color = Palette.muted, fontSize = 14.sp)
-            Button(onClick = actions.pickAudio, modifier = Modifier.height(52.dp)) { Text("IMPORTAR MÚSICAS") }
-            OutlinedButton(onClick = actions.pickFolder, modifier = Modifier.height(48.dp)) { Text("IMPORTAR PASTA") }
+            // Três portas: músicas soltas, uma pasta inteira, ou um pendrive que já veio do rekordbox.
+            Text("Comece pelas suas músicas", color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text("WAV · MP3 · FLAC · AAC", color = Palette.muted, fontSize = 13.sp)
+            Button(onClick = actions.pickAudio, modifier = Modifier.fillMaxWidth().spotlight(!app.guideHidden).height(56.dp)) { Text("IMPORTAR MÚSICAS", fontSize = 15.sp) }
+            OutlinedButton(onClick = actions.pickFolder, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("IMPORTAR UMA PASTA") }
+            TextButton(onClick = { app.tab = Tab.USB; actions.pickUsb() }, modifier = Modifier.padding(top = 8.dp)) { Text("TENHO UM PENDRIVE DO REKORDBOX", fontSize = 12.sp) }
         } else {
             Text("Nenhuma faixa nesta lista.", color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Text(if (m.filter != QuickFilter.ALL) m.filter.hint else "Mude a busca.", color = Palette.muted, fontSize = 14.sp)
@@ -213,7 +188,7 @@ private fun SwipeToTarget(app: ManagerApp, t: TrackItem, onNoTarget: () -> Unit,
         enableDismissFromEndToStart = false,
         backgroundContent = {
             Box(Modifier.fillMaxSize().background(Palette.blueActiveFill).padding(start = 18.dp), contentAlignment = Alignment.CenterStart) {
-                Text(if (target == null) "≡ ALVO?" else (if (inTarget) "− " else "＋ ") + target.name, color = Palette.text, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(if (target == null) "＋ PLAYLIST?" else (if (inTarget) "− " else "＋ ") + target.name, color = Palette.text, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         },
     ) { Box(Modifier.background(Palette.bg)) { content() } }
@@ -312,7 +287,7 @@ private fun SelectionBar(app: ManagerApp, rows: List<TrackItem>, show: (Dialog) 
                     if (p != null && fresh.isNotEmpty() && m.submit(Edit.AddToPlaylist(id, fresh), "Adicionar ${fresh.size} a \"${p.name}\"")) app.did("${fresh.size} faixa(s) em \"${p.name}\"")
                     m.selection = emptySet()
                     app.selecting = false
-                }, modifier = Modifier.height(44.dp)) { Text("＋ ao alvo", fontSize = 13.sp, color = Palette.blue) }
+                }, modifier = Modifier.height(44.dp)) { Text("＋ ${m.target?.let { m.playlist(it)?.name }.orEmpty()}", fontSize = 13.sp, color = Palette.blue, maxLines = 1) }
             }
             item { OutlinedButton(onClick = { show(Dialog.AddToPlaylist) }, modifier = Modifier.height(44.dp)) { Text("Playlist", fontSize = 13.sp) } }
             item { OutlinedButton(onClick = { show(Dialog.Edit) }, modifier = Modifier.height(44.dp)) { Text("Editar", fontSize = 13.sp) } }
@@ -348,7 +323,7 @@ private fun LibraryDialogs(app: ManagerApp, dialog: Dialog?, close: () -> Unit) 
                 done()
             }, onClose = close)
         }
-        Dialog.PickTarget -> PlaylistPicker(app, title = "Playlist alvo", onPick = { id ->
+        Dialog.PickTarget -> PlaylistPicker(app, title = "Adicionar em", onPick = { id ->
             m.target = id
             close()
         }, onCreate = { name ->

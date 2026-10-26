@@ -49,7 +49,7 @@ fun TriageScreen(app: ManagerApp) {
         app.preview.stop()
         if (at >= ids.lastIndex) {
             app.endTriage()
-            app.notice = os.deckbridge.manager.Banner("Triagem ✓", false)
+            app.notice = os.deckbridge.manager.Banner("Tudo marcado ✓", false)
         } else app.triageAt = at + 1
     }
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg)) {
@@ -57,7 +57,7 @@ fun TriageScreen(app: ManagerApp) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { app.endTriage() }) { Text("✕", fontSize = 16.sp) }
-                Text("TRIAGEM", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+                Text("MARCAR", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
                 Text("${at + 1}/${ids.size}", color = Palette.orange, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.padding(start = 10.dp).weight(1f))
                 if (m.dirty) TextButton(onClick = { m.undo() }) { Text("↶", fontSize = 20.sp) }
             }
@@ -87,7 +87,12 @@ private fun TrackCard(app: ManagerApp, t: TrackItem) {
         // Tocar na onda ouve daquele ponto: dá para pular direto para o drop.
         PlayableWave(app, t, 64.dp)
         // Botão de tocar na cor do PLAY do player: verde-claro com texto escuro.
-        Box(Modifier.fillMaxWidth().padding(top = 6.dp).height(52.dp).clip(RbShape).background(if (playing) Palette.surfaceHigh else Palette.playBg).clickable { app.preview.toggle(t) }, contentAlignment = Alignment.Center) {
+        // Na primeira vez, o OUVIR leva o destaque: é por onde se começa a marcar.
+        Box(
+            Modifier.fillMaxWidth().padding(top = 6.dp).spotlight(app.hint("listen")).height(52.dp).clip(RbShape)
+                .background(if (playing) Palette.surfaceHigh else Palette.playBg).clickable { app.seen("listen"); app.preview.toggle(t) },
+            contentAlignment = Alignment.Center,
+        ) {
             Text(if (playing) "■ PARAR" else "▶ OUVIR", color = if (playing) Palette.blue else Palette.playInk, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
         }
     }

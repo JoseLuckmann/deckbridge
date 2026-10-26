@@ -38,6 +38,14 @@ import os.deckbridge.manager.pdb.PlaylistItem
  * Playlists. Em pé: a lista e, ao abrir uma, as faixas dela em tela cheia. Deitado: lista e faixas lado a lado.
  * A ordem das faixas se muda com ▲ ▼ (arrastar não é confiável com o dedo numa lista que rola).
  */
+/** Pôr músicas na playlist [id]: a lista de músicas abre com o ＋ em cada linha apontando para ela. */
+fun addTo(app: ManagerApp, id: Int) {
+    app.model.target = id
+    app.model.openPlaylist = null
+    app.tab = Tab.LIBRARY
+    app.did("＋ em cada música")
+}
+
 @Composable
 fun PlaylistsTab(app: ManagerApp) {
     val m = app.model
@@ -83,10 +91,17 @@ private fun PlaylistList(app: ManagerApp, show: (PlaylistDialog) -> Unit) {
         Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { show(PlaylistDialog.New) }, modifier = Modifier.weight(1f).height(46.dp)) { Text("+ NOVA PLAYLIST", fontSize = 13.sp) }
             // Montar um set pronto para mixar a partir da biblioteca, das melhores ou de uma playlist.
-            Button(onClick = { show(PlaylistDialog.Build) }, modifier = Modifier.weight(1f).height(46.dp)) { Text("MONTAR SET", fontSize = 13.sp) }
+            val noTracks = view?.tracks.isNullOrEmpty()
+            Button(
+                onClick = { show(PlaylistDialog.Build) }, enabled = !noTracks,
+                modifier = Modifier.weight(1f).spotlight(lists.isEmpty() && !noTracks && !app.guideHidden).height(46.dp),
+            ) { Text("MONTAR SET", fontSize = 13.sp) }
         }
         if (lists.isEmpty()) {
-            Hint("Nenhuma playlist")
+            // Sem músicas não há o que pôr numa playlist: o caminho é importar.
+            if (view?.tracks.isNullOrEmpty()) Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Button(onClick = { app.tab = Tab.LIBRARY }, modifier = Modifier.height(52.dp)) { Text("IMPORTAR MÚSICAS") }
+            } else Hint("")
         } else {
             LazyColumn(Modifier.weight(1f)) {
                 items(lists, key = { it.id }) { p ->
@@ -101,7 +116,7 @@ private fun PlaylistList(app: ManagerApp, show: (PlaylistDialog) -> Unit) {
                             
                         }
                         Text(if (p.folder) "" else "$count", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono)
-                        if (m.target == p.id) Text("  ALVO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        if (m.target == p.id) Text("  ＋", color = Palette.blue, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -118,13 +133,19 @@ private fun PlaylistTracks(app: ManagerApp, p: PlaylistItem, onBack: (() -> Unit
             if (onBack != null) TextButton(onClick = onBack) { Text("‹ VOLTAR", fontSize = 13.sp) }
             Text(p.name, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false))
             Text("${ids.size}", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(start = 8.dp).weight(1f))
-            if (m.target == p.id) Text("ALVO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 6.dp))
-            if (ids.size >= 2) OutlinedButton(onClick = { app.sets.open(p.id) }, modifier = Modifier.height(38.dp)) { Text("SET", fontSize = 12.sp) }
+            // ＋ põe músicas; MIXAR abre o set (transições, ouvir, ensaiar).
+            OutlinedButton(onClick = { addTo(app, p.id) }, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)) { Text("＋", fontSize = 16.sp) }
+            if (ids.size >= 2) Button(
+                onClick = { app.seen("set"); app.sets.open(p.id) },
+                modifier = Modifier.padding(start = 6.dp).spotlight(app.hint("set")).height(38.dp),
+            ) { Text("MIXAR", fontSize = 12.sp) }
             // Tudo que não é usado o tempo todo fica no ⋯.
             TextButton(onClick = { show(PlaylistDialog.More(p)) }) { Text("⋯", fontSize = 22.sp) }
         }
         if (ids.isEmpty()) {
-            Hint("Vazia")
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Button(onClick = { addTo(app, p.id) }, modifier = Modifier.spotlight(!app.guideHidden).height(52.dp)) { Text("ADICIONAR MÚSICAS") }
+            }
         } else {
             LazyColumn(Modifier.weight(1f)) {
                 items(ids.withIndex().toList(), key = { it.value }) { (n, id) ->
@@ -181,10 +202,10 @@ private fun PlaylistDialogs(app: ManagerApp, dialog: PlaylistDialog?, show: (Pla
         )
         is PlaylistDialog.More -> {
             val p = dialog.p
-            val options = listOf(if (m.target == p.id) "Deixar de ser alvo" else "Usar como alvo", "Ordenar…", "Renomear", "Apagar")
+            val options = listOf(if (m.target == p.id) "Parar de adicionar aqui" else "Adicionar músicas aqui", "Ordenar…", "Renomear", "Apagar")
             ChoiceDialog(p.name, options, onPick = { n ->
                 when (n) {
-                    0 -> { m.target = if (m.target == p.id) null else p.id; close() }
+                    0 -> { if (m.target == p.id) m.target = null else addTo(app, p.id); close() }
                     1 -> show(PlaylistDialog.Sort(p))
                     2 -> show(PlaylistDialog.Rename(p))
                     else -> show(PlaylistDialog.Delete(p))

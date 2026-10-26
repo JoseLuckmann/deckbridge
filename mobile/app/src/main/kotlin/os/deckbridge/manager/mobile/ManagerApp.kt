@@ -27,6 +27,29 @@ import os.deckbridge.manager.transfer.UsbExporter
 import os.deckbridge.manager.transfer.UsbImporter
 import os.deckbridge.manager.volume.Backups
 
+/**
+ * Os quatro passos do trabalho, na ordem: trazer as músicas (e analisar), ouvir e dar nota, juntar numa playlist e
+ * levar para o pendrive. É o que o guia mostra e o que a fileira de baixo destaca.
+ */
+enum class GuideStep(val label: String) {
+    IMPORT("Importar"), RATE("Marcar"), PLAYLIST("Playlist"), USB("Pendrive");
+
+    fun done(app: ManagerApp, v: os.deckbridge.manager.pdb.LibraryView): Boolean = when (this) {
+        IMPORT -> v.tracks.isNotEmpty() && v.tracks.all { app.model.hasAnalysis(it) }
+        RATE -> v.tracks.isNotEmpty() && v.tracks.count { it.rating == 0 } <= v.tracks.size / 2
+        PLAYLIST -> v.playlists.any { !it.folder && v.entries[it.id].orEmpty().isNotEmpty() }
+        USB -> app.exportedOnce
+    }
+
+    /** A área do app onde este passo se faz. */
+    val tab: Tab? get() = when (this) {
+        IMPORT -> Tab.LIBRARY
+        RATE -> null
+        PLAYLIST -> Tab.PLAYLISTS
+        USB -> Tab.USB
+    }
+}
+
 enum class Tab(val title: String) { LIBRARY("Biblioteca"), PLAYLISTS("Playlists"), USB("Pendrive"), MENU("Menu") }
 
 /** Um trabalho longo em andamento (importar, analisar, exportar). A tela mostra o texto e o botão de cancelar. */
@@ -99,7 +122,27 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
 
     fun showGuide() {
         guideHidden = false
-        prefs.edit().putBoolean("guiaOculto", false).apply()
+        coachSeen = emptySet()
+        prefs.edit().putBoolean("guiaOculto", false).putStringSet("visto", emptySet()).apply()
+    }
+
+    /** Os destaques que a pessoa já usou (cada um aparece até ser usado uma vez). */
+    private var coachSeen by mutableStateOf(prefs.getStringSet("visto", emptySet())!!.toSet())
+
+    /** Destacar o controle [key]: o guia está ligado e a pessoa ainda não o usou. */
+    fun hint(key: String): Boolean = !guideHidden && key !in coachSeen
+
+    /** A pessoa usou o controle [key]: o destaque dele some de vez. */
+    fun seen(key: String) {
+        if (key in coachSeen) return
+        coachSeen = coachSeen + key
+        prefs.edit().putStringSet("visto", coachSeen).apply()
+    }
+
+    /** O passo do caminho (importar → marcar → playlist → pendrive) em que a pessoa está, ou null se já fez tudo. */
+    fun step(): GuideStep? {
+        val v = model.view ?: return GuideStep.IMPORT
+        return GuideStep.values().firstOrNull { !it.done(this, v) }
     }
 
     init {
@@ -139,7 +182,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     fun startTriage() {
         val v = model.view ?: return
         val ids = Smart.triageQueue(v)
-        if (ids.isEmpty()) return
+        if (ids.isEmpty()) return did(if (v.tracks.isEmpty()) "Importe músicas primeiro" else "Tudo marcado ✓")
         triage = ids
         triageAt = 0
         detailId = null

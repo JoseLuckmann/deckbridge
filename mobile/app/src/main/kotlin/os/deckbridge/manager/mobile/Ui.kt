@@ -55,6 +55,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                     NavRail(app)
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         TopBar(app, actions)
+                        if (app.tab != Tab.MENU) GuideStrip(app, actions)
                         Row(Modifier.weight(1f)) {
                             Box(Modifier.weight(1f).fillMaxHeight()) { TabContent(app, actions) }
                             if (app.tab == Tab.LIBRARY || (app.tab == Tab.PLAYLISTS && open != null)) {
@@ -72,6 +73,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                         DetailPanel(app, open, onBack = { app.detailId = null })
                     } else {
                         TopBar(app, actions)
+                        if (app.tab != Tab.MENU) GuideStrip(app, actions)
                         Box(Modifier.weight(1f)) { TabContent(app, actions) }
                         SaveBar(app)
                         NavBar(app)
@@ -100,7 +102,7 @@ private fun TabContent(app: ManagerApp, actions: Actions) {
 
 /** Rótulo curto de cada área, em caixa alta, como a fileira de botões do player. */
 private fun Tab.short() = when (this) {
-    Tab.LIBRARY -> "FAIXAS"
+    Tab.LIBRARY -> "MÚSICAS"
     Tab.PLAYLISTS -> "PLAYLISTS"
     Tab.USB -> "PENDRIVE"
     Tab.MENU -> "MENU"
@@ -143,19 +145,44 @@ private fun SaveBar(app: ManagerApp) {
     }
 }
 
-/** Fileira de botões iguais, como SOURCE / BROWSE / TAG LIST / PLAYLIST / SEARCH / MENU. O ativo: azul-escuro, contorno azul. */
+/** O que falta em cada área, num número pequeno no botão: músicas sem nota (MARCAR). */
+private fun pending(app: ManagerApp, t: Tab?): Int = when (t) {
+    null -> app.model.view?.tracks?.count { it.rating == 0 } ?: 0
+    else -> 0
+}
+
+/** O botão da área do próximo passo do guia leva o destaque (contorno duplo). */
+private fun spotlit(app: ManagerApp, t: Tab?): Boolean {
+    if (app.guideHidden) return false
+    val step = app.step() ?: return false
+    // Importar se faz na própria lista de músicas (já aberta no começo): sem destaque na fileira.
+    if (step == GuideStep.IMPORT) return false
+    return step.tab == t && app.tab != t
+}
+
+/**
+ * Fileira de botões iguais, como SOURCE / BROWSE / TAG LIST / PLAYLIST / SEARCH / MENU, na ordem do trabalho: músicas,
+ * marcar, playlists, pendrive. O ativo: azul-escuro, contorno azul.
+ */
 @Composable
 private fun NavBar(app: ManagerApp) {
     Row(Modifier.fillMaxWidth().background(Palette.bg).padding(horizontal = 6.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        listOf(Tab.LIBRARY, Tab.PLAYLISTS, null, Tab.USB, Tab.MENU).forEach { t ->
+        listOf(Tab.LIBRARY, null, Tab.PLAYLISTS, Tab.USB, Tab.MENU).forEach { t ->
             val on = t != null && app.tab == t
-            val label = t?.short() ?: "TRIAGEM"
+            val label = t?.short() ?: "MARCAR"
+            val count = pending(app, t)
             Box(
-                Modifier.weight(1f).height(48.dp).clip(RbShape).background(if (on) Palette.blueActiveFill else Palette.surfaceHigh)
+                Modifier.weight(1f).spotlight(spotlit(app, t)).height(48.dp).clip(RbShape).background(if (on) Palette.blueActiveFill else Palette.surfaceHigh)
                     .border(BorderStroke(1.dp, if (on) Palette.blue else Palette.line), RbShape)
                     .clickable { if (t == null) app.startTriage() else app.tab = t },
                 contentAlignment = Alignment.Center,
-            ) { Text(label, color = if (on) Palette.text else Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1) }
+            ) {
+                Text(label, color = if (on) Palette.text else Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1)
+                if (count > 0) Text(
+                    if (count > 99) "99+" else "$count", color = Palette.orange, fontSize = 10.sp, fontFamily = Mono, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 4.dp),
+                )
+            }
         }
     }
 }
@@ -165,10 +192,11 @@ private fun NavBar(app: ManagerApp) {
 private fun NavRail(app: ManagerApp) {
     Column(Modifier.width(64.dp).fillMaxHeight().background(Palette.bg).border(BorderStroke(1.dp, Palette.line)).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         data class Item(val tab: Tab?, val glyph: String, val label: String)
-        listOf(Item(Tab.LIBRARY, "≡", "LIST"), Item(Tab.PLAYLISTS, "♫", "PLAY"), Item(null, "▶", "TRIA"), Item(Tab.USB, "⎘", "USB"), Item(Tab.MENU, "⋯", "MENU")).forEach { it ->
+        listOf(Item(Tab.LIBRARY, "≡", "MÚS"), Item(null, "★", "MARC"), Item(Tab.PLAYLISTS, "♫", "PLAY"), Item(Tab.USB, "⎘", "USB"), Item(Tab.MENU, "⋯", "MENU")).forEach { it ->
             val on = it.tab != null && app.tab == it.tab
+            val hot = spotlit(app, it.tab)
             Column(
-                Modifier.fillMaxWidth().clickable { if (it.tab == null) app.startTriage() else app.tab = it.tab }.padding(vertical = 8.dp),
+                Modifier.fillMaxWidth().spotlight(hot).clickable { if (it.tab == null) app.startTriage() else app.tab = it.tab }.padding(vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(it.glyph, color = if (on) Palette.blue else Palette.mutedBright, fontSize = 20.sp)
