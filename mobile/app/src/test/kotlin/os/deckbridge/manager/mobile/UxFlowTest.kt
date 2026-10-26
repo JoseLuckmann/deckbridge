@@ -123,4 +123,17 @@ class UxFlowTest {
         assertTrue(t.id in a.model.view!!.entries[2].orEmpty(), "deslizar põe na playlist alvo")
         assertEquals(null, a.detailId, "deslizar não abre a faixa")
     }
+
+    @Test fun theTracksTabShowsTheWholeLibraryEvenWithAPlaylistOpen() {
+        // Achado ao gravar a jornada: abrir uma playlist na aba PLAYLISTS deixava a aba FAIXAS só com as dela.
+        val a = app()
+        a.hideGuide()
+        a.tab = Tab.PLAYLISTS
+        a.model.openPlaylist = 2
+        rule.setContent { ManagerRoot(a, noActions) }
+        rule.onNodeWithText("FAIXAS").performClick()
+        rule.waitForIdle()
+        assertEquals(a.model.view!!.tracks.size, a.model.rows().size)
+        rule.onNodeWithText("Night Signal").assertExists()
+    }
 }

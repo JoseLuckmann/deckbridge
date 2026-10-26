@@ -44,7 +44,8 @@ class UsbChoice(val tree: Uri, val label: String, val storage: Storage, val exis
  */
 class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     val backupsDir = File(root.parentFile, "backups")
-    val model = ManagerModel(Backups(backupsDir))
+    // A aba FAIXAS é a biblioteca toda, mesmo com uma playlist aberta na aba PLAYLISTS.
+    val model = ManagerModel(Backups(backupsDir)).also { it.scopeToOpenPlaylist = false }
 
     var tab by mutableStateOf(Tab.LIBRARY)
     var detailId by mutableStateOf<Int?>(null)

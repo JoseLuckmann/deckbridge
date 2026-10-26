@@ -62,6 +62,7 @@ tasks.withType<Test>().configureEach {
     systemProperty("roborazzi.test.record", "true")
     // Vídeo de teste de mixagem com músicas locais (fora do repositório): -PmixVideo=<pasta com in/ e out/>.
     systemProperty("mix.video", (findProperty("mixVideo") as String?) ?: "")
+    systemProperty("journey.video", (findProperty("journeyVideo") as String?) ?: "")
     systemProperty("roborazzi.output.dir", System.getProperty("prints.dir") ?: layout.buildDirectory.dir("prints").get().asFile.absolutePath)
 }
 

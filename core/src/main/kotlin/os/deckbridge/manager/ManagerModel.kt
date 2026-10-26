@@ -278,9 +278,15 @@ class ManagerModel(val backups: Backups = Backups()) {
     fun playlist(id: Int): PlaylistItem? = view?.playlists?.firstOrNull { it.id == id }
 
     /** Ids de faixa que a lista mostra: coleção ou playlist (pasta mostra as playlists de dentro, sem repetir). */
+    /**
+     * Se a playlist aberta limita a lista de faixas. No desktop, sim (a barra lateral escolhe o que a tabela mostra); no
+     * celular, não: a aba FAIXAS é sempre a biblioteca toda, e a playlist aberta é só a da aba PLAYLISTS.
+     */
+    var scopeToOpenPlaylist = true
+
     fun scopeTrackIds(): List<Int> {
         val v = view ?: return emptyList()
-        val open = openPlaylist ?: return v.tracks.map { it.id }
+        val open = openPlaylist?.takeIf { scopeToOpenPlaylist } ?: return v.tracks.map { it.id }
         val p = playlist(open) ?: return v.tracks.map { it.id }
         if (!p.folder) return v.entries[open].orEmpty().filter { v.track(it) != null }
         val seen = LinkedHashSet<Int>()
