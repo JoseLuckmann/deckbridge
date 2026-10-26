@@ -68,6 +68,10 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
   manter ou mais calmo — que volta à linha principal mais adiante ou vira outro final. Vira uma playlist "Set - ramo B"
   (vai para o pendrive); tocar em "RAMO B" abre a linha do ramo com transições, prévia e ensaio.
 
+- **MAPA** (tocar na faixa do master no topo do SET): o gráfico do master ao longo do tempo com a linha principal e cada
+  ramo saindo e voltando, a lista dos caminhos (duração, BPM início → pico → fim, avisos) e, para o caminho escolhido,
+  a hora em que cada faixa entra. › abre a linha.
+
 ## Teste de áudio
 
 MENU → APARELHO → **Teste de áudio**: lê 30 s de uma música da biblioteca pelo decodificador do Android e monta uma

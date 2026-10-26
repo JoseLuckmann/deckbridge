@@ -11,6 +11,9 @@ import os.deckbridge.manager.mix.SetPlanner
 import os.deckbridge.manager.mix.MixPreview
 import os.deckbridge.manager.mix.SetBranch
 import os.deckbridge.manager.mix.SetBranches
+import os.deckbridge.manager.mix.SetRoute
+import os.deckbridge.manager.mix.SetRoutes
+import os.deckbridge.manager.mix.RouteTempo
 import os.deckbridge.manager.mix.SetBuilder
 import os.deckbridge.manager.mix.SetShape
 import os.deckbridge.manager.mix.SetTempo
@@ -88,6 +91,7 @@ class SetDesk(private val app: ManagerApp) {
     fun close() {
         app.preview.stop()
         rehearsal = null
+        mapOpen = false
         playlistId = null
     }
 
@@ -123,6 +127,41 @@ class SetDesk(private val app: ManagerApp) {
         masterFixed = fixed
         runCatching { SetTempo.saveMode(masterFile(root), fixed) }
         app.did(if (fixed == null) "Master automático" else "Master %.1f".format(fixed))
+    }
+
+    /** Um caminho do mapa, o andamento dele e quantas trocas têm aviso. */
+    class RouteView(val route: SetRoute, val tempo: RouteTempo, val issues: Int)
+
+    /** O mapa do set aberto (a linha principal e os ramos, com o andamento) está na tela. */
+    var mapOpen by mutableStateOf(false)
+
+    /**
+     * Os caminhos do set principal — a linha e um por ramo (até o ponto de virada, o ramo e o resto da linha a partir da
+     * volta) — com o andamento de cada um no master do set. As transições guardadas valem: as da linha e as de cada ramo.
+     */
+    fun routes(): List<RouteView> {
+        val v = app.model.view ?: return emptyList()
+        val root = rootId() ?: return emptyList()
+        val main = v.entries[root].orEmpty().filter { v.track(it) != null }
+        val mine = SetBranches.alive(v, branches).filter { it.mainId == root }
+        val mainSaved = runCatching { SetPlanner.load(file(root)) }.getOrDefault(emptyList())
+        return SetRoutes.routes(v, main, mine).map { r ->
+            val keep = mainSaved + (r.branch?.let { b -> runCatching { SetPlanner.load(file(b.playlistId)) }.getOrDefault(emptyList()) } ?: emptyList())
+            val masters = SetTempo.plan(r.ids.map { v.track(it)?.bpm ?: 0.0 }, masterFixed)
+            val plan = SetPlanner.plan(v, r.ids, ::grid, keep = keep)
+            val issues = os.deckbridge.manager.mix.SetDoctor.check(v, r.ids, plan, ::grid, masters).map { it.fromId to it.toId }.distinct().size
+            RouteView(r, SetRoutes.tempo(v, r.ids, plan, masters), issues)
+        }
+    }
+
+    /** Abre a linha de um caminho do mapa: a principal ou a do ramo. */
+    fun openRoute(r: SetRoute) {
+        mapOpen = false
+        val target = r.branch?.playlistId ?: rootId() ?: return
+        if (target == playlistId) return
+        app.preview.stop()
+        rehearsal = null
+        open(target)
     }
 
     /**

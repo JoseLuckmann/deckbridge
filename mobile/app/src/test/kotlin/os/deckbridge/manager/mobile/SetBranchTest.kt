@@ -131,4 +131,47 @@ class SetBranchTest {
         val m = a.sets.masters()
         m.zipWithNext().forEach { (x, y) -> assertTrue(kotlin.math.abs(y - x) / x * 100 <= SetTempo.STEP_PCT + 1e-9) }
     }
+
+    @Test fun theMapShowsEveryRouteAndItsTempo() {
+        val a = app()
+        val main = mainSet(a)
+        a.sets.open(main)
+        // Ramo B: sai da primeira e volta; ramo C: sai da terceira e vira outro final.
+        val b = assertNotNull(a.sets.createBranch(id(a, "Night Signal"), 3, os.deckbridge.manager.mix.SetShape.FLOW, rejoin = true))
+        a.sets.openMain()
+        val c = assertNotNull(a.sets.createBranch(id(a, "Glass Harbour"), 2, os.deckbridge.manager.mix.SetShape.RISING, rejoin = false))
+        a.sets.openMain()
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        rule.waitForIdle()
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Mapa do set")).performClick()
+        rule.waitForIdle()
+        assertTrue(a.sets.mapOpen)
+        rule.onNodeWithText("3 caminhos").assertExists()
+        rule.onNodeWithText("Linha principal").assertExists()
+        rule.onNodeWithText("Glass Harbour → outro final").assertExists()
+        // Cada caminho com o andamento: a linha principal tem 4 faixas; B passa pelo ramo e volta; C acaba no ramo.
+        val routes = a.sets.routes()
+        assertEquals(3, routes.size)
+        assertEquals(a.model.view!!.entries[main], routes[0].route.ids)
+        assertEquals(b, routes[1].route.branch!!.playlistId)
+        assertEquals(c, routes[2].route.branch!!.playlistId)
+        assertEquals(null, routes[2].route.merge)
+        routes.forEach { r ->
+            assertTrue(r.tempo.startMs.zipWithNext().all { (x, y) -> y > x }, "o tempo anda")
+            assertTrue(r.tempo.masters.zipWithNext().all { (x, y) -> kotlin.math.abs(y - x) / x * 100 <= SetTempo.STEP_PCT + 1e-9 }, "sem saltos")
+        }
+        rule.onRoot().captureRoboImage(File(out, "mobile-28-vertical-mapa.png").path)
+        // Escolher o caminho B mostra as faixas dele com a hora em que entram.
+        rule.onNodeWithText("B").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("ANDAMENTO · RAMO B").assertExists()
+        assertEquals(2, rule.onAllNodes(hasText("0:00")).fetchSemanticsNodes().size, "eixo do gráfico e a primeira faixa")
+        rule.onRoot().captureRoboImage(File(out, "mobile-29-vertical-mapa-ramo.png").path)
+        // › abre a linha do caminho (o do B é o penúltimo › da tela: o mapa está por cima e o C vem depois).
+        val opens = rule.onAllNodes(hasText("›"))
+        opens[opens.fetchSemanticsNodes().lastIndex - 1].performClick()
+        rule.waitForIdle()
+        assertEquals(b, a.sets.playlistId)
+        assertTrue(!a.sets.mapOpen)
+    }
 }

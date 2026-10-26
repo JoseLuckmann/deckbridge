@@ -91,7 +91,7 @@ fun SetScreen(app: ManagerApp) {
             Text("≈" + mmss(SetPlanner.lengthMs(v, ids, plan)), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
             PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playAll(plan) }
         }
-        if (ids.size >= 2) FlowStrip(ids.mapNotNull { v.track(it) }, masters)
+        if (ids.size >= 2) FlowStrip(ids.mapNotNull { v.track(it) }, masters) { desk.mapOpen = true }
         if (ids.size >= 2) ActionsRow(
             issues = issues.map { it.fromId to it.toId }.distinct().size,
             redo = plan.count { it.mark == Transition.Mark.REDO },
@@ -227,13 +227,17 @@ private fun PlayButton(on: Boolean, enabled: Boolean = true, label: String? = nu
  * para tocar no master. Ponto verde entre duas faixas: troca de tom suave; laranja: não.
  */
 @Composable
-private fun FlowStrip(tracks: List<TrackItem>, masters: List<Double>) {
+private fun FlowStrip(tracks: List<TrackItem>, masters: List<Double>, onMap: () -> Unit) {
     val bpms = tracks.map { it.bpm }.filter { it > 0 } + masters
     if (bpms.isEmpty()) return
     val lo = bpms.min() - 2
     val hi = bpms.max() + 2
     val good = tracks.zipWithNext().map { (a, b) -> SetPlanner.fit(a, b).keyOk }
-    Row(Modifier.fillMaxWidth().height(64.dp).background(Palette.surface).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().height(64.dp).background(Palette.surface).border(BorderStroke(1.dp, Palette.line)).clickable(onClick = onMap)
+            .semantics { contentDescription = "Mapa do set" }.padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(Modifier.width(52.dp)) {
             Text("MASTER", color = Palette.blue, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             Text("%.0f".format(hi - 2), color = Palette.muted, fontSize = 10.sp, fontFamily = Mono)
@@ -262,6 +266,11 @@ private fun FlowStrip(tracks: List<TrackItem>, masters: List<Double>) {
                 drawCircle(if (good[i]) ok else warn, 3.5.dp.toPx(), Offset((x(i) + x(i + 1)) / 2, (y(m) + y(mn)) / 2))
             }
             for (i in 0 until n) if (tracks[i].bpm > 0) drawCircle(dot, 2.5.dp.toPx(), Offset(x(i), y(tracks[i].bpm)))
+        }
+        // O mapa: a linha principal, os ramos e o andamento de cada caminho.
+        Column(Modifier.width(48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("MAPA", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text("›", color = Palette.blue, fontSize = 20.sp)
         }
     }
 }

@@ -80,6 +80,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
             }
             if (app.triage != null) TriageScreen(app)
             if (app.sets.playlistId != null) SetScreen(app)
+            if (app.sets.playlistId != null && app.sets.mapOpen) SetMapScreen(app)
             if (app.sets.mixing != null) MixScreen(app)
             JobOverlay(app)
             NoticeToast(app)

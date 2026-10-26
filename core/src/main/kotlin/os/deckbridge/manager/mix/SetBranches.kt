@@ -53,3 +53,64 @@ object SetBranches {
     fun line(view: LibraryView, b: SetBranch): List<Int> =
         listOf(b.fromTrackId) + view.entries[b.playlistId].orEmpty().filter { view.track(it) != null } + listOfNotNull(b.rejoinTrackId)
 }
+
+/**
+ * Um caminho inteiro do set: a linha principal ([branch] null) ou a linha principal até o ponto de virada, o ramo e, se
+ * ele volta, o resto da linha principal a partir da volta. [split] é a posição do ponto de virada em [ids] e [merge] a
+ * da volta (null: o ramo é outro final); entre as duas, o caminho é só deste ramo.
+ */
+data class SetRoute(val letter: Char, val branch: SetBranch?, val ids: List<Int>, val split: Int?, val merge: Int?) {
+    /** A faixa na posição [i] é do trecho próprio do ramo (depois da virada e antes da volta). */
+    fun own(i: Int): Boolean = split != null && i > split && (merge == null || i < merge)
+
+    /** A troca da posição [i] para a [i]+1 é do ramo (sai da virada ou chega na volta). */
+    fun ownStep(i: Int): Boolean = split != null && i >= split && (merge == null || i < merge)
+
+    /** A posição [i] já é a linha principal de novo, depois da volta. */
+    fun afterMerge(i: Int): Boolean = merge != null && i >= merge
+
+    /** De onde sai e onde volta (null: outro final), para mostrar. */
+    val rejoinId: Int? get() = merge?.let { ids.getOrNull(it) }
+}
+
+/** O andamento de um caminho: quando cada faixa começa (no master, em ms), o master em cada uma e o tamanho total. */
+data class RouteTempo(val startMs: List<Long>, val masters: List<Double>, val lengthMs: Long) {
+    val first get() = masters.firstOrNull() ?: 0.0
+    val peak get() = masters.maxOrNull() ?: 0.0
+    val last get() = masters.lastOrNull() ?: 0.0
+}
+
+object SetRoutes {
+    /** A linha principal ([main], na ordem) e um caminho por ramo vivo que sai dela. */
+    fun routes(view: LibraryView, main: List<Int>, branches: List<SetBranch>): List<SetRoute> {
+        val out = mutableListOf(SetRoute('A', null, main, null, null))
+        branches.forEachIndexed { n, b ->
+            val at = main.indexOf(b.fromTrackId)
+            if (at < 0) return@forEachIndexed
+            val mid = view.entries[b.playlistId].orEmpty().filter { view.track(it) != null }
+            val back = b.rejoinTrackId?.let { main.indexOf(it) }?.takeIf { it > at }
+            val ids = main.take(at + 1) + mid + (if (back != null) main.drop(back) else emptyList())
+            out += SetRoute(SetBranches.letter(n), b, ids, at, back?.let { at + 1 + mid.size })
+        }
+        return out
+    }
+
+    /**
+     * Quando cada faixa de [ids] começa e o tamanho do caminho, tocando no master ([masters]): o trecho de cada faixa
+     * (da entrada à saída das [transitions]) dura menos se o master está acima do BPM dela.
+     */
+    fun tempo(view: LibraryView, ids: List<Int>, transitions: List<Transition>, masters: List<Double>): RouteTempo {
+        val starts = ArrayList<Long>(ids.size)
+        var at = 0L
+        ids.forEachIndexed { n, id ->
+            starts += at
+            val t = view.track(id) ?: return@forEachIndexed
+            // O mesmo trecho que SetPlanner.lengthMs conta: da entrada (vindo da anterior) à saída (para a próxima).
+            val from = if (n > 0) transitions.firstOrNull { it.fromId == ids[n - 1] && it.toId == id }?.inMs ?: 0 else 0
+            val to = if (n < ids.lastIndex) transitions.firstOrNull { it.fromId == id && it.toId == ids[n + 1] }?.outMs ?: (t.durationSeconds * 1000) else t.durationSeconds * 1000
+            val speed = masters.getOrNull(n)?.takeIf { it > 0 && t.bpm > 0 }?.let { it / t.bpm } ?: 1.0
+            at += ((to - from).coerceAtLeast(0) / speed).toLong()
+        }
+        return RouteTempo(starts, masters, at)
+    }
+}

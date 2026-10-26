@@ -156,6 +156,30 @@ class SetTempoAndBranchTest {
         assertTrue(line.zipWithNext().all { (x, y) -> SetPlanner.fit(v.track(x)!!, v.track(y)!!).keyOk }, "todas as trocas no tom: $line")
     }
 
+    @Test fun caminhosDoMapaEAndamento() {
+        val tracks = (1..12).map { t(it, 120.0 + it, "Am") }
+        // Linha 1..5; ramo B sai da 2 (10, 11) e volta na 4; ramo C sai da 3 (12) e não volta.
+        val v = view(tracks, mapOf(1 to listOf(1, 2, 3, 4, 5), 20 to listOf(10, 11), 21 to listOf(12)))
+        val b = os.deckbridge.manager.mix.SetBranch(20, 1, 2, 4)
+        val c = os.deckbridge.manager.mix.SetBranch(21, 1, 3, null)
+        val routes = os.deckbridge.manager.mix.SetRoutes.routes(v, listOf(1, 2, 3, 4, 5), listOf(b, c))
+        assertEquals(listOf('A', 'B', 'C'), routes.map { it.letter })
+        assertEquals(listOf(1, 2, 10, 11, 4, 5), routes[1].ids)
+        assertEquals(1, routes[1].split)
+        assertEquals(4, routes[1].merge, "a volta (faixa 4) fica na posição 4 do caminho")
+        assertEquals(listOf(1, 2, 3, 12), routes[2].ids)
+        assertEquals(null, routes[2].merge)
+        // Andamento: sem transições, cada faixa toca inteira (300 s); no master acima do BPM dela, dura menos.
+        val ids = routes[0].ids
+        val same = os.deckbridge.manager.mix.SetRoutes.tempo(v, ids, emptyList(), ids.map { v.track(it)!!.bpm })
+        assertEquals(listOf(0L, 300_000L, 600_000L, 900_000L, 1_200_000L), same.startMs)
+        assertEquals(1_500_000L, same.lengthMs)
+        val faster = os.deckbridge.manager.mix.SetRoutes.tempo(v, ids, emptyList(), ids.map { 130.0 })
+        assertEquals((300_000 * 121.0 / 130).toLong(), faster.startMs[1])
+        assertTrue(faster.lengthMs < same.lengthMs)
+        assertEquals(130.0, faster.peak)
+    }
+
     @Test fun ramosGuardadosESoOsVivos() {
         val f = Files.createTempDirectory("b").resolve("branches.properties").toFile()
         val list = listOf(os.deckbridge.manager.mix.SetBranch(20, 1, 2, 5), os.deckbridge.manager.mix.SetBranch(21, 1, 3, null))
