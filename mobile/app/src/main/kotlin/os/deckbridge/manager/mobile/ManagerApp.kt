@@ -200,6 +200,46 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         }
     }
 
+    /** Último resultado do teste de áudio (MENU), para conferir no próprio aparelho. */
+    var audioCheckResult by mutableStateOf(prefs.getString("testeAudio", "") ?: "")
+        private set
+
+    /**
+     * Teste de áudio no aparelho: lê 30 s de uma música da biblioteca pelo decodificador do Android e monta uma transição
+     * com Master Tempo, medindo o tempo de cada parte. É o que os testes de JVM não alcançam (não há MediaCodec neles).
+     */
+    fun audioCheck() {
+        val v = model.view ?: return
+        fun fileOf(t: TrackItem) = File(root, t.filePath.replace('\\', '/').trimStart('/'))
+        val tracks = v.tracks.filter { fileOf(it).isFile }.sortedByDescending { it.bpm > 0 }.take(2)
+        if (tracks.isEmpty()) {
+            say("Nenhuma música no aparelho", error = true)
+            return
+        }
+        background("Teste de áudio") { j ->
+            val a = tracks[0]
+            val b = tracks.getOrElse(1) { a }
+            val fa = fileOf(a)
+            j.text = fa.name
+            val t0 = System.nanoTime()
+            val pcm = os.deckbridge.manager.importer.AudioIo.segment(fa, a.durationSeconds * 1000 / 3, 30_000)
+                ?: throw ExportException("E_AUDIO", "Não consegui ler ${fa.extension.uppercase()} neste aparelho")
+            val read = (System.nanoTime() - t0) / 1e9
+            j.text = "Montando transição"
+            val ga = sets.grid(a)
+            val tr = os.deckbridge.manager.mix.Transition(a.id, b.id, os.deckbridge.manager.mix.SetPlanner.defaultOut(a, ga, 16), os.deckbridge.manager.mix.SetPlanner.defaultIn(sets.grid(b)), 16)
+            val t1 = System.nanoTime()
+            val reader = { t: TrackItem -> os.deckbridge.manager.mix.SegmentReader { s0, len -> os.deckbridge.manager.importer.AudioIo.segment(fileOf(t), s0, len) } }
+            os.deckbridge.manager.mix.MixRenderer.transition(reader(a), a.bpm, reader(b), b.bpm, tr, waves = true)
+                ?: throw ExportException("E_AUDIO", "Não consegui montar a transição")
+            val mix = (System.nanoTime() - t1) / 1e9
+            val result = "%s %d Hz · ler 30 s: %.1f s · transição: %.1f s".format(fa.extension.uppercase(), pcm.sampleRate, read, mix)
+            prefs.edit().putString("testeAudio", result).apply()
+            android.os.Handler(android.os.Looper.getMainLooper()).post { audioCheckResult = result }
+            say("Áudio ok · $result")
+        }
+    }
+
     /** Roda [block] numa thread própria, com [Job] visível. Erros viram aviso; nada derruba o app. */
     fun background(title: String, block: (Job) -> Unit) {
         if (job != null) return

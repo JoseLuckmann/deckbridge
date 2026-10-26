@@ -21,7 +21,11 @@ enum class MixStyle(val title: String) {
  * Uma transição pré-programada: a faixa [fromId] começa a sair em [outMs] (num início de compasso), a [toId] entra a
  * partir de [inMs] no mesmo instante, e as duas tocam juntas por [bars] compassos no andamento da que sai.
  */
-data class Transition(val fromId: Int, val toId: Int, val outMs: Int, val inMs: Int, val bars: Int = 16, val style: MixStyle = MixStyle.BASS_SWAP)
+data class Transition(
+    val fromId: Int, val toId: Int, val outMs: Int, val inMs: Int, val bars: Int = 16, val style: MixStyle = MixStyle.BASS_SWAP,
+    /** Master Tempo: a que entra muda de andamento sem mudar de tom. */
+    val masterTempo: Boolean = true,
+)
 
 /** O que se sabe de uma faixa para planejar: grade e cues (do ANLZ) e a duração. */
 class TrackGrid(val beats: List<Beat>, val cues: List<Cue>, val durationMs: Int)
@@ -56,6 +60,12 @@ object SetPlanner {
 
     /** Entrada automática: o primeiro início de compasso (o começo da faixa, se não há grade). */
     fun defaultIn(g: TrackGrid?): Int = downbeats(g).firstOrNull() ?: 0
+
+    /** Quantos semitons o tom muda tocando a [speed] sem Master Tempo. */
+    fun semitones(speed: Double): Double = if (speed > 0) 12 * kotlin.math.ln(speed) / kotlin.math.ln(2.0) else 0.0
+
+    /** O tom (Camelot) depois de subir [semi] semitons: cada semitom anda 7 casas na roda. */
+    fun shiftKey(key: Pair<Int, Char>, semi: Int): Pair<Int, Char> = (Math.floorMod(key.first - 1 + 7 * semi, 12) + 1) to key.second
 
     fun fit(a: TrackItem, b: TrackItem): Fit {
         val ka = Smart.camelot(a.key)
@@ -113,6 +123,7 @@ object SetPlanner {
             p.setProperty("$n.in", t.inMs.toString())
             p.setProperty("$n.bars", t.bars.toString())
             p.setProperty("$n.style", t.style.name)
+            p.setProperty("$n.mt", t.masterTempo.toString())
         }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".novo")
@@ -128,7 +139,7 @@ object SetPlanner {
             runCatching {
                 Transition(
                     p.getProperty("$i.from").toInt(), p.getProperty("$i.to").toInt(), p.getProperty("$i.out").toInt(), p.getProperty("$i.in").toInt(),
-                    p.getProperty("$i.bars").toInt(), MixStyle.valueOf(p.getProperty("$i.style")),
+                    p.getProperty("$i.bars").toInt(), MixStyle.valueOf(p.getProperty("$i.style")), p.getProperty("$i.mt")?.toBooleanStrictOrNull() ?: true,
                 )
             }.getOrNull()
         }

@@ -68,8 +68,8 @@ class MixTest {
 
     @Test fun `a que entra cai na batida da que sai depois de ajustar o andamento`() {
         // A a 120 (batida de 500 ms) e B a 125 em 48 kHz (480 ms); B entra numa batida dela (960 ms).
-        val tr = Transition(1, 2, outMs = 60_000, inMs = 960, bars = 4, style = MixStyle.CUT)
-        val s = assertNotNull(MixRenderer.transition(clicks(120.0, 44100), 120.0, clicks(125.0, 48000), 125.0, tr, leadMs = 4000, tailMs = 2000))
+        val tr = Transition(1, 2, outMs = 60_000, inMs = 960, bars = 4, style = MixStyle.CUT, masterTempo = false)
+        val s = assertNotNull(MixRenderer.transition(clicks(120.0, 44100), 120.0, clicks(125.0, 48000), 125.0, tr, leadMs = 4000, tailMs = 2000)).audio
         assertEquals(14_000.0, s.seconds * 1000, 1.0) // 4 s antes + 4 compassos de 2 s + 2 s depois
         val before = onsetsMs(s, 0).filter { it < 3990 }
         assertEquals(8, before.size)
@@ -79,9 +79,59 @@ class MixTest {
         after.forEachIndexed { k, ms -> assertEquals(4000 + k * 500.0, ms, 2.0, "batida $k") }
     }
 
+    @Test fun `com master tempo as batidas tambem caem e o tom fica`() {
+        val tr = Transition(1, 2, outMs = 60_000, inMs = 960, bars = 4, style = MixStyle.CUT, masterTempo = true)
+        val p = assertNotNull(MixRenderer.transition(clicks(120.0, 44100), 120.0, clicks(125.0, 48000), 125.0, tr, leadMs = 4000, tailMs = 2000, waves = true))
+        val s = p.audio
+        assertEquals(14_000.0, s.seconds * 1000, 2.0)
+        val after = onsetsMs(s, 3990)
+        assertTrue(after.size >= 19, "batidas depois da troca: ${after.size}")
+        // WSOLA escolhe cada grão a até ±5 ms: a batida pode andar um pouco, mas não acumula.
+        after.forEachIndexed { k, ms -> assertEquals(4000 + k * 500.0, ms, 8.0, "batida $k") }
+        // Ondas dos dois decks na base de tempo da prévia (150 colunas por segundo).
+        assertEquals(14.0 * 150, assertNotNull(p.waveA).columns.toDouble(), 3.0)
+        assertEquals(p.leadMs, p.fromB(tr.inMs))
+        assertEquals(tr.inMs + 480, p.bAt(p.leadMs + 500)) // 500 ms da prévia = 480 ms da faixa de 125 BPM
+    }
+
+    @Test fun `stretch muda o andamento e mantem a frequencia`() {
+        val n = 44100 * 3
+        val sine = FloatArray(n) { kotlin.math.sin(2 * Math.PI * 440.0 * it / 44100).toFloat() * 0.5f }
+        val out = os.deckbridge.manager.mix.Stretch.tempo(Stereo(sine, sine.copyOf(), 44100), 0.9)
+        assertEquals(n / 0.9, out.frames.toDouble(), 2.0)
+        // Frequência por cruzamentos de zero no meio (longe das pontas).
+        var crossings = 0
+        val from = 44100 / 2
+        val to = out.frames - 44100 / 2
+        for (i in from + 1 until to) if (out.left[i - 1] < 0 && out.left[i] >= 0) crossings++
+        val hz = crossings / ((to - from) / 44100.0)
+        assertEquals(440.0, hz, 4.0)
+        // Sem master tempo, a 0,9 o tom desce: ~396 Hz.
+        val plain = MixRenderer.resample(os.deckbridge.logic.DecodedPcm(sine, sine.copyOf(), 44100), 0.9)
+        var c2 = 0
+        for (i in from + 1 until plain.frames - from) if (plain.left[i - 1] < 0 && plain.left[i] >= 0) c2++
+        assertEquals(396.0, c2 / ((plain.frames - 2 * from) / 44100.0), 4.0)
+    }
+
+    @Test fun `niveis do mixer por estilo`() {
+        val lv = os.deckbridge.manager.mix.Levels()
+        MixRenderer.levels(MixStyle.BASS_SWAP, 1000.0, 8000.0, 2000.0, lv)
+        assertEquals(1f, lv.aLow); assertEquals(0f, lv.bLow); assertEquals(0.25f, lv.bHigh, 0.01f)
+        MixRenderer.levels(MixStyle.BASS_SWAP, 5000.0, 8000.0, 2000.0, lv)
+        assertEquals(0f, lv.aLow); assertEquals(1f, lv.bLow)
+        MixRenderer.levels(MixStyle.CUT, -100.0, 8000.0, 2000.0, lv)
+        assertEquals(1f, lv.aVol); assertEquals(0f, lv.bVol)
+        MixRenderer.levels(MixStyle.ECHO, 3000.0, 8000.0, 2000.0, lv)
+        assertEquals(0f, lv.aVol); assertTrue(lv.echo)
+        // Tom sem master tempo: +4% ≈ +0,7 semitom → arredonda para 1 → 8A vira 3A.
+        assertEquals(1, Math.round(SetPlanner.semitones(1.04)).toInt())
+        assertEquals(3 to 'A', SetPlanner.shiftKey(8 to 'A', 1))
+        assertEquals(11 to 'B', SetPlanner.shiftKey(6 to 'B', -1))
+    }
+
     @Test fun `mistura com potencia constante`() {
         val tr = Transition(1, 2, 30_000, 0, bars = 4, style = MixStyle.BLEND)
-        val s = assertNotNull(MixRenderer.transition(constant(0.4f), 120.0, constant(0.4f), 120.0, tr, leadMs = 2000, tailMs = 2000))
+        val s = assertNotNull(MixRenderer.transition(constant(0.4f), 120.0, constant(0.4f), 120.0, tr, leadMs = 2000, tailMs = 2000)).audio
         assertEquals(0.4f, at(s, 1000), 0.01f)
         assertEquals(0.4f * 1.414f, at(s, 2000 + 4000), 0.02f) // meio dos compassos juntos
         assertEquals(0.4f, at(s, 2000 + 8000 + 1000), 0.01f)
@@ -89,7 +139,7 @@ class MixTest {
 
     @Test fun `troca de grave passa o grave no meio`() {
         val tr = Transition(1, 2, 30_000, 0, bars = 4, style = MixStyle.BASS_SWAP)
-        val s = assertNotNull(MixRenderer.transition(constant(0.3f), 120.0, constant(0.6f), 120.0, tr, leadMs = 2000, tailMs = 2000))
+        val s = assertNotNull(MixRenderer.transition(constant(0.3f), 120.0, constant(0.6f), 120.0, tr, leadMs = 2000, tailMs = 2000)).audio
         assertEquals(0.3f, at(s, 1000), 0.01f)
         assertEquals(0.3f, at(s, 2000 + 3000), 0.02f) // antes da troca: só o grave da que sai
         assertEquals(0.6f, at(s, 2000 + 5000), 0.02f) // depois: só o da que entra
@@ -98,7 +148,7 @@ class MixTest {
 
     @Test fun `eco segura a que sai depois de ela parar`() {
         val tr = Transition(1, 2, 30_000, 0, bars = 4, style = MixStyle.ECHO)
-        val s = assertNotNull(MixRenderer.transition(clicks(120.0, 44100), 120.0, constant(0f), 120.0, tr, leadMs = 2000, tailMs = 2000))
+        val s = assertNotNull(MixRenderer.transition(clicks(120.0, 44100), 120.0, constant(0f), 120.0, tr, leadMs = 2000, tailMs = 2000)).audio
         // A seca para 1 compasso (2 s) depois da saída; no compasso seguinte só sobra o eco, mais baixo.
         val echo = onsetsMs(s, 2000 + 2000 + 50).filter { it < 2000 + 4000 }
         assertTrue(echo.isNotEmpty(), "eco audível")

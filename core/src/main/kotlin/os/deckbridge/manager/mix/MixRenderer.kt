@@ -21,97 +21,150 @@ fun interface SegmentReader {
 }
 
 /**
+ * Níveis de cada canal num instante da transição, como se fossem os controles do mixer: volume (fader), grave (LOW) e o
+ * resto (MID+HI) de cada deck, e se o eco está ligado. A prévia é montada com eles e a tela de teste mostra os mesmos.
+ */
+class Levels {
+    var aVol = 1f; var aLow = 1f; var aHigh = 1f
+    var bVol = 0f; var bLow = 1f; var bHigh = 1f
+    var echo = false
+}
+
+/**
+ * Uma prévia montada e o que a tela precisa para desenhá-la como dois decks: o tempo de cada faixa em cada instante, as
+ * ondas coloridas (já na base de tempo da prévia, a que entra esticada para o andamento da que sai) e as batidas.
+ */
+class MixPreview(
+    val audio: Stereo,
+    val transition: Transition,
+    val leadMs: Int,
+    val overlapMs: Int,
+    val aStartMs: Int,
+    /** Velocidade da que entra: andamento da que sai ÷ andamento dela. */
+    val speed: Double,
+    val barMsA: Double,
+    val waveA: os.deckbridge.logic.ColorWave?,
+    val waveB: os.deckbridge.logic.ColorWave?,
+) {
+    val lengthMs get() = (audio.frames * 1000L / audio.rate).toInt()
+    /** Onde está a faixa que sai (ms dela) no instante [ms] da prévia. */
+    fun aAt(ms: Int) = aStartMs + ms
+    /** Onde está a que entra (ms dela) no instante [ms] da prévia (negativo: ainda não começou). */
+    fun bAt(ms: Int) = transition.inMs + ((ms - leadMs) * speed).toInt()
+    /** Instante da prévia em que a faixa que sai passa por [trackMs]. */
+    fun fromA(trackMs: Int) = trackMs - aStartMs
+    fun fromB(trackMs: Int) = leadMs + ((trackMs - transition.inMs) / speed).toInt()
+    fun levelsAt(ms: Int, into: Levels = Levels()) = MixRenderer.levels(transition.style, (ms - leadMs).toDouble(), overlapMs.toDouble(), barMsA, into)
+}
+
+/**
  * Monta a prévia de uma transição, offline: [leadMs] da faixa que sai antes do ponto de saída, os compassos juntos no
- * estilo escolhido e [tailMs] da que entra depois. A que entra é tocada no andamento da que sai (mudar a velocidade muda
- * o tom, como um toca-discos sem "master tempo"; é uma prévia), com o ponto de entrada caindo exatamente no ponto de
- * saída, batida com batida.
+ * estilo escolhido e [tailMs] da que entra depois. A que entra toca no andamento da que sai, com o ponto de entrada
+ * caindo exatamente no ponto de saída, batida com batida. Com Master Tempo (padrão) o tom fica; sem, muda junto, como
+ * um toca-discos.
  */
 object MixRenderer {
     const val RATE = 44100
 
+    /** Os níveis dos dois canais a [relMs] do ponto de saída (negativo: antes), conforme o estilo. */
+    fun levels(style: MixStyle, relMs: Double, overlapMs: Double, barMs: Double, out: Levels): Levels {
+        val x = if (overlapMs <= 0) (if (relMs >= 0) 1.0 else 0.0) else (relMs / overlapMs).coerceIn(0.0, 1.0)
+        out.aLow = 1f; out.aHigh = 1f; out.bLow = 1f; out.bHigh = 1f; out.echo = false
+        if (relMs < 0) {
+            out.aVol = 1f; out.bVol = 0f
+            if (style == MixStyle.BASS_SWAP) out.bLow = 0f
+            return out
+        }
+        when (style) {
+            MixStyle.BLEND -> {
+                out.aVol = cos(x * PI / 2).toFloat()
+                out.bVol = sin(x * PI / 2).toFloat()
+            }
+            MixStyle.BASS_SWAP -> {
+                // Agudos e médios da que entra sobem na primeira metade; no meio, os graves trocam de uma para outra;
+                // a que sai desce no último quarto.
+                val swap = x >= 0.5
+                out.aLow = if (swap) 0f else 1f
+                out.aVol = if (relMs >= overlapMs) 0f else if (x < 0.75) 1f else cos((x - 0.75) / 0.25 * PI / 2).toFloat()
+                out.bLow = if (swap) 1f else 0f
+                out.bHigh = min(1.0, x * 2).toFloat()
+                out.bVol = 1f
+            }
+            MixStyle.CUT -> {
+                // Troca seca no início do compasso, com 10 ms para não estalar.
+                val g = ((relMs + 10) / 10).coerceIn(0.0, 1.0).toFloat()
+                out.aVol = 1 - g
+                out.bVol = g
+            }
+            MixStyle.ECHO -> {
+                // A que sai para um compasso depois do ponto de saída e fica só o eco (uma batida, realimentado).
+                out.aVol = if (relMs < barMs) 1f else 0f
+                out.echo = true
+                out.bVol = (x * 4).coerceAtMost(1.0).toFloat()
+            }
+        }
+        return out
+    }
+
     fun transition(
-        a: SegmentReader, bpmA: Double, b: SegmentReader, bpmB: Double, t: Transition, leadMs: Int = 12_000, tailMs: Int = 12_000,
-    ): Stereo? {
-        val overlapMs = (t.bars * SetPlanner.barMs(bpmA)).toInt().coerceAtLeast(0)
+        a: SegmentReader, bpmA: Double, b: SegmentReader, bpmB: Double, t: Transition, leadMs: Int = 12_000, tailMs: Int = 12_000, waves: Boolean = false,
+    ): MixPreview? {
+        val barMs = SetPlanner.barMs(bpmA)
+        val overlapMs = (t.bars * barMs).toInt().coerceAtLeast(0)
         val lead = min(leadMs, t.outMs)
         val aStart = t.outMs - lead
-        val aLen = lead + overlapMs + if (t.style == MixStyle.ECHO) (SetPlanner.barMs(bpmA) * 2).toInt() else 0
+        val aLen = lead + overlapMs + if (t.style == MixStyle.ECHO) (barMs * 2).toInt() else 0
         val pa = a.read(aStart, aLen) ?: return null
-        // Velocidade da que entra: no andamento da que sai.
         val speed = if (bpmA > 0 && bpmB > 0) bpmA / bpmB else 1.0
         val bOutMs = overlapMs + tailMs
-        val pb = b.read(t.inMs, (bOutMs * speed).toInt() + 200) ?: return null
+        val pb = b.read(t.inMs, (bOutMs * speed).toInt() + 300) ?: return null
         val sa = resample(pa, 1.0)
-        val sb = resample(pb, speed)
+        val sb = if (t.masterTempo) Stretch.tempo(resample(pb, 1.0), speed) else resample(pb, speed)
         val leadFrames = ms(lead)
-        val overlapFrames = ms(overlapMs)
         val total = leadFrames + ms(bOutMs)
         val outL = FloatArray(total)
         val outR = FloatArray(total)
-        val lowA = LowPass()
-        val lowAR = LowPass()
-        val lowB = LowPass()
-        val lowBR = LowPass()
-        val beatFrames = ms(SetPlanner.barMs(bpmA).toInt() / 4)
+        val lowA = LowPass(); val lowAR = LowPass(); val lowB = LowPass(); val lowBR = LowPass()
+        val beatFrames = ms((barMs / 4).toInt())
         val echoL = FloatArray(max(1, beatFrames))
         val echoR = FloatArray(max(1, beatFrames))
         var echoAt = 0
+        val lv = Levels()
         for (i in 0 until total) {
             val inA = i < sa.frames
-            var al = if (inA) sa.left[i] else 0f
-            var ar = if (inA) sa.right[i] else 0f
+            val al = if (inA) sa.left[i] else 0f
+            val ar = if (inA) sa.right[i] else 0f
             val j = i - leadFrames
-            var bl = if (j >= 0 && j < sb.frames) sb.left[j] else 0f
-            var br = if (j >= 0 && j < sb.frames) sb.right[j] else 0f
-            // x: 0 no ponto de saída, 1 no fim dos compassos juntos.
-            val x = if (overlapFrames == 0) (if (j >= 0) 1.0 else 0.0) else (j.toDouble() / overlapFrames).coerceIn(0.0, 1.0)
-            when (t.style) {
-                MixStyle.BLEND -> {
-                    val ga = cos(x * PI / 2).toFloat()
-                    val gb = sin(x * PI / 2).toFloat()
-                    al *= ga; ar *= ga; bl *= gb; br *= gb
-                }
-                MixStyle.BASS_SWAP -> {
-                    // Agudos e médios da que entra sobem na primeira metade; no meio, os graves trocam de uma para outra;
-                    // a que sai desce no último quarto.
-                    val la = lowA.step(al); val ra = lowAR.step(ar)
-                    val lb = lowB.step(bl); val rb = lowBR.step(br)
-                    val swap = x >= 0.5
-                    val highB = min(1.0, x * 2).toFloat()
-                    val fadeA = if (x < 0.75) 1f else cos((x - 0.75) / 0.25 * PI / 2).toFloat()
-                    val aLowGain = if (swap) 0f else 1f
-                    val bLowGain = if (swap) 1f else 0f
-                    if (j < 0) { /* antes da saída: só a que sai, inteira */ } else {
-                        al = (la * aLowGain + (al - la)) * fadeA; ar = (ra * aLowGain + (ar - ra)) * fadeA
-                        bl = lb * bLowGain + (bl - lb) * highB; br = rb * bLowGain + (br - rb) * highB
-                    }
-                    if (j >= overlapFrames) { al = 0f; ar = 0f }
-                }
-                MixStyle.CUT -> {
-                    // Troca seca no início do compasso, com 10 ms para não estalar.
-                    val g = ((j + ms(10)).toDouble() / ms(10)).coerceIn(0.0, 1.0).toFloat()
-                    al *= 1 - g; ar *= 1 - g; bl *= g; br *= g
-                }
-                MixStyle.ECHO -> {
-                    // A que sai para de tocar um compasso depois do ponto de saída e fica só o eco (uma batida, realimentado).
-                    val dryOn = j < ms(SetPlanner.barMs(bpmA).toInt())
-                    val inL = if (dryOn) al else 0f
-                    val inR = if (dryOn) ar else 0f
-                    val el = echoL[echoAt]; val er = echoR[echoAt]
-                    echoL[echoAt] = inL * 0.5f + el * 0.55f
-                    echoR[echoAt] = inR * 0.5f + er * 0.55f
-                    echoAt = (echoAt + 1) % echoL.size
-                    if (j < 0) { /* antes: só a que sai */ } else {
-                        al = inL + el; ar = inR + er
-                    }
-                    val gb = (x * 4).coerceAtMost(1.0).toFloat()
-                    bl *= gb; br *= gb
-                }
+            val inB = j >= 0 && j < sb.frames
+            val bl = if (inB) sb.left[j] else 0f
+            val br = if (inB) sb.right[j] else 0f
+            levels(t.style, j * 1000.0 / RATE, overlapMs.toDouble(), barMs, lv)
+            val la = lowA.step(al); val ra = lowAR.step(ar)
+            val lb = lowB.step(bl); val rb = lowBR.step(br)
+            var oal = (la * lv.aLow + (al - la) * lv.aHigh) * lv.aVol
+            var oar = (ra * lv.aLow + (ar - ra) * lv.aHigh) * lv.aVol
+            if (lv.echo) {
+                val el = echoL[echoAt]; val er = echoR[echoAt]
+                echoL[echoAt] = oal * 0.5f + el * 0.55f
+                echoR[echoAt] = oar * 0.5f + er * 0.55f
+                echoAt = (echoAt + 1) % echoL.size
+                if (j >= 0) { oal += el; oar += er }
             }
-            outL[i] = soft(al + bl)
-            outR[i] = soft(ar + br)
+            val obl = (lb * lv.bLow + (bl - lb) * lv.bHigh) * lv.bVol
+            val obr = (rb * lv.bLow + (br - rb) * lv.bHigh) * lv.bVol
+            outL[i] = soft(oal + obl)
+            outR[i] = soft(oar + obr)
         }
-        return Stereo(outL, outR, RATE)
+        var waveA: os.deckbridge.logic.ColorWave? = null
+        var waveB: os.deckbridge.logic.ColorWave? = null
+        if (waves) {
+            // Cada deck com a própria onda, inteira (independente do fader), na base de tempo da prévia.
+            val monoA = FloatArray(total) { if (it < sa.frames) 0.5f * (sa.left[it] + sa.right[it]) else 0f }
+            val monoB = FloatArray(total) { val k = it - leadFrames; if (k >= 0 && k < sb.frames) 0.5f * (sb.left[k] + sb.right[k]) else 0f }
+            waveA = os.deckbridge.logic.wavesFromPcm(monoA, RATE).rgbDetail
+            waveB = os.deckbridge.logic.wavesFromPcm(monoB, RATE).rgbDetail
+        }
+        return MixPreview(Stereo(outL, outR, RATE), t, lead, overlapMs, aStart, speed, barMs, waveA, waveB)
     }
 
     /** Várias transições em sequência, com meio segundo de silêncio entre elas: o "mix de teste" do set. */

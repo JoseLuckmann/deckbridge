@@ -8,7 +8,7 @@ import os.deckbridge.manager.importer.AudioIo
 import os.deckbridge.manager.mix.MixRenderer
 import os.deckbridge.manager.mix.SegmentReader
 import os.deckbridge.manager.mix.SetPlanner
-import os.deckbridge.manager.mix.Stereo
+import os.deckbridge.manager.mix.MixPreview
 import os.deckbridge.manager.mix.TrackGrid
 import os.deckbridge.manager.mix.Transition
 import os.deckbridge.manager.pdb.Edit
@@ -85,11 +85,108 @@ class SetDesk(private val app: ManagerApp) {
 
     private fun reader(t: TrackItem) = SegmentReader { start, len -> AudioIo.segment(File(app.root, t.filePath.replace('\\', '/').trimStart('/')), start, len) }
 
-    private fun render(tr: Transition, lead: Int, tail: Int): Stereo? {
+    private fun render(tr: Transition, lead: Int, tail: Int, waves: Boolean = false): MixPreview? {
         val v = app.model.view ?: return null
         val a = v.track(tr.fromId) ?: return null
         val b = v.track(tr.toId) ?: return null
-        return MixRenderer.transition(reader(a), a.bpm, reader(b), b.bpm, tr, lead, tail)
+        return MixRenderer.transition(reader(a), a.bpm, reader(b), b.bpm, tr, lead, tail, waves)
+    }
+
+    // ---- teste de mixagem (a tela de dois decks) ------------------------------------------------------------------
+
+    /** Transição aberta na tela de teste. */
+    var mixing by mutableStateOf<Transition?>(null)
+        private set
+
+    /** A prévia montada da transição aberta (com ondas); fica a anterior na tela enquanto a nova é montada. */
+    var mixPreview by mutableStateOf<MixPreview?>(null)
+        private set
+    var mixFile by mutableStateOf<File?>(null)
+        private set
+    var mixBusy by mutableStateOf(false)
+        private set
+    var mixError by mutableStateOf<String?>(null)
+        private set
+
+    /** Onde a cabeça está na prévia (ms), parada ou tocando. */
+    var cursorMs by mutableStateOf(0)
+
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "deckbridge-mix").apply { isDaemon = true } }
+    @Volatile private var generation = 0
+    private val previews = object : LinkedHashMap<String, MixPreview>(4, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MixPreview>?) = size > 3
+    }
+
+    fun openMix(tr: Transition) {
+        app.preview.stop()
+        mixing = tr
+        mixPreview = null
+        mixFile = null
+        rebuild(tr, startAtOut = true)
+    }
+
+    fun closeMix() {
+        app.preview.stop()
+        generation++
+        mixing = null
+        mixPreview = null
+    }
+
+    /** Ajuste na tela de teste: guarda no plano e monta de novo; a cabeça fica no mesmo lugar relativo ao ponto de saída. */
+    fun editMix(tr: Transition) {
+        val wasPlaying = app.preview.playingKey?.startsWith("mix|") == true
+        val rel = cursorMs - (mixPreview?.leadMs ?: 0)
+        app.preview.stop()
+        mixing = tr
+        update(tr)
+        rebuild(tr, startAtOut = false, keepRel = rel, play = wasPlaying)
+    }
+
+    private fun rebuild(tr: Transition, startAtOut: Boolean, keepRel: Int = 0, play: Boolean = false) {
+        val gen = ++generation
+        mixBusy = true
+        mixError = null
+        val key = keyOf(tr)
+        worker.execute {
+            val result = runCatching {
+                val p = synchronized(previews) { previews[key] } ?: render(tr, 12_000, 12_000, waves = true)?.also { synchronized(previews) { previews[key] = it } }
+                    ?: throw IllegalStateException("Não consegui ler o áudio das duas faixas")
+                val out = cacheFile(key)
+                if (!out.isFile) publish(out) { it.writeBytes(MixRenderer.wav(p.audio)) }
+                p to out
+            }
+            onMain {
+                if (gen != generation) return@onMain
+                mixBusy = false
+                result.onSuccess { (p, f) ->
+                    mixPreview = p
+                    mixFile = f
+                    cursorMs = (if (startAtOut) p.leadMs - (2 * p.barMsA).toInt() else p.leadMs + keepRel).coerceIn(0, p.lengthMs)
+                    if (play) playMix()
+                }.onFailure { mixError = it.message ?: it.javaClass.simpleName }
+            }
+        }
+    }
+
+    fun mixKey() = mixing?.let { "mix|" + keyOf(it) }
+
+    val mixPlaying get() = app.preview.playingKey != null && app.preview.playingKey == mixKey()
+
+    fun playMix() {
+        val f = mixFile ?: return
+        val key = mixKey() ?: return
+        if (mixPlaying) {
+            cursorMs = app.preview.positionMs()
+            app.preview.stop()
+        } else {
+            app.preview.toggleFile(f, key, "teste de mix", cursorMs)
+        }
+    }
+
+    fun seekMix(ms: Int) {
+        val p = mixPreview ?: return
+        cursorMs = ms.coerceIn(0, p.lengthMs)
+        if (mixPlaying) app.preview.seekTo(cursorMs)
     }
 
     private fun cacheFile(key: String) = File(app.context.cacheDir, "mix/${key.hashCode().toUInt()}.wav")
@@ -106,7 +203,7 @@ class SetDesk(private val app: ManagerApp) {
     fun renderTransition(tr: Transition): File {
         val out = cacheFile(keyOf(tr))
         if (out.isFile) return out
-        val s = render(tr, 12_000, 12_000) ?: throw IllegalStateException("não consegui ler o áudio das duas faixas")
+        val s = render(tr, 12_000, 12_000)?.audio ?: throw IllegalStateException("não consegui ler o áudio das duas faixas")
         return publish(out) { it.writeBytes(MixRenderer.wav(s)) }
     }
 
@@ -115,7 +212,7 @@ class SetDesk(private val app: ManagerApp) {
         val out = cacheFile(setKey(plan))
         if (out.isFile) return out
         var used = 0
-        val file = publish(out) { tmp -> used = MixRenderer.writeSequence(tmp, plan.map { tr -> { render(tr, 8_000, 8_000) } }, cancelled = cancelled, progress = progress) }
+        val file = publish(out) { tmp -> used = MixRenderer.writeSequence(tmp, plan.map { tr -> { render(tr, 8_000, 8_000)?.audio } }, cancelled = cancelled, progress = progress) }
         if (cancelled() || used == 0) {
             file.delete()
             if (used == 0 && !cancelled()) throw IllegalStateException("não consegui ler o áudio")

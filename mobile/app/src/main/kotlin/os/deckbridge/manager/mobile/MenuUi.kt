@@ -39,6 +39,8 @@ fun MenuTab(app: ManagerApp, actions: Actions) {
         Section("Ajuda")
         Line("Próximo passo", if (app.guideHidden) "oculto" else "visível") { if (app.guideHidden) app.showGuide() else app.hideGuide() }
         Line("Buscar e filtrar", "") { app.tab = Tab.LIBRARY; app.helpRequested = true }
+        Section("Aparelho")
+        Line("Teste de áudio", app.audioCheckResult.substringAfter("· ").ifEmpty { "" }) { app.audioCheck() }
         Section("Segurança")
         Line("Cópias de segurança", "${m.backupList().size}") {}
     }

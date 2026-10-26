@@ -43,12 +43,18 @@ Na playlist, **SET** abre o planejador. Entre cada par de faixas aparece a trans
 vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída.
 
 - **▶** monta e toca a transição: 12 s antes, os compassos juntos, 12 s depois. A que entra toca no andamento da que sai,
-  com a entrada caindo na batida da saída. Sem master tempo: o tom muda junto.
-- **✎** ajusta compassos (4/8/16/32), estilo (Troca de grave, Mistura, Eco, Corte), saída e entrada (‹ › um compasso,
-  « » quatro, ou um cue). **AUTO** volta ao automático (cue "Outro" ou perto do fim; primeiro compasso da que entra).
+  com a entrada caindo na batida da saída, com Master Tempo (o tom não muda).
+- **MIX** abre o teste de mixagem, no layout do player: DECK 1 e DECK 2 com ondas coloridas rolando juntas, batidas,
+  cues e o trecho junto marcado; mixer (HI/LOW/FADER e crossfader) acompanhando; PLAY e pulos de compasso; fileiras
+  BARS, FX, SAÍDA D1, ENTRA D2 (com os cues como pads), MASTER TEMPO e AUTO. Cada ajuste monta a prévia de novo.
 - **▶ OUVIR** no topo: todas as transições em sequência, para ouvir o set de ponta a ponta.
 - **PRÓXIMA**: três faixas que combinam com a última (tom e BPM primeiro, depois nota). ▶ ouve, ＋ põe no fim.
 - O plano fica em `sets/` ao lado da biblioteca do aparelho; o pendrive e o banco do rekordbox não mudam.
+
+## Teste de áudio
+
+MENU → APARELHO → **Teste de áudio**: lê 30 s de uma música da biblioteca pelo decodificador do Android e monta uma
+transição, e mostra o formato e quanto tempo levou. É a conferência que só o aparelho faz (MP3/FLAC, velocidade).
 
 ## Ícone e integração com o Android
 

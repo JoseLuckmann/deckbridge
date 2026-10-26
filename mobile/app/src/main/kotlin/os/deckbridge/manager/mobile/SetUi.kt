@@ -63,7 +63,6 @@ fun SetScreen(app: ManagerApp) {
     val ids = desk.ids()
     val plan = remember(ids, desk.saved, v) { desk.plan(ids) }
     androidx.activity.compose.BackHandler { desk.close() }
-    var editing by remember { mutableStateOf<Transition?>(null) }
     val allKey = desk.setKey(plan)
     Column(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(52.dp).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -82,7 +81,7 @@ fun SetScreen(app: ManagerApp) {
                 if (tr != null) {
                     val b = v.track(tr.toId)!!
                     item(key = "x$id-${tr.toId}") {
-                        TransitionRow(t, b, tr, SetPlanner.fit(t, b), playing = app.preview.playingKey == desk.keyFor(tr), onPlay = { desk.play(tr) }, onEdit = { editing = tr })
+                        TransitionRow(t, b, tr, SetPlanner.fit(t, b), playing = app.preview.playingKey == desk.keyFor(tr), onPlay = { desk.play(tr) }, onEdit = { desk.openMix(tr) })
                     }
                 }
             }
@@ -96,11 +95,6 @@ fun SetScreen(app: ManagerApp) {
                 }
             }
         }
-    }
-    editing?.let { tr ->
-        val a = v.track(tr.fromId)
-        val b = v.track(tr.toId)
-        if (a == null || b == null) editing = null else TransitionDialog(app, a, b, tr, onClose = { editing = null })
     }
 }
 
@@ -186,7 +180,8 @@ private fun TransitionRow(a: TrackItem, b: TrackItem, tr: Transition, fit: Fit, 
             }
             Text("${tr.style.title} · ${tr.bars} comp. · ${mmss(tr.outMs)}", color = Palette.muted, fontSize = 12.sp, maxLines = 1)
         }
-        TextButton(onClick = onEdit) { Text("✎", fontSize = 18.sp) }
+        OutlinedButton(onClick = onEdit, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("MIX", fontSize = 11.sp) }
+        Spacer(Modifier.width(6.dp))
         PlayButton(on = playing, onClick = onPlay)
     }
 }
@@ -203,60 +198,3 @@ private fun SuggestionRow(t: TrackItem, fit: Fit, playing: Boolean, onPlay: () -
     }
 }
 
-/** Ajustar uma transição: compassos, estilo, e os pontos de saída e entrada (compasso a compasso ou num cue). */
-@Composable
-private fun TransitionDialog(app: ManagerApp, a: TrackItem, b: TrackItem, start: Transition, onClose: () -> Unit) {
-    val desk = app.sets
-    var tr by remember { mutableStateOf(start) }
-    val ga = desk.grid(a)
-    val gb = desk.grid(b)
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text("${keyLabel(a)} → ${keyLabel(b)}", fontFamily = Mono) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Label("COMPASSOS")
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(4, 8, 16, 32).forEach { n -> FilterChip(tr.bars == n, { tr = tr.copy(bars = n) }, { Text("$n") }) }
-                }
-                Label("ESTILO")
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    MixStyle.values().forEach { s -> FilterChip(tr.style == s, { tr = tr.copy(style = s) }, { Text(s.title) }) }
-                }
-                PointPicker("SAI DE ${a.title.ifEmpty { a.fileName }}", tr.outMs, ga?.cues.orEmpty(), onNudge = { tr = tr.copy(outMs = SetPlanner.nudge(a, ga, tr.outMs, it)) }, onAuto = { tr = tr.copy(outMs = SetPlanner.defaultOut(a, ga, tr.bars)) }) { tr = tr.copy(outMs = it) }
-                PointPicker("ENTRA ${b.title.ifEmpty { b.fileName }}", tr.inMs, gb?.cues.orEmpty(), onNudge = { tr = tr.copy(inMs = SetPlanner.nudge(b, gb, tr.inMs, it)) }, onAuto = { tr = tr.copy(inMs = SetPlanner.defaultIn(gb)) }) { tr = tr.copy(inMs = it) }
-                if (ga == null || gb == null) Text("Sem grade: analise as faixas para cair na batida.", color = Palette.noteInk, fontSize = 12.sp)
-            }
-        },
-        confirmButton = {
-            Row {
-                PlayButton(on = app.preview.playingKey == desk.keyFor(tr)) { desk.update(tr); desk.play(tr) }
-                TextButton(onClick = { desk.update(tr); onClose() }) { Text("OK") }
-            }
-        },
-        dismissButton = { TextButton(onClick = { desk.reset(tr); onClose() }) { Text("AUTO") } },
-        containerColor = Palette.surfaceHigh,
-    )
-}
-
-@Composable
-private fun Label(text: String) = Text(text, color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-
-@Composable
-private fun PointPicker(title: String, ms: Int, cues: List<os.deckbridge.manager.anlz.Cue>, onNudge: (Int) -> Unit, onAuto: () -> Unit, onPick: (Int) -> Unit) {
-    Label(title)
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        OutlinedButton(onClick = { onNudge(-4) }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("«") }
-        OutlinedButton(onClick = { onNudge(-1) }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("‹") }
-        Text(mmss(ms), color = Palette.orange, fontSize = 16.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
-        OutlinedButton(onClick = { onNudge(1) }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("›") }
-        OutlinedButton(onClick = { onNudge(4) }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("»") }
-    }
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        AssistChip(onAuto, { Text("AUTO") })
-        cues.forEach { c ->
-            val name = if (c.hot > 0) ('A' + c.hot - 1).toString() else "◆"
-            AssistChip({ onPick(c.timeMs) }, { Text(name + (if (c.comment.isNotEmpty()) " ${c.comment}" else "") + " " + mmss(c.timeMs), maxLines = 1) })
-        }
-    }
-}

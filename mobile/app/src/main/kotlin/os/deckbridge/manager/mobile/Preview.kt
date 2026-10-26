@@ -50,13 +50,17 @@ class Preview(private val app: ManagerApp) {
     }
 
     /** Toca um WAV montado (prévia de transição ou mix de teste); tocar a mesma chave de novo para. */
-    fun toggleFile(file: File, key: String, title: String) {
+    fun toggleFile(file: File, key: String, title: String, fromMs: Int = 0) {
         if (playingKey == key) {
             stop()
             return
         }
         stop()
-        if (start(file, title, 0)) playingKey = key
+        if (start(file, title, fromMs)) playingKey = key
+    }
+
+    fun seekTo(ms: Int) {
+        runCatching { player?.seekTo(ms) }
     }
 
     private fun start(file: File, title: String, fromMs: Int): Boolean {
