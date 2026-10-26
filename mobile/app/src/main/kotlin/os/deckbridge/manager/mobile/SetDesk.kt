@@ -47,6 +47,9 @@ class SetDesk(private val app: ManagerApp) {
         return v.entries[playlistId ?: return emptyList()].orEmpty().filter { v.track(it) != null }
     }
 
+    /** As grades mudaram (refazer grades): lê de novo na próxima vez. */
+    fun forgetGrids() = synchronized(grids) { grids.clear() }
+
     fun grid(t: TrackItem): TrackGrid? = synchronized(grids) {
         grids.getOrPut(t.id) {
             val f = runCatching { app.model.trackFiles(t) }.getOrNull()

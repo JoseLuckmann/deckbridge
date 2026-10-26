@@ -144,6 +144,12 @@ sealed interface Edit {
      * Cria um ANLZ novo, da análise do app, para uma faixa que já está no banco (sem análise, ou para reanalisar). O ANLZ
      * antigo não é tocado: o banco passa a apontar para o novo. [setTempo] também grava o andamento e [setKey] o tom.
      */
+    /**
+     * Troca só a grade (PQTZ) da faixa pelas batidas dadas, como saem do analisador (regulares ou não). Cues, ondas e o
+     * resto do ANLZ ficam. Usada por "refazer grades".
+     */
+    data class ReplaceGrid(val trackId: Int, val beats: List<os.deckbridge.manager.anlz.Beat>, val bpm: Double) : Edit
+
     data class AttachAnalysis(val trackId: Int, val prepared: PreparedTrack, val cues: List<Cue>, val setTempo: Boolean, val setKey: Boolean) : Edit
 
     /**
@@ -217,6 +223,7 @@ class PdbEditor(private val raw: RawPdb, root: File? = null) {
             is Edit.ImportTrack -> importTrack(edit)
             is Edit.AdoptTrack -> adoptTrack(edit)
             is Edit.AttachAnalysis -> attachAnalysis(edit)
+            is Edit.ReplaceGrid -> replaceGrid(edit)
         }
     }
 
@@ -542,6 +549,23 @@ class PdbEditor(private val raw: RawPdb, root: File? = null) {
         files.put(rel, GridIo.write(dat, GridIo.regular(e.bpm, e.firstBeatMs, durationMs)).write())
         // O EXT real traz uma segunda grade (PQT2) que não sabemos reescrever. Deixá-la com os valores velhos faria os
         // players mais novos usarem a grade antiga, então ela sai e eles voltam para a PQTZ.
+        val extRel = sibling(rel, "EXT")
+        loadAnlz(extRel)?.let { ext -> if (ext.first("PQT2") != null) files.put(extRel, ext.replacing(setOf("PQT2"), emptyList()).write()) }
+        row.tempo = (e.bpm * 100).roundToInt().coerceIn(1, 65535)
+        rowsOf(PdbType.TRACKS)[at] = row.encode()
+    }
+
+    private fun replaceGrid(e: Edit.ReplaceGrid) {
+        if (e.bpm !in 20.0..400.0) throw EditException("O andamento tem de ficar entre 20 e 400 BPM.")
+        if (e.beats.isEmpty()) throw EditException("Grade vazia.")
+        if (e.beats.any { it.inBar !in 1..4 || it.timeMs < 0 }) throw EditException("Batida inválida na grade.")
+        if (e.beats.zipWithNext().any { (a, b) -> b.timeMs <= a.timeMs }) throw EditException("As batidas da grade têm de estar em ordem.")
+        val at = trackIndex(e.trackId)
+        val row = parseRow(at)
+        val rel = datRel(row)
+        val dat = loadAnlz(rel) ?: throw EditException("O arquivo de análise $rel não está no pendrive.")
+        files.put(rel, GridIo.write(dat, e.beats).write())
+        // Mesma regra da grade manual: a PQT2 antiga sairia na frente da nova nos players mais novos.
         val extRel = sibling(rel, "EXT")
         loadAnlz(extRel)?.let { ext -> if (ext.first("PQT2") != null) files.put(extRel, ext.replacing(setOf("PQT2"), emptyList()).write()) }
         row.tempo = (e.bpm * 100).roundToInt().coerceIn(1, 65535)

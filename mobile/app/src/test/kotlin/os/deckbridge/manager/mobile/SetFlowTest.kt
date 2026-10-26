@@ -167,4 +167,24 @@ class SetFlowTest {
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
         assertTrue(a.audioCheckResult.startsWith("WAV"), a.audioCheckResult + " / " + a.notice?.text)
     }
+
+    @Test fun refreshGridsFixesOnlyTheTrackThatWasOff() {
+        val a = app()
+        val t = a.model.view!!.tracks.first()
+        val before = a.model.trackFiles(t).beats
+        check(a.model.submit(os.deckbridge.manager.pdb.Edit.SetGrid(t.id, t.bpm, before.first().timeMs + 18), "grade torta"))
+        check(a.model.apply(null) != null)
+        a.refreshGrids()
+        val until = System.currentTimeMillis() + 120_000
+        while (a.job != null && System.currentTimeMillis() < until) {
+            Thread.sleep(20)
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        }
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        val text = a.notice?.text.orEmpty()
+        assertTrue(text.startsWith("1 refeitas") && text.contains("já certas"), text)
+        val after = a.model.trackFiles(a.model.view!!.track(t.id)!!).beats
+        assertTrue(kotlin.math.abs(after.first().timeMs - before.first().timeMs) <= 1, "${after.first()} vs ${before.first()}")
+        assertTrue(!a.model.dirty, "gravado")
+    }
 }

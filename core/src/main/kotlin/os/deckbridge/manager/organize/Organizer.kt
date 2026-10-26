@@ -16,6 +16,7 @@ enum class Rule(val title: String) {
     DUPLICATE("Possíveis duplicatas"),
     MISSING("Campos vazios"),
     ANALYSIS("Sem análise"),
+    GRID("Grade refeita"),
 }
 
 data class Suggestion(

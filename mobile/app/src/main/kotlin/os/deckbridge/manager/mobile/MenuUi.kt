@@ -34,6 +34,7 @@ fun MenuTab(app: ManagerApp, actions: Actions) {
         Line("Importar pasta", "") { actions.pickFolder() }
         Line("Analisar todas", "${counts[QuickFilter.UNANALYZED] ?: 0}") { app.analyzeAll() }
         Line("Arrumar nomes", "") { app.openTidy() }
+        Line("Refazer grades", "") { app.refreshGrids() }
         Line("Triagem", "${counts[QuickFilter.UNRATED] ?: 0}") { app.startTriage() }
         Line("Descartar mudanças", if (m.dirty) "${m.pending.size}" else "") { m.discard() }
         Section("Ajuda")

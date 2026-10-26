@@ -236,6 +236,28 @@ fun OrganizeModal(model: ManagerModel, st: OrganizeState, onClose: () -> Unit) {
                     st.busy = null
                 }
             }, enabled = busy == null && targets.isNotEmpty())
+            val analyzed = model.selection.mapNotNull { view.track(it) }.ifEmpty { view.tracks }.filter { model.hasAnalysis(it) }
+            // Grade do analisador atual (só a grade; cues e ondas ficam), para revisar antes de pôr na fila.
+            Btn("Refazer ${analyzed.size} grade(s)", {
+                val root = model.volume!!.root
+                st.busy = "refazendo grades…"
+                thread(name = "organizar-grades", isDaemon = true) {
+                    var done = 0
+                    var same = 0
+                    for (t in analyzed) {
+                        st.busy = "grade ${++done}/${analyzed.size}: ${t.title}"
+                        val fresh = os.deckbridge.manager.organize.GridRefresh.analyze(root, t)
+                        if (fresh == null) {
+                            st.items.add(Suggestion(Rule.GRID, listOf(t.id), "\"${t.title}\" sem áudio para refazer a grade", "", null) to mutableStateOf(false))
+                            continue
+                        }
+                        val c = os.deckbridge.manager.organize.GridRefresh.change(t, model.trackFiles(t).beats, fresh.first, fresh.second)
+                        val s = os.deckbridge.manager.organize.GridRefresh.suggestion(c)
+                        if (s != null) st.items.add(s to mutableStateOf(true)) else same++
+                    }
+                    st.busy = if (same > 0) "$same grade(s) já estavam certas" else null
+                }
+            }, enabled = busy == null && analyzed.isNotEmpty())
             Label(if (st.force) "☑" else "☐", Pal.Blue, 16.sp, modifier = Modifier.clickable { st.force = !st.force })
             Label("reanalisar mesmo com análise do rekordbox", Pal.Muted, 11.sp)
             Box(Modifier.weight(1f))

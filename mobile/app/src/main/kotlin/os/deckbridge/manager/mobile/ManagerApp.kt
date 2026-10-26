@@ -200,6 +200,52 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         }
     }
 
+    /**
+     * Refaz as grades de todas as faixas analisadas com o analisador atual (só a grade: cues, ondas e tom ficam). As que
+     * já estão iguais não mudam; o tempo 1 de cada compasso é mantido quando a grade só se desloca. Grava em lotes, cada
+     * um com cópia de segurança, como "Analisar todas".
+     */
+    fun refreshGrids() {
+        val v = model.view ?: return
+        val todo = v.tracks.filter { model.hasAnalysis(it) }
+        if (todo.isEmpty()) {
+            say("Nenhuma faixa analisada")
+            return
+        }
+        background("Refazendo ${todo.size} grade(s)") { j ->
+            var changed = 0
+            var same = 0
+            var failed = 0
+            val edits = ArrayList<Pair<Edit, String>>()
+            fun flush() {
+                if (edits.isEmpty()) return
+                model.submitAll(edits)
+                edits.clear()
+                model.apply(null) { j.text = it }
+            }
+            for ((n, t) in todo.withIndex()) {
+                if (j.cancelled) break
+                j.text = "${n + 1}/${todo.size}: ${t.title}"
+                val fresh = os.deckbridge.manager.organize.GridRefresh.analyze(root, t)
+                if (fresh == null) {
+                    failed++
+                    continue
+                }
+                val c = os.deckbridge.manager.organize.GridRefresh.change(t, model.trackFiles(t).beats, fresh.first, fresh.second)
+                val e = c.edit
+                if (e == null) same++ else {
+                    edits += e to "Refazer grade de \"${t.title}\""
+                    changed++
+                }
+                if (edits.size >= 20) flush()
+            }
+            flush()
+            pruneBackups()
+            sets.forgetGrids()
+            say(listOfNotNull("$changed refeitas", "$same já certas".takeIf { same > 0 }, "$failed sem áudio".takeIf { failed > 0 }).joinToString(" · "))
+        }
+    }
+
     /** Último resultado do teste de áudio (MENU), para conferir no próprio aparelho. */
     var audioCheckResult by mutableStateOf(prefs.getString("testeAudio", "") ?: "")
         private set

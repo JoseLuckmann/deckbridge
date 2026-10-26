@@ -33,7 +33,8 @@ fun plainAudioFiles(root: File, limit: Int = 300): List<File> {
     return out
 }
 
-private const val PLAIN_ALGO = "0140"
+// 0141: grade no início do clique do bumbo (alignGridToClick); o cache antigo tinha a grade de antes.
+private const val PLAIN_ALGO = "0141"
 
 fun analyzePlainPcm(samples: FloatArray, rate: Int): Pair<TrackRead, PcmWaves> {
     return analyzeTrack(samples, rate) to wavesFromPcm(samples, rate)
