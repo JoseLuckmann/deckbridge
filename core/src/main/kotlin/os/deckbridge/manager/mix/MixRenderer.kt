@@ -43,6 +43,13 @@ class MixPreview(
     /** Velocidade da que entra: andamento da que sai ÷ andamento dela. */
     val speed: Double,
     val barMsA: Double,
+    /**
+     * Ajuste fino aplicado à que entra, em ms da prévia (positivo: ela estava atrasada e foi adiantada), medido pelos
+     * ataques graves das duas no trecho junto. 0 se desligado ou se não deu para medir com segurança.
+     */
+    val phaseMs: Double,
+    /** O atraso medido entre os bumbos, mesmo quando o ajuste está desligado (null: não deu para medir). */
+    val measuredMs: Double?,
     val waveA: os.deckbridge.logic.ColorWave?,
     val waveB: os.deckbridge.logic.ColorWave?,
 ) {
@@ -50,10 +57,10 @@ class MixPreview(
     /** Onde está a faixa que sai (ms dela) no instante [ms] da prévia. */
     fun aAt(ms: Int) = aStartMs + ms
     /** Onde está a que entra (ms dela) no instante [ms] da prévia (negativo: ainda não começou). */
-    fun bAt(ms: Int) = transition.inMs + ((ms - leadMs) * speed).toInt()
+    fun bAt(ms: Int) = transition.inMs + ((ms - leadMs + phaseMs) * speed).toInt()
     /** Instante da prévia em que a faixa que sai passa por [trackMs]. */
     fun fromA(trackMs: Int) = trackMs - aStartMs
-    fun fromB(trackMs: Int) = leadMs + ((trackMs - transition.inMs) / speed).toInt()
+    fun fromB(trackMs: Int) = leadMs + ((trackMs - transition.inMs) / speed - phaseMs).toInt()
     fun levelsAt(ms: Int, into: Levels = Levels()) = MixRenderer.levels(transition.style, (ms - leadMs).toDouble(), overlapMs.toDouble(), barMsA, into)
 }
 
@@ -122,6 +129,10 @@ object MixRenderer {
         val sb = if (t.masterTempo) Stretch.tempo(resample(pb, 1.0), speed) else resample(pb, speed)
         val leadFrames = ms(lead)
         val total = leadFrames + ms(bOutMs)
+        // Sync fino: as grades alinham a batida, mas cada análise põe a grade a uma distância um pouco diferente do
+        // ataque do bumbo; o que sobra (10–30 ms) embola o grave. Mede pelos ataques graves e corrige, como no jog.
+        val measured = phaseLag(sa, sb, leadFrames, ms(overlapMs), ms((2 * barMs).toInt()))
+        val shift = if (t.phaseLock && measured != null) (measured * RATE / 1000).toInt() else 0
         val outL = FloatArray(total)
         val outR = FloatArray(total)
         val lowA = LowPass(); val lowAR = LowPass(); val lowB = LowPass(); val lowBR = LowPass()
@@ -135,9 +146,10 @@ object MixRenderer {
             val al = if (inA) sa.left[i] else 0f
             val ar = if (inA) sa.right[i] else 0f
             val j = i - leadFrames
-            val inB = j >= 0 && j < sb.frames
-            val bl = if (inB) sb.left[j] else 0f
-            val br = if (inB) sb.right[j] else 0f
+            val jb = j + shift
+            val inB = j >= 0 && jb >= 0 && jb < sb.frames
+            val bl = if (inB) sb.left[jb] else 0f
+            val br = if (inB) sb.right[jb] else 0f
             levels(t.style, j * 1000.0 / RATE, overlapMs.toDouble(), barMs, lv)
             val la = lowA.step(al); val ra = lowAR.step(ar)
             val lb = lowB.step(bl); val rb = lowBR.step(br)
@@ -160,11 +172,82 @@ object MixRenderer {
         if (waves) {
             // Cada deck com a própria onda, inteira (independente do fader), na base de tempo da prévia.
             val monoA = FloatArray(total) { if (it < sa.frames) 0.5f * (sa.left[it] + sa.right[it]) else 0f }
-            val monoB = FloatArray(total) { val k = it - leadFrames; if (k >= 0 && k < sb.frames) 0.5f * (sb.left[k] + sb.right[k]) else 0f }
+            val monoB = FloatArray(total) { val k = it - leadFrames + shift; if (it >= leadFrames && k >= 0 && k < sb.frames) 0.5f * (sb.left[k] + sb.right[k]) else 0f }
             waveA = os.deckbridge.logic.wavesFromPcm(monoA, RATE).rgbDetail
             waveB = os.deckbridge.logic.wavesFromPcm(monoB, RATE).rgbDetail
         }
-        return MixPreview(Stereo(outL, outR, RATE), t, lead, overlapMs, aStart, speed, barMs, waveA, waveB)
+        return MixPreview(Stereo(outL, outR, RATE), t, lead, overlapMs, aStart, speed, barMs, shift * 1000.0 / RATE, measured, waveA, waveB)
+    }
+
+    private const val HOP = 49 // 1,111 ms exatos a 44,1 kHz
+    private const val MAX_LAG_MS = 60.0
+
+    /** Força de ataque do grave (< ~150 Hz), uma entrada por [HOP] amostras, de [from] a [from] + [count]. */
+    private fun lowOnset(s: Stereo, from: Int, count: Int): DoubleArray {
+        val a = 1 - exp(-2 * PI * 150.0 / RATE)
+        var y1 = 0.0
+        var y2 = 0.0
+        val n = count / HOP
+        val env = DoubleArray(n)
+        for (k in 0 until n) {
+            var e = 0.0
+            for (i in from + k * HOP until from + (k + 1) * HOP) {
+                val x = if (i in 0 until s.frames) 0.5 * (s.left[i] + s.right[i]) else 0.0
+                y1 += a * (x - y1)
+                y2 += a * (y1 - y2)
+                e += y2 * y2
+            }
+            env[k] = e
+        }
+        val out = DoubleArray(n)
+        for (k in 1 until n) out[k] = maxOf(0.0, env[k] - env[k - 1])
+        return out
+    }
+
+    /**
+     * Quanto (ms) os bumbos da que entra estão atrasados em relação aos da que sai no trecho junto (negativo: adiantados),
+     * a até ±60 ms. Correlação dos ataques graves em janelas de [windowFrames] (dois compassos); fica a mediana das
+     * janelas com pico claro, para uma linha de baixo ou um trecho sem bumbo não puxarem o resultado. Null se não
+     * houver janelas suficientes.
+     */
+    fun phaseLag(sa: Stereo, sb: Stereo, leadFrames: Int, overlapFrames: Int, windowFrames: Int = RATE * 4): Double? {
+        if (overlapFrames < RATE * 2) return null
+        val maxLag = (MAX_LAG_MS * RATE / 1000 / HOP).toInt() + 1
+        val ea = lowOnset(sa, leadFrames, overlapFrames)
+        val eb = lowOnset(sb, -maxLag * HOP, overlapFrames + 2 * maxLag * HOP)
+        val win = (windowFrames / HOP).coerceAtLeast(64)
+        val lags = ArrayList<Double>()
+        var start = 0
+        while (start + win / 2 <= ea.size) {
+            val end = minOf(ea.size, start + win)
+            var normA = 0.0
+            for (k in start until end) normA += ea[k] * ea[k]
+            if (normA > 1e-12) {
+                val scores = DoubleArray(2 * maxLag + 1)
+                for (c in -maxLag..maxLag) {
+                    var dot = 0.0
+                    var nb = 0.0
+                    for (k in start until end) {
+                        val idx = k + c + maxLag
+                        if (idx in eb.indices) { dot += ea[k] * eb[idx]; nb += eb[idx] * eb[idx] }
+                    }
+                    scores[c + maxLag] = if (nb > 1e-12) dot / kotlin.math.sqrt(normA * nb) else 0.0
+                }
+                val best = scores.indices.maxByOrNull { scores[it] }!!
+                val mean = scores.average()
+                if (scores[best] >= 0.3 && scores[best] >= mean * 1.8 && best in 1 until scores.lastIndex) {
+                    val l = scores[best - 1]; val c0 = scores[best]; val r = scores[best + 1]
+                    val den = l - 2 * c0 + r
+                    val frac = if (den < 0) (0.5 * (l - r) / den).coerceIn(-0.5, 0.5) else 0.0
+                    lags += (best - maxLag + frac) * HOP * 1000.0 / RATE
+                }
+            }
+            start += win
+        }
+        if (lags.size < 2) return null
+        val sorted = lags.sorted()
+        val med = sorted[sorted.size / 2]
+        return if (kotlin.math.abs(med) >= MAX_LAG_MS - 1) null else med
     }
 
     /** Várias transições em sequência, com meio segundo de silêncio entre elas: o "mix de teste" do set. */

@@ -25,6 +25,8 @@ data class Transition(
     val fromId: Int, val toId: Int, val outMs: Int, val inMs: Int, val bars: Int = 16, val style: MixStyle = MixStyle.BASS_SWAP,
     /** Master Tempo: a que entra muda de andamento sem mudar de tom. */
     val masterTempo: Boolean = true,
+    /** Sync fino: corrige o resto de desalinhamento entre os bumbos que as grades deixam. */
+    val phaseLock: Boolean = true,
 )
 
 /** O que se sabe de uma faixa para planejar: grade e cues (do ANLZ) e a duração. */
@@ -124,6 +126,7 @@ object SetPlanner {
             p.setProperty("$n.bars", t.bars.toString())
             p.setProperty("$n.style", t.style.name)
             p.setProperty("$n.mt", t.masterTempo.toString())
+            p.setProperty("$n.lock", t.phaseLock.toString())
         }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".novo")
@@ -140,6 +143,7 @@ object SetPlanner {
                 Transition(
                     p.getProperty("$i.from").toInt(), p.getProperty("$i.to").toInt(), p.getProperty("$i.out").toInt(), p.getProperty("$i.in").toInt(),
                     p.getProperty("$i.bars").toInt(), MixStyle.valueOf(p.getProperty("$i.style")), p.getProperty("$i.mt")?.toBooleanStrictOrNull() ?: true,
+                    p.getProperty("$i.lock")?.toBooleanStrictOrNull() ?: true,
                 )
             }.getOrNull()
         }

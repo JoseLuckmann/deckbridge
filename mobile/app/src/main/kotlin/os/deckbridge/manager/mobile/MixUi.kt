@@ -450,6 +450,17 @@ private fun Controls(app: ManagerApp, a: TrackItem, b: TrackItem, tr: Transition
                 if (auto != null) edit(auto.copy(masterTempo = tr.masterTempo))
             }
         }
+        val p = desk.mixPreview
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            RowLabel("SYNC")
+            PadButton("SYNC FINO", Modifier.weight(1.4f), on = tr.phaseLock) { edit(tr.copy(phaseLock = !tr.phaseLock)) }
+            // Quanto os bumbos estavam fora com as grades alinhadas (o que o sync do player faria).
+            val m = p?.measuredMs
+            Box(Modifier.weight(1f).height(38.dp).border(BorderStroke(1.dp, if (m != null && kotlin.math.abs(m) >= 8) Palette.orange else Palette.line), RbShape), contentAlignment = Alignment.Center) {
+                Text(m?.let { "%+.0f ms".format(it) } ?: "—", color = if (m != null && kotlin.math.abs(m) >= 8) Palette.orange else Palette.mutedBright, fontSize = 13.sp, fontFamily = Mono)
+            }
+            PadButton("GRADE D2", Modifier.weight(1.2f), enabled = m != null && kotlin.math.abs(m) >= 3) { desk.fixGridOfIncoming() }
+        }
         if (ga == null || gb == null) Text("Sem grade: analise as faixas para cair na batida.", color = Palette.noteInk, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(12.dp))
     }

@@ -90,8 +90,26 @@ class MixTest {
         after.forEachIndexed { k, ms -> assertEquals(4000 + k * 500.0, ms, 8.0, "batida $k") }
         // Ondas dos dois decks na base de tempo da prévia (150 colunas por segundo).
         assertEquals(14.0 * 150, assertNotNull(p.waveA).columns.toDouble(), 3.0)
-        assertEquals(p.leadMs, p.fromB(tr.inMs))
-        assertEquals(tr.inMs + 480, p.bAt(p.leadMs + 500)) // 500 ms da prévia = 480 ms da faixa de 125 BPM
+        // Com o sync fino (aqui só uns ms, do WSOLA), o mapeamento de tempo de B o inclui.
+        assertTrue(kotlin.math.abs(p.phaseMs) < 6, "sync fino ${p.phaseMs}")
+        assertTrue(kotlin.math.abs(p.fromB(tr.inMs) - p.leadMs) <= 6)
+        assertTrue(kotlin.math.abs(p.bAt(p.leadMs + 500) - (tr.inMs + 480)) <= 6) // 500 ms da prévia = 480 ms da faixa de 125 BPM
+    }
+
+    @Test fun `sync fino corrige a grade da que entra 20 ms fora do bumbo`() {
+        // A grade de B diz que a batida está em 960 ms, mas o bumbo está 20 ms depois (como uma análise imprecisa).
+        val late = SegmentReader { start, len -> clicks(125.0, 48000).read(start - 20, len) }
+        val base = Transition(1, 2, outMs = 60_000, inMs = 960, bars = 8, style = MixStyle.CUT, masterTempo = false)
+        val fixed = assertNotNull(MixRenderer.transition(clicks(120.0, 44100), 120.0, late, 125.0, base, leadMs = 4000, tailMs = 2000))
+        assertEquals(19.2, assertNotNull(fixed.measuredMs), 2.0) // 20 ms da faixa B = 19,2 ms no andamento da A
+        assertEquals(fixed.measuredMs!!, fixed.phaseMs, 0.05)
+        onsetsMs(fixed.audio, 3990).forEachIndexed { k, ms -> assertEquals(4000 + k * 500.0, ms, 2.0, "batida $k com sync fino") }
+        val raw = assertNotNull(MixRenderer.transition(clicks(120.0, 44100), 120.0, late, 125.0, base.copy(phaseLock = false), leadMs = 4000, tailMs = 2000))
+        assertEquals(0.0, raw.phaseMs)
+        assertEquals(19.2, assertNotNull(raw.measuredMs), 2.0)
+        assertEquals(4019.2, onsetsMs(raw.audio, 3990).first(), 2.0)
+        // A tela leva o tempo da faixa B em conta: a batida de B (980 ms no áudio) cai no ponto de saída.
+        assertTrue(kotlin.math.abs(fixed.leadMs - fixed.fromB(980)) <= 2)
     }
 
     @Test fun `stretch muda o andamento e mantem a frequencia`() {

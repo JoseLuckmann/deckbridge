@@ -189,6 +189,34 @@ class SetDesk(private val app: ManagerApp) {
         if (mixPlaying) app.preview.seekTo(cursorMs)
     }
 
+    /**
+     * Corrige a grade da que entra pelo atraso medido entre os bumbos: assim o sync do player (que alinha grades) também
+     * fica certo, não só a prévia. A entrada anda junto, e a prévia é montada de novo (o sync fino passa a medir ~0).
+     */
+    fun fixGridOfIncoming() {
+        val p = mixPreview ?: return
+        val tr = mixing ?: return
+        val measured = p.measuredMs ?: return
+        val b = app.model.view?.track(tr.toId) ?: return
+        val g = grid(b) ?: return
+        val first = g.beats.firstOrNull()?.timeMs ?: return
+        val delta = Math.round(measured * p.speed).toInt()
+        if (delta == 0) return
+        val period = 60000.0 / b.bpm
+        var newFirst = first + delta
+        while (newFirst < 0) newFirst += period.toInt()
+        if (!app.model.submit(Edit.SetGrid(b.id, b.bpm, newFirst), "Grade de \"${b.title}\": %+d ms".format(delta))) return
+        val fixed = tr.copy(inMs = (tr.inMs + delta).coerceAtLeast(0))
+        app.background("Salvando a grade") { j ->
+            app.model.apply(null) { j.text = it } ?: throw IllegalStateException(app.model.banner?.text ?: "Não consegui salvar a grade")
+            onMain {
+                synchronized(grids) { grids.remove(b.id) }
+                editMix(fixed)
+                app.did("Grade de ${b.title}: %+d ms".format(delta))
+            }
+        }
+    }
+
     private fun cacheFile(key: String) = File(app.context.cacheDir, "mix/${key.hashCode().toUInt()}.wav")
 
     private fun keyOf(tr: Transition): String {

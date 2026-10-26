@@ -110,6 +110,10 @@ class SetFlowTest {
         assertEquals(p.leadMs - (2 * p.barMsA).toInt(), a.sets.cursorMs)
         rule.onNodeWithText("DECK 1").assertExists()
         rule.onNodeWithText("▶ PLAY").assertExists()
+        rule.onNodeWithText("SYNC FINO").assertExists()
+        assertTrue(a.sets.mixing!!.phaseLock, "sync fino ligado por padrão")
+        // Faixas sintéticas com grade certa: nada a corrigir (o botão de grade fica apagado).
+        assertTrue(kotlin.math.abs(p.measuredMs ?: 0.0) < 3, "medido ${p.measuredMs}")
         rule.onRoot().captureRoboImage(File(out, "mobile-16-vertical-teste-de-mix.png").path)
 
         // Leva a cabeça para o meio da troca e confere os níveis do mixer (troca de grave: grave da 2 entrou).
