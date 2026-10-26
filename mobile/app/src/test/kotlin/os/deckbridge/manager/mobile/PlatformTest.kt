@@ -62,7 +62,7 @@ class PlatformTest {
         repeat(600) {
             // Avança o relógio da thread principal: os quadros do Compose são agendados com atraso.
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(50))
-            if (app.job == null && app.pendingIntent == null) return
+            if (app.job == null && app.pendingIntent == null && !app.imports.running) return
             Thread.sleep(20)
         }
     }
