@@ -89,6 +89,11 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
 - Abas na ordem do trabalho: **MÚSICAS · MARCAR · PLAYLISTS · PENDRIVE**. Numa playlist, **＋** põe músicas (cada linha
   ganha um ＋) e **MIXAR** abre o set.
 
+## Importar
+
+- A importação roda em segundo plano: uma faixa fina no topo mostra "IMPORTANDO 7/40" e ✕ para parar. Dá para marcar,
+  montar playlists e ouvir enquanto isso; cada música aparece na lista assim que fica pronta. Repetidas são puladas.
+
 ## Simples por padrão
 
 - **Grava sozinho** (20 s depois da última mudança e ao sair do app); ↶ ↷ no topo enquanto há o que desfazer.

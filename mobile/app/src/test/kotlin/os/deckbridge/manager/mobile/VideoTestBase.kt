@@ -72,7 +72,8 @@ abstract class VideoTestBase {
     /** Enquanto uma tarefa roda, um quadro a cada ~0,7 s de verdade, mostrado por 0,3 s (acelerado). */
     protected fun whileJob(app: ManagerApp, minimum: Double = 1.0) {
         var shown = 0.0
-        while (app.job != null) {
+        // A importação roda fora do "job" (a tela fica livre), então espera as duas coisas.
+        while (app.job != null || app.imports.running) {
             Thread.sleep(700)
             idle()
             hold(0.3)

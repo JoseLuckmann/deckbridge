@@ -34,10 +34,12 @@ fun UsbTab(app: ManagerApp, actions: Actions) {
     val v = m.view
     val usb = app.usb
     var confirm by remember { mutableStateOf<Confirm?>(null) }
-    val noAudio = v?.tracks?.count { t -> !java.io.File(app.root, t.filePath.replace('\\', '/').trimStart('/')).isFile } ?: 0
+    // Durante a importação as novas ainda não foram gravadas na biblioteca: não é "sem áudio".
+    val noAudio = if (app.imports.running) 0 else v?.tracks?.count { t -> !java.io.File(app.root, t.filePath.replace('\\', '/').trimStart('/')).isFile } ?: 0
     val unanalyzed = v?.tracks?.count { !m.hasAnalysis(it) } ?: 0
     val emptyLists = v?.playlists?.count { !it.folder && v.entries[it.id].orEmpty().isEmpty() } ?: 0
-    val blocked = noAudio > 0 || (v?.tracks?.isEmpty() ?: true)
+    // Exportar no meio de uma importação levaria a biblioteca pela metade: espera terminar.
+    val blocked = noAudio > 0 || (v?.tracks?.isEmpty() ?: true) || app.imports.running
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Line("NO CELULAR", "${v?.tracks?.size ?: 0} músicas · ${v?.playlists?.count { !it.folder } ?: 0} playlists", Palette.text)
         // Sem músicas não há o que levar: o caminho é importar.
@@ -73,14 +75,14 @@ fun UsbTab(app: ManagerApp, actions: Actions) {
                 onClick = { if (usb?.existing != null) confirm = Confirm.EXPORT else app.export() },
                 enabled = ready && !blocked,
                 modifier = Modifier.padding(start = 10.dp).weight(1f).spotlight(ready && !blocked && !app.exportedOnce && !app.guideHidden).height(56.dp),
-            ) { Text("EXPORTAR", fontSize = 15.sp) }
+            ) { Text(if (app.imports.running) "IMPORTANDO…" else "EXPORTAR", fontSize = 15.sp) }
         }
         app.lastTransfer?.let { r ->
             Text("✓ ${r.tracks} faixas · ${r.copied} copiados", color = Palette.keyInk, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         }
         Spacer(Modifier.height(20.dp))
         // Só quando o pendrive já tem uma biblioteca para trazer (sem botão apagado na tela).
-        if (usb?.existing != null) TextButton(onClick = { confirm = Confirm.IMPORT }) { Text("TRAZER DO PENDRIVE", fontSize = 12.sp) }
+        if (usb?.existing != null && !app.imports.running) TextButton(onClick = { confirm = Confirm.IMPORT }) { Text("TRAZER DO PENDRIVE", fontSize = 12.sp) }
     }
     when (confirm) {
         Confirm.EXPORT -> ConfirmDialog(

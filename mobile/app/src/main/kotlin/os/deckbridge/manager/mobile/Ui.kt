@@ -57,6 +57,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                     NavRail(app)
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         TopBar(app, actions)
+                        ImportStrip(app)
                         if (app.tab != Tab.MENU) GuideStrip(app, actions)
                         Row(Modifier.weight(1f)) {
                             Box(Modifier.weight(1f).fillMaxHeight()) { TabContent(app, actions) }
@@ -74,6 +75,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                         DetailPanel(app, open, onBack = { app.detailId = null })
                     } else {
                         TopBar(app, actions)
+                        ImportStrip(app)
                         if (app.tab != Tab.MENU) GuideStrip(app, actions)
                         Box(Modifier.weight(1f)) { TabContent(app, actions) }
                         NavBar(app)
@@ -126,6 +128,30 @@ private fun TopBar(app: ManagerApp, actions: Actions) {
             TextButton(onClick = { app.searchOpen = !app.searchOpen }) { Text("⌕", fontSize = 22.sp) }
             OutlinedButton(onClick = actions.pickAudio, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp)) { Text("＋", fontSize = 18.sp) }
         }
+    }
+}
+
+/**
+ * A importação rodando em segundo plano: uma faixa fina com quantas já passaram, a música da vez e ✕ para parar. A tela
+ * continua livre; as músicas aparecem na lista conforme ficam prontas.
+ */
+@Composable
+private fun ImportStrip(app: ManagerApp) {
+    val p = app.imports.progress ?: return
+    Column(Modifier.fillMaxWidth().background(Palette.surface)) {
+        Row(Modifier.fillMaxWidth().height(36.dp).padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("IMPORTANDO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+            Text("  ${p.done}/${p.total}", color = Palette.orange, fontSize = 12.sp, fontFamily = Mono)
+            Text(
+                "  " + shortTitle(p.current.substringBeforeLast('.')), color = Palette.mutedBright, fontSize = 12.sp, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { app.imports.cancel() }, modifier = Modifier.semantics { contentDescription = "Parar a importação" }) { Text("✕", fontSize = 14.sp) }
+        }
+        LinearProgressIndicator(
+            progress = { if (p.total == 0) 0f else p.done.toFloat() / p.total }, modifier = Modifier.fillMaxWidth().height(2.dp),
+            color = Palette.blue, trackColor = Palette.line,
+        )
     }
 }
 

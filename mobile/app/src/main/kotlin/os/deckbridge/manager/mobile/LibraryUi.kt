@@ -122,7 +122,10 @@ private fun SearchField(app: ManagerApp, help: () -> Unit) {
 private fun EmptyList(app: ManagerApp, actions: Actions) {
     val m = app.model
     Column(Modifier.fillMaxWidth().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (m.view?.tracks?.isEmpty() == true) {
+        if (m.view?.tracks?.isEmpty() == true && app.imports.running) {
+            // Importando com a biblioteca ainda vazia: as músicas aparecem aqui conforme ficam prontas.
+            Text("As músicas aparecem aqui", color = Palette.mutedBright, fontSize = 15.sp)
+        } else if (m.view?.tracks?.isEmpty() == true) {
             // Três portas: músicas soltas, uma pasta inteira, ou um pendrive que já veio do rekordbox.
             Text("Comece pelas suas músicas", color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Text("WAV · MP3 · FLAC · AAC", color = Palette.muted, fontSize = 13.sp)

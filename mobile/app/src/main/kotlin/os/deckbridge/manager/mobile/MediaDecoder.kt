@@ -70,12 +70,16 @@ class MediaDecoder : PlatformDecoder {
             val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
             val cap = rate * 60 * MAX_MINUTES
             val estimate = ((durationUs * rate) / 1_000_000L).toInt().coerceIn(rate * 10, cap)
-            val sink = PcmAccumulator(rate, channels, estimate, cap)
+            // Já em mono ~22 kHz, aos pedaços (a faixa inteira em estéreo não cabe na memória com folga).
+            val sink = MonoSink(rate, channels, estimate, cap)
             val info = MediaCodec.BufferInfo()
             var inputDone = false
             var outputDone = false
             var guard = 0
+            // Um arquivo com defeito pode deixar o decodificador sem entregar nada: não fica preso para sempre.
+            val deadline = System.currentTimeMillis() + MAX_DECODE_MS
             while (!outputDone) {
+                if (System.currentTimeMillis() > deadline) return null
                 if (!inputDone) {
                     val inIndex = codec.dequeueInputBuffer(5_000)
                     if (inIndex >= 0) {
@@ -106,20 +110,7 @@ class MediaDecoder : PlatformDecoder {
                     outputDone = true
                 }
             }
-            val pcm = sink.result() ?: return null
-            // Mono e redução para perto de 22 kHz, como o importador faz com WAV.
-            val factor = (pcm.sampleRate / 22050).coerceAtLeast(1)
-            val n = pcm.frameCount / factor
-            val out = FloatArray(n)
-            for (o in 0 until n) {
-                var acc = 0f
-                for (k in 0 until factor) {
-                    val i = o * factor + k
-                    acc += (pcm.left[i] + pcm.right[i]) * 0.5f
-                }
-                out[o] = acc / factor
-            }
-            MonoAudio(out, pcm.sampleRate / factor)
+            MonoAudio(sink.result() ?: return null, sink.outRate)
         } catch (_: Exception) {
             null
         } finally {
@@ -205,5 +196,8 @@ class MediaDecoder : PlatformDecoder {
 
     private companion object {
         const val MAX_MINUTES = 15
+
+        /** Tempo máximo para decodificar uma faixa (as de 15 minutos levam poucos segundos num celular). */
+        const val MAX_DECODE_MS = 120_000L
     }
 }
