@@ -25,6 +25,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,7 +66,6 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                                 }
                             }
                         }
-                        SaveBar(app)
                     }
                 }
             } else {
@@ -75,7 +76,6 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                         TopBar(app, actions)
                         if (app.tab != Tab.MENU) GuideStrip(app, actions)
                         Box(Modifier.weight(1f)) { TabContent(app, actions) }
-                        SaveBar(app)
                         NavBar(app)
                     }
                 }
@@ -121,6 +121,7 @@ private fun TopBar(app: ManagerApp, actions: Actions) {
         Text(app.tab.short(), color = Palette.blue, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
         if (count != null) Text("$count", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(start = 8.dp))
         Spacer(Modifier.weight(1f))
+        UndoButtons(app)
         if (app.tab == Tab.LIBRARY) {
             TextButton(onClick = { app.searchOpen = !app.searchOpen }) { Text("⌕", fontSize = 22.sp) }
             OutlinedButton(onClick = actions.pickAudio, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp)) { Text("＋", fontSize = 18.sp) }
@@ -128,21 +129,12 @@ private fun TopBar(app: ManagerApp, actions: Actions) {
     }
 }
 
-/** Mudanças não gravadas: uma linha só. Some quando não há nada pendente. */
+/** Desfazer e refazer, no topo: só aparecem quando há o que desfazer (gravar é sozinho). */
 @Composable
-private fun SaveBar(app: ManagerApp) {
+private fun UndoButtons(app: ManagerApp) {
     val m = app.model
-    if (!m.dirty && m.redoStack.isEmpty()) return
-    Row(Modifier.fillMaxWidth().height(48.dp).background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.line)).padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (m.dirty) {
-            Box(Modifier.size(8.dp).background(Palette.orange, RbShape))
-            Text("${m.pending.size}", color = Palette.orange, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.padding(start = 8.dp))
-        }
-        Spacer(Modifier.weight(1f))
-        TextButton(onClick = { m.undo() }, enabled = m.dirty) { Text("↶", fontSize = 20.sp) }
-        if (m.redoStack.isNotEmpty()) TextButton(onClick = { m.redo() }) { Text("↷", fontSize = 20.sp) }
-        if (m.dirty) Button(onClick = { app.save() }, modifier = Modifier.height(38.dp)) { Text("SALVAR", fontSize = 13.sp) }
-    }
+    if (m.dirty) TextButton(onClick = { m.undo() }, enabled = !m.saving, modifier = Modifier.semantics { contentDescription = "Desfazer" }) { Text("↶", fontSize = 20.sp) }
+    if (m.redoStack.isNotEmpty()) TextButton(onClick = { m.redo() }, modifier = Modifier.semantics { contentDescription = "Refazer" }) { Text("↷", fontSize = 20.sp) }
 }
 
 /** O que falta em cada área, num número pequeno no botão: músicas sem nota (MARCAR). */

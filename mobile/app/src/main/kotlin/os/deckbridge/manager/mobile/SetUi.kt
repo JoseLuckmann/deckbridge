@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,7 +53,6 @@ import os.deckbridge.manager.smart.Smart
 
 private fun mmss(ms: Int): String = "%d:%02d".format(ms / 60000, ms / 1000 % 60)
 
-private fun keyLabel(t: TrackItem): String = Smart.camelot(t.key)?.let { "${it.first}${it.second}" } ?: t.key.ifEmpty { "—" }
 
 /**
  * O set: as faixas da playlist na ordem, e entre cada par a transição programada (tom e andamento, estilo, compassos,
@@ -82,6 +82,7 @@ fun SetScreen(app: ManagerApp) {
     val issues = remember(ids, plan, v) { desk.issues(ids, plan) }
     var sortOpen by remember { mutableStateOf(false) }
     var bridgeFor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var issueFor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     Column(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(52.dp).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { back() }) { Text("‹", fontSize = 22.sp) }
@@ -95,16 +96,18 @@ fun SetScreen(app: ManagerApp) {
             }
             Text("≈" + mmss(SetPlanner.lengthMs(v, ids, plan)), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
             PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playAll(plan) }
+            // O que se usa pouco (ordenar) fica no ⋯; numa pool a ordem é escolhida na hora.
+            if (poolAt == null && ids.size >= 3) TextButton(onClick = { sortOpen = true }, modifier = Modifier.semantics { contentDescription = "Mais" }) { Text("⋯", fontSize = 20.sp) }
         }
-        if (ids.size >= 2) FlowStrip(ids.mapNotNull { v.track(it) }, masters, pool = poolAt?.let { it until poolEnd }) { desk.mapOpen = true }
+        if (ids.size >= 2) FlowStrip(
+            ids.mapNotNull { v.track(it) }, masters, desk.masterFixed, pool = poolAt?.let { it until poolEnd },
+            onMaster = { masterOpen = true },
+        ) { desk.mapOpen = true }
         if (ids.size >= 2) ActionsRow(
             issues = issues.map { it.fromId to it.toId }.distinct().size,
             redo = plan.count { it.mark == Transition.Mark.REDO },
-            master = desk.masterFixed,
             onRehearse = { app.seen("rehearse"); desk.startRehearsal(plan) },
             rehearseSpot = !app.hint("hear") && app.hint("rehearse"),
-            onSort = if (poolAt == null) ({ sortOpen = true }) else null,
-            onMaster = { masterOpen = true },
         )
         LazyColumn(Modifier.weight(1f)) {
             if (branch != null) item(key = "volta") { RejoinRow(app, branch.rejoinTrackId) { rejoinOpen = true } }
@@ -135,7 +138,7 @@ fun SetScreen(app: ManagerApp) {
                             t, b, tr, SetPlanner.fit(t, b), stretch = SetTempo.stretchPct(b.bpm, masters.getOrNull(n) ?: t.bpm), playing = app.preview.playingKey == desk.keyFor(tr), issues = here,
                             rehearsing = desk.rehearsal?.let { plan.getOrNull(it) } == tr,
                             onPlay = { desk.play(tr) }, onEdit = { desk.openMix(tr) },
-                            onBridge = if (here.any { it.bridgeable }) ({ bridgeFor = id to tr.toId }) else null,
+                            onIssue = { issueFor = id to tr.toId },
                             // Quem nunca ouviu uma transição: o ▶ da primeira mostra por onde começar.
                             spot = n == 0 && app.hint("hear"),
                         )
@@ -168,6 +171,15 @@ fun SetScreen(app: ManagerApp) {
         }, onClose = { masterOpen = false })
     }
     branchFrom?.let { from -> BranchDialog(app, from) { branchFrom = null } }
+    issueFor?.let { (a, b) ->
+        // O aviso por extenso só quando se pede (tocar no ⚠); se uma ponte resolve, ela é a ação.
+        val here = issues.filter { it.fromId == a && it.toId == b }
+        val bridge = here.any { it.bridgeable }
+        ChoiceDialog(here.joinToString("\n") { it.text }, listOf(if (bridge) "Pôr uma ponte" else "OK"), onPick = {
+            issueFor = null
+            if (bridge) bridgeFor = a to b
+        }, onClose = { issueFor = null })
+    }
     turnAt?.let { n ->
         // Ponto de virada: daqui sai um ramo, ou daqui em diante a linha vira pool (ou volta a ser lista).
         val id = ids.getOrNull(n)
@@ -194,7 +206,7 @@ fun SetScreen(app: ManagerApp) {
         if (options.isEmpty()) {
             ConfirmDialog("Ponte", "Nenhuma faixa da biblioteca combina com as duas.", "OK", onConfirm = { bridgeFor = null }, onClose = { bridgeFor = null })
         } else {
-            ChoiceDialog("Ponte entre as duas", options.map { "${it.title.ifEmpty { it.fileName }} · ${keyLabel(it)} · %.0f".format(it.bpm) }, onPick = { n ->
+            ChoiceDialog("Ponte entre as duas", options.map { "${it.title.ifEmpty { it.fileName }} · ${keyLabel(it.key)} · %.0f".format(it.bpm) }, onPick = { n ->
                 bridgeFor = null
                 desk.insertBridge(a, options[n])
             }, onClose = { bridgeFor = null })
@@ -202,21 +214,14 @@ fun SetScreen(app: ManagerApp) {
     }
 }
 
-/** Ensaiar, ordenar e o resumo dos avisos, logo abaixo da curva. */
+/** Ensaiar (o botão principal) e o resumo: quantas a refazer e quantas trocas com aviso. */
 @Composable
-private fun ActionsRow(
-    issues: Int, redo: Int, master: Double?, onRehearse: () -> Unit, onSort: (() -> Unit)?, onMaster: () -> Unit, rehearseSpot: Boolean = false,
-) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+private fun ActionsRow(issues: Int, redo: Int, onRehearse: () -> Unit, rehearseSpot: Boolean = false) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Button(onClick = onRehearse, modifier = Modifier.spotlight(rehearseSpot).height(40.dp)) { Text("ENSAIAR", fontSize = 12.sp) }
-        // Numa pool a ordem é decidida na hora: não há o que ordenar.
-        if (onSort != null) OutlinedButton(onClick = onSort, modifier = Modifier.height(40.dp)) { Text("ORDENAR", fontSize = 12.sp) }
-        OutlinedButton(onClick = onMaster, modifier = Modifier.height(40.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) {
-            Text(if (master == null) "MASTER AUTO" else "MASTER %.0f".format(master), fontSize = 11.sp)
-        }
         Spacer(Modifier.weight(1f))
-        if (redo > 0) Text("✗ $redo", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(end = 8.dp))
-        Text(if (issues == 0) "✓ trocas ok" else "⚠ $issues", color = if (issues == 0) Palette.keyInk else Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        if (redo > 0) Text("✗ $redo", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(end = 10.dp))
+        Text(if (issues == 0) "✓" else "⚠ $issues", color = if (issues == 0) Palette.keyInk else Palette.orange, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -265,7 +270,9 @@ private fun PlayButton(on: Boolean, enabled: Boolean = true, label: String? = nu
  * para tocar no master. Ponto verde entre duas faixas: troca de tom suave; laranja: não.
  */
 @Composable
-private fun FlowStrip(tracks: List<TrackItem>, masters: List<Double>, pool: IntRange? = null, onMap: () -> Unit) {
+private fun FlowStrip(
+    tracks: List<TrackItem>, masters: List<Double>, fixed: Double?, pool: IntRange? = null, onMaster: () -> Unit, onMap: () -> Unit,
+) {
     val bpms = tracks.map { it.bpm }.filter { it > 0 } + masters
     if (bpms.isEmpty()) return
     val lo = bpms.min() - 2
@@ -276,11 +283,10 @@ private fun FlowStrip(tracks: List<TrackItem>, masters: List<Double>, pool: IntR
             .semantics { contentDescription = "Mapa do set" }.padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.width(52.dp)) {
+        // Tocar no master escolhe o andamento (automático ou fixo); o resto da faixa abre o mapa.
+        Column(Modifier.width(60.dp).fillMaxHeight().clickable(onClick = onMaster).semantics { contentDescription = "Master" }, verticalArrangement = Arrangement.Center) {
             Text("MASTER", color = Palette.blue, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            Text("%.0f".format(hi - 2), color = Palette.muted, fontSize = 10.sp, fontFamily = Mono)
-            Spacer(Modifier.weight(1f))
-            Text("%.0f".format(lo + 2), color = Palette.muted, fontSize = 10.sp, fontFamily = Mono)
+            Text(fixed?.let { "%.0f".format(it) } ?: "AUTO", color = Palette.orange, fontSize = 15.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
         }
         val line = Palette.blue
         val ok = Palette.keyInk
@@ -318,15 +324,17 @@ private fun FlowStrip(tracks: List<TrackItem>, masters: List<Double>, pool: IntR
 @Composable
 private fun KeyBadge(t: TrackItem) {
     Box(Modifier.clip(RbShape).background(Palette.keyFill).padding(horizontal = 6.dp, vertical = 2.dp)) {
-        Text(keyLabel(t), color = Palette.keyInk, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
+        Text(keyLabel(t.key), color = Palette.keyInk, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun SetTrackRow(n: Int, t: TrackItem, master: Double?, playing: Boolean, anchor: Boolean, onBranch: (() -> Unit)?, onOpen: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(56.dp).background(if (playing) Palette.selectedRow else if (anchor) Palette.bg else Palette.surface).clickable(onClick = onOpen)
-            .padding(start = 14.dp, end = if (onBranch != null) 2.dp else 14.dp),
+        Modifier.fillMaxWidth().height(56.dp).background(if (playing) Palette.selectedRow else if (anchor) Palette.bg else Palette.surface)
+            .combinedClickable(onClick = onOpen, onLongClick = onBranch)
+            .padding(start = 14.dp, end = if (onBranch != null) 0.dp else 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(if (anchor) "↔" else "$n", color = if (anchor) Palette.orange else Palette.muted, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.width(26.dp))
@@ -334,18 +342,14 @@ private fun SetTrackRow(n: Int, t: TrackItem, master: Double?, playing: Boolean,
             Text(t.title.ifEmpty { t.fileName }, color = if (anchor) Palette.mutedBright else Palette.text, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(if (anchor) "linha principal" else t.artist, color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        // O BPM em que toca (o master) e, embaixo, o da faixa e quanto ela estica.
+        // O BPM em que toca (o master). O da faixa e quanto estica só aparecem quando passa do confortável (10%).
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 8.dp)) {
-            Text(master?.let { "%.1f".format(it) } ?: if (t.bpm > 0) "%.1f".format(t.bpm) else "—", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono)
+            Text(bpmLabel(master ?: t.bpm), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono)
             if (master != null && t.bpm > 0) {
                 val st = SetTempo.stretchPct(t.bpm, master)
-                Text(
-                    "%.0f %+.0f%%".format(t.bpm, st), fontSize = 10.sp, fontFamily = Mono,
-                    color = when {
-                        kotlin.math.abs(st) > SetTempo.MAX_PCT -> Palette.danger
-                        kotlin.math.abs(st) > SetTempo.COMFORT_PCT -> Palette.orange
-                        else -> Palette.muted
-                    },
+                if (kotlin.math.abs(st) > SetTempo.COMFORT_PCT) Text(
+                    "%.0f ".format(t.bpm) + pctLabel(st), fontSize = 10.sp, fontFamily = Mono,
+                    color = if (kotlin.math.abs(st) > SetTempo.MAX_PCT) Palette.danger else Palette.orange,
                 )
             }
         }
@@ -368,13 +372,13 @@ private fun BranchIcon(color: androidx.compose.ui.graphics.Color) {
     }
 }
 
-/** O ponto de virada desta faixa: criar um ramo daqui ou fazer o resto da linha virar pool. */
+/** O ponto de virada desta faixa (também no toque longo): criar um ramo daqui ou fazer o resto da linha virar pool. */
 @Composable
 private fun BranchButton(onClick: () -> Unit) {
     Box(
         Modifier.size(40.dp).clickable(onClick = onClick).semantics { contentDescription = "Ponto de virada" },
         contentAlignment = Alignment.Center,
-    ) { BranchIcon(Palette.blue) }
+    ) { Text("⋯", color = Palette.mutedBright, fontSize = 18.sp) }
 }
 
 /** Um ramo que sai desta faixa: a letra, quantas faixas e onde volta. Tocar abre o SET do ramo. */
@@ -404,13 +408,18 @@ private fun BranchDialog(app: ManagerApp, from: Int, onClose: () -> Unit) {
     var count by remember { mutableStateOf(3) }
     var shape by remember { mutableStateOf(os.deckbridge.manager.mix.SetShape.RISING) }
     var rejoin by remember { mutableStateOf(true) }
+    // Abre com o padrão e um CRIAR; as escolhas ficam em "mais opções".
+    var more by remember { mutableStateOf(false) }
     val title = app.model.view?.track(from)?.title.orEmpty()
     val counts = if (kind == SetDesk.BranchKind.POOL) listOf(4, 6, 8, 12) else listOf(2, 3, 4, 6)
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onClose,
         title = { Text("Ramo depois de\n$title", maxLines = 2) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (!more) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("$count faixas · mais energia · volta para a linha", color = Palette.mutedBright, fontSize = 14.sp)
+                TextButton(onClick = { more = true }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("MAIS OPÇÕES", fontSize = 12.sp) }
+            } else Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("TIPO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(SetDesk.BranchKind.LIST to "Lista", SetDesk.BranchKind.POOL to "Pool", SetDesk.BranchKind.MANUAL to "Eu escolho").forEach { (k, label) ->
@@ -454,45 +463,41 @@ private fun BranchDialog(app: ManagerApp, from: Int, onClose: () -> Unit) {
 
 private fun fitText(f: Fit): String = if (f.bpmDiffPct == 0.0) "=" else "%+.1f%%".format(f.bpmDiffPct)
 
+/**
+ * Uma transição numa linha: o tom de uma para a outra e quanto a que entra estica até o master; o estilo e os compassos só
+ * quando foram mudados. O fio verde ou laranja já diz se a troca combina; o ⚠ abre o aviso. Tocar na linha abre o mix.
+ */
 @Composable
 private fun TransitionRow(
     a: TrackItem, b: TrackItem, tr: Transition, fit: Fit, stretch: Double, playing: Boolean, issues: List<os.deckbridge.manager.mix.SetIssue>, rehearsing: Boolean,
-    onPlay: () -> Unit, onEdit: () -> Unit, onBridge: (() -> Unit)?, spot: Boolean = false,
+    onPlay: () -> Unit, onEdit: () -> Unit, onIssue: () -> Unit, spot: Boolean = false,
 ) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 52.dp).background(if (rehearsing) Palette.blueActiveFill else Palette.bg).clickable(onClick = onEdit)
-            .padding(start = 22.dp, end = 10.dp, top = 4.dp, bottom = 4.dp).height(androidx.compose.foundation.layout.IntrinsicSize.Min),
+        Modifier.fillMaxWidth().height(48.dp).background(if (rehearsing) Palette.blueActiveFill else Palette.bg).clickable(onClick = onEdit)
+            .padding(start = 22.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // O fio que liga uma faixa à outra.
-        Box(Modifier.width(2.dp).fillMaxHeight().background(if (fit.good) Palette.keyInk.copy(alpha = 0.6f) else Palette.orange.copy(alpha = 0.6f)))
-        Column(Modifier.padding(start = 14.dp).weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                when (tr.mark) {
-                    Transition.Mark.GOOD -> Text("✓ ", color = Palette.keyInk, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Transition.Mark.REDO -> Text("✗ ", color = Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    null -> {}
-                }
-                Text("${keyLabel(a)}→${keyLabel(b)}", color = if (fit.keyOk) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
-                // Quanto a que entra estica para tocar no master (até 10%: normal).
-                Text(
-                    "  %+.1f%%".format(stretch), fontSize = 12.sp, fontFamily = Mono,
-                    color = if (kotlin.math.abs(stretch) <= SetTempo.COMFORT_PCT) Palette.mutedBright else if (kotlin.math.abs(stretch) <= SetTempo.MAX_PCT) Palette.orange else Palette.danger,
-                )
+        Box(Modifier.width(2.dp).fillMaxHeight().background(if (fit.good && issues.isEmpty()) Palette.keyInk.copy(alpha = 0.6f) else Palette.orange.copy(alpha = 0.6f)))
+        Row(Modifier.padding(start = 14.dp).weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            when (tr.mark) {
+                Transition.Mark.GOOD -> Text("✓ ", color = Palette.keyInk, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Transition.Mark.REDO -> Text("✗ ", color = Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                null -> {}
             }
-            Text("${tr.style.title} · ${tr.bars} comp. · ${mmss(tr.outMs)}", color = Palette.muted, fontSize = 12.sp, maxLines = 1)
-            // Um aviso só, numa linha (o primeiro); a cor do fio já diz que algo pede atenção.
-            if (issues.isNotEmpty()) Text(
-                "⚠ " + issues.first().text + if (issues.size > 1) " +${issues.size - 1}" else "", color = Palette.orange, fontSize = 11.sp,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            Text("${keyLabel(a.key)}→${keyLabel(b.key)}", color = if (fit.keyOk) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
+            Text(
+                "  " + pctLabel(stretch), fontSize = 12.sp, fontFamily = Mono,
+                color = if (kotlin.math.abs(stretch) <= SetTempo.COMFORT_PCT) Palette.mutedBright else if (kotlin.math.abs(stretch) <= SetTempo.MAX_PCT) Palette.orange else Palette.danger,
+            )
+            if (tr.style != MixStyle.BASS_SWAP || tr.bars != 16) Text(
+                "  ${tr.style.title} · ${tr.bars}", color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
-        if (onBridge != null) {
-            OutlinedButton(onClick = onBridge, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) { Text("PONTE", fontSize = 10.sp) }
-            Spacer(Modifier.width(4.dp))
-        }
-        OutlinedButton(onClick = onEdit, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("MIX", fontSize = 11.sp) }
-        Spacer(Modifier.width(6.dp))
+        if (issues.isNotEmpty()) Box(
+            Modifier.size(40.dp).clickable(onClick = onIssue).semantics { contentDescription = "Aviso" },
+            contentAlignment = Alignment.Center,
+        ) { Text("⚠", color = Palette.orange, fontSize = 16.sp) }
         PlayButton(on = playing, modifier = Modifier.spotlight(spot), onClick = onPlay)
     }
 }
@@ -502,7 +507,7 @@ private fun SuggestionRow(t: TrackItem, fit: Fit, playing: Boolean, onPlay: () -
     Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${keyLabel(t)} · ${fitText(fit)}", color = if (fit.good) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono)
+            Text("${keyLabel(t.key)} · ${fitText(fit)}", color = if (fit.good) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono)
         }
         PlayButton(on = playing, onClick = onPlay)
         OutlinedButton(onClick = onAdd, modifier = Modifier.padding(start = 6.dp).height(38.dp)) { Text("＋", fontSize = 16.sp) }
@@ -589,22 +594,22 @@ private fun PoolRow(
                 t.title.ifEmpty { t.fileName }, color = if (played) Palette.muted else Palette.text, fontSize = 15.sp, fontWeight = FontWeight.Medium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            Row {
-                if (fit != null && !played && !now) Text(
-                    "${fitKeys(fit)}${fitText(fit)}  ", fontSize = 12.sp, fontFamily = Mono, color = if (fit.good) Palette.keyInk else Palette.orange,
-                )
-                Text(
-                    when {
-                        now -> "tocando"
-                        played -> "tocada"
-                        links == 0 -> "isolada"
-                        else -> "liga $links"
-                    },
-                    color = if (links == 0 && !played && !now) Palette.orange else Palette.muted, fontSize = 12.sp,
-                )
+            // Embaixo: tocando / tocada, ou um ponto verde/laranja (a troca a partir da que está tocando) e quanto estica.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                when {
+                    now -> Text("tocando", color = Palette.muted, fontSize = 12.sp)
+                    played -> Text("tocada", color = Palette.muted, fontSize = 12.sp)
+                    else -> {
+                        if (fit != null) {
+                            Box(Modifier.size(8.dp).clip(RbShape).background(if (fit.good) Palette.keyInk else Palette.orange))
+                            Text(" ${fitText(fit)}", color = Palette.mutedBright, fontSize = 12.sp, fontFamily = Mono)
+                        }
+                        if (links == 0) Text("  isolada", color = Palette.orange, fontSize = 12.sp)
+                    }
+                }
             }
         }
-        Text(master?.let { "%.1f".format(it) } ?: "%.1f".format(t.bpm), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(end = 8.dp))
+        Text(bpmLabel(master ?: t.bpm), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(end = 8.dp))
         KeyBadge(t)
         Box(
             Modifier.padding(start = 6.dp).height(36.dp).clip(RbShape).background(if (now) Palette.blue else Palette.bg)
@@ -614,5 +619,3 @@ private fun PoolRow(
     }
 }
 
-/** Se o tom da troca combina ("tom ok") ou não ("tom ✗"), quando os dois têm tom. */
-private fun fitKeys(f: Fit): String = if (f.keyDistance == null) "" else if (f.keyOk) "tom ok " else "tom ✗ "

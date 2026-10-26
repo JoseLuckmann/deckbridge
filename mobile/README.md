@@ -89,6 +89,13 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
 - Abas na ordem do trabalho: **MÚSICAS · MARCAR · PLAYLISTS · PENDRIVE**. Numa playlist, **＋** põe músicas (cada linha
   ganha um ＋) e **MIXAR** abre o set.
 
+## Simples por padrão
+
+- **Grava sozinho** (20 s depois da última mudança e ao sair do app); ↶ ↷ no topo enquanto há o que desfazer.
+- No SET, cada troca é uma linha: ▶ ouve, tocar na linha abre o MIX, ⚠ mostra o aviso (e a ponte). ⋯ ou toque longo na
+  faixa abre o ponto de virada. O master fica na faixa de cima.
+- No MIX, AJUSTAR ▾ abre os ajustes finos. Tom em Camelot em todo o app (MENU → Tom troca para a nota musical).
+
 ## Teste de áudio
 
 MENU → APARELHO → **Teste de áudio**: lê 30 s de uma música da biblioteca pelo decodificador do Android e monta uma

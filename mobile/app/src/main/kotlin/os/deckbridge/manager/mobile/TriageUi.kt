@@ -83,7 +83,7 @@ private fun TrackCard(app: ManagerApp, t: TrackItem) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(t.artist.ifEmpty { "—" }, color = Palette.muted, fontSize = 16.sp, maxLines = 1)
-        Text(listOf(if (t.bpm > 0) "%.1f".format(t.bpm) else "—", t.key.ifEmpty { "—" }, formatDuration(t.durationSeconds)).joinToString("  ·  "), color = Palette.mutedBright, fontSize = 15.sp, fontFamily = Mono, modifier = Modifier.padding(top = 4.dp, bottom = 6.dp))
+        Text(listOf(if (t.bpm > 0) "%.1f".format(t.bpm) else "—", keyLabel(t.key), formatDuration(t.durationSeconds)).joinToString("  ·  "), color = Palette.mutedBright, fontSize = 15.sp, fontFamily = Mono, modifier = Modifier.padding(top = 4.dp, bottom = 6.dp))
         // Tocar na onda ouve daquele ponto: dá para pular direto para o drop.
         PlayableWave(app, t, 64.dp)
         // Botão de tocar na cor do PLAY do player: verde-claro com texto escuro.

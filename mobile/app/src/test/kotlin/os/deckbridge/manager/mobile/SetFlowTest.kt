@@ -44,7 +44,7 @@ class SetFlowTest {
         a.tab = Tab.PLAYLISTS
         a.model.openPlaylist = 1
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
-        rule.onNodeWithText("MIXAR").performClick()
+        rule.onNodeWithText("SET").performClick()
         rule.waitForIdle()
         assertEquals(1, a.sets.playlistId)
         val plan = a.sets.plan()
@@ -98,7 +98,7 @@ class SetFlowTest {
         a.sets.open(1)
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
         rule.waitForIdle()
-        rule.onAllNodes(androidx.compose.ui.test.hasText("MIX"))[0].performClick()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("→", substring = true))[0].performClick()
         rule.waitForIdle()
         assertNotNull(a.sets.mixing)
         waitMix(a)
@@ -110,6 +110,11 @@ class SetFlowTest {
         assertEquals(p.leadMs - (2 * p.barMsA).toInt(), a.sets.cursorMs)
         rule.onNodeWithText("DECK 1").assertExists()
         rule.onNodeWithText("▶ PLAY").assertExists()
+        // Simples por padrão: compassos e estilo à vista; o resto em AJUSTAR.
+        assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("SYNC FINO")).fetchSemanticsNodes().size)
+        rule.onRoot().captureRoboImage(File(out, "mobile-39-vertical-mix-simples.png").path)
+        rule.onNodeWithText("AJUSTAR ▾").performClick()
+        rule.waitForIdle()
         rule.onNodeWithText("SYNC FINO").assertExists()
         assertTrue(a.sets.mixing!!.phaseLock, "sync fino ligado por padrão")
         // Faixas sintéticas com grade certa: nada a corrigir (o botão de grade fica apagado).

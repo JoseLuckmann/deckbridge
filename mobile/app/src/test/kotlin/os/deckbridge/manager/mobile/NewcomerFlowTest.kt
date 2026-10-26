@@ -85,7 +85,7 @@ class NewcomerFlowTest {
         click("PLAYLISTS")
         rule.onNodeWithText(pid.name).performClick()
         rule.waitForIdle()
-        click("MIXAR")
+        click("SET")
         assertFalse(a.hint("set"))
         assertTrue(a.hint("hear"))
         rule.onRoot().captureRoboImage(File(out, "mobile-37-vertical-set-primeiro-play.png").path)

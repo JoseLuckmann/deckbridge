@@ -39,7 +39,7 @@ fun UsbTab(app: ManagerApp, actions: Actions) {
     val emptyLists = v?.playlists?.count { !it.folder && v.entries[it.id].orEmpty().isEmpty() } ?: 0
     val blocked = noAudio > 0 || (v?.tracks?.isEmpty() ?: true)
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Line("NO CELULAR", "${v?.tracks?.size ?: 0} músicas · ${v?.playlists?.count { !it.folder } ?: 0} playlists", if (m.dirty) Palette.orange else Palette.text)
+        Line("NO CELULAR", "${v?.tracks?.size ?: 0} músicas · ${v?.playlists?.count { !it.folder } ?: 0} playlists", Palette.text)
         // Sem músicas não há o que levar: o caminho é importar.
         if (v?.tracks.isNullOrEmpty()) {
             Button(onClick = { app.tab = Tab.LIBRARY; actions.pickAudio() }, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("IMPORTAR MÚSICAS") }
@@ -68,18 +68,19 @@ fun UsbTab(app: ManagerApp, actions: Actions) {
         }
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            StepMark(2, app.exportedOnce && !m.dirty, ready && !blocked)
+            StepMark(2, app.exportedOnce, ready && !blocked)
             Button(
                 onClick = { if (usb?.existing != null) confirm = Confirm.EXPORT else app.export() },
                 enabled = ready && !blocked,
                 modifier = Modifier.padding(start = 10.dp).weight(1f).spotlight(ready && !blocked && !app.exportedOnce && !app.guideHidden).height(56.dp),
-            ) { Text(if (m.dirty) "SALVAR E EXPORTAR" else "EXPORTAR", fontSize = 15.sp) }
+            ) { Text("EXPORTAR", fontSize = 15.sp) }
         }
         app.lastTransfer?.let { r ->
             Text("✓ ${r.tracks} faixas · ${r.copied} copiados", color = Palette.keyInk, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         }
         Spacer(Modifier.height(20.dp))
-        TextButton(onClick = { confirm = Confirm.IMPORT }, enabled = usb?.existing != null && !m.dirty) { Text("TRAZER DO PENDRIVE", fontSize = 12.sp) }
+        // Só quando o pendrive já tem uma biblioteca para trazer (sem botão apagado na tela).
+        if (usb?.existing != null) TextButton(onClick = { confirm = Confirm.IMPORT }) { Text("TRAZER DO PENDRIVE", fontSize = 12.sp) }
     }
     when (confirm) {
         Confirm.EXPORT -> ConfirmDialog(

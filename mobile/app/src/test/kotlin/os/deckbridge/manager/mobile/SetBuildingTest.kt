@@ -91,10 +91,13 @@ class SetBuildingTest {
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
         rule.waitForIdle()
         // Am → Bm: distância 2 na roda.
-        rule.onNodeWithText("Tom 8A→10A não combina", substring = true).assertExists()
         rule.onNodeWithText("⚠ 1").assertExists()
         rule.onRoot().captureRoboImage(File(out, "mobile-21-vertical-set-aviso.png").path)
-        rule.onNodeWithText("PONTE").performClick()
+        // O aviso por extenso só ao tocar no ⚠ da troca; a ponte é a ação dele.
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Aviso")).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Tom 8A→10A não combina", substring = true).assertExists()
+        rule.onNodeWithText("Pôr uma ponte").performClick()
         rule.waitForIdle()
         captureScreenRoboImage(File(out, "mobile-22-vertical-ponte.png").path)
         rule.onAllNodes(hasText("· 9A ·", substring = true))[0].performClick()
@@ -104,7 +107,7 @@ class SetBuildingTest {
         assertEquals(id(a, "Night Signal"), ids.first())
         assertEquals(id(a, "Copper Sky"), ids.last())
         assertEquals("Em", a.model.view!!.track(ids[1])!!.key)
-        rule.onNodeWithText("✓ trocas ok").assertExists()
+        assertTrue(a.sets.issues(ids, a.sets.plan()).isEmpty(), "trocas ok")
         // Um desfazer tira a ponte inteira.
         a.model.undo()
         a.model.undo()
@@ -119,7 +122,7 @@ class SetBuildingTest {
         a.model.submit(Edit.AddToPlaylist(pid, order), "p")
         a.sets.open(pid)
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
-        rule.onNodeWithText("ORDENAR").performClick()
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Mais")).performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Fluido").performClick()
         rule.waitForIdle()

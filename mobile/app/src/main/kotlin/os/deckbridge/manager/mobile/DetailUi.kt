@@ -154,7 +154,7 @@ private fun AnalysisSection(app: ManagerApp, t: TrackItem) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Stat("BPM", if (t.bpm > 0) "%.2f".format(t.bpm) else "—")
-            Stat("Tom", t.key.ifEmpty { "—" })
+            Stat("Tom", keyLabel(t.key) + if (!KeyStyle.musical && t.key.isNotEmpty()) " · ${t.key}" else "")
             Stat("Tempo", formatDuration(t.durationSeconds))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

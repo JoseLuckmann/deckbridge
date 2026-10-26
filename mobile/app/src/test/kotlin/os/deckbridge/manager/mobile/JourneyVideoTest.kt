@@ -115,9 +115,9 @@ class JourneyVideoTest : VideoTestBase() {
 
         // 4. Planejar a mixagem: o SET da playlist e o teste da primeira transição, tocando.
         step("4 · Planejar a mixagem")
-        tapText("MIXAR")
+        tapText("SET")
         hold(2.5)
-        tap(rule.onAllNodes(hasText("MIX"))[0])
+        tap(rule.onAllNodes(hasText("→", substring = true))[0])
         val until = System.currentTimeMillis() + 300_000
         while (app.sets.mixBusy && System.currentTimeMillis() < until) {
             Thread.sleep(600)

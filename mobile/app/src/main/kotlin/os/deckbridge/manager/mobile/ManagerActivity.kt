@@ -42,8 +42,18 @@ class ManagerActivity : ComponentActivity() {
         app.pendingIntent = intent
     }
 
+    /** Grava sozinho depois de [QUIET_MS] sem mudanças (confere a cada 5 s enquanto o app está na frente). */
+    private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
+    private val autosave = object : Runnable {
+        override fun run() {
+            if (app.model.dirty && System.currentTimeMillis() - app.model.lastChangeAt > QUIET_MS) app.autosave()
+            ticker.postDelayed(this, 5_000)
+        }
+    }
+
     override fun onStart() {
         super.onStart()
+        ticker.postDelayed(autosave, 5_000)
         ContextCompat.registerReceiver(this, noisy, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
@@ -55,7 +65,12 @@ class ManagerActivity : ComponentActivity() {
         app.preview.stop()
         runCatching { unregisterReceiver(noisy) }
         super.onStop()
-        Thread { app.saveNow() }.start()
+        ticker.removeCallbacks(autosave)
+        app.autosave()
+    }
+
+    private companion object {
+        const val QUIET_MS = 20_000L
     }
 
     override fun onDestroy() {

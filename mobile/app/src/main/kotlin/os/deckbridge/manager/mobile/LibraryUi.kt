@@ -72,13 +72,17 @@ fun LibraryTab(app: ManagerApp, actions: Actions) {
                 })
             }
             if (narrowed && rows.isNotEmpty()) item { FilterChip(selected = false, onClick = { dialog = Dialog.SaveList }, label = { Text("＋ Playlist", maxLines = 1) }) }
+            // A ordem da lista (no lugar do cabeçalho de colunas): o nome da ordem atual, tocar escolhe outra.
+            item {
+                val name = sortChoices.firstOrNull { it.first == m.sort.column }?.second ?: "Ordem"
+                FilterChip(selected = false, onClick = { dialog = Dialog.Sort }, label = { Text("⇅ $name", maxLines = 1) })
+            }
         }
-        if (rows.isNotEmpty()) ListHeader(app)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 8.dp)) {
             if (rows.isEmpty()) {
                 item(key = "empty") { EmptyList(app, actions) }
             } else {
-                items(rows, key = { it.id }) { t -> SwipeToTarget(app, t, onNoTarget = { dialog = Dialog.PickTarget }) { TrackRow(app, t, selected = t.id in m.selection, edited = t.id in m.editedTrackIds()) } }
+                items(rows, key = { it.id }) { t -> SwipeToTarget(app, t, onNoTarget = { dialog = Dialog.PickTarget }) { TrackRow(app, t, selected = t.id in m.selection) } }
             }
         }
         if (app.selecting) SelectionBar(app, rows) { dialog = it }
@@ -133,28 +137,6 @@ private fun EmptyList(app: ManagerApp, actions: Actions) {
     }
 }
 
-/** Cabeçalho da lista como no player: TÍTULO … BPM TOM; tocar ordena e tocar de novo inverte. */
-@Composable
-private fun ListHeader(app: ManagerApp) {
-    val m = app.model
-    @Composable fun head(label: String, col: TrackColumn, mod: Modifier) {
-        val on = m.sort.column == col
-        Text(
-            label + if (on) (if (m.sort.ascending) " ▲" else " ▼") else "",
-            color = if (on) Palette.orange else Palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, maxLines = 1,
-            modifier = mod.clickable {
-                if (on) m.toggleSort(col) else m.sort = os.deckbridge.manager.Sort(col, col != TrackColumn.ID && col != TrackColumn.RATING && col != TrackColumn.BPM)
-            }.padding(vertical = 8.dp),
-        )
-    }
-    Row(Modifier.fillMaxWidth().background(Palette.surface).border(BorderStroke(0.5.dp, Palette.line)).padding(start = 58.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        head("TÍTULO", TrackColumn.ARTIST, Modifier.weight(1f))
-        head("NOTA", TrackColumn.RATING, Modifier.padding(end = 12.dp))
-        head("BPM", TrackColumn.BPM, Modifier.width(52.dp))
-        head("TOM", TrackColumn.KEY, Modifier.width(40.dp))
-    }
-}
-
 /** Disco da faixa como na lista do player: quadrado na cor da faixa com o anel branco e o ponto. */
 @Composable
 private fun Disc(color: Color?) {
@@ -196,7 +178,7 @@ private fun SwipeToTarget(app: ManagerApp, t: TrackItem, onNoTarget: () -> Unit,
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean, edited: Boolean) {
+fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean) {
     val m = app.model
     val open = app.detailId == t.id
     val inTarget = m.target?.let { t.id in m.view?.entries?.get(it).orEmpty() } == true
@@ -233,16 +215,14 @@ fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean, edited: Boolean) 
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                // Ponto laranja: mudança não salva.
-                if (edited) Box(Modifier.padding(start = 6.dp).size(6.dp).background(Palette.orange, RbShape))
             }
             Text(t.artist.ifEmpty { "—" }, color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (t.rating > 0) Text("★".repeat(t.rating), color = Palette.orange, fontSize = 11.sp, modifier = Modifier.padding(start = 6.dp, end = 8.dp))
         // Sem análise: o BPM fica apagado, sem texto extra.
-        Text(if (t.bpm > 0) "%.1f".format(t.bpm) else "—", color = if (analyzed) Palette.text else Palette.muted, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.width(52.dp))
+        Text(bpmLabel(t.bpm), color = if (analyzed) Palette.text else Palette.muted, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.width(52.dp))
         Box(Modifier.width(40.dp).height(24.dp).background(if (compatible) Palette.keyFill else Color.Transparent), contentAlignment = Alignment.Center) {
-            Text(t.key.ifEmpty { "—" }, color = if (compatible) Palette.keyInk else Palette.mutedBright, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(keyLabel(t.key), color = if (compatible) Palette.keyInk else Palette.mutedBright, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
         if (m.target != null && !app.selecting) {
             Box(Modifier.size(52.dp).clickable { app.did(m.toggleInTarget(t.id)) }, contentAlignment = Alignment.Center) {

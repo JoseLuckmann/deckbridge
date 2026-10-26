@@ -36,10 +36,11 @@ fun MenuTab(app: ManagerApp, actions: Actions) {
         Line("Arrumar nomes", "") { app.openTidy() }
         Line("Refazer grades", "") { app.refreshGrids() }
         Line("Marcar (ouvir e dar nota)", "${counts[QuickFilter.UNRATED] ?: 0}") { app.startTriage() }
-        Line("Descartar mudanças", if (m.dirty) "${m.pending.size}" else "") { m.discard() }
         Section("Ajuda")
         Line("Guia para começar", if (app.guideHidden) "desligado" else "ligado") { if (app.guideHidden) app.showGuide() else app.hideGuide() }
         Line("Buscar e filtrar", "") { app.tab = Tab.LIBRARY; app.helpRequested = true }
+        Section("Tela")
+        Line("Tom", if (KeyStyle.musical) "Am (musical)" else "8A (Camelot)") { app.setMusicalKeys(!KeyStyle.musical) }
         Section("Aparelho")
         Line("Teste de áudio", app.audioCheckResult.substringAfter("· ").ifEmpty { "" }) { app.audioCheck() }
         Section("Segurança")

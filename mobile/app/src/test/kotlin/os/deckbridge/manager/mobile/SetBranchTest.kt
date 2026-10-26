@@ -68,6 +68,8 @@ class SetBranchTest {
         rule.waitForIdle()
         rule.onNodeWithText("Criar ramo daqui").performClick()
         rule.waitForIdle()
+        rule.onNodeWithText("MAIS OPÇÕES").performClick()
+        rule.waitForIdle()
         rule.onNodeWithText("Manter").performClick()
         rule.waitForIdle()
         captureScreenRoboImage(File(out, "mobile-24-vertical-novo-ramo.png").path)
@@ -113,16 +115,18 @@ class SetBranchTest {
         val main = mainSet(a)
         a.sets.open(main)
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
-        rule.onNodeWithText("MASTER AUTO").performClick()
+        // O master fica na faixa de cima: tocar nele escolhe.
+        rule.onNodeWithText("AUTO").assertExists()
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Master")).performClick()
         rule.waitForIdle()
         rule.onNodeWithText("126 BPM").performClick()
         rule.waitForIdle()
         assertEquals(126.0, a.sets.masterFixed)
         assertEquals(listOf(126.0, 126.0, 126.0, 126.0), a.sets.masters())
         assertEquals(126.0, a.sets.tempoFor(a.sets.plan()[0]))
-        // Small Hours (123) toca a 126: +2,4%.
-        rule.onNodeWithText("123 +2%").assertExists()
-        rule.onNodeWithText("MASTER 126").assertExists()
+        // Todas tocam a 126; o BPM da faixa e quanto estica só aparecem acima de 10% (aqui, nenhuma).
+        assertTrue(rule.onAllNodes(androidx.compose.ui.test.hasText("126")).fetchSemanticsNodes().size >= 5, "o master e as 4 faixas a 126")
+        assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("123 +2%")).fetchSemanticsNodes().size)
         rule.onRoot().captureRoboImage(File(out, "mobile-27-vertical-master-fixo.png").path)
         // Guardado por set: reabrir mantém.
         a.sets.close()

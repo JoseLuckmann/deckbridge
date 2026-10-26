@@ -27,6 +27,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,6 +104,8 @@ fun MixScreen(app: ManagerApp) {
     val gb = desk.grid(b)
     val pos = desk.cursorMs
     val levels = p?.levelsAt(pos) ?: Levels()
+    // Simples por padrão: ondas, PLAY, compassos e estilo. "AJUSTAR" abre o resto.
+    var advanced by remember { mutableStateOf(false) }
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         val wide = maxWidth >= WIDE_DP.dp
         val decks = @Composable { waveH: Dp ->
@@ -110,9 +116,9 @@ fun MixScreen(app: ManagerApp) {
         }
         val controls = @Composable {
             Overview(p, pos) { desk.seekMix(it) }
-            MixerStrip(levels)
-            Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos)
-            Controls(app, a, b, tr, ga, gb)
+            if (advanced) MixerStrip(levels)
+            Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced)
+            Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
         }
         Column(Modifier.fillMaxSize()) {
             StatusStrip(a, b, p, pos, busy = desk.mixBusy) { desk.closeMix() }
@@ -137,7 +143,7 @@ fun MixScreen(app: ManagerApp) {
 @Composable
 private fun StatusStrip(a: TrackItem, b: TrackItem, p: MixPreview?, pos: Int, busy: Boolean, onClose: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(44.dp).border(BorderStroke(1.dp, Palette.line)).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("TESTE DE MIX", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+        Text("MIX", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
         Text(
             if (busy) "  MONTANDO…" else "", color = Palette.noteInk, fontSize = 11.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f),
@@ -387,7 +393,7 @@ private fun Meter(label: String, value: Float, modifier: Modifier) {
 
 /** Fileira de transporte: pular compassos e PLAY/PAUSE grande, verde como no player. */
 @Composable
-private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSeek: (Int) -> Unit, pos: Int) {
+private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSeek: (Int) -> Unit, pos: Int, jumps: Boolean) {
     val bar = p?.barMsA ?: 2000.0
     Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         PadButton("◀◀ 4", Modifier.weight(1f)) { onSeek(pos - (4 * bar).toInt()) }
@@ -400,7 +406,7 @@ private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSe
         PadButton("1 ▶", Modifier.weight(1f)) { onSeek(pos + bar.toInt()) }
         PadButton("4 ▶▶", Modifier.weight(1f)) { onSeek(pos + (4 * bar).toInt()) }
     }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    if (jumps) Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         PadButton("CUE SAÍDA", Modifier.weight(1f)) { if (p != null) onSeek(p.leadMs - (2 * bar).toInt()) }
         PadButton("MEIO", Modifier.weight(1f)) { if (p != null) onSeek(p.leadMs + p.overlapMs / 2 - (bar).toInt()) }
         PadButton("FIM", Modifier.weight(1f)) { if (p != null) onSeek(p.leadMs + p.overlapMs - (2 * bar).toInt()) }
@@ -424,19 +430,25 @@ private fun RowLabel(text: String) = Text(text, color = Palette.text, fontSize =
 
 /** Os ajustes, em fileiras como LOOP / KEY do player. */
 @Composable
-private fun Controls(app: ManagerApp, a: TrackItem, b: TrackItem, tr: Transition, ga: TrackGrid?, gb: TrackGrid?) {
+private fun Controls(app: ManagerApp, a: TrackItem, b: TrackItem, tr: Transition, ga: TrackGrid?, gb: TrackGrid?, advanced: Boolean, onToggle: () -> Unit) {
     val desk = app.sets
     fun edit(t: Transition) = desk.editMix(t)
     Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            RowLabel("BARS")
+            RowLabel("COMP.")
             listOf(4, 8, 16, 32).forEach { n -> PadButton("$n", Modifier.weight(1f), on = tr.bars == n) { edit(tr.copy(bars = n)) } }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            RowLabel("FX")
+            RowLabel("ESTILO")
             listOf(MixStyle.BASS_SWAP to "GRAVE", MixStyle.BLEND to "MISTURA", MixStyle.ECHO to "ECHO", MixStyle.CUT to "CORTE").forEach { (s, label) ->
                 PadButton(label, Modifier.weight(1f), on = tr.style == s) { edit(tr.copy(style = s)) }
             }
+        }
+        PadButton(if (advanced) "MENOS ▴" else "AJUSTAR ▾", Modifier.fillMaxWidth()) { onToggle() }
+        if (ga == null || gb == null) Text("Sem grade: analise as faixas para cair na batida.", color = Palette.noteInk, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        if (!advanced) {
+            Spacer(Modifier.height(12.dp))
+            return@Column
         }
         PointRow("SAÍDA D1", tr.outMs, onNudge = { edit(tr.copy(outMs = SetPlanner.nudge(a, ga, tr.outMs, it))) })
         CueRow(ga?.cues.orEmpty(), tr.outMs) { edit(tr.copy(outMs = it)) }
@@ -462,7 +474,6 @@ private fun Controls(app: ManagerApp, a: TrackItem, b: TrackItem, tr: Transition
             }
             PadButton("GRADE D2", Modifier.weight(1.2f), enabled = m != null && kotlin.math.abs(m) >= 3) { desk.fixGridOfIncoming() }
         }
-        if (ga == null || gb == null) Text("Sem grade: analise as faixas para cair na batida.", color = Palette.noteInk, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(12.dp))
     }
 }

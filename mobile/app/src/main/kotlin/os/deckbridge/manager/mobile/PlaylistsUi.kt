@@ -133,12 +133,12 @@ private fun PlaylistTracks(app: ManagerApp, p: PlaylistItem, onBack: (() -> Unit
             if (onBack != null) TextButton(onClick = onBack) { Text("‹ VOLTAR", fontSize = 13.sp) }
             Text(p.name, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false))
             Text("${ids.size}", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(start = 8.dp).weight(1f))
-            // ＋ põe músicas; MIXAR abre o set (transições, ouvir, ensaiar).
+            // ＋ põe músicas; SET abre o set (transições, ouvir, ensaiar).
             OutlinedButton(onClick = { addTo(app, p.id) }, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)) { Text("＋", fontSize = 16.sp) }
             if (ids.size >= 2) Button(
                 onClick = { app.seen("set"); app.sets.open(p.id) },
                 modifier = Modifier.padding(start = 6.dp).spotlight(app.hint("set")).height(38.dp),
-            ) { Text("MIXAR", fontSize = 12.sp) }
+            ) { Text("SET", fontSize = 12.sp) }
             // Tudo que não é usado o tempo todo fica no ⋯.
             TextButton(onClick = { show(PlaylistDialog.More(p)) }) { Text("⋯", fontSize = 22.sp) }
         }

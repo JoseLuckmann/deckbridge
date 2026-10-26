@@ -79,7 +79,7 @@ class SetVideoTest : VideoTestBase() {
 
         // 3. O master manda: fixa 130 e todas as faixas tocam nele (o quanto cada uma estica aparece na linha).
         step("3 · O master manda no andamento")
-        tapText("MASTER AUTO")
+        tap(rule.onNode(hasContentDescription("Master")))
         hold(1.0)
         tapText("130 BPM")
         app.notice = null
@@ -87,7 +87,7 @@ class SetVideoTest : VideoTestBase() {
 
         // 4. Ouvir a primeira transição, já no master.
         step("4 · Ouvir a transição")
-        tap(rule.onAllNodes(hasText("MIX"))[0])
+        tap(rule.onAllNodes(hasText("→", substring = true))[0])
         val until = System.currentTimeMillis() + 300_000
         while (app.sets.mixBusy && System.currentTimeMillis() < until) {
             Thread.sleep(600)
@@ -126,6 +126,8 @@ class SetVideoTest : VideoTestBase() {
         hold(1.0)
         tapText("Criar ramo daqui")
         hold(1.5)
+        tapText("MAIS OPÇÕES")
+        hold(1.0)
         tapText("Manter")
         hold(1.0)
         tapText("CRIAR")

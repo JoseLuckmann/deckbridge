@@ -14,6 +14,8 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,3 +92,24 @@ fun Modifier.spotlight(on: Boolean): Modifier =
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(w),
         )
     }
+
+/** Como o tom aparece em todo o app: Camelot (8A, padrão, o que DJ usa para mixar) ou a nota musical (Am). */
+object KeyStyle {
+    var musical by androidx.compose.runtime.mutableStateOf(false)
+}
+
+/** O tom de uma faixa, no formato escolhido em [KeyStyle]. */
+fun keyLabel(key: String): String {
+    if (key.isEmpty()) return "—"
+    if (KeyStyle.musical) return key
+    return os.deckbridge.manager.smart.Smart.camelot(key)?.let { "${it.first}${it.second}" } ?: key
+}
+
+/** BPM nas listas: inteiro (o decimal fica no detalhe da faixa). */
+fun bpmLabel(bpm: Double): String = if (bpm > 0) "%.0f".format(bpm) else "—"
+
+/** O título sem o "(Extended Mix)", "(… Remix)" do fim: cabe nas linhas curtas. */
+fun shortTitle(title: String): String = title.substringBefore(" (").trim().ifEmpty { title }
+
+/** Uma porcentagem com sinal e sem casa decimal; o que arredonda para zero aparece "0%" (nunca "-0%"). */
+fun pctLabel(pct: Double): String = Math.round(pct).let { if (it == 0L) "0%" else "%+d%%".format(it) }

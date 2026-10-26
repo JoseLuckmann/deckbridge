@@ -77,7 +77,7 @@ class SetPoolTest {
         click("Pool depois desta")
         assertEquals(3, a.sets.poolFrom)
         rule.onNodeWithText("POOL").assertExists()
-        assertEquals(0, rule.onAllNodes(hasText("ORDENAR")).fetchSemanticsNodes().size, "pool não se ordena")
+        assertEquals(0, rule.onAllNodes(hasContentDescription("Mais")).fetchSemanticsNodes().size, "pool não se ordena")
         assertEquals(2, a.sets.plan().size, "transições só nas 3 fixas")
         assertEquals(3, a.sets.poolIds().size)
         // Tocando a Copper Sky: as outras vêm na ordem da melhor troca a partir dela.
@@ -114,6 +114,7 @@ class SetPoolTest {
         // Ramo B em pool, saindo da 1ª e voltando na linha.
         turn(0)
         click("Criar ramo daqui")
+        click("MAIS OPÇÕES")
         click("Pool")
         // O "4" do diálogo (a 4ª faixa do set também mostra "4"): o diálogo é o último na árvore.
         pick("4")
@@ -132,6 +133,7 @@ class SetPoolTest {
         // Ramo C "Eu escolho" saindo da 2ª: nasce vazio; ponho uma faixa e escolho onde volta.
         turn(1)
         click("Criar ramo daqui")
+        click("MAIS OPÇÕES")
         click("Eu escolho")
         click("CRIAR")
         val c = assertNotNull(a.sets.branch)
@@ -150,6 +152,7 @@ class SetPoolTest {
         // Ramo D de dentro do C: sai da faixa que pus e é outro final.
         turn(0)
         click("Criar ramo daqui")
+        click("MAIS OPÇÕES")
         click("Eu escolho")
         click("CRIAR")
         val d = assertNotNull(a.sets.branch)

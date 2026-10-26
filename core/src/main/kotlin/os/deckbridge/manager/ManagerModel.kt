@@ -64,6 +64,17 @@ class ManagerModel(val backups: Backups = Backups()) {
     val isOpen: Boolean get() = volume != null
     val dirty: Boolean get() = pending.isNotEmpty()
 
+    /** Quando a fila mudou pela última vez (para gravar sozinho depois de um tempo sem mexer). */
+    @Volatile var lastChangeAt = 0L
+        private set
+
+    /** Uma gravação silenciosa está em andamento: desfazer espera (o que está sendo gravado não pode sair da fila). */
+    var saving by mutableStateOf(false)
+        private set
+
+    /** Uma gravação de cada vez (a silenciosa e a do exportar não se cruzam). */
+    private val writeLock = Any()
+
     fun open(root: File): Boolean = try {
         val vol = Volumes.open(root)
         volume = vol
@@ -98,6 +109,7 @@ class ManagerModel(val backups: Backups = Backups()) {
             pending = pending + PendingChange(edit, text)
             redoStack = emptyList()
             view = e.view()
+            lastChangeAt = System.currentTimeMillis()
             true
         } catch (ex: EditException) {
             editor = rebuild()
@@ -116,7 +128,8 @@ class ManagerModel(val backups: Backups = Backups()) {
     }
 
     fun undo() {
-        if (pending.isEmpty()) return
+        if (pending.isEmpty() || saving) return
+        lastChangeAt = System.currentTimeMillis()
         redoStack = redoStack + pending.last()
         pending = pending.dropLast(1)
         editor = rebuild()
@@ -340,24 +353,79 @@ class ManagerModel(val backups: Backups = Backups()) {
 
     /** Grava a fila no pendrive (ou na cópia [target]). Bloqueante: a tela chama fora da thread de interface. */
     fun apply(target: File? = null, progress: (String) -> Unit = {}): ApplyReport? {
-        val vol = volume ?: return null
-        val e = editor ?: return null
-        return try {
-            val report = SafeWriter.apply(vol, e, pending.map { it.text }, backups, target ?: vol.root, progress)
-            lastReport = report
-            val reopen = target ?: vol.root
-            // Reabre o volume já gravado: a tela passa a mostrar o que está de fato no arquivo.
-            if (target == null) {
-                open(reopen)
-                banner = Banner("Gravado no pendrive. Cópia de segurança em ${report.backup.dir.path}", error = false)
-            } else {
-                banner = Banner("Gravado na cópia ${target.path}. O pendrive aberto não foi tocado.", error = false)
+        synchronized(writeLock) {
+            val vol = volume ?: return null
+            val e = editor ?: return null
+            return try {
+                val report = SafeWriter.apply(vol, e, pending.map { it.text }, backups, target ?: vol.root, progress)
+                lastReport = report
+                val reopen = target ?: vol.root
+                // Reabre o volume já gravado: a tela passa a mostrar o que está de fato no arquivo.
+                if (target == null) {
+                    open(reopen)
+                    banner = Banner("Gravado no pendrive. Cópia de segurança em ${report.backup.dir.path}", error = false)
+                } else {
+                    banner = Banner("Gravado na cópia ${target.path}. O pendrive aberto não foi tocado.", error = false)
+                }
+                report
+            } catch (ex: VolumeException) {
+                banner = Banner(ex.message ?: ex.code, error = true)
+                null
             }
-            report
-        } catch (ex: VolumeException) {
-            banner = Banner(ex.message ?: ex.code, error = true)
+        }
+    }
+
+    /** O que uma gravação silenciosa gravou: as [count] primeiras mudanças da fila. */
+    class QuietSave(val count: Int, val report: ApplyReport)
+
+    /**
+     * Começa uma gravação silenciosa (na thread da tela): marca [saving] e devolve a fila de agora, ou null se não há o
+     * que gravar. Depois, [writeQuiet] numa thread de fundo e [finishQuiet] de volta na thread da tela.
+     */
+    fun beginQuiet(): List<PendingChange>? {
+        if (pending.isEmpty() || saving || volume == null) return null
+        saving = true
+        return pending
+    }
+
+    /**
+     * Grava [queued] (de [beginQuiet]) a partir de uma cópia do editor, sem mexer no que a tela usa: dá para continuar
+     * editando enquanto grava. Bloqueante; chamar fora da thread da tela. Null se falhou ([banner] diz o motivo).
+     */
+    fun writeQuiet(queued: List<PendingChange>): QuietSave? = synchronized(writeLock) {
+        val vol = volume ?: return@synchronized null
+        try {
+            val fresh = PdbEditor(vol.raw, vol.root).also { ed -> queued.forEach { ed.apply(it.edit) } }
+            QuietSave(queued.size, SafeWriter.apply(vol, fresh, queued.map { it.text }, backups, vol.root) {})
+        } catch (ex: Exception) {
+            banner = Banner(ex.message ?: "Não consegui gravar.", error = true)
             null
         }
+    }
+
+    /**
+     * Termina a gravação silenciosa (na thread da tela): relê o que foi gravado e põe de volta na fila só o que foi feito
+     * durante a gravação. A tela continua onde estava (filtro, busca, seleção, playlist aberta).
+     */
+    fun finishQuiet(done: QuietSave?) {
+        saving = false
+        val vol = volume ?: return
+        if (done == null) return
+        val later = pending.drop(done.count)
+        val reopened = try { Volumes.open(vol.root) } catch (ex: VolumeException) {
+            banner = Banner(ex.message ?: ex.code, error = true)
+            return
+        }
+        volume = reopened
+        val fresh = PdbEditor(reopened.raw, reopened.root)
+        val kept = later.filter { runCatching { fresh.apply(it.edit) }.isSuccess }
+        editor = fresh
+        pending = kept
+        lastReport = done.report
+        view = fresh.view()
+        selection = selection.filter { view!!.track(it) != null }.toSet()
+        if (openPlaylist != null && view!!.playlists.none { it.id == openPlaylist }) openPlaylist = null
+        if (target != null && view!!.playlists.none { it.id == target }) target = null
     }
 
     fun restore(record: BackupRecord): Boolean {

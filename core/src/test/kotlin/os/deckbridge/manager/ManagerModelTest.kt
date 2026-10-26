@@ -36,6 +36,37 @@ class ManagerModelTest {
     }
 
     @Test
+    fun aQuietSaveKeepsTheScreenAndWhatWasDoneMeanwhile() {
+        val dir = TestVolumes.synthetic()
+        val m = model()
+        m.open(dir)
+        val a = m.view!!.tracks[0]
+        val b = m.view!!.tracks[1]
+        m.submit(Edit.SetTracks(listOf(a.id), TrackPatch(rating = 5)), "nota")
+        m.filter = os.deckbridge.manager.smart.QuickFilter.TOP
+        m.query = "x"
+        val queued = assertNotNull(m.beginQuiet())
+        assertTrue(m.saving)
+        m.undo()
+        assertEquals(1, m.pending.size, "desfazer espera a gravação")
+        // Editando enquanto grava: a mudança nova fica na fila depois.
+        m.submit(Edit.SetTracks(listOf(b.id), TrackPatch(rating = 3)), "outra")
+        val done = assertNotNull(m.writeQuiet(queued))
+        m.finishQuiet(done)
+        assertFalse(m.saving)
+        assertEquals(listOf("outra"), m.pending.map { it.text }, "só o que foi feito durante a gravação fica na fila")
+        assertEquals(5, m.view!!.track(a.id)!!.rating)
+        assertEquals(3, m.view!!.track(b.id)!!.rating)
+        assertEquals(os.deckbridge.manager.smart.QuickFilter.TOP, m.filter, "a tela não pula")
+        assertEquals("x", m.query)
+        // Gravado de verdade: reabrir lê a nota.
+        val again = model()
+        again.open(dir)
+        assertEquals(5, again.view!!.track(a.id)!!.rating)
+        assertEquals(0, again.view!!.track(b.id)!!.rating.let { if (it == b.rating) 0 else it }, "a de depois ainda não foi gravada")
+    }
+
+    @Test
     fun aRefusedEditLeavesTheQueueAndTheViewAsTheyWere() {
         val m = model()
         m.open(TestVolumes.synthetic())

@@ -103,7 +103,9 @@ fun SetMapScreen(app: ManagerApp) {
  */
 @Composable
 private fun RouteChart(routes: List<SetDesk.RouteView>, picked: Int, natives: (Int) -> Double) {
-    val all = routes.flatMap { it.tempo.masters }.filter { it > 0 }
+    // A escala cobre o master e o BPM de cada faixa do caminho escolhido (com o master fixo, a linha é reta e os pontos mostram as faixas).
+    val sel0 = routes.getOrNull(picked) ?: routes.first()
+    val all = (routes.flatMap { it.tempo.masters } + sel0.route.ids.map(natives)).filter { it > 0 }
     if (all.isEmpty()) return
     val lo = all.min() - 2
     val hi = all.max() + 2
@@ -118,6 +120,7 @@ private fun RouteChart(routes: List<SetDesk.RouteView>, picked: Int, natives: (I
             }
             val colors = routes.indices.map { routeColor(it) }
             val warn = Palette.orange
+            val native0 = Palette.mutedBright
             Canvas(Modifier.weight(1f).fillMaxHeight()) {
                 fun x(ms: Long) = size.width * (ms.toFloat() / total)
                 fun y(bpm: Double) = size.height * (1 - ((bpm - lo) / (hi - lo)).toFloat())
@@ -149,11 +152,17 @@ private fun RouteChart(routes: List<SetDesk.RouteView>, picked: Int, natives: (I
                         if (own) drawCircle(colors[n].copy(alpha = strong), (if (n == picked) 4f else 3f) * density, pts[i])
                     }
                 }
-                // Onde uma faixa do caminho escolhido estica mais que o confortável (acima de 10%): um anel laranja.
+                // No caminho escolhido: o BPM de cada faixa (ponto claro, ligado ao master por um traço) e, onde estica
+                // mais que o confortável (acima de 10%), um anel laranja.
                 val sel = routes[picked]
                 sel.route.ids.indices.forEach { i ->
                     val native = natives(sel.route.ids[i])
                     val mst = sel.tempo.masters.getOrNull(i) ?: return@forEach
+                    val at = x(sel.tempo.startMs[i])
+                    if (native > 0) {
+                        drawLine(native0.copy(alpha = 0.5f), Offset(at, y(mst)), Offset(at, y(native)), 1f * density)
+                        drawCircle(native0, 2.5f * density, Offset(at, y(native)))
+                    }
                     if (native > 0 && kotlin.math.abs(SetTempo.stretchPct(native, mst)) > SetTempo.COMFORT_PCT) {
                         drawCircle(warn, 7f * density, Offset(x(sel.tempo.startMs[i]), y(mst)), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f * density))
                     }
@@ -173,7 +182,7 @@ private fun RouteChart(routes: List<SetDesk.RouteView>, picked: Int, natives: (I
 private fun RouteRow(app: ManagerApp, n: Int, r: SetDesk.RouteView, selected: Boolean, onPick: () -> Unit, onOpen: () -> Unit) {
     val v = app.model.view ?: return
     val route = r.route
-    fun title(id: Int) = v.track(id)?.let { it.title.ifEmpty { it.fileName } }.orEmpty()
+    fun title(id: Int) = v.track(id)?.let { shortTitle(it.title.ifEmpty { it.fileName }) }.orEmpty()
     val from = route.branch?.fromTrackId
     val back = route.rejoinId
     val where = when {
@@ -214,10 +223,10 @@ private fun StepRow(t: os.deckbridge.manager.pdb.TrackItem, startMs: Long, maste
         if (master != null && t.bpm > 0) {
             val st = SetTempo.stretchPct(t.bpm, master)
             Text(
-                "%.0f %+.0f%%".format(master, st), fontSize = 12.sp, fontFamily = Mono,
+                "%.0f ".format(master) + pctLabel(st), fontSize = 12.sp, fontFamily = Mono,
                 color = if (kotlin.math.abs(st) > SetTempo.MAX_PCT) Palette.danger else if (kotlin.math.abs(st) > SetTempo.COMFORT_PCT) Palette.orange else Palette.mutedBright,
             )
         }
-        Text(Smart.camelot(t.key)?.let { "${it.first}${it.second}" } ?: "—", color = Palette.keyInk, fontSize = 12.sp, fontFamily = Mono, modifier = Modifier.width(30.dp))
+        Text(keyLabel(t.key), color = Palette.keyInk, fontSize = 12.sp, fontFamily = Mono, modifier = Modifier.width(30.dp))
     }
 }

@@ -50,6 +50,9 @@ enum class GuideStep(val label: String) {
     }
 }
 
+/** Quanto um aviso fica na tela antes de sumir sozinho. */
+const val NOTICE_MS = 3_500L
+
 enum class Tab(val title: String) { LIBRARY("Biblioteca"), PLAYLISTS("Playlists"), USB("Pendrive"), MENU("Menu") }
 
 /** Um trabalho longo em andamento (importar, analisar, exportar). A tela mostra o texto e o botão de cancelar. */
@@ -81,7 +84,17 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     var job by mutableStateOf<Job?>(null)
     var usb by mutableStateOf<UsbChoice?>(null)
     var lastTransfer by mutableStateOf<TransferReport?>(null)
-    var notice by mutableStateOf<Banner?>(null)
+    private var shownNotice by mutableStateOf<Banner?>(null)
+    private val noticeTimer = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** O aviso de baixo. Some sozinho em [NOTICE_MS] (um erro fica até o OK). */
+    var notice: Banner?
+        get() = shownNotice
+        set(value) {
+            shownNotice = value
+            noticeTimer.removeCallbacksAndMessages(null)
+            if (value != null && !value.error) noticeTimer.postDelayed({ if (shownNotice === value) shownNotice = null }, NOTICE_MS)
+        }
 
     /** Verdadeiro quando o aviso atual veio de uma mudança que o botão "Desfazer" do aviso desfaz. */
     var noticeUndo by mutableStateOf(false)
@@ -113,6 +126,16 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
             ACTION_IMPORTAR -> pickAudio()
             ACTION_EXPORTAR -> tab = Tab.USB
         }
+    }
+
+    init {
+        KeyStyle.musical = prefs.getBoolean("tomMusical", false)
+    }
+
+    /** Tom em nota musical (Am) em vez de Camelot (8A), em todo o app. */
+    fun setMusicalKeys(on: Boolean) {
+        KeyStyle.musical = on
+        prefs.edit().putBoolean("tomMusical", on).apply()
     }
 
     fun hideGuide() {
@@ -350,6 +373,30 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         }, "deckbridge-job").start()
     }
 
+    /** Dentro de uma tarefa que vai reler a biblioteca: grava antes o que está na fila (nada se perde). */
+    private fun saveFirst(j: Job) {
+        if (!model.dirty) return
+        j.text = "Gravando"
+        if (model.apply(null) { j.text = it } == null) throw ExportException("E_SAVE", model.banner?.text ?: "Não consegui gravar.")
+        pruneBackups()
+    }
+
+    /**
+     * Grava sozinho, sem tela de espera nem aviso: a fila vai para a biblioteca do aparelho numa thread de fundo e a tela
+     * fica onde está (dá para continuar mexendo). Chamado depois de um tempo sem mudanças e ao sair do app. Na thread da tela.
+     */
+    fun autosave() {
+        if (job != null) return
+        val queued = model.beginQuiet() ?: return
+        Thread({
+            val done = model.writeQuiet(queued)
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                model.finishQuiet(done)
+                if (done != null) pruneBackups() else say(model.banner?.text ?: "Não consegui gravar.", error = true)
+            }
+        }, "deckbridge-gravar").start()
+    }
+
     /** Grava as mudanças da fila na biblioteca local (com cópia de segurança). */
     fun save(thenRun: (() -> Unit)? = null) {
         if (!model.dirty) {
@@ -365,11 +412,6 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
                 say(model.banner?.text ?: "Não consegui salvar.", error = true)
             }
         }
-    }
-
-    /** Salva sem abrir tarefa (ao sair do app). Bloqueante. */
-    fun saveNow() {
-        if (model.dirty && job == null) model.apply(null)
     }
 
     private fun pruneBackups(keep: Int = 15) {
@@ -537,11 +579,8 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     /** Junta as faixas do pendrive às do aparelho, sem apagar nada; repetidas são puladas. */
     fun mergeFromUsb() {
         val choice = usb ?: return
-        if (model.dirty) {
-            say("Salve antes", error = true)
-            return
-        }
         background("Juntando") { j ->
+            saveFirst(j)
             val r = os.deckbridge.manager.transfer.UsbMerger(model.backups, context.cacheDir).merge(choice.storage, root, progress = { j.text = it }, cancelled = { j.cancelled })
             model.open(root)
             pruneBackups()
@@ -551,11 +590,8 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
 
     fun importFromUsb(includeAudio: Boolean) {
         val choice = usb ?: return
-        if (model.dirty) {
-            say("Salve antes", error = true)
-            return
-        }
         background("Trazendo do pendrive") { j ->
+            saveFirst(j)
             val report = UsbImporter(backupsDir).import(choice.storage, root, includeAudio, progress = { j.text = it }, cancelled = { j.cancelled })
             lastTransfer = report
             model.open(root)
