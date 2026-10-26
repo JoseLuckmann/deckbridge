@@ -27,7 +27,11 @@ data class Transition(
     val masterTempo: Boolean = true,
     /** Sync fino: corrige o resto de desalinhamento entre os bumbos que as grades deixam. */
     val phaseLock: Boolean = true,
-)
+    /** O que o DJ achou ao ensaiar: boa, refazer, ou ainda não ouviu. */
+    val mark: Mark? = null,
+) {
+    enum class Mark { GOOD, REDO }
+}
 
 /** O que se sabe de uma faixa para planejar: grade e cues (do ANLZ) e a duração. */
 class TrackGrid(val beats: List<Beat>, val cues: List<Cue>, val durationMs: Int)
@@ -127,6 +131,7 @@ object SetPlanner {
             p.setProperty("$n.style", t.style.name)
             p.setProperty("$n.mt", t.masterTempo.toString())
             p.setProperty("$n.lock", t.phaseLock.toString())
+            t.mark?.let { p.setProperty("$n.mark", it.name) }
         }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".novo")
@@ -144,6 +149,7 @@ object SetPlanner {
                     p.getProperty("$i.from").toInt(), p.getProperty("$i.to").toInt(), p.getProperty("$i.out").toInt(), p.getProperty("$i.in").toInt(),
                     p.getProperty("$i.bars").toInt(), MixStyle.valueOf(p.getProperty("$i.style")), p.getProperty("$i.mt")?.toBooleanStrictOrNull() ?: true,
                     p.getProperty("$i.lock")?.toBooleanStrictOrNull() ?: true,
+                    p.getProperty("$i.mark")?.let { m -> runCatching { Transition.Mark.valueOf(m) }.getOrNull() },
                 )
             }.getOrNull()
         }

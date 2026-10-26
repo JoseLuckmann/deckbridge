@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -62,8 +63,11 @@ fun SetScreen(app: ManagerApp) {
     val p = v.playlists.firstOrNull { it.id == desk.playlistId } ?: run { desk.close(); return }
     val ids = desk.ids()
     val plan = remember(ids, desk.saved, v) { desk.plan(ids) }
-    androidx.activity.compose.BackHandler { desk.close() }
+    androidx.activity.compose.BackHandler { if (desk.rehearsal != null) desk.stopRehearsal() else desk.close() }
     val allKey = desk.setKey(plan)
+    val issues = remember(ids, plan, v) { desk.issues(ids, plan) }
+    var sortOpen by remember { mutableStateOf(false) }
+    var bridgeFor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     Column(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(52.dp).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { desk.close() }) { Text("‹", fontSize = 22.sp) }
@@ -73,6 +77,12 @@ fun SetScreen(app: ManagerApp) {
             PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playAll(plan) }
         }
         if (ids.size >= 2) FlowStrip(ids.mapNotNull { v.track(it) }, plan)
+        if (ids.size >= 2) ActionsRow(
+            issues = issues.map { it.fromId to it.toId }.distinct().size,
+            redo = plan.count { it.mark == Transition.Mark.REDO },
+            onRehearse = { desk.startRehearsal(plan) },
+            onSort = { sortOpen = true },
+        )
         LazyColumn(Modifier.weight(1f)) {
             ids.forEachIndexed { n, id ->
                 val t = v.track(id) ?: return@forEachIndexed
@@ -81,7 +91,13 @@ fun SetScreen(app: ManagerApp) {
                 if (tr != null) {
                     val b = v.track(tr.toId)!!
                     item(key = "x$id-${tr.toId}") {
-                        TransitionRow(t, b, tr, SetPlanner.fit(t, b), playing = app.preview.playingKey == desk.keyFor(tr), onPlay = { desk.play(tr) }, onEdit = { desk.openMix(tr) })
+                        val here = issues.filter { it.fromId == id && it.toId == tr.toId }
+                        TransitionRow(
+                            t, b, tr, SetPlanner.fit(t, b), playing = app.preview.playingKey == desk.keyFor(tr), issues = here,
+                            rehearsing = desk.rehearsal?.let { plan.getOrNull(it) } == tr,
+                            onPlay = { desk.play(tr) }, onEdit = { desk.openMix(tr) },
+                            onBridge = if (here.any { it.bridgeable }) ({ bridgeFor = id to tr.toId }) else null,
+                        )
                     }
                 }
             }
@@ -94,6 +110,61 @@ fun SetScreen(app: ManagerApp) {
                     item(key = "s${s.id}") { SuggestionRow(s, SetPlanner.fit(last, s), onPlay = { app.preview.toggle(s) }, playing = app.preview.playingId == s.id) { desk.append(s) } }
                 }
             }
+        }
+        desk.rehearsal?.let { at -> plan.getOrNull(at)?.let { tr -> RehearsalBar(app, at, plan, tr) } }
+    }
+    if (sortOpen) {
+        val shapes = os.deckbridge.manager.mix.SetShape.values().toList()
+        ChoiceDialog("Ordenar para mixar", shapes.map { it.title }, onPick = { n -> sortOpen = false; desk.reorder(shapes[n]) }, onClose = { sortOpen = false })
+    }
+    bridgeFor?.let { (a, b) ->
+        val options = remember(a, b, ids) { desk.bridges(a, b) }
+        if (options.isEmpty()) {
+            ConfirmDialog("Ponte", "Nenhuma faixa da biblioteca combina com as duas.", "OK", onConfirm = { bridgeFor = null }, onClose = { bridgeFor = null })
+        } else {
+            ChoiceDialog("Ponte entre as duas", options.map { "${it.title.ifEmpty { it.fileName }} · ${keyLabel(it)} · %.0f".format(it.bpm) }, onPick = { n ->
+                bridgeFor = null
+                desk.insertBridge(a, options[n])
+            }, onClose = { bridgeFor = null })
+        }
+    }
+}
+
+/** Ensaiar, ordenar e o resumo dos avisos, logo abaixo da curva. */
+@Composable
+private fun ActionsRow(issues: Int, redo: Int, onRehearse: () -> Unit, onSort: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Button(onClick = onRehearse, modifier = Modifier.height(40.dp)) { Text("ENSAIAR", fontSize = 12.sp) }
+        OutlinedButton(onClick = onSort, modifier = Modifier.height(40.dp)) { Text("ORDENAR", fontSize = 12.sp) }
+        Spacer(Modifier.weight(1f))
+        if (redo > 0) Text("✗ $redo", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(end = 8.dp))
+        Text(if (issues == 0) "✓ trocas ok" else "⚠ $issues", color = if (issues == 0) Palette.keyInk else Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** O ensaio: a transição que está tocando e os botões para dizer se ficou boa. */
+@Composable
+private fun RehearsalBar(app: ManagerApp, at: Int, plan: List<Transition>, tr: Transition) {
+    val v = app.model.view ?: return
+    val a = v.track(tr.fromId)
+    val b = v.track(tr.toId)
+    Column(Modifier.fillMaxWidth().background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.blueActiveLine)).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("ENSAIO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+            Text("  ${at + 1}/${plan.size}", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono)
+            Text(
+                "  ${a?.title.orEmpty()} → ${b?.title.orEmpty()}", color = Palette.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(onClick = { app.sets.rehearse(plan, Transition.Mark.REDO) }, modifier = Modifier.weight(1f).height(48.dp)) { Text("✗ REFAZER", color = Palette.orange, fontSize = 13.sp) }
+            Box(
+                Modifier.weight(1f).height(48.dp).clip(RbShape).background(Palette.keyFill).border(BorderStroke(1.dp, Palette.keyInk.copy(alpha = 0.5f)), RbShape)
+                    .clickable { app.sets.rehearse(plan, Transition.Mark.GOOD) },
+                contentAlignment = Alignment.Center,
+            ) { Text("✓ BOA", color = Palette.keyInk, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+            OutlinedButton(onClick = { app.sets.stopRehearsal() }, modifier = Modifier.height(48.dp)) { Text("■", fontSize = 14.sp) }
         }
     }
 }
@@ -169,16 +240,33 @@ private fun SetTrackRow(n: Int, t: TrackItem, playing: Boolean, onOpen: () -> Un
 private fun fitText(f: Fit): String = if (f.bpmDiffPct == 0.0) "=" else "%+.1f%%".format(f.bpmDiffPct)
 
 @Composable
-private fun TransitionRow(a: TrackItem, b: TrackItem, tr: Transition, fit: Fit, playing: Boolean, onPlay: () -> Unit, onEdit: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(52.dp).clickable(onClick = onEdit).padding(start = 22.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun TransitionRow(
+    a: TrackItem, b: TrackItem, tr: Transition, fit: Fit, playing: Boolean, issues: List<os.deckbridge.manager.mix.SetIssue>, rehearsing: Boolean,
+    onPlay: () -> Unit, onEdit: () -> Unit, onBridge: (() -> Unit)?,
+) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).background(if (rehearsing) Palette.blueActiveFill else Palette.bg).clickable(onClick = onEdit)
+            .padding(start = 22.dp, end = 10.dp, top = 4.dp, bottom = 4.dp).height(androidx.compose.foundation.layout.IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         // O fio que liga uma faixa à outra.
         Box(Modifier.width(2.dp).fillMaxHeight().background(if (fit.good) Palette.keyInk.copy(alpha = 0.6f) else Palette.orange.copy(alpha = 0.6f)))
         Column(Modifier.padding(start = 14.dp).weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                when (tr.mark) {
+                    Transition.Mark.GOOD -> Text("✓ ", color = Palette.keyInk, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Transition.Mark.REDO -> Text("✗ ", color = Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    null -> {}
+                }
                 Text("${keyLabel(a)}→${keyLabel(b)}", color = if (fit.keyOk) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
                 Text("  " + fitText(fit), color = if (fit.bpmOk) Palette.mutedBright else Palette.orange, fontSize = 12.sp, fontFamily = Mono)
             }
             Text("${tr.style.title} · ${tr.bars} comp. · ${mmss(tr.outMs)}", color = Palette.muted, fontSize = 12.sp, maxLines = 1)
+            if (issues.isNotEmpty()) Text("⚠ " + issues.joinToString(" · ") { it.text }, color = Palette.orange, fontSize = 11.sp, maxLines = 2)
+        }
+        if (onBridge != null) {
+            OutlinedButton(onClick = onBridge, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) { Text("PONTE", fontSize = 10.sp) }
+            Spacer(Modifier.width(4.dp))
         }
         OutlinedButton(onClick = onEdit, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("MIX", fontSize = 11.sp) }
         Spacer(Modifier.width(6.dp))

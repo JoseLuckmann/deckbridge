@@ -39,6 +39,7 @@ class SetDesk(private val app: ManagerApp) {
 
     fun close() {
         app.preview.stop()
+        rehearsal = null
         playlistId = null
     }
 
@@ -136,7 +137,9 @@ class SetDesk(private val app: ManagerApp) {
     }
 
     /** Ajuste na tela de teste: guarda no plano e monta de novo; a cabeça fica no mesmo lugar relativo ao ponto de saída. */
-    fun editMix(tr: Transition) {
+    fun editMix(changed: Transition) {
+        // A transição mudou: o que o DJ marcou no ensaio era sobre a antiga.
+        val tr = changed.copy(mark = null)
         val wasPlaying = app.preview.playingKey?.startsWith("mix|") == true
         val rel = cursorMs - (mixPreview?.leadMs ?: 0)
         app.preview.stop()
@@ -290,5 +293,101 @@ class SetDesk(private val app: ManagerApp) {
             val f = renderSet(plan, { j.cancelled }) { j.text = "${it + 1}/${plan.size}" } ?: return@background
             onMain { if (playlistId == opened && opened != null) app.preview.toggleFile(f, key, "set") }
         }
+    }
+
+    // ---- montar, ordenar, checar e ensaiar ----------------------------------------------------------------------
+
+    fun issues(ids: List<Int>, plan: List<Transition>): List<os.deckbridge.manager.mix.SetIssue> {
+        val v = app.model.view ?: return emptyList()
+        return os.deckbridge.manager.mix.SetDoctor.check(v, ids, plan, ::grid)
+    }
+
+    /** Reordena a playlist para mixar (a primeira faixa fica: é a escolha do DJ para abrir). Desfazível. */
+    fun reorder(shape: os.deckbridge.manager.mix.SetShape) {
+        val id = playlistId ?: return
+        val v = app.model.view ?: return
+        val ids = ids()
+        val order = os.deckbridge.manager.mix.SetBuilder.order(v, ids, shape, first = ids.firstOrNull())
+        if (order == ids) return app.did("Já está na melhor ordem")
+        if (app.model.submit(Edit.ReorderPlaylist(id, order), "Ordenar \"${v.playlists.first { it.id == id }.name}\" para mixar (${shape.title})")) app.did("Ordenada: ${shape.title}")
+    }
+
+    fun bridges(a: Int, b: Int): List<TrackItem> {
+        val v = app.model.view ?: return emptyList()
+        return os.deckbridge.manager.mix.SetDoctor.bridges(v, v.track(a) ?: return emptyList(), v.track(b) ?: return emptyList(), ids().toSet())
+    }
+
+    /** Põe [bridge] entre [after] e a seguinte. Um desfazer tira as duas mudanças. */
+    fun insertBridge(after: Int, bridge: TrackItem) {
+        val id = playlistId ?: return
+        val ids = ids()
+        val at = ids.indexOf(after).takeIf { it >= 0 } ?: return
+        val order = ids.toMutableList().apply { add(at + 1, bridge.id) }
+        val n = app.model.submitAll(listOf(
+            Edit.AddToPlaylist(id, listOf(bridge.id)) to "Ponte \"${bridge.title}\"",
+            Edit.ReorderPlaylist(id, order) to "Ponte \"${bridge.title}\" no lugar",
+        ))
+        if (n == 2) app.did("Ponte: ${bridge.title}")
+    }
+
+    fun mark(tr: Transition, mark: Transition.Mark?) = update(tr.copy(mark = mark))
+
+    /** Ensaio: índice da transição sendo ouvida no plano, ou null. */
+    var rehearsal by mutableStateOf<Int?>(null)
+        private set
+
+    fun startRehearsal(plan: List<Transition>) {
+        if (plan.isEmpty()) return
+        // Começa na primeira que ainda não está boa.
+        val at = plan.indexOfFirst { it.mark != Transition.Mark.GOOD }.takeIf { it >= 0 } ?: 0
+        rehearsal = at
+        hear(plan[at])
+    }
+
+    private fun hear(tr: Transition) {
+        if (app.preview.playingKey != keyOf(tr)) play(tr)
+    }
+
+    /** Marca a transição do ensaio e passa para a próxima; na última, termina com o resumo. */
+    fun rehearse(plan: List<Transition>, mark: Transition.Mark) {
+        val at = rehearsal ?: return
+        val tr = plan.getOrNull(at) ?: return stopRehearsal()
+        mark(tr, mark)
+        val next = at + 1
+        if (next >= plan.size) {
+            stopRehearsal()
+            val marks = plan.mapIndexed { i, t -> if (i == at) mark else t.mark }
+            app.did("Ensaio: ${marks.count { it == Transition.Mark.GOOD }} boas · ${marks.count { it == Transition.Mark.REDO }} a refazer")
+        } else {
+            rehearsal = next
+            hear(plan[next])
+        }
+    }
+
+    fun stopRehearsal() {
+        rehearsal = null
+        app.preview.stop()
+    }
+
+    /**
+     * Monta um set novo de [minutes] minutos a partir de [pool], cria a playlist já na ordem para mixar e abre o SET dela.
+     * Devolve o id da playlist, ou null se não deu (nada com andamento no conjunto).
+     */
+    fun buildSet(pool: List<TrackItem>, minutes: Int, shape: os.deckbridge.manager.mix.SetShape, name: String): Int? {
+        val v = app.model.view ?: return null
+        val order = os.deckbridge.manager.mix.SetBuilder.build(v, pool, minutes, shape)
+        if (order.size < 2) {
+            app.notice = os.deckbridge.manager.Banner("Poucas faixas com BPM para montar um set", true)
+            return null
+        }
+        val id = app.model.nextPlaylistId()
+        val n = app.model.submitAll(listOf(
+            Edit.CreatePlaylist(id, 0, name, false) to "Montar \"$name\"",
+            Edit.AddToPlaylist(id, order) to "Faixas de \"$name\"",
+        ))
+        if (n != 2) return null
+        open(id)
+        app.did("$name · ${order.size} faixas")
+        return id
     }
 }

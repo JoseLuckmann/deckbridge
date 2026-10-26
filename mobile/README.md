@@ -51,6 +51,14 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
 - **PRÓXIMA**: três faixas que combinam com a última (tom e BPM primeiro, depois nota). ▶ ouve, ＋ põe no fim.
 - O plano fica em `sets/` ao lado da biblioteca do aparelho; o pendrive e o banco do rekordbox não mudam.
 
+## Montar e testar sets (rodada 9)
+
+- **MONTAR SET** (aba PLAYLISTS): de onde (biblioteca, ★4+ ou uma playlist), duração (30–120 min) e forma (Fluido,
+  Subindo, Sobe e desce). Cria a playlist na ordem para mixar e abre o SET.
+- No SET: **ORDENAR** (a primeira faixa fica), **⚠** com o que pode soar mal em cada troca (tom, salto de BPM, sem
+  grade, saída sem espaço), **PONTE** (uma faixa que combina com as duas, posta no meio) e **ENSAIAR**: toca cada
+  transição; ✓ BOA ou ✗ REFAZER passa para a próxima, e as marcas ficam no plano.
+
 ## Teste de áudio
 
 MENU → APARELHO → **Teste de áudio**: lê 30 s de uma música da biblioteca pelo decodificador do Android e monta uma

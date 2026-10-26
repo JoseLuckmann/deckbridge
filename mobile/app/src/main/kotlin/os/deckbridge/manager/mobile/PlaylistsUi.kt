@@ -1,6 +1,8 @@
 package os.deckbridge.manager.mobile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -66,6 +68,7 @@ sealed interface PlaylistDialog {
     data class Delete(val p: PlaylistItem) : PlaylistDialog
     data class More(val p: PlaylistItem) : PlaylistDialog
     data class Sort(val p: PlaylistItem) : PlaylistDialog
+    data object Build : PlaylistDialog
 }
 
 @Composable
@@ -77,7 +80,11 @@ private fun PlaylistList(app: ManagerApp, show: (PlaylistDialog) -> Unit) {
     val view = m.view
     val lists = view?.playlists.orEmpty().sortedWith(compareBy({ it.parentId }, { it.sort }, { it.id }))
     Column(Modifier.fillMaxSize()) {
-        OutlinedButton(onClick = { show(PlaylistDialog.New) }, modifier = Modifier.fillMaxWidth().padding(10.dp).height(46.dp)) { Text("+ NOVA PLAYLIST", fontSize = 13.sp) }
+        Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { show(PlaylistDialog.New) }, modifier = Modifier.weight(1f).height(46.dp)) { Text("+ NOVA PLAYLIST", fontSize = 13.sp) }
+            // Montar um set pronto para mixar a partir da biblioteca, das melhores ou de uma playlist.
+            Button(onClick = { show(PlaylistDialog.Build) }, modifier = Modifier.weight(1f).height(46.dp)) { Text("MONTAR SET", fontSize = 13.sp) }
+        }
         if (lists.isEmpty()) {
             Hint("Nenhuma playlist")
         } else {
@@ -191,6 +198,55 @@ private fun PlaylistDialogs(app: ManagerApp, dialog: PlaylistDialog?, show: (Pla
                 close()
             }, onClose = close)
         }
+        PlaylistDialog.Build -> BuildSetDialog(app, onClose = close)
         null -> {}
     }
+}
+
+/**
+ * Montar set: de onde (a biblioteca, as de nota 4 ou mais, ou uma playlist), quanto tempo e que forma. O app escolhe e
+ * ordena pelas trocas de tom e andamento, cria a playlist e abre o SET dela para ouvir e ajustar.
+ */
+@Composable
+private fun BuildSetDialog(app: ManagerApp, onClose: () -> Unit) {
+    val v = app.model.view ?: return
+    val lists = v.playlists.filter { !it.folder && v.entries[it.id].orEmpty().size >= 2 }.take(6)
+    val sources = listOf("Toda a biblioteca", "★4+") + lists.map { it.name }
+    var source by remember { mutableStateOf(0) }
+    var minutes by remember { mutableStateOf(60) }
+    var shape by remember { mutableStateOf(os.deckbridge.manager.mix.SetShape.FLOW) }
+    fun pool(): List<os.deckbridge.manager.pdb.TrackItem> = when (source) {
+        0 -> v.tracks
+        1 -> v.tracks.filter { it.rating >= 4 }
+        else -> v.entries[lists[source - 2].id].orEmpty().mapNotNull { v.track(it) }
+    }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Montar set") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("DE ONDE", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    sources.forEachIndexed { n, name -> FilterChip(source == n, { source = n }, { Text(name, maxLines = 1) }) }
+                }
+                Text("${pool().count { it.bpm > 0 }} faixas", color = Palette.muted, fontSize = 12.sp)
+                Text("DURAÇÃO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(30, 60, 90, 120).forEach { m -> FilterChip(minutes == m, { minutes = m }, { Text("$m min") }) }
+                }
+                Text("FORMA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    os.deckbridge.manager.mix.SetShape.values().forEach { sh -> FilterChip(shape == sh, { shape = sh }, { Text(sh.title, maxLines = 1) }) }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val name = "Set $minutes min · ${shape.title}"
+                if (app.sets.buildSet(pool(), minutes, shape, name) != null) onClose()
+            }, enabled = pool().count { it.bpm > 0 } >= 2) { Text("MONTAR") }
+        },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancelar") } },
+        containerColor = Palette.surfaceHigh,
+    )
 }
