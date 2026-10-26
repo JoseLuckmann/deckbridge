@@ -238,11 +238,12 @@ class SetDesk(private val app: ManagerApp) {
 
     private fun reader(t: TrackItem) = SegmentReader { start, len -> AudioIo.segment(File(app.root, t.filePath.replace('\\', '/').trimStart('/')), start, len) }
 
-    private fun render(tr: Transition, lead: Int, tail: Int, waves: Boolean = false): MixPreview? {
+    /** [tempo]: o master da troca, lido na thread da tela antes de montar (a tela pode mudar enquanto monta). */
+    private fun render(tr: Transition, lead: Int, tail: Int, waves: Boolean = false, tempo: Double? = tempoFor(tr)): MixPreview? {
         val v = app.model.view ?: return null
         val a = v.track(tr.fromId) ?: return null
         val b = v.track(tr.toId) ?: return null
-        return MixRenderer.transition(reader(a), a.bpm, reader(b), b.bpm, tr, lead, tail, waves, tempo = tempoFor(tr) ?: a.bpm)
+        return MixRenderer.transition(reader(a), a.bpm, reader(b), b.bpm, tr, lead, tail, waves, tempo = tempo ?: a.bpm)
     }
 
     // ---- teste de mixagem (a tela de dois decks) ------------------------------------------------------------------
@@ -301,10 +302,11 @@ class SetDesk(private val app: ManagerApp) {
         val gen = ++generation
         mixBusy = true
         mixError = null
-        val key = keyOf(tr)
+        val tempo = tempoFor(tr)
+        val key = keyOf(tr, tempo)
         worker.execute {
             val result = runCatching {
-                val p = synchronized(previews) { previews[key] } ?: render(tr, 12_000, 12_000, waves = true)?.also { synchronized(previews) { previews[key] = it } }
+                val p = synchronized(previews) { previews[key] } ?: render(tr, 12_000, 12_000, waves = true, tempo = tempo)?.also { synchronized(previews) { previews[key] = it } }
                     ?: throw IllegalStateException("Não consegui ler o áudio das duas faixas")
                 val out = cacheFile(key)
                 if (!out.isFile) publish(out) { it.writeBytes(MixRenderer.wav(p.audio)) }
@@ -374,28 +376,30 @@ class SetDesk(private val app: ManagerApp) {
 
     private fun cacheFile(key: String) = File(app.context.cacheDir, "mix/${key.hashCode().toUInt()}.wav")
 
-    private fun keyOf(tr: Transition): String {
+    private fun keyOf(tr: Transition, tempo: Double? = tempoFor(tr)): String {
         val v = app.model.view
         val sig = listOf(tr.fromId, tr.toId).joinToString { id -> v?.track(id)?.let { "${it.filePath}:${it.bpm}" } ?: "" }
-        return "t|$tr|$sig|${tempoFor(tr)}"
+        return "t|$tr|$sig|$tempo"
     }
 
     fun keyFor(tr: Transition) = keyOf(tr)
 
     /** Monta a prévia de [tr] num WAV (ou devolve a que já está montada). Bloqueante: chamar fora da thread da tela. */
-    fun renderTransition(tr: Transition): File {
-        val out = cacheFile(keyOf(tr))
+    fun renderTransition(tr: Transition, tempo: Double? = tempoFor(tr)): File {
+        val out = cacheFile(keyOf(tr, tempo))
         if (out.isFile) return out
-        val s = render(tr, 12_000, 12_000)?.audio ?: throw IllegalStateException("não consegui ler o áudio das duas faixas")
+        val s = render(tr, 12_000, 12_000, tempo = tempo)?.audio ?: throw IllegalStateException("não consegui ler o áudio das duas faixas")
         return publish(out) { it.writeBytes(MixRenderer.wav(s)) }
     }
 
     /** Todas as transições em sequência (8 s antes e 8 s depois de cada). Null se cancelado. Bloqueante. */
-    fun renderSet(plan: List<Transition>, cancelled: () -> Boolean = { false }, progress: (Int) -> Unit = {}): File? {
-        val out = cacheFile(setKey(plan))
+    fun renderSet(
+        plan: List<Transition>, cancelled: () -> Boolean = { false }, tempos: List<Double?> = plan.map { tempoFor(it) }, progress: (Int) -> Unit = {},
+    ): File? {
+        val out = cacheFile(setKey(plan, tempos))
         if (out.isFile) return out
         var used = 0
-        val file = publish(out) { tmp -> used = MixRenderer.writeSequence(tmp, plan.map { tr -> { render(tr, 8_000, 8_000)?.audio } }, cancelled = cancelled, progress = progress) }
+        val file = publish(out) { tmp -> used = MixRenderer.writeSequence(tmp, plan.mapIndexed { i, tr -> { render(tr, 8_000, 8_000, tempo = tempos[i])?.audio } }, cancelled = cancelled, progress = progress) }
         if (cancelled() || used == 0) {
             file.delete()
             if (used == 0 && !cancelled()) throw IllegalStateException("não consegui ler o áudio")
@@ -412,7 +416,8 @@ class SetDesk(private val app: ManagerApp) {
         return out
     }
 
-    fun setKey(plan: List<Transition>) = "all|" + plan.joinToString(";") { keyOf(it) }
+    fun setKey(plan: List<Transition>, tempos: List<Double?> = plan.map { tempoFor(it) }) =
+        "all|" + plan.withIndex().joinToString(";") { (i, tr) -> keyOf(tr, tempos[i]) }
 
     private fun onMain(block: () -> Unit) = android.os.Handler(android.os.Looper.getMainLooper()).post(block)
 
@@ -423,8 +428,9 @@ class SetDesk(private val app: ManagerApp) {
         val ready = cacheFile(key)
         if (ready.isFile) return app.preview.toggleFile(ready, key, "transição")
         val opened = playlistId
+        val tempo = tempoFor(tr)
         app.background("Montando prévia") { j ->
-            val f = renderTransition(tr)
+            val f = renderTransition(tr, tempo)
             // Saiu do SET (ou abriu outro) enquanto montava: não começa a tocar numa tela que já não está aberta.
             if (!j.cancelled) onMain { if (playlistId == opened && opened != null) app.preview.toggleFile(f, key, "transição") }
         }
@@ -438,8 +444,9 @@ class SetDesk(private val app: ManagerApp) {
         val ready = cacheFile(key)
         if (ready.isFile) return app.preview.toggleFile(ready, key, "set")
         val opened = playlistId
+        val tempos = plan.map { tempoFor(it) }
         app.background("Montando o set") { j ->
-            val f = renderSet(plan, { j.cancelled }) { j.text = "${it + 1}/${plan.size}" } ?: return@background
+            val f = renderSet(plan, { j.cancelled }, tempos) { j.text = "${it + 1}/${plan.size}" } ?: return@background
             onMain { if (playlistId == opened && opened != null) app.preview.toggleFile(f, key, "set") }
         }
     }
