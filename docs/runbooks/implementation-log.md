@@ -918,3 +918,10 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Versão 0.3.0 (código 3).
 - Evidência: core 100 testes (novos: batidas com MT caem a ±8 ms com 120→125 BPM e 48→44,1 kHz; seno de 440 Hz esticado a 0,9 continua em 440 Hz e sem MT vai a ~396 Hz; níveis por estilo; tom deslocado). Mobile `SetFlowTest` 4 testes: abrir a tela pelo MIX, ondas dos dois decks, MT ligado por padrão, cabeça dois compassos antes da saída, KILL no grave no meio da troca de grave, CORTE/8/MASTER TEMPO pela fileira montam de novo e ficam no plano, captura deitada, teste de áudio com a biblioteca (WAV). Capturas `docs/ui/mobile-16..18`.
 - Não verificado (`BLOCKED_HARDWARE`): o "Teste de áudio" foi feito para rodar no aparelho e só rodou aqui com WAV; MP3/FLAC pelo MediaCodec, tempos reais no S25 Ultra e qualidade de ouvido do WSOLA continuam sem prova. A cabeça segue o MediaPlayer a cada quadro (latência do aparelho não medida).
+
+## 2026-10-26 — Vídeo de teste de mixagem com músicas do usuário
+
+- Pedido: gravar um vídeo do teste de mixagem com duas das músicas de teste enviadas pelo usuário.
+- `MixVideoTest` (só roda com `-PmixVideo=<pasta>`; as músicas ficam fora do repositório): importa e analisa as cinco músicas como o app, escolhe o par que melhor combina (Killingzoo "Imagination" remix, 128 BPM, Gm/6A → Wiz Khalifa "See You Again" remix, 126 BPM, Gm/6A: mesmo tom, −1,6%), abre o SET e o teste de mixagem e captura a tela quadro a quadro (66 ms) enquanto toca a prévia montada (troca de grave, 16 compassos, Master Tempo). `mobile/tools/montar-video-mix.sh` junta os quadros com o áudio da própria prévia.
+- Achado: o relógio do MediaPlayer simulado do Robolectric andava ~26% mais rápido que os quadros e a primeira gravação parou antes do fim; agora a cabeça vai para o instante exato de cada quadro, o mesmo do áudio.
+- Resultado: vídeo de 49 s, 720×1560, entregue ao usuário (não versionado). É a tela renderizada em JVM e o áudio montado pelo núcleo, não uma gravação do aparelho.

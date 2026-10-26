@@ -57,9 +57,11 @@ tasks.withType<Test>().configureEach {
     // Uma JVM por classe de teste: a classe que abre a atividade de verdade (PreviewLifecycleTest) deixava estado do
     // Compose/Robolectric que fazia as capturas seguintes esperarem para sempre por "ocioso". Isoladas, todas passam.
     forkEvery = 1
-    maxHeapSize = "2g"
+    maxHeapSize = "4g"
     environment("LC_ALL", "C.UTF-8")
     systemProperty("roborazzi.test.record", "true")
+    // Vídeo de teste de mixagem com músicas locais (fora do repositório): -PmixVideo=<pasta com in/ e out/>.
+    systemProperty("mix.video", (findProperty("mixVideo") as String?) ?: "")
     systemProperty("roborazzi.output.dir", System.getProperty("prints.dir") ?: layout.buildDirectory.dir("prints").get().asFile.absolutePath)
 }
 
