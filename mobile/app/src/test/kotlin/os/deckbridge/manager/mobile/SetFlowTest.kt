@@ -187,4 +187,49 @@ class SetFlowTest {
         assertTrue(kotlin.math.abs(after.first().timeMs - before.first().timeMs) <= 1, "${after.first()} vs ${before.first()}")
         assertTrue(!a.model.dirty, "gravado")
     }
+
+    @Test fun leavingTheMixTestStopsTheMusic() {
+        // Relato: "saiu da mixagem e a música continuou tocando".
+        val a = app()
+        a.hideGuide()
+        a.sets.open(1)
+        a.sets.openMix(a.sets.plan()[0])
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        waitMix(a)
+        val f = assertNotNull(a.sets.mixFile)
+        org.robolectric.shadows.ShadowMediaPlayer.addMediaInfo(org.robolectric.shadows.util.DataSource.toDataSource(f.absolutePath), org.robolectric.shadows.ShadowMediaPlayer.MediaInfo(60_000, 0))
+        rule.mainClock.autoAdvance = false
+        a.sets.playMix()
+        assertTrue(a.preview.isPlaying, "devia estar tocando")
+        rule.mainClock.advanceTimeBy(200)
+        // O ✕ da tela de teste (a última na árvore: as abas de baixo continuam nela).
+        val closes = rule.onAllNodes(androidx.compose.ui.test.hasText("✕"))
+        closes[closes.fetchSemanticsNodes().lastIndex].performClick()
+        rule.mainClock.advanceTimeBy(200)
+        assertTrue(!a.preview.isPlaying, "saiu e continuou tocando")
+        assertEquals(null, a.sets.mixing)
+    }
+
+    @Test fun aPreviewStillBeingBuiltDoesNotStartAfterLeavingTheSet() {
+        val a = app()
+        // O player simulado aceita qualquer arquivo: se a prévia fosse tocar, tocaria.
+        org.robolectric.shadows.ShadowMediaPlayer.setMediaInfoProvider { org.robolectric.shadows.ShadowMediaPlayer.MediaInfo(60_000, 0) }
+        a.sets.open(1)
+        val tr = a.sets.plan()[0]
+        a.sets.play(tr) // monta em segundo plano
+        a.sets.close() // sai antes de ficar pronta (voltar do sistema)
+        val until = System.currentTimeMillis() + 60_000
+        while (a.job != null && System.currentTimeMillis() < until) {
+            Thread.sleep(20)
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        }
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertTrue(!a.preview.isPlaying, "começou a tocar depois de sair do SET")
+        // E com o SET aberto, a mesma prévia toca (o simulado funciona).
+        a.sets.open(1)
+        a.sets.play(tr)
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertTrue(a.preview.isPlaying, "a prévia pronta devia tocar com o SET aberto")
+        a.preview.stop()
+    }
 }

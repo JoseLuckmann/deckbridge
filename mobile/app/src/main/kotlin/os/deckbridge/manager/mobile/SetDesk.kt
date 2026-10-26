@@ -270,9 +270,11 @@ class SetDesk(private val app: ManagerApp) {
         if (app.preview.playingKey == key) return app.preview.stop()
         val ready = cacheFile(key)
         if (ready.isFile) return app.preview.toggleFile(ready, key, "transição")
+        val opened = playlistId
         app.background("Montando prévia") { j ->
             val f = renderTransition(tr)
-            if (!j.cancelled) onMain { app.preview.toggleFile(f, key, "transição") }
+            // Saiu do SET (ou abriu outro) enquanto montava: não começa a tocar numa tela que já não está aberta.
+            if (!j.cancelled) onMain { if (playlistId == opened && opened != null) app.preview.toggleFile(f, key, "transição") }
         }
     }
 
@@ -283,9 +285,10 @@ class SetDesk(private val app: ManagerApp) {
         if (app.preview.playingKey == key) return app.preview.stop()
         val ready = cacheFile(key)
         if (ready.isFile) return app.preview.toggleFile(ready, key, "set")
+        val opened = playlistId
         app.background("Montando o set") { j ->
             val f = renderSet(plan, { j.cancelled }) { j.text = "${it + 1}/${plan.size}" } ?: return@background
-            onMain { app.preview.toggleFile(f, key, "set") }
+            onMain { if (playlistId == opened && opened != null) app.preview.toggleFile(f, key, "set") }
         }
     }
 }

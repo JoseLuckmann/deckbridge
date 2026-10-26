@@ -216,11 +216,10 @@ class JourneyVideoTest {
             val f = File(frames, "%05d.png".format(n++))
             captureScreenRoboImage(f.path)
         }
-        app.preview.stop()
-        tick()
-        hold(0.8)
-        // As telas do SET e do teste ficam por cima das abas (cujos botões continuam na árvore): o visível é o último.
+        // Sai pelo ✕ da tela de teste, como o usuário: é ele que para o som.
+        val audioEnd = n + 6
         tapText("✕")
+        check(!app.preview.isPlaying) { "saiu da mixagem e continuou tocando" }
         hold(1.0)
         tapText("‹")
         hold(0.8)
@@ -240,7 +239,7 @@ class JourneyVideoTest {
         File(out, "taps.tsv").writeText(taps.toString())
         File(out, "steps.tsv").writeText(steps.toString())
         File(out, "info.txt").writeText(
-            "quadros\t$n\nms_por_quadro\t$frameMs\naudio_quadro\t$audioFrame\naudio_inicio_ms\t$startMs\n" +
+            "quadros\t$n\nms_por_quadro\t$frameMs\naudio_quadro\t$audioFrame\naudio_fim_quadro\t$audioEnd\naudio_inicio_ms\t$startMs\n" +
                 "pendrive\t${File(usbBase, "USB DJ/PIONEER/rekordbox/export.pdb").length()}\n" +
                 app.model.view!!.tracks.joinToString("") { "faixa\t${it.title}\t${"%.2f".format(it.bpm)}\t${it.key}\t${it.rating}\n" },
         )

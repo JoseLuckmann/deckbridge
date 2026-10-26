@@ -961,3 +961,9 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Defeito achado gravando: no celular, abrir uma playlist na aba PLAYLISTS deixava a aba FAIXAS restrita a ela ("Nenhuma faixa nesta lista"), porque a lista do núcleo usa a playlist aberta como escopo (o comportamento certo no desktop, pela barra lateral). Agora `ManagerModel.scopeToOpenPlaylist` é falso no celular; teste novo em `UxFlowTest`.
 - Limitações do vídeo, ditas: o seletor de arquivos do Android não aparece (o toque em IMPORTAR entrega os arquivos direto); a caixa de nome da playlist não aparece — qualquer campo de texto numa janela de diálogo não fica "ocioso" no Robolectric, inclusive o do Material sem código do app (testado isolado) —, então "Sexta à noite" é criada direto; MP3 passa pelo ffmpeg, não pelo MediaCodec; o player é o simulado e a cabeça segue o tempo de cada quadro.
 - Evidência: core 106, mobile 44 (2 pulados: os gravadores de vídeo sem pasta).
+
+## 2026-10-26 — "Saiu da mixagem e a música continuou tocando"
+
+- No vídeo da jornada, o som da prévia seguia depois de fechar o teste de mixagem. Causa do vídeo: o montador colava o áudio da prévia inteiro e não cortava onde a reprodução parou. Agora `JourneyVideoTest` registra o quadro da parada (`audio_fim_quadro`) e sai pelo ✕ de verdade (que é quem para o som, conferido no próprio teste), e `montar-video-jornada.py` corta o áudio ali, com 60 ms de saída suave. O vídeo foi remontado.
+- No app, o ✕, o voltar do sistema e o ‹ do SET já paravam o som; teste novo `leavingTheMixTestStopsTheMusic` (tocar e tocar no ✕ → para).
+- Achado ao revisar: a prévia do ▶ de uma transição e o OUVIR do set são montados em segundo plano e, se o DJ saísse do SET antes de ficarem prontos, começavam a tocar depois. Agora só tocam se o mesmo SET ainda estiver aberto. Teste `aPreviewStillBeingBuiltDoesNotStartAfterLeavingTheSet` (falha sem a correção, conferido; com o SET aberto a mesma prévia toca).

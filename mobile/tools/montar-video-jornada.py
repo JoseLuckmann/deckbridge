@@ -5,7 +5,7 @@ Uso: montar-video-jornada.py <pasta passada em -PjourneyVideo> [saida.mp4]
 
 Lê out/frames (PNG a 10 quadros/s), out/taps.tsv (quadro, x, y: o toque aparece como um círculo nos quadros
 seguintes), out/steps.tsv (quadro, legenda: a faixa de cima) e out/info.txt (onde começa o áudio do teste de mix,
-out/mix.wav). Precisa de Pillow e ffmpeg.
+out/mix.wav, até audio_fim_quadro). Precisa de Pillow e ffmpeg.
 """
 import os
 import shutil
@@ -50,11 +50,16 @@ os.makedirs(work)
 written = 0
 audio_frame_src = int(info["audio_quadro"].split("\t")[0])
 audio_frame = None
+# Onde a reprodução parou (o som some ali; sem isso o resto da prévia tocaria por cima das telas seguintes).
+audio_end_src = int(info["audio_fim_quadro"].split("\t")[0]) if "audio_fim_quadro" in info else None
+audio_end = None
 for i, name in enumerate(frames):
     if not kept(i):
         continue
     if audio_frame is None and i >= audio_frame_src:
         audio_frame = written
+    if audio_end is None and audio_end_src is not None and i >= audio_end_src:
+        audio_end = written
     im = Image.open(os.path.join(out, "frames", name)).convert("RGB")
     w, h = im.size
     canvas = Image.new("RGB", (w, h + BAND), BG)
@@ -83,10 +88,12 @@ for i, name in enumerate(frames):
 audio_start = int(info["audio_inicio_ms"].split("\t")[0]) / 1000.0
 delay = audio_frame * ms
 fps = 1000.0 / ms
+# Só o trecho tocado: do começo até a parada, com 60 ms de saída suave.
+trim = "" if audio_end is None else "atrim=0:%.3f,afade=t=out:st=%.3f:d=0.06," % ((audio_end - audio_frame) * ms / 1000.0, max(0.0, (audio_end - audio_frame) * ms / 1000.0 - 0.06))
 subprocess.run([
     "ffmpeg", "-v", "error", "-y", "-framerate", str(fps), "-i", os.path.join(work, "%05d.png"),
     "-ss", "%.3f" % audio_start, "-i", os.path.join(out, "mix.wav"),
-    "-filter_complex", "[0:v]scale=720:-2,format=yuv420p[v];[1:a]adelay=%d|%d,apad[a]" % (delay, delay),
+    "-filter_complex", "[0:v]scale=720:-2,format=yuv420p[v];[1:a]%sadelay=%d|%d,apad[a]" % (trim, delay, delay),
     "-map", "[v]", "-map", "[a]", "-t", "%.2f" % (written / fps),
     "-c:v", "libx264", "-crf", "20", "-preset", "medium", "-r", "30", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", dest,
 ], check=True)
