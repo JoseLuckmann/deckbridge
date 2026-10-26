@@ -117,9 +117,8 @@ class SetVideoTest : VideoTestBase() {
         val audioEnd = n + 6
         tapText("✕")
         check(!app.preview.isPlaying) { "saiu da mixagem e continuou tocando" }
-        hold(1.0)
-        tapText("‹")
-        hold(1.0)
+        // O ✕ já volta ao set.
+        hold(1.5)
 
         // 5. Ponto de virada: um ramo que sai da 2ª faixa e, se der, volta mais adiante.
         step("5 · Ponto de virada: um ramo")
