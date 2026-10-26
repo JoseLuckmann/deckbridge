@@ -9,6 +9,11 @@ import os.deckbridge.manager.mix.MixRenderer
 import os.deckbridge.manager.mix.SegmentReader
 import os.deckbridge.manager.mix.SetPlanner
 import os.deckbridge.manager.mix.MixPreview
+import os.deckbridge.manager.mix.SetBranch
+import os.deckbridge.manager.mix.SetBranches
+import os.deckbridge.manager.mix.SetBuilder
+import os.deckbridge.manager.mix.SetShape
+import os.deckbridge.manager.mix.SetTempo
 import os.deckbridge.manager.mix.TrackGrid
 import os.deckbridge.manager.mix.Transition
 import os.deckbridge.manager.pdb.Edit
@@ -31,10 +36,53 @@ class SetDesk(private val app: ManagerApp) {
 
     private fun file(id: Int) = File(app.root.parentFile, "sets/$id.properties")
 
+    private val branchesFile get() = File(app.root.parentFile, "sets/branches.properties")
+    private fun masterFile(id: Int) = File(app.root.parentFile, "sets/$id.master")
+
+    /** Os ramos de todos os sets (as playlists de ramo e de onde saem). */
+    var branches by mutableStateOf<List<SetBranch>>(emptyList())
+        private set
+
+    /** O master do set aberto: null é automático (segue as faixas), um número é fixo. */
+    var masterFixed by mutableStateOf<Double?>(null)
+        private set
+
     fun open(id: Int) {
         synchronized(grids) { grids.clear() }
+        branches = SetBranches.load(branchesFile)
         saved = SetPlanner.load(file(id))
         playlistId = id
+        masterFixed = SetTempo.loadMode(masterFile(rootId() ?: id))
+    }
+
+    /** O ramo aberto, se a playlist aberta é um ramo de outro set. */
+    val branch: SetBranch? get() {
+        val v = app.model.view ?: return null
+        return SetBranches.alive(v, branches).firstOrNull { it.playlistId == playlistId }
+    }
+
+    /** O set principal: o próprio, ou aquele de onde o ramo sai. */
+    fun rootId(): Int? = branch?.mainId ?: playlistId
+
+    /** Os ramos que saem do set aberto (só do principal). */
+    fun branchesHere(): List<SetBranch> {
+        val v = app.model.view ?: return emptyList()
+        if (branch != null) return emptyList()
+        return SetBranches.alive(v, branches).filter { it.mainId == playlistId }
+    }
+
+    /** A letra do ramo (B, C…), pela ordem em que foram criados no set. */
+    fun letterOf(b: SetBranch): Char {
+        val v = app.model.view ?: return '?'
+        val mine = SetBranches.alive(v, branches).filter { it.mainId == b.mainId }
+        return SetBranches.letter(mine.indexOfFirst { it.playlistId == b.playlistId }.coerceAtLeast(0))
+    }
+
+    fun openMain() {
+        val main = branch?.mainId ?: return
+        app.preview.stop()
+        rehearsal = null
+        open(main)
     }
 
     fun close() {
@@ -43,9 +91,69 @@ class SetDesk(private val app: ManagerApp) {
         playlistId = null
     }
 
+    /** A linha que se toca: a playlist, ou — num ramo — o ponto de virada, as faixas do ramo e onde volta. */
     fun ids(): List<Int> {
         val v = app.model.view ?: return emptyList()
+        branch?.let { return SetBranches.line(v, it) }
+        return entries()
+    }
+
+    /** Só as faixas da playlist aberta (o que se edita: num ramo, sem o ponto de virada e a volta). */
+    fun entries(): List<Int> {
+        val v = app.model.view ?: return emptyList()
         return v.entries[playlistId ?: return emptyList()].orEmpty().filter { v.track(it) != null }
+    }
+
+    /** O master em cada posição de [ids]. Num ramo, começa no master que o set principal tem no ponto de virada. */
+    fun masters(ids: List<Int> = ids()): List<Double> {
+        val v = app.model.view ?: return emptyList()
+        val natives = ids.map { v.track(it)?.bpm ?: 0.0 }
+        val b = branch ?: return SetTempo.plan(natives, masterFixed)
+        val mainIds = v.entries[b.mainId].orEmpty()
+        val mainMasters = SetTempo.plan(mainIds.map { v.track(it)?.bpm ?: 0.0 }, masterFixed)
+        val start = mainMasters.getOrNull(mainIds.indexOf(b.fromTrackId)) ?: natives.firstOrNull() ?: 120.0
+        return listOf(start) + SetTempo.plan(natives.drop(1), masterFixed, start)
+    }
+
+    /** O master da troca [tr] na linha aberta (as duas faixas tocam nele). */
+    fun tempoFor(tr: Transition, ids: List<Int> = ids()): Double? = masters(ids).getOrNull(ids.indexOf(tr.fromId))
+
+    fun setMaster(fixed: Double?) {
+        val root = rootId() ?: return
+        masterFixed = fixed
+        runCatching { SetTempo.saveMode(masterFile(root), fixed) }
+        app.did(if (fixed == null) "Master automático" else "Master %.1f".format(fixed))
+    }
+
+    /**
+     * Cria um ramo a partir de [fromTrackId]: [count] faixas no rumo [shape] e, se [rejoin], a volta à linha. Vira uma
+     * playlist "Set ⑂ B" (vai para o pendrive). Abre o SET do ramo e devolve o id da playlist, ou null.
+     */
+    fun createBranch(fromTrackId: Int, count: Int, shape: SetShape, rejoin: Boolean): Int? {
+        val v = app.model.view ?: return null
+        val main = playlistId ?: return null
+        if (branch != null) return null
+        val line = entries()
+        val mine = SetBranches.alive(v, branches).filter { it.mainId == main }
+        val taken = mine.flatMap { v.entries[it.playlistId].orEmpty() }.toSet()
+        val (ids, back) = SetBuilder.branch(v, line, fromTrackId, count, shape, taken = taken, rejoin = rejoin)
+        if (ids.isEmpty()) {
+            app.notice = os.deckbridge.manager.Banner("Nenhuma faixa fora do set combina daqui", true)
+            return null
+        }
+        val letter = SetBranches.letter(mine.size)
+        val name = "${v.playlists.first { it.id == main }.name} - ramo $letter"
+        val id = app.model.nextPlaylistId()
+        val n = app.model.submitAll(listOf(
+            Edit.CreatePlaylist(id, 0, name, false) to "Ramo \"$name\"",
+            Edit.AddToPlaylist(id, ids) to "Faixas do ramo \"$name\"",
+        ))
+        if (n != 2) return null
+        branches = SetBranches.load(branchesFile) + SetBranch(id, main, fromTrackId, back)
+        runCatching { SetBranches.save(branchesFile, branches) }
+        app.did("Ramo $letter · ${ids.size} faixas" + if (back != null) " · volta na linha" else "")
+        open(id)
+        return id
     }
 
     /** As grades mudaram (refazer grades): lê de novo na próxima vez. */
@@ -78,6 +186,8 @@ class SetDesk(private val app: ManagerApp) {
 
     fun suggestions(ids: List<Int>): List<TrackItem> {
         val v = app.model.view ?: return emptyList()
+        // Um ramo que volta para a linha já tem fim; não há "próxima".
+        if (branch?.rejoinTrackId != null) return emptyList()
         val last = ids.lastOrNull()?.let { v.track(it) } ?: return emptyList()
         return SetPlanner.suggestNext(v, last, ids.toSet())
     }
@@ -93,7 +203,7 @@ class SetDesk(private val app: ManagerApp) {
         val v = app.model.view ?: return null
         val a = v.track(tr.fromId) ?: return null
         val b = v.track(tr.toId) ?: return null
-        return MixRenderer.transition(reader(a), a.bpm, reader(b), b.bpm, tr, lead, tail, waves)
+        return MixRenderer.transition(reader(a), a.bpm, reader(b), b.bpm, tr, lead, tail, waves, tempo = tempoFor(tr) ?: a.bpm)
     }
 
     // ---- teste de mixagem (a tela de dois decks) ------------------------------------------------------------------
@@ -228,7 +338,7 @@ class SetDesk(private val app: ManagerApp) {
     private fun keyOf(tr: Transition): String {
         val v = app.model.view
         val sig = listOf(tr.fromId, tr.toId).joinToString { id -> v?.track(id)?.let { "${it.filePath}:${it.bpm}" } ?: "" }
-        return "t|$tr|$sig"
+        return "t|$tr|$sig|${tempoFor(tr)}"
     }
 
     fun keyFor(tr: Transition) = keyOf(tr)
@@ -299,29 +409,35 @@ class SetDesk(private val app: ManagerApp) {
 
     fun issues(ids: List<Int>, plan: List<Transition>): List<os.deckbridge.manager.mix.SetIssue> {
         val v = app.model.view ?: return emptyList()
-        return os.deckbridge.manager.mix.SetDoctor.check(v, ids, plan, ::grid)
+        return os.deckbridge.manager.mix.SetDoctor.check(v, ids, plan, ::grid, masters(ids))
     }
 
     /** Reordena a playlist para mixar (a primeira faixa fica: é a escolha do DJ para abrir). Desfazível. */
     fun reorder(shape: os.deckbridge.manager.mix.SetShape) {
         val id = playlistId ?: return
         val v = app.model.view ?: return
-        val ids = ids()
-        val order = os.deckbridge.manager.mix.SetBuilder.order(v, ids, shape, first = ids.firstOrNull())
+        val ids = entries()
+        // Num ramo, a ordem começa no ponto de virada (que não é do ramo e fica fora da playlist).
+        val anchor = branch?.fromTrackId
+        val order = if (anchor != null) {
+            os.deckbridge.manager.mix.SetBuilder.order(v, listOf(anchor) + ids, shape, first = anchor).drop(1)
+        } else os.deckbridge.manager.mix.SetBuilder.order(v, ids, shape, first = ids.firstOrNull())
         if (order == ids) return app.did("Já está na melhor ordem")
         if (app.model.submit(Edit.ReorderPlaylist(id, order), "Ordenar \"${v.playlists.first { it.id == id }.name}\" para mixar (${shape.title})")) app.did("Ordenada: ${shape.title}")
     }
 
     fun bridges(a: Int, b: Int): List<TrackItem> {
         val v = app.model.view ?: return emptyList()
-        return os.deckbridge.manager.mix.SetDoctor.bridges(v, v.track(a) ?: return emptyList(), v.track(b) ?: return emptyList(), ids().toSet())
+        val busy = ids().toSet() + (rootId()?.let { v.entries[it].orEmpty() } ?: emptyList())
+        return os.deckbridge.manager.mix.SetDoctor.bridges(v, v.track(a) ?: return emptyList(), v.track(b) ?: return emptyList(), busy)
     }
 
     /** Põe [bridge] entre [after] e a seguinte. Um desfazer tira as duas mudanças. */
     fun insertBridge(after: Int, bridge: TrackItem) {
         val id = playlistId ?: return
-        val ids = ids()
-        val at = ids.indexOf(after).takeIf { it >= 0 } ?: return
+        val ids = entries()
+        // Depois do ponto de virada de um ramo, a ponte é a primeira do ramo.
+        val at = if (after == branch?.fromTrackId) -1 else ids.indexOf(after).takeIf { it >= 0 } ?: return
         val order = ids.toMutableList().apply { add(at + 1, bridge.id) }
         val n = app.model.submitAll(listOf(
             Edit.AddToPlaylist(id, listOf(bridge.id)) to "Ponte \"${bridge.title}\"",

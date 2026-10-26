@@ -10,6 +10,7 @@ enum class SetShape(val title: String) {
     FLOW("Fluido"),
     RISING("Subindo"),
     PEAK("Sobe e desce"),
+    FALLING("Descendo"),
 }
 
 /**
@@ -17,6 +18,11 @@ enum class SetShape(val title: String) {
  * que entra acompanha sem soar estranho, com Master Tempo). Sem modelo nem "IA": um custo por troca e uma busca simples.
  */
 object SetBuilder {
+    private const val BEAM = 12
+
+    /** No ramo, uma troca fora do tom (ou uma volta que não encaixa) só entra se não houver outro jeito. */
+    private const val MISS = 25.0
+
     /** Custo de ir de [a] para [b] (menor é melhor). [at] é a posição no set, de 0 (início) a 1 (fim). */
     fun cost(a: TrackItem, b: TrackItem, shape: SetShape = SetShape.FLOW, at: Double = 0.5): Double {
         val fit = SetPlanner.fit(a, b)
@@ -27,18 +33,21 @@ object SetBuilder {
             null -> 3.0
             else -> 8.0 + fit.keyDistance
         }
+        // O master manda: até 10% de esticada é tocar normal; até 16% (o pitch do player) pesa; além disso não dá.
         val pct = abs(fit.bpmDiffPct)
         var tempo = when {
             a.bpm <= 0 || b.bpm <= 0 -> 3.0
-            pct <= 3 -> pct * 0.5
-            pct <= 6 -> 1.5 + (pct - 3)
-            else -> 10.0 + pct
+            pct <= 3 -> pct * 0.3
+            pct <= SetTempo.COMFORT_PCT -> 0.9 + (pct - 3) * 0.3
+            pct <= SetTempo.MAX_PCT -> 3.0 + (pct - SetTempo.COMFORT_PCT)
+            else -> 20.0 + pct
         }
         // A forma: subindo pede andamento que não cai; sobe-e-desce, subir até o meio e descer depois.
         val rising = when (shape) {
             SetShape.FLOW -> null
             SetShape.RISING -> true
             SetShape.PEAK -> at < 0.6
+            SetShape.FALLING -> false
         }
         if (rising != null && a.bpm > 0 && b.bpm > 0) {
             val wrongWay = if (rising) a.bpm - b.bpm else b.bpm - a.bpm
@@ -54,6 +63,7 @@ object SetBuilder {
     /** Por onde começar quando o DJ não escolheu: o andamento mais baixo (subindo) ou o mais comum do conjunto. */
     private fun opener(tracks: List<TrackItem>, shape: SetShape): TrackItem = when (shape) {
         SetShape.RISING, SetShape.PEAK -> tracks.filter { it.bpm > 0 }.minByOrNull { it.bpm } ?: tracks.first()
+        SetShape.FALLING -> tracks.filter { it.bpm > 0 }.maxByOrNull { it.bpm } ?: tracks.first()
         SetShape.FLOW -> {
             val median = tracks.map { it.bpm }.sorted()[tracks.size / 2]
             tracks.minByOrNull { abs(it.bpm - median) - it.rating * 0.01 }!!
@@ -102,6 +112,85 @@ object SetBuilder {
         return out.map { it.id } + ids.filter { view.track(it) == null }
     }
 
+    /**
+     * Um ramo do set: a partir de [from] (uma faixa da linha [line]), [count] faixas de [pool] que não estão na linha nem
+     * em [taken], no rumo [shape], e — se [rejoin] — a faixa da linha, mais adiante, em que o ramo melhor volta (a troca
+     * do último do ramo para ela é boa). Devolve as faixas do ramo e onde volta (null: não volta, vira outro final).
+     */
+    fun branch(
+        view: LibraryView, line: List<Int>, from: Int, count: Int, shape: SetShape, pool: List<TrackItem> = view.tracks,
+        taken: Set<Int> = emptySet(), rejoin: Boolean = true,
+    ): Pair<List<Int>, Int?> {
+        val start = view.track(from) ?: return emptyList<Int>() to null
+        val busy = line.toSet() + taken
+        val candidates = pool.filter { it.id !in busy && it.bpm > 0 }
+
+        /**
+         * Busca em feixe: guarda os [BEAM] caminhos mais baratos a cada passo (passo a passo puro escolhe uma faixa boa
+         * agora que deixa a próxima troca ruim). Com [target], o último passo também paga a troca para ele (o ramo mira a volta).
+         */
+        fun walk(target: TrackItem?): Pair<List<TrackItem>, Double> {
+            val n = count.coerceAtMost(candidates.size)
+            if (n <= 0) return emptyList<TrackItem>() to 0.0
+            var beam = listOf(emptyList<TrackItem>() to 0.0)
+            for (step in 0 until n) {
+                val at = (step + 1).toDouble() / (count + 1)
+                val lastStep = step == n - 1
+                beam = beam.flatMap { (path, total) ->
+                    val last = path.lastOrNull() ?: start
+                    candidates.filter { it !in path }.map { c ->
+                        var s = cost(last, c, shape, at) - c.rating * 0.5 + if (!SetPlanner.fit(last, c).keyOk) MISS else 0.0
+                        if (lastStep && target != null) s += cost(c, target, shape, 1.0) + if (!SetPlanner.fit(c, target).good) MISS else 0.0
+                        (path + c) to total + s
+                    }
+                }.sortedBy { it.second }.take(BEAM) // ordenação estável: mesmo conjunto, mesmo ramo
+            }
+            return beam.first()
+        }
+
+        if (!rejoin) {
+            val (picked, _) = walk(null)
+            if (picked.isEmpty()) return emptyList<Int>() to null
+            return between(start, picked, null, shape).map { it.id } to null
+        }
+        // Volta: depois do ponto de virada (pulando ao menos uma da linha). Tenta cada ponto e fica com o ramo mais barato
+        // cuja última troca para a linha seja boa; um ponto mais perto ganha no empate.
+        val after = line.drop(line.indexOf(from) + 2).mapNotNull { view.track(it) }
+        val best = after.mapIndexedNotNull { i, target ->
+            val (picked, total) = walk(target)
+            if (picked.isEmpty()) return@mapIndexedNotNull null
+            val ordered = between(start, picked, target, shape).map { it.id }
+            val end = view.track(ordered.last())!!
+            if (!SetPlanner.fit(end, target).good) null else Triple(ordered, target.id, total + i * 0.2)
+        }.minByOrNull { it.third }
+        if (best != null) return best.first to best.second
+        // Nenhum ponto de volta encaixa: o ramo vira outro final.
+        val (picked, _) = walk(null)
+        if (picked.isEmpty()) return emptyList<Int>() to null
+        return between(start, picked, null, shape).map { it.id } to null
+    }
+
+    /**
+     * A melhor ordem de [middle] entre [first] (fixa no começo) e [last] (fixa no fim, se houver). Um ramo tem poucas
+     * faixas: até 7 testa todas as ordens; mais que isso, fica a ordem dada.
+     */
+    private fun between(first: TrackItem, middle: List<TrackItem>, last: TrackItem?, shape: SetShape): List<TrackItem> {
+        if (middle.size > 7) return middle
+        var best = middle
+        var bestCost = Double.MAX_VALUE
+        fun visit(prefix: List<TrackItem>, rest: List<TrackItem>) {
+            if (rest.isEmpty()) {
+                val order = listOf(first) + prefix + listOfNotNull(last)
+                val c = total(order, shape) + order.zipWithNext().count { (x, y) -> !SetPlanner.fit(x, y).keyOk } * MISS
+                if (c < bestCost - 1e-9) { bestCost = c; best = prefix }
+                return
+            }
+            for (t in rest) visit(prefix + t, rest - t)
+        }
+        visit(emptyList(), middle)
+        return best
+    }
+
     /** Quanto de uma faixa costuma tocar num set: tudo menos a troca de 16 compassos e uma folga (aproximado). */
     fun playedMs(t: TrackItem): Int = ((t.durationSeconds * 1000) - (16 * SetPlanner.barMs(t.bpm)).toInt() - 4000).coerceAtLeast(30_000)
 
@@ -139,16 +228,24 @@ data class SetIssue(val fromId: Int, val toId: Int, val kind: Kind, val text: St
 
 /** A checagem do set: o que pode soar mal em cada troca, em texto curto, e faixas que fazem a ponte. */
 object SetDoctor {
-    fun check(view: LibraryView, ids: List<Int>, plan: List<Transition>, grids: (TrackItem) -> TrackGrid?): List<SetIssue> {
+    /**
+     * [masters] é o master de cada posição de [ids] (vazio: julga pelos BPMs das faixas). Esticar até 10% não é aviso; a
+     * faixa que precisa passar do pitch do player (16%) é.
+     */
+    fun check(view: LibraryView, ids: List<Int>, plan: List<Transition>, grids: (TrackItem) -> TrackGrid?, masters: List<Double> = emptyList()): List<SetIssue> {
         val out = ArrayList<SetIssue>()
-        for ((a, b) in ids.zipWithNext()) {
+        for ((n, pair) in ids.zipWithNext().withIndex()) {
+            val (a, b) = pair
             val ta = view.track(a) ?: continue
             val tb = view.track(b) ?: continue
             val fit = SetPlanner.fit(ta, tb)
             val ka = Smart.camelot(ta.key)?.let { "${it.first}${it.second}" } ?: ta.key
             val kb = Smart.camelot(tb.key)?.let { "${it.first}${it.second}" } ?: tb.key
             if (fit.keyDistance != null && fit.keyDistance >= 2) out += SetIssue(a, b, SetIssue.Kind.KEY, "Tom $ka→$kb não combina")
-            if (!fit.bpmOk) out += SetIssue(a, b, SetIssue.Kind.TEMPO, "Salto de %+.0f%% no BPM".format(fit.bpmDiffPct))
+            // Na troca, a que entra toca no master de quem sai.
+            val master = masters.getOrNull(n) ?: ta.bpm
+            val stretch = SetTempo.stretchPct(tb.bpm, master)
+            if (tb.bpm > 0 && kotlin.math.abs(stretch) > SetTempo.MAX_PCT) out += SetIssue(a, b, SetIssue.Kind.TEMPO, "Esticar %+.0f%%: passa do pitch".format(stretch))
             if (grids(ta) == null || grids(tb) == null) out += SetIssue(a, b, SetIssue.Kind.NO_GRID, "Sem grade: analise")
             val tr = plan.firstOrNull { it.fromId == a && it.toId == b }
             if (tr != null && grids(ta) != null) {

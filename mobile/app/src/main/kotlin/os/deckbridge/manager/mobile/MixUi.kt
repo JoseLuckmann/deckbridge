@@ -159,8 +159,9 @@ private fun DeckHeader(n: Int, t: TrackItem, tr: Transition, p: MixPreview?, pos
         else -> p.bAt(pos)
     }
     val dur = g?.durationMs ?: (t.durationSeconds * 1000)
-    // A que entra toca no andamento da que sai: TEMPO mostra quanto o pitch dela anda.
-    val speed = if (!master && from != null && from.bpm > 0 && t.bpm > 0) from.bpm / t.bpm else 1.0
+    // As duas tocam no master do set: TEMPO mostra quanto o pitch de cada uma anda até ele.
+    val tempo = p?.tempo ?: if (from != null) from.bpm else t.bpm
+    val speed = if (t.bpm > 0 && tempo > 0) tempo / t.bpm else 1.0
     val shown = t.bpm * speed
     val key = camelotOf(t)
     val semi = Math.round(SetPlanner.semitones(speed)).toInt()

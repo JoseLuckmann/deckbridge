@@ -33,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import os.deckbridge.manager.mix.Fit
 import os.deckbridge.manager.mix.MixStyle
 import os.deckbridge.manager.mix.SetPlanner
+import os.deckbridge.manager.mix.SetTempo
 import os.deckbridge.manager.mix.Transition
 import os.deckbridge.manager.pdb.TrackItem
 import os.deckbridge.manager.smart.Smart
@@ -63,37 +66,61 @@ fun SetScreen(app: ManagerApp) {
     val p = v.playlists.firstOrNull { it.id == desk.playlistId } ?: run { desk.close(); return }
     val ids = desk.ids()
     val plan = remember(ids, desk.saved, v) { desk.plan(ids) }
-    androidx.activity.compose.BackHandler { if (desk.rehearsal != null) desk.stopRehearsal() else desk.close() }
+    val branch = desk.branch
+    val masters = remember(ids, desk.masterFixed, v, branch) { desk.masters(ids) }
+    val branchesHere = desk.branchesHere()
+    fun back() = if (desk.rehearsal != null) desk.stopRehearsal() else if (branch != null) desk.openMain() else desk.close()
+    androidx.activity.compose.BackHandler { back() }
+    var masterOpen by remember { mutableStateOf(false) }
+    var branchFrom by remember { mutableStateOf<Int?>(null) }
     val allKey = desk.setKey(plan)
     val issues = remember(ids, plan, v) { desk.issues(ids, plan) }
     var sortOpen by remember { mutableStateOf(false) }
     var bridgeFor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     Column(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(52.dp).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { desk.close() }) { Text("‹", fontSize = 22.sp) }
-            Text("SET", color = Palette.blue, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-            Text(p.name, color = Palette.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
+            TextButton(onClick = { back() }) { Text("‹", fontSize = 22.sp) }
+            if (branch != null) {
+                // Num ramo: a letra e o set de onde sai.
+                Text("RAMO ${desk.letterOf(branch)}", color = Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+                Text(v.playlists.firstOrNull { it.id == branch.mainId }?.name.orEmpty(), color = Palette.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
+            } else {
+                Text("SET", color = Palette.blue, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                Text(p.name, color = Palette.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
+            }
             Text("≈" + mmss(SetPlanner.lengthMs(v, ids, plan)), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
             PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playAll(plan) }
         }
-        if (ids.size >= 2) FlowStrip(ids.mapNotNull { v.track(it) }, plan)
+        if (ids.size >= 2) FlowStrip(ids.mapNotNull { v.track(it) }, masters)
         if (ids.size >= 2) ActionsRow(
             issues = issues.map { it.fromId to it.toId }.distinct().size,
             redo = plan.count { it.mark == Transition.Mark.REDO },
+            master = desk.masterFixed,
             onRehearse = { desk.startRehearsal(plan) },
             onSort = { sortOpen = true },
+            onMaster = { masterOpen = true },
         )
         LazyColumn(Modifier.weight(1f)) {
             ids.forEachIndexed { n, id ->
                 val t = v.track(id) ?: return@forEachIndexed
-                item(key = "t$id") { SetTrackRow(n + 1, t, playing = app.preview.playingId == id) { app.preview.toggle(t) } }
+                // Num ramo, o ponto de virada e a volta são da linha principal: aparecem, mas não são do ramo.
+                val anchor = branch != null && (n == 0 || (id == branch.rejoinTrackId && n == ids.lastIndex))
+                item(key = "t$id-$n") {
+                    SetTrackRow(
+                        n + 1, t, masters.getOrNull(n), playing = app.preview.playingId == id, anchor = anchor,
+                        onBranch = if (branch == null) ({ branchFrom = id }) else null,
+                    ) { app.preview.toggle(t) }
+                }
+                branchesHere.filter { it.fromTrackId == id }.forEach { b ->
+                    item(key = "b${b.playlistId}") { BranchRow(app, b, ids) { desk.open(b.playlistId) } }
+                }
                 val tr = plan.firstOrNull { it.fromId == id && n < ids.lastIndex && it.toId == ids[n + 1] }
                 if (tr != null) {
                     val b = v.track(tr.toId)!!
                     item(key = "x$id-${tr.toId}") {
                         val here = issues.filter { it.fromId == id && it.toId == tr.toId }
                         TransitionRow(
-                            t, b, tr, SetPlanner.fit(t, b), playing = app.preview.playingKey == desk.keyFor(tr), issues = here,
+                            t, b, tr, SetPlanner.fit(t, b), stretch = SetTempo.stretchPct(b.bpm, masters.getOrNull(n) ?: t.bpm), playing = app.preview.playingKey == desk.keyFor(tr), issues = here,
                             rehearsing = desk.rehearsal?.let { plan.getOrNull(it) } == tr,
                             onPlay = { desk.play(tr) }, onEdit = { desk.openMix(tr) },
                             onBridge = if (here.any { it.bridgeable }) ({ bridgeFor = id to tr.toId }) else null,
@@ -117,6 +144,16 @@ fun SetScreen(app: ManagerApp) {
         val shapes = os.deckbridge.manager.mix.SetShape.values().toList()
         ChoiceDialog("Ordenar para mixar", shapes.map { it.title }, onPick = { n -> sortOpen = false; desk.reorder(shapes[n]) }, onClose = { sortOpen = false })
     }
+    if (masterOpen) {
+        // Automático ou um valor fixo perto do meio do set.
+        val mid = ids.mapNotNull { v.track(it)?.bpm }.filter { it > 0 }.sorted().let { if (it.isEmpty()) 128.0 else it[it.size / 2] }
+        val values = (-3..3).map { kotlin.math.round(mid) + it * 1.0 }
+        ChoiceDialog("Master do set", listOf("Automático (segue as faixas)") + values.map { "%.0f BPM".format(it) }, onPick = { n ->
+            masterOpen = false
+            desk.setMaster(if (n == 0) null else values[n - 1])
+        }, onClose = { masterOpen = false })
+    }
+    branchFrom?.let { from -> BranchDialog(app, from) { branchFrom = null } }
     bridgeFor?.let { (a, b) ->
         val options = remember(a, b, ids) { desk.bridges(a, b) }
         if (options.isEmpty()) {
@@ -132,10 +169,13 @@ fun SetScreen(app: ManagerApp) {
 
 /** Ensaiar, ordenar e o resumo dos avisos, logo abaixo da curva. */
 @Composable
-private fun ActionsRow(issues: Int, redo: Int, onRehearse: () -> Unit, onSort: () -> Unit) {
+private fun ActionsRow(issues: Int, redo: Int, master: Double?, onRehearse: () -> Unit, onSort: () -> Unit, onMaster: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Button(onClick = onRehearse, modifier = Modifier.height(40.dp)) { Text("ENSAIAR", fontSize = 12.sp) }
         OutlinedButton(onClick = onSort, modifier = Modifier.height(40.dp)) { Text("ORDENAR", fontSize = 12.sp) }
+        OutlinedButton(onClick = onMaster, modifier = Modifier.height(40.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) {
+            Text(if (master == null) "MASTER AUTO" else "MASTER %.0f".format(master), fontSize = 11.sp)
+        }
         Spacer(Modifier.weight(1f))
         if (redo > 0) Text("✗ $redo", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(end = 8.dp))
         Text(if (issues == 0) "✓ trocas ok" else "⚠ $issues", color = if (issues == 0) Palette.keyInk else Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -182,16 +222,20 @@ private fun PlayButton(on: Boolean, enabled: Boolean = true, label: String? = nu
     }
 }
 
-/** A curva de andamento do set, com os pontos verdes onde a troca de tom é suave e laranja onde não é. */
+/**
+ * A curva do master do set (linha azul) e o BPM de cada faixa (pontos): a distância entre os dois é quanto a faixa estica
+ * para tocar no master. Ponto verde entre duas faixas: troca de tom suave; laranja: não.
+ */
 @Composable
-private fun FlowStrip(tracks: List<TrackItem>, plan: List<Transition>) {
-    val bpms = tracks.map { it.bpm }.filter { it > 0 }
+private fun FlowStrip(tracks: List<TrackItem>, masters: List<Double>) {
+    val bpms = tracks.map { it.bpm }.filter { it > 0 } + masters
     if (bpms.isEmpty()) return
     val lo = bpms.min() - 2
     val hi = bpms.max() + 2
-    val good = tracks.zipWithNext().map { (a, b) -> SetPlanner.fit(a, b).good }
-    Row(Modifier.fillMaxWidth().height(56.dp).background(Palette.surface).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.width(44.dp)) {
+    val good = tracks.zipWithNext().map { (a, b) -> SetPlanner.fit(a, b).keyOk }
+    Row(Modifier.fillMaxWidth().height(64.dp).background(Palette.surface).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.width(52.dp)) {
+            Text("MASTER", color = Palette.blue, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             Text("%.0f".format(hi - 2), color = Palette.muted, fontSize = 10.sp, fontFamily = Mono)
             Spacer(Modifier.weight(1f))
             Text("%.0f".format(lo + 2), color = Palette.muted, fontSize = 10.sp, fontFamily = Mono)
@@ -199,20 +243,25 @@ private fun FlowStrip(tracks: List<TrackItem>, plan: List<Transition>) {
         val line = Palette.blue
         val ok = Palette.keyInk
         val warn = Palette.orange
+        val dot = Palette.text
+        val tick = Palette.mutedBright
         Canvas(Modifier.weight(1f).fillMaxHeight()) {
             val n = tracks.size
-            fun pt(i: Int): Offset {
-                val bpm = tracks[i].bpm.takeIf { it > 0 } ?: ((lo + hi) / 2)
-                val x = if (n == 1) size.width / 2 else size.width * i / (n - 1)
-                val y = size.height * (1 - ((bpm - lo) / (hi - lo)).toFloat())
-                return Offset(x, y)
+            fun x(i: Int) = if (n == 1) size.width / 2 else size.width * i / (n - 1)
+            fun y(bpm: Double) = size.height * (1 - ((bpm - lo) / (hi - lo)).toFloat())
+            for (i in 0 until n) {
+                val m = masters.getOrNull(i) ?: continue
+                val b = tracks[i].bpm
+                // O quanto a faixa estica até o master.
+                if (b > 0) drawLine(tick.copy(alpha = 0.5f), Offset(x(i), y(m)), Offset(x(i), y(b)), strokeWidth = 1.dp.toPx())
+                if (i > 0) masters.getOrNull(i - 1)?.let { pm -> drawLine(line, Offset(x(i - 1), y(pm)), Offset(x(i), y(m)), strokeWidth = 2.5.dp.toPx()) }
             }
-            for (i in 0 until n - 1) drawLine(line, pt(i), pt(i + 1), strokeWidth = 2.dp.toPx())
             for (i in 0 until n - 1) {
-                val mid = Offset((pt(i).x + pt(i + 1).x) / 2, (pt(i).y + pt(i + 1).y) / 2)
-                drawCircle(if (good[i]) ok else warn, 3.5.dp.toPx(), mid)
+                val m = masters.getOrNull(i) ?: continue
+                val mn = masters.getOrNull(i + 1) ?: m
+                drawCircle(if (good[i]) ok else warn, 3.5.dp.toPx(), Offset((x(i) + x(i + 1)) / 2, (y(m) + y(mn)) / 2))
             }
-            for (i in 0 until n) drawCircle(Palette.text, 2.5.dp.toPx(), pt(i))
+            for (i in 0 until n) if (tracks[i].bpm > 0) drawCircle(dot, 2.5.dp.toPx(), Offset(x(i), y(tracks[i].bpm)))
         }
     }
 }
@@ -225,23 +274,120 @@ private fun KeyBadge(t: TrackItem) {
 }
 
 @Composable
-private fun SetTrackRow(n: Int, t: TrackItem, playing: Boolean, onOpen: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(56.dp).background(if (playing) Palette.selectedRow else Palette.surface).clickable(onClick = onOpen).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("$n", color = Palette.muted, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.width(26.dp))
+private fun SetTrackRow(n: Int, t: TrackItem, master: Double?, playing: Boolean, anchor: Boolean, onBranch: (() -> Unit)?, onOpen: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(56.dp).background(if (playing) Palette.selectedRow else if (anchor) Palette.bg else Palette.surface).clickable(onClick = onOpen)
+            .padding(start = 14.dp, end = if (onBranch != null) 2.dp else 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(if (anchor) "↔" else "$n", color = if (anchor) Palette.orange else Palette.muted, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.width(26.dp))
         Column(Modifier.weight(1f)) {
-            Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(t.artist, color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(t.title.ifEmpty { t.fileName }, color = if (anchor) Palette.mutedBright else Palette.text, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (anchor) "linha principal" else t.artist, color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(if (t.bpm > 0) "%.1f".format(t.bpm) else "—", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(end = 8.dp))
+        // O BPM em que toca (o master) e, embaixo, o da faixa e quanto ela estica.
+        Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 8.dp)) {
+            Text(master?.let { "%.1f".format(it) } ?: if (t.bpm > 0) "%.1f".format(t.bpm) else "—", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono)
+            if (master != null && t.bpm > 0) {
+                val st = SetTempo.stretchPct(t.bpm, master)
+                Text(
+                    "%.0f %+.0f%%".format(t.bpm, st), fontSize = 10.sp, fontFamily = Mono,
+                    color = when {
+                        kotlin.math.abs(st) > SetTempo.MAX_PCT -> Palette.danger
+                        kotlin.math.abs(st) > SetTempo.COMFORT_PCT -> Palette.orange
+                        else -> Palette.muted
+                    },
+                )
+            }
+        }
         KeyBadge(t)
+        if (onBranch != null) BranchButton(onBranch)
     }
+}
+
+/** O desenho do ramo (a linha que se divide em duas), feito à mão: o símbolo de bifurcação não existe em toda fonte. */
+@Composable
+private fun BranchIcon(color: androidx.compose.ui.graphics.Color) {
+    Canvas(Modifier.size(18.dp)) {
+        val w = size.width
+        val h = size.height
+        val stroke = 2.dp.toPx()
+        drawLine(color, Offset(w * 0.3f, h), Offset(w * 0.3f, h * 0.1f), stroke)
+        drawLine(color, Offset(w * 0.3f, h * 0.55f), Offset(w * 0.8f, h * 0.15f), stroke)
+        drawCircle(color, 2.2.dp.toPx(), Offset(w * 0.8f, h * 0.15f))
+        drawCircle(color, 2.2.dp.toPx(), Offset(w * 0.3f, h * 0.1f))
+    }
+}
+
+/** Criar um ramo a partir desta faixa. */
+@Composable
+private fun BranchButton(onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).clickable(onClick = onClick).semantics { contentDescription = "Criar ramo" },
+        contentAlignment = Alignment.Center,
+    ) { BranchIcon(Palette.blue) }
+}
+
+/** Um ramo que sai desta faixa: a letra, quantas faixas e onde volta. Tocar abre o SET do ramo. */
+@Composable
+private fun BranchRow(app: ManagerApp, b: os.deckbridge.manager.mix.SetBranch, line: List<Int>, onOpen: () -> Unit) {
+    val v = app.model.view ?: return
+    val p = v.playlists.firstOrNull { it.id == b.playlistId } ?: return
+    val n = v.entries[b.playlistId].orEmpty().size
+    val back = b.rejoinTrackId?.let { r -> line.indexOf(r).takeIf { it >= 0 }?.let { "volta no ${it + 1}" } } ?: "outro final"
+    Row(
+        Modifier.fillMaxWidth().height(40.dp).clickable(onClick = onOpen).padding(start = 40.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BranchIcon(Palette.orange)
+        Text(" RAMO ${app.sets.letterOf(b)}", color = Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text("  $n faixas · $back", color = Palette.mutedBright, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        Text("›", color = Palette.blue, fontSize = 18.sp)
+    }
+}
+
+/** Criar um ramo daqui: quantas faixas, o rumo e se volta para a linha principal. */
+@Composable
+private fun BranchDialog(app: ManagerApp, from: Int, onClose: () -> Unit) {
+    var count by remember { mutableStateOf(3) }
+    var shape by remember { mutableStateOf(os.deckbridge.manager.mix.SetShape.RISING) }
+    var rejoin by remember { mutableStateOf(true) }
+    val title = app.model.view?.track(from)?.title.orEmpty()
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Ramo depois de\n$title", maxLines = 2) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("FAIXAS", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(2, 3, 4, 6).forEach { c -> FilterChip(count == c, { count = c }, { Text("$c") }) }
+                }
+                Text("RUMO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        os.deckbridge.manager.mix.SetShape.RISING to "Mais energia",
+                        os.deckbridge.manager.mix.SetShape.FLOW to "Manter",
+                        os.deckbridge.manager.mix.SetShape.FALLING to "Mais calmo",
+                    ).forEach { (sh, label) -> FilterChip(shape == sh, { shape = sh }, { Text(label, maxLines = 1) }) }
+                }
+                Text("VOLTA PARA A LINHA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(rejoin, { rejoin = true }, { Text("Sim") })
+                    FilterChip(!rejoin, { rejoin = false }, { Text("Não (outro final)") })
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onClose(); app.sets.createBranch(from, count, shape, rejoin) }) { Text("CRIAR") } },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancelar") } },
+        containerColor = Palette.surfaceHigh,
+    )
 }
 
 private fun fitText(f: Fit): String = if (f.bpmDiffPct == 0.0) "=" else "%+.1f%%".format(f.bpmDiffPct)
 
 @Composable
 private fun TransitionRow(
-    a: TrackItem, b: TrackItem, tr: Transition, fit: Fit, playing: Boolean, issues: List<os.deckbridge.manager.mix.SetIssue>, rehearsing: Boolean,
+    a: TrackItem, b: TrackItem, tr: Transition, fit: Fit, stretch: Double, playing: Boolean, issues: List<os.deckbridge.manager.mix.SetIssue>, rehearsing: Boolean,
     onPlay: () -> Unit, onEdit: () -> Unit, onBridge: (() -> Unit)?,
 ) {
     Row(
@@ -259,7 +405,11 @@ private fun TransitionRow(
                     null -> {}
                 }
                 Text("${keyLabel(a)}→${keyLabel(b)}", color = if (fit.keyOk) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
-                Text("  " + fitText(fit), color = if (fit.bpmOk) Palette.mutedBright else Palette.orange, fontSize = 12.sp, fontFamily = Mono)
+                // Quanto a que entra estica para tocar no master (até 10%: normal).
+                Text(
+                    "  %+.1f%%".format(stretch), fontSize = 12.sp, fontFamily = Mono,
+                    color = if (kotlin.math.abs(stretch) <= SetTempo.COMFORT_PCT) Palette.mutedBright else if (kotlin.math.abs(stretch) <= SetTempo.MAX_PCT) Palette.orange else Palette.danger,
+                )
             }
             Text("${tr.style.title} · ${tr.bars} comp. · ${mmss(tr.outMs)}", color = Palette.muted, fontSize = 12.sp, maxLines = 1)
             if (issues.isNotEmpty()) Text("⚠ " + issues.joinToString(" · ") { it.text }, color = Palette.orange, fontSize = 11.sp, maxLines = 2)

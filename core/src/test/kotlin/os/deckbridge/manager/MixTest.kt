@@ -112,6 +112,22 @@ class MixTest {
         assertTrue(kotlin.math.abs(fixed.leadMs - fixed.fromB(980)) <= 2)
     }
 
+    @Test fun `as duas tocam no master do set`() {
+        // A de 120 e B de 125 tocadas a 128: batidas a cada 468,75 ms antes e depois da troca.
+        val tr = Transition(1, 2, outMs = 60_000, inMs = 960, bars = 4, style = MixStyle.CUT, masterTempo = false, phaseLock = false)
+        val p = assertNotNull(MixRenderer.transition(clicks(120.0, 44100), 120.0, clicks(125.0, 48000), 125.0, tr, leadMs = 4000, tailMs = 2000, tempo = 128.0))
+        assertEquals(128.0, p.tempo)
+        val beat = 60000.0 / 128
+        val before = onsetsMs(p.audio, 0).filter { it < p.leadMs - 10 }
+        assertTrue(before.size >= 7)
+        before.zipWithNext().forEach { (x, y) -> assertEquals(beat, y - x, 1.5) }
+        val after = onsetsMs(p.audio, p.leadMs - 10)
+        after.forEachIndexed { k, ms -> assertEquals(p.leadMs + k * beat, ms, 2.0, "batida $k") }
+        // A posição na faixa que sai anda mais rápido que a prévia (120 → 128).
+        assertTrue(kotlin.math.abs(p.aAt(p.leadMs) - tr.outMs) <= 2)
+        assertTrue(kotlin.math.abs(p.aAt(p.leadMs + 1000) - (tr.outMs + 1067)) <= 3)
+    }
+
     @Test fun `stretch muda o andamento e mantem a frequencia`() {
         val n = 44100 * 3
         val sine = FloatArray(n) { kotlin.math.sin(2 * Math.PI * 440.0 * it / 44100).toFloat() * 0.5f }

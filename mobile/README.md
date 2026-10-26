@@ -59,6 +59,15 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
   grade, saída sem espaço), **PONTE** (uma faixa que combina com as duas, posta no meio) e **ENSAIAR**: toca cada
   transição; ✓ BOA ou ✗ REFAZER passa para a próxima, e as marcas ficam no plano.
 
+## Ramos e master (rodada 10)
+
+- **MASTER**: o BPM do set é o do master. AUTO segue as faixas sem saltos (no máximo 2,5% por troca); ou fixe um BPM
+  e todas tocam nele. Cada faixa mostra o BPM em que toca e "nativo ±%": até 10% é normal, até 16% (pitch) em laranja,
+  além disso em vermelho.
+- **Ramo** (ícone em cada faixa do SET): uma linha alternativa a partir daquela faixa — 2 a 6 faixas, mais energia,
+  manter ou mais calmo — que volta à linha principal mais adiante ou vira outro final. Vira uma playlist "Set - ramo B"
+  (vai para o pendrive); tocar em "RAMO B" abre a linha do ramo com transições, prévia e ensaio.
+
 ## Teste de áudio
 
 MENU → APARELHO → **Teste de áudio**: lê 30 s de uma música da biblioteca pelo decodificador do Android e monta uma

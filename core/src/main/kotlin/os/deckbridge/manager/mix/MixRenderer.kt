@@ -40,9 +40,12 @@ class MixPreview(
     val leadMs: Int,
     val overlapMs: Int,
     val aStartMs: Int,
-    /** Velocidade da que entra: andamento da que sai ÷ andamento dela. */
+    /** Velocidade da que entra: o master ÷ o andamento dela. */
     val speed: Double,
     val barMsA: Double,
+    /** O master da troca (as duas tocam nele) e a velocidade da que sai até ele. */
+    val tempo: Double,
+    val speedA: Double,
     /**
      * Ajuste fino aplicado à que entra, em ms da prévia (positivo: ela estava atrasada e foi adiantada), medido pelos
      * ataques graves das duas no trecho junto. 0 se desligado ou se não deu para medir com segurança.
@@ -55,11 +58,11 @@ class MixPreview(
 ) {
     val lengthMs get() = (audio.frames * 1000L / audio.rate).toInt()
     /** Onde está a faixa que sai (ms dela) no instante [ms] da prévia. */
-    fun aAt(ms: Int) = aStartMs + ms
+    fun aAt(ms: Int) = aStartMs + (ms * speedA).toInt()
     /** Onde está a que entra (ms dela) no instante [ms] da prévia (negativo: ainda não começou). */
     fun bAt(ms: Int) = transition.inMs + ((ms - leadMs + phaseMs) * speed).toInt()
     /** Instante da prévia em que a faixa que sai passa por [trackMs]. */
-    fun fromA(trackMs: Int) = trackMs - aStartMs
+    fun fromA(trackMs: Int) = ((trackMs - aStartMs) / speedA).toInt()
     fun fromB(trackMs: Int) = leadMs + ((trackMs - transition.inMs) / speed - phaseMs).toInt()
     fun levelsAt(ms: Int, into: Levels = Levels()) = MixRenderer.levels(transition.style, (ms - leadMs).toDouble(), overlapMs.toDouble(), barMsA, into)
 }
@@ -115,17 +118,22 @@ object MixRenderer {
 
     fun transition(
         a: SegmentReader, bpmA: Double, b: SegmentReader, bpmB: Double, t: Transition, leadMs: Int = 12_000, tailMs: Int = 12_000, waves: Boolean = false,
+        /** O master da troca: as duas faixas tocam nele (padrão: o BPM da que sai, que então não muda). */
+        tempo: Double = bpmA,
     ): MixPreview? {
-        val barMs = SetPlanner.barMs(bpmA)
+        val master = if (tempo > 0) tempo else bpmA
+        val barMs = SetPlanner.barMs(master)
         val overlapMs = (t.bars * barMs).toInt().coerceAtLeast(0)
-        val lead = min(leadMs, t.outMs)
-        val aStart = t.outMs - lead
-        val aLen = lead + overlapMs + if (t.style == MixStyle.ECHO) (barMs * 2).toInt() else 0
+        val speedA = if (bpmA > 0 && master > 0) master / bpmA else 1.0
+        // [lead] e o resto em tempo da prévia; a faixa que sai anda [speedA] vezes isso no tempo dela.
+        val lead = min(leadMs, (t.outMs / speedA).toInt())
+        val aStart = t.outMs - (lead * speedA).toInt()
+        val aLen = ((lead + overlapMs + if (t.style == MixStyle.ECHO) (barMs * 2).toInt() else 0) * speedA).toInt() + 300
         val pa = a.read(aStart, aLen) ?: return null
-        val speed = if (bpmA > 0 && bpmB > 0) bpmA / bpmB else 1.0
+        val speed = if (master > 0 && bpmB > 0) master / bpmB else 1.0
         val bOutMs = overlapMs + tailMs
         val pb = b.read(t.inMs, (bOutMs * speed).toInt() + 300) ?: return null
-        val sa = resample(pa, 1.0)
+        val sa = if (t.masterTempo) Stretch.tempo(resample(pa, 1.0), speedA) else resample(pa, speedA)
         val sb = if (t.masterTempo) Stretch.tempo(resample(pb, 1.0), speed) else resample(pb, speed)
         val leadFrames = ms(lead)
         val total = leadFrames + ms(bOutMs)
@@ -176,7 +184,7 @@ object MixRenderer {
             waveA = os.deckbridge.logic.wavesFromPcm(monoA, RATE).rgbDetail
             waveB = os.deckbridge.logic.wavesFromPcm(monoB, RATE).rgbDetail
         }
-        return MixPreview(Stereo(outL, outR, RATE), t, lead, overlapMs, aStart, speed, barMs, shift * 1000.0 / RATE, measured, waveA, waveB)
+        return MixPreview(Stereo(outL, outR, RATE), t, lead, overlapMs, aStart, speed, barMs, master, speedA, shift * 1000.0 / RATE, measured, waveA, waveB)
     }
 
     private const val HOP = 49 // 1,111 ms exatos a 44,1 kHz

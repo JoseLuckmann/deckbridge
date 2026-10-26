@@ -39,8 +39,56 @@ class TrackGrid(val beats: List<Beat>, val cues: List<Cue>, val durationMs: Int)
 /** Quão bem duas faixas se encaixam: distância de tom na roda (0 igual, 1 vizinha) e diferença de andamento. */
 data class Fit(val keyDistance: Int?, val bpmDiffPct: Double) {
     val keyOk get() = keyDistance != null && keyDistance <= 1
-    val bpmOk get() = abs(bpmDiffPct) <= 6.0
+    /** O master manda: esticar uma faixa até 10% (116 tocada em 128) é tocar normal, com Master Tempo. */
+    val bpmOk get() = abs(bpmDiffPct) <= SetTempo.COMFORT_PCT
     val good get() = keyOk && bpmOk
+}
+
+/**
+ * O master do set: o BPM em que cada faixa toca. Quem manda é o master, não o BPM da faixa — tocar uma de 116 a 128 é
+ * normal. O que não pode é o master dar saltos: no automático ele segue as faixas, mas anda no máximo [STEP_PCT] por
+ * troca; fixo, fica num valor só. Cada faixa estica (ou encolhe) do BPM dela até o master.
+ */
+object SetTempo {
+    /** Até aqui esticar é tocar normal. */
+    const val COMFORT_PCT = 10.0
+
+    /** O limite do pitch do player (±16%): passou disso, a faixa não chega no master. */
+    const val MAX_PCT = 16.0
+
+    /** Quanto o master pode andar numa troca sem soar brusco. */
+    const val STEP_PCT = 2.5
+
+    /** Quanto a faixa estica para tocar em [master] (positivo: mais rápida que o BPM dela). */
+    fun stretchPct(native: Double, master: Double): Double = if (native > 0) (master / native - 1) * 100 else 0.0
+
+    /**
+     * O master de cada posição: [fixed] em todas, ou seguindo os BPMs ([natives]) a passos de até [STEP_PCT], a partir
+     * de [start] (o master de onde a linha começa, num ramo) ou do BPM da primeira.
+     */
+    fun plan(natives: List<Double>, fixed: Double? = null, start: Double? = null): List<Double> {
+        if (natives.isEmpty()) return emptyList()
+        if (fixed != null) return natives.map { fixed }
+        val out = ArrayList<Double>(natives.size)
+        // Sem ponto de partida, o master começa no BPM da primeira faixa (com andamento).
+        var m = start ?: natives.firstOrNull { it > 0 } ?: 120.0
+        for (n in natives) {
+            if (n > 0) {
+                val step = m * STEP_PCT / 100
+                m += (n - m).coerceIn(-step, step)
+            }
+            out += m
+        }
+        return out
+    }
+
+    /** "auto" ou o BPM fixo, do arquivo do set. */
+    fun loadMode(file: File): Double? = runCatching { file.readText().trim().toDoubleOrNull() }.getOrNull()
+
+    fun saveMode(file: File, fixed: Double?) {
+        file.parentFile?.mkdirs()
+        file.writeText(fixed?.let { "%.2f".format(java.util.Locale.ROOT, it) } ?: "auto")
+    }
 }
 
 object SetPlanner {
