@@ -63,8 +63,10 @@ class SetBranchTest {
         a.sets.open(main)
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
         rule.waitForIdle()
-        // O ⑂ da primeira faixa.
-        rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("Criar ramo"))[0].performClick()
+        // O ponto de virada da primeira faixa → criar ramo.
+        rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("Ponto de virada"))[0].performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Criar ramo daqui").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Manter").performClick()
         rule.waitForIdle()

@@ -180,6 +180,50 @@ class SetTempoAndBranchTest {
         assertEquals(130.0, faster.peak)
     }
 
+    @Test fun ramoDentroDeRamoEPoolNoCaminho() {
+        val tracks = (1..14).map { t(it, 124.0, "Am") }
+        // Linha 1..5; B sai da 2 (10, 11) e volta na 4; C sai da 11 (dentro de B) com 12, 13 e volta na 5.
+        val v = view(tracks, mapOf(1 to listOf(1, 2, 3, 4, 5), 20 to listOf(10, 11), 21 to listOf(12, 13)))
+        val b = os.deckbridge.manager.mix.SetBranch(20, 1, 2, 4)
+        val c = os.deckbridge.manager.mix.SetBranch(21, 20, 11, 5)
+        assertEquals(1, os.deckbridge.manager.mix.SetBranches.rootOf(listOf(b, c), 21))
+        assertEquals(listOf(b, c), os.deckbridge.manager.mix.SetBranches.tree(listOf(b, c), 1))
+        // A linha principal vira pool da 4ª em diante; o ramo C é todo pool.
+        val pools = mapOf(1 to 3, 21 to 0)
+        val routes = os.deckbridge.manager.mix.SetRoutes.routes(v, listOf(1, 2, 3, 4, 5), listOf(b, c), { pools[it] }, mainId = 1)
+        assertEquals(listOf(1, 2, 10, 11, 12, 13, 5), routes[2].ids, "C sai de dentro de B e volta na linha")
+        assertEquals(3, routes[2].split)
+        assertEquals(6, routes[2].merge)
+        assertEquals(listOf(false, false, false, true, true), routes[0].pool)
+        assertEquals(listOf(false, false, false, false, true, true, true), routes[2].pool)
+        assertTrue(routes[2].insidePool(4) && !routes[2].insidePool(3))
+    }
+
+    @Test fun poolCombinaEntreSiEMostraAProxima() {
+        val a = t(1, 124.0, "Am")
+        val lib = listOf(a, t(2, 125.0, "Am", 2), t(3, 126.0, "Em", 5), t(4, 123.0, "C"), t(5, 124.0, "F#m", 5), t(6, 160.0, "Am", 5), t(7, 127.0, "Bm"))
+        val v = view(lib)
+        val pool = os.deckbridge.manager.mix.SetPool.fill(v, listOf(a), emptyList(), setOf(1), 4)
+        assertEquals(4, pool.size)
+        assertTrue(5 !in pool && 6 !in pool, "tom longe e 160 BPM ficam fora: $pool")
+        val links = os.deckbridge.manager.mix.SetPool.linkCount(v, pool)
+        assertTrue(links.values.all { it >= 1 }, "nenhuma isolada: $links")
+        // Tocando a 2 (Am): a próxima melhor é de tom igual ou vizinho; as tocadas saem.
+        val next = os.deckbridge.manager.mix.SetPool.next(v, v.track(2)!!, pool, played = setOf(4))
+        assertTrue(next.none { it.first.id == 4 || it.first.id == 2 })
+        assertTrue(next.first().second.keyOk)
+        // Ramo em pool que volta: a volta é uma faixa da linha com que a pool combina.
+        val line = listOf(1, 6, 7)
+        val (ids, back) = os.deckbridge.manager.mix.SetPool.branch(v, line, from = 1, count = 3)
+        assertEquals(7, back)
+        assertTrue(ids.isNotEmpty() && ids.none { it in line })
+        val f = Files.createTempDirectory("p").resolve("9.pool").toFile()
+        os.deckbridge.manager.mix.SetPool.save(f, 5)
+        assertEquals(5, os.deckbridge.manager.mix.SetPool.load(f))
+        os.deckbridge.manager.mix.SetPool.save(f, null)
+        assertEquals(null, os.deckbridge.manager.mix.SetPool.load(f))
+    }
+
     @Test fun ramosGuardadosESoOsVivos() {
         val f = Files.createTempDirectory("b").resolve("branches.properties").toFile()
         val list = listOf(os.deckbridge.manager.mix.SetBranch(20, 1, 2, 5), os.deckbridge.manager.mix.SetBranch(21, 1, 3, null))

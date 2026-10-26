@@ -14,6 +14,7 @@ import os.deckbridge.manager.mix.SetBranches
 import os.deckbridge.manager.mix.SetRoute
 import os.deckbridge.manager.mix.SetRoutes
 import os.deckbridge.manager.mix.RouteTempo
+import os.deckbridge.manager.mix.SetPool
 import os.deckbridge.manager.mix.SetBuilder
 import os.deckbridge.manager.mix.SetShape
 import os.deckbridge.manager.mix.SetTempo
@@ -54,6 +55,9 @@ class SetDesk(private val app: ManagerApp) {
         synchronized(grids) { grids.clear() }
         branches = SetBranches.load(branchesFile)
         saved = SetPlanner.load(file(id))
+        poolFrom = poolFromOf(id)
+        poolNow = null
+        poolPlayed = emptySet()
         playlistId = id
         masterFixed = SetTempo.loadMode(masterFile(rootId() ?: id))
     }
@@ -64,22 +68,24 @@ class SetDesk(private val app: ManagerApp) {
         return SetBranches.alive(v, branches).firstOrNull { it.playlistId == playlistId }
     }
 
-    /** O set principal: o próprio, ou aquele de onde o ramo sai. */
-    fun rootId(): Int? = branch?.mainId ?: playlistId
+    /** O set principal: o próprio, ou aquele de onde o ramo (ou o ramo do ramo) sai. */
+    fun rootId(): Int? = playlistId?.let { SetBranches.rootOf(branches, it) }
 
-    /** Os ramos que saem do set aberto (só do principal). */
+    /** Os ramos que saem da linha aberta (do set principal ou de um ramo: um ramo pode ter ramos). */
     fun branchesHere(): List<SetBranch> {
         val v = app.model.view ?: return emptyList()
-        if (branch != null) return emptyList()
         return SetBranches.alive(v, branches).filter { it.mainId == playlistId }
     }
 
-    /** A letra do ramo (B, C…), pela ordem em que foram criados no set. */
-    fun letterOf(b: SetBranch): Char {
-        val v = app.model.view ?: return '?'
-        val mine = SetBranches.alive(v, branches).filter { it.mainId == b.mainId }
-        return SetBranches.letter(mine.indexOfFirst { it.playlistId == b.playlistId }.coerceAtLeast(0))
+    /** Todos os ramos do set principal aberto (os que saem dele e os que saem dos ramos dele), na ordem de criação. */
+    fun tree(): List<SetBranch> {
+        val v = app.model.view ?: return emptyList()
+        val root = rootId() ?: return emptyList()
+        return SetBranches.tree(SetBranches.alive(v, branches), root)
     }
+
+    /** A letra do ramo (B, C…), pela ordem em que foram criados no set. */
+    fun letterOf(b: SetBranch): Char = SetBranches.letter(tree().indexOfFirst { it.playlistId == b.playlistId }.coerceAtLeast(0))
 
     fun openMain() {
         val main = branch?.mainId ?: return
@@ -108,16 +114,90 @@ class SetDesk(private val app: ManagerApp) {
         return v.entries[playlistId ?: return emptyList()].orEmpty().filter { v.track(it) != null }
     }
 
-    /** O master em cada posição de [ids]. Num ramo, começa no master que o set principal tem no ponto de virada. */
+    /**
+     * O master em cada posição de [ids]. Num ramo, é o do caminho inteiro (desde a abertura do set, passando pelos ramos
+     * de onde ele sai): começa no master que a linha tem no ponto de virada.
+     */
     fun masters(ids: List<Int> = ids()): List<Double> {
         val v = app.model.view ?: return emptyList()
         val natives = ids.map { v.track(it)?.bpm ?: 0.0 }
         val b = branch ?: return SetTempo.plan(natives, masterFixed)
-        val mainIds = v.entries[b.mainId].orEmpty()
-        val mainMasters = SetTempo.plan(mainIds.map { v.track(it)?.bpm ?: 0.0 }, masterFixed)
-        val start = mainMasters.getOrNull(mainIds.indexOf(b.fromTrackId)) ?: natives.firstOrNull() ?: 120.0
+        val r = route(b.playlistId) ?: return SetTempo.plan(natives, masterFixed)
+        val all = SetTempo.plan(r.ids.map { v.track(it)?.bpm ?: 0.0 }, masterFixed)
+        val start = all.getOrNull(r.split ?: 0) ?: natives.firstOrNull() ?: 120.0
         return listOf(start) + SetTempo.plan(natives.drop(1), masterFixed, start)
     }
+
+    /** Os caminhos da árvore do set aberto (sem o andamento), para achar de onde um ramo vem. */
+    private fun rawRoutes(): List<SetRoute> {
+        val v = app.model.view ?: return emptyList()
+        val root = rootId() ?: return emptyList()
+        return SetRoutes.routes(v, v.entries[root].orEmpty().filter { v.track(it) != null }, tree(), ::poolFromOf, mainId = root)
+    }
+
+    private fun route(playlist: Int): SetRoute? = rawRoutes().firstOrNull { it.branch?.playlistId == playlist }
+
+    // ---- pool: um trecho sem ordem, escolhido na hora -----------------------------------------------------------
+
+    private fun poolFile(id: Int) = File(app.root.parentFile, "sets/$id.pool")
+
+    private fun poolFromOf(id: Int): Int? = runCatching { SetPool.load(poolFile(id)) }.getOrNull()
+
+    /** A playlist [id] tem pool (toda ou de uma faixa em diante). */
+    fun isPool(id: Int): Boolean = poolFromOf(id) != null
+
+    /** Da faixa [poolFrom] da playlist aberta em diante é pool (null: é toda lista). */
+    var poolFrom by mutableStateOf<Int?>(null)
+        private set
+
+    /** A faixa da pool que está tocando agora (para mostrar o que combina com ela) e as que já tocaram. Só na tela. */
+    var poolNow by mutableStateOf<Int?>(null)
+        private set
+    var poolPlayed by mutableStateOf<Set<Int>>(emptySet())
+        private set
+
+    /** De que posição de [ids] (a linha aberta) começa a pool, ou null. Num ramo, [ids] tem o ponto de virada antes. */
+    fun poolStart(ids: List<Int> = ids()): Int? {
+        val k = poolFrom ?: return null
+        val at = if (branch != null) k + 1 else k
+        return at.takeIf { it < poolEnd(ids) }
+    }
+
+    /** Até onde vai a pool em [ids] (exclusivo): a faixa da volta de um ramo não é da pool. */
+    fun poolEnd(ids: List<Int> = ids()): Int = if (branch?.rejoinTrackId != null) ids.size - 1 else ids.size
+
+    /** A parte com ordem de [ids]: tudo antes da pool (é onde há transições programadas). */
+    fun fixedPart(ids: List<Int> = ids()): List<Int> = poolStart(ids)?.let { ids.take(it) } ?: ids
+
+    /** Faz da faixa [entryIndex] da playlist em diante uma pool (null: volta a ser lista). */
+    fun makePool(entryIndex: Int?) {
+        val id = playlistId ?: return
+        poolFrom = entryIndex
+        poolNow = null
+        poolPlayed = emptySet()
+        runCatching { SetPool.save(poolFile(id), entryIndex) }
+        app.did(if (entryIndex == null) "Lista" else "Pool a partir da ${entryIndex + 1}ª")
+    }
+
+    /** Marca [id] como a que está tocando: a de antes vai para as tocadas. Tocar de novo na mesma desmarca. */
+    fun playingNow(id: Int) {
+        val now = poolNow
+        if (now == id) { poolNow = null; return }
+        if (now != null) poolPlayed = poolPlayed + now
+        poolPlayed = poolPlayed - id
+        poolNow = id
+    }
+
+    fun resetPool() {
+        poolNow = null
+        poolPlayed = emptySet()
+    }
+
+    /** De onde se entra na pool: a última faixa antes dela (num ramo que é todo pool, o ponto de virada). */
+    fun poolEntry(ids: List<Int> = ids()): Int? = poolStart(ids)?.let { ids.getOrNull(it - 1) }
+
+    /** As faixas da pool na linha aberta. */
+    fun poolIds(ids: List<Int> = ids()): List<Int> = poolStart(ids)?.let { ids.subList(it, poolEnd(ids)) } ?: emptyList()
 
     /** O master da troca [tr] na linha aberta (as duas faixas tocam nele). */
     fun tempoFor(tr: Transition, ids: List<Int> = ids()): Double? = masters(ids).getOrNull(ids.indexOf(tr.fromId))
@@ -142,14 +222,16 @@ class SetDesk(private val app: ManagerApp) {
     fun routes(): List<RouteView> {
         val v = app.model.view ?: return emptyList()
         val root = rootId() ?: return emptyList()
-        val main = v.entries[root].orEmpty().filter { v.track(it) != null }
-        val mine = SetBranches.alive(v, branches).filter { it.mainId == root }
-        val mainSaved = runCatching { SetPlanner.load(file(root)) }.getOrDefault(emptyList())
-        return SetRoutes.routes(v, main, mine).map { r ->
-            val keep = mainSaved + (r.branch?.let { b -> runCatching { SetPlanner.load(file(b.playlistId)) }.getOrDefault(emptyList()) } ?: emptyList())
+        val tree = tree()
+        // As transições guardadas de cada linha do set (a principal e cada ramo) valem em qualquer caminho que passe nela.
+        val keep = (listOf(root) + tree.map { it.playlistId }).flatMap { runCatching { SetPlanner.load(file(it)) }.getOrDefault(emptyList()) }
+        return rawRoutes().map { r ->
             val masters = SetTempo.plan(r.ids.map { v.track(it)?.bpm ?: 0.0 }, masterFixed)
             val plan = SetPlanner.plan(v, r.ids, ::grid, keep = keep)
-            val issues = os.deckbridge.manager.mix.SetDoctor.check(v, r.ids, plan, ::grid, masters).map { it.fromId to it.toId }.distinct().size
+            // Dentro de uma pool não há troca programada (a ordem é escolhida na hora): não conta como aviso.
+            val issues = os.deckbridge.manager.mix.SetDoctor.check(v, r.ids, plan, ::grid, masters)
+                .filter { i -> r.ids.indices.none { n -> r.ids[n] == i.fromId && n + 1 < r.ids.size && r.ids[n + 1] == i.toId && (r.pool[n] || r.pool[n + 1]) } }
+                .map { it.fromId to it.toId }.distinct().size
             RouteView(r, SetRoutes.tempo(v, r.ids, plan, masters), issues)
         }
     }
@@ -164,33 +246,48 @@ class SetDesk(private val app: ManagerApp) {
         open(target)
     }
 
+    /** Como o ramo é montado: uma lista automática, uma pool automática ou vazio (o DJ escolhe as faixas). */
+    enum class BranchKind { LIST, POOL, MANUAL }
+
     /**
-     * Cria um ramo a partir de [fromTrackId]: [count] faixas no rumo [shape] e, se [rejoin], a volta à linha. Vira uma
-     * playlist "Set ⑂ B" (vai para o pendrive). Abre o SET do ramo e devolve o id da playlist, ou null.
+     * Cria um ramo a partir de [fromTrackId] da linha aberta (a principal ou um ramo: ramo de ramo vale). [kind] LIST:
+     * [count] faixas no rumo [shape]; POOL: [count] faixas que combinam entre si, sem ordem; MANUAL: vazio. Se [rejoin],
+     * volta mais adiante no caminho de onde sai. Vira uma playlist "Set - ramo B" (vai para o pendrive). Abre o SET do
+     * ramo e devolve o id da playlist, ou null.
      */
-    fun createBranch(fromTrackId: Int, count: Int, shape: SetShape, rejoin: Boolean): Int? {
+    fun createBranch(fromTrackId: Int, count: Int, shape: SetShape, rejoin: Boolean, kind: BranchKind = BranchKind.LIST): Int? {
         val v = app.model.view ?: return null
-        val main = playlistId ?: return null
-        if (branch != null) return null
-        val line = entries()
-        val mine = SetBranches.alive(v, branches).filter { it.mainId == main }
-        val taken = mine.flatMap { v.entries[it.playlistId].orEmpty() }.toSet()
-        val (ids, back) = SetBuilder.branch(v, line, fromTrackId, count, shape, taken = taken, rejoin = rejoin)
-        if (ids.isEmpty()) {
+        val parent = playlistId ?: return null
+        val root = rootId() ?: return null
+        // A linha onde pode voltar: o caminho inteiro de onde o ramo sai (num ramo, segue depois da volta dele).
+        val line = if (branch == null) entries() else route(parent)?.ids ?: ids()
+        val tree = tree()
+        val taken = tree.flatMap { v.entries[it.playlistId].orEmpty() }.toSet() + v.entries[root].orEmpty()
+        val (ids, back) = when (kind) {
+            BranchKind.LIST -> SetBuilder.branch(v, line, fromTrackId, count, shape, taken = taken, rejoin = rejoin)
+            BranchKind.POOL -> SetPool.branch(v, line, fromTrackId, count, taken = taken, rejoin = rejoin)
+            BranchKind.MANUAL -> emptyList<Int>() to null
+        }
+        if (ids.isEmpty() && kind != BranchKind.MANUAL) {
             app.notice = os.deckbridge.manager.Banner("Nenhuma faixa fora do set combina daqui", true)
             return null
         }
-        val letter = SetBranches.letter(mine.size)
-        val name = "${v.playlists.first { it.id == main }.name} - ramo $letter"
+        val letter = SetBranches.letter(tree.size)
+        val name = "${v.playlists.first { it.id == root }.name} - ramo $letter"
         val id = app.model.nextPlaylistId()
-        val n = app.model.submitAll(listOf(
-            Edit.CreatePlaylist(id, 0, name, false) to "Ramo \"$name\"",
-            Edit.AddToPlaylist(id, ids) to "Faixas do ramo \"$name\"",
-        ))
-        if (n != 2) return null
-        branches = SetBranches.load(branchesFile) + SetBranch(id, main, fromTrackId, back)
+        val edits = listOf(Edit.CreatePlaylist(id, 0, name, false) to "Ramo \"$name\"") +
+            (if (ids.isNotEmpty()) listOf(Edit.AddToPlaylist(id, ids) to "Faixas do ramo \"$name\"") else emptyList())
+        if (app.model.submitAll(edits) != edits.size) return null
+        branches = SetBranches.load(branchesFile) + SetBranch(id, parent, fromTrackId, back)
         runCatching { SetBranches.save(branchesFile, branches) }
-        app.did("Ramo $letter · ${ids.size} faixas" + if (back != null) " · volta na linha" else "")
+        if (kind == BranchKind.POOL) runCatching { SetPool.save(poolFile(id), 0) }
+        app.did(
+            when (kind) {
+                BranchKind.MANUAL -> "Ramo $letter · escolha as faixas"
+                BranchKind.POOL -> "Ramo $letter · pool de ${ids.size}"
+                BranchKind.LIST -> "Ramo $letter · ${ids.size} faixas"
+            } + if (back != null) " · volta na linha" else "",
+        )
         open(id)
         return id
     }
@@ -205,9 +302,10 @@ class SetDesk(private val app: ManagerApp) {
         }
     }
 
+    /** As transições da linha aberta: só na parte com ordem (numa pool a ordem é escolhida na hora). */
     fun plan(ids: List<Int> = ids()): List<Transition> {
         val v = app.model.view ?: return emptyList()
-        return SetPlanner.plan(v, ids, ::grid, keep = saved)
+        return SetPlanner.plan(v, fixedPart(ids), ::grid, keep = saved)
     }
 
     fun update(t: Transition) {
@@ -225,15 +323,41 @@ class SetDesk(private val app: ManagerApp) {
 
     fun suggestions(ids: List<Int>): List<TrackItem> {
         val v = app.model.view ?: return emptyList()
+        // Na pool: as que combinam com a entrada, com a volta e com as que já estão nela.
+        if (poolStart(ids) != null) {
+            val anchors = listOfNotNull(poolEntry(ids), branch?.rejoinTrackId).mapNotNull { v.track(it) }
+            val busy = ids.toSet() + tree().flatMap { v.entries[it.playlistId].orEmpty() } + (rootId()?.let { v.entries[it].orEmpty() } ?: emptyList())
+            return SetPool.fill(v, anchors, poolIds(ids), busy, 3).mapNotNull { v.track(it) }
+        }
         // Um ramo que volta para a linha já tem fim; não há "próxima".
         if (branch?.rejoinTrackId != null) return emptyList()
         val last = ids.lastOrNull()?.let { v.track(it) } ?: return emptyList()
-        return SetPlanner.suggestNext(v, last, ids.toSet())
+        // Num ramo, nada que já está no set (na linha principal ou em outro ramo).
+        val busy = ids.toSet() + if (branch != null) tree().flatMap { v.entries[it.playlistId].orEmpty() } + (rootId()?.let { v.entries[it].orEmpty() } ?: emptyList()) else emptyList()
+        return SetPlanner.suggestNext(v, last, busy)
     }
 
     fun append(t: TrackItem) {
         val id = playlistId ?: return
         if (app.model.submit(Edit.AddToPlaylist(id, listOf(t.id)), "Pôr \"${t.title}\" no set")) app.did("+ ${t.title}")
+    }
+
+    /** Onde o ramo aberto pode voltar: as faixas do caminho de onde ele saiu, depois do ponto de virada. */
+    fun rejoinChoices(): List<Int> {
+        val b = branch ?: return emptyList()
+        val v = app.model.view ?: return emptyList()
+        val parent = if (b.mainId == rootId()) v.entries[b.mainId].orEmpty() else route(b.mainId)?.ids ?: return emptyList()
+        val at = parent.indexOf(b.fromTrackId).takeIf { it >= 0 } ?: return emptyList()
+        return parent.drop(at + 1).filter { v.track(it) != null }.distinct()
+    }
+
+    /** Muda onde o ramo aberto volta ([trackId]) ou faz dele outro final (null). */
+    fun setRejoin(trackId: Int?) {
+        val b = branch ?: return
+        branches = SetBranches.load(branchesFile).map { if (it.playlistId == b.playlistId) it.copy(rejoinTrackId = trackId) else it }
+        runCatching { SetBranches.save(branchesFile, branches) }
+        val v = app.model.view
+        app.did(trackId?.let { "Volta em ${v?.track(it)?.title.orEmpty()}" } ?: "Outro final")
     }
 
     private fun reader(t: TrackItem) = SegmentReader { start, len -> AudioIo.segment(File(app.root, t.filePath.replace('\\', '/').trimStart('/')), start, len) }
@@ -455,7 +579,8 @@ class SetDesk(private val app: ManagerApp) {
 
     fun issues(ids: List<Int>, plan: List<Transition>): List<os.deckbridge.manager.mix.SetIssue> {
         val v = app.model.view ?: return emptyList()
-        return os.deckbridge.manager.mix.SetDoctor.check(v, ids, plan, ::grid, masters(ids))
+        val fixed = fixedPart(ids)
+        return os.deckbridge.manager.mix.SetDoctor.check(v, fixed, plan, ::grid, masters(ids).take(fixed.size))
     }
 
     /** Reordena a playlist para mixar (a primeira faixa fica: é a escolha do DJ para abrir). Desfazível. */

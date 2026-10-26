@@ -45,6 +45,7 @@ import os.deckbridge.manager.mix.Fit
 import os.deckbridge.manager.mix.MixStyle
 import os.deckbridge.manager.mix.SetPlanner
 import os.deckbridge.manager.mix.SetTempo
+import os.deckbridge.manager.mix.SetPool
 import os.deckbridge.manager.mix.Transition
 import os.deckbridge.manager.pdb.TrackItem
 import os.deckbridge.manager.smart.Smart
@@ -73,6 +74,10 @@ fun SetScreen(app: ManagerApp) {
     androidx.activity.compose.BackHandler { back() }
     var masterOpen by remember { mutableStateOf(false) }
     var branchFrom by remember { mutableStateOf<Int?>(null) }
+    var turnAt by remember { mutableStateOf<Int?>(null) }
+    var rejoinOpen by remember { mutableStateOf(false) }
+    val poolAt = desk.poolStart(ids)
+    val poolEnd = desk.poolEnd(ids)
     val allKey = desk.setKey(plan)
     val issues = remember(ids, plan, v) { desk.issues(ids, plan) }
     var sortOpen by remember { mutableStateOf(false) }
@@ -91,24 +96,30 @@ fun SetScreen(app: ManagerApp) {
             Text("≈" + mmss(SetPlanner.lengthMs(v, ids, plan)), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
             PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playAll(plan) }
         }
-        if (ids.size >= 2) FlowStrip(ids.mapNotNull { v.track(it) }, masters) { desk.mapOpen = true }
+        if (ids.size >= 2) FlowStrip(ids.mapNotNull { v.track(it) }, masters, pool = poolAt?.let { it until poolEnd }) { desk.mapOpen = true }
         if (ids.size >= 2) ActionsRow(
             issues = issues.map { it.fromId to it.toId }.distinct().size,
             redo = plan.count { it.mark == Transition.Mark.REDO },
             master = desk.masterFixed,
             onRehearse = { desk.startRehearsal(plan) },
-            onSort = { sortOpen = true },
+            onSort = if (poolAt == null) ({ sortOpen = true }) else null,
             onMaster = { masterOpen = true },
         )
         LazyColumn(Modifier.weight(1f)) {
+            if (branch != null) item(key = "volta") { RejoinRow(app, branch.rejoinTrackId) { rejoinOpen = true } }
             ids.forEachIndexed { n, id ->
+                // A pool aparece num bloco só, no lugar da primeira faixa dela (sem ordem e sem transições).
+                if (poolAt != null && n in poolAt until poolEnd) {
+                    if (n == poolAt) poolItems(app, ids, masters, poolAt, poolEnd)
+                    return@forEachIndexed
+                }
                 val t = v.track(id) ?: return@forEachIndexed
                 // Num ramo, o ponto de virada e a volta são da linha principal: aparecem, mas não são do ramo.
                 val anchor = branch != null && (n == 0 || (id == branch.rejoinTrackId && n == ids.lastIndex))
                 item(key = "t$id-$n") {
                     SetTrackRow(
                         n + 1, t, masters.getOrNull(n), playing = app.preview.playingId == id, anchor = anchor,
-                        onBranch = if (branch == null) ({ branchFrom = id }) else null,
+                        onBranch = if (!anchor) ({ turnAt = n }) else null,
                     ) { app.preview.toggle(t) }
                 }
                 branchesHere.filter { it.fromTrackId == id }.forEach { b ->
@@ -131,8 +142,8 @@ fun SetScreen(app: ManagerApp) {
             if (ids.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("Playlist vazia", color = Palette.muted, fontSize = 14.sp) } }
             val next = desk.suggestions(ids)
             if (next.isNotEmpty()) {
-                item(key = "next") { Text("PRÓXIMA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.padding(start = 14.dp, top = 16.dp, bottom = 4.dp)) }
-                val last = v.track(ids.last())!!
+                item(key = "next") { Text(if (poolAt != null) "PARA A POOL" else "PRÓXIMA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.padding(start = 14.dp, top = 16.dp, bottom = 4.dp)) }
+                val last = v.track(desk.poolEntry(ids) ?: ids.last())!!
                 next.forEach { s ->
                     item(key = "s${s.id}") { SuggestionRow(s, SetPlanner.fit(last, s), onPlay = { app.preview.toggle(s) }, playing = app.preview.playingId == s.id) { desk.append(s) } }
                 }
@@ -154,6 +165,27 @@ fun SetScreen(app: ManagerApp) {
         }, onClose = { masterOpen = false })
     }
     branchFrom?.let { from -> BranchDialog(app, from) { branchFrom = null } }
+    turnAt?.let { n ->
+        // Ponto de virada: daqui sai um ramo, ou daqui em diante a linha vira pool (ou volta a ser lista).
+        val id = ids.getOrNull(n)
+        val entry = if (branch != null) n - 1 else n
+        val options = listOf("Criar ramo daqui", if (desk.poolFrom == null) "Pool depois desta" else "Tirar a pool (lista)")
+        ChoiceDialog("Ponto de virada · ${id?.let { v.track(it)?.title }.orEmpty()}", options, onPick = { k ->
+            turnAt = null
+            when {
+                k == 0 && id != null -> branchFrom = id
+                desk.poolFrom == null -> desk.makePool(entry + 1)
+                else -> desk.makePool(null)
+            }
+        }, onClose = { turnAt = null })
+    }
+    if (rejoinOpen) {
+        val choices = desk.rejoinChoices()
+        ChoiceDialog("Volta para", listOf("Outro final (não volta)") + choices.map { v.track(it)?.title.orEmpty() }, onPick = { k ->
+            rejoinOpen = false
+            desk.setRejoin(if (k == 0) null else choices[k - 1])
+        }, onClose = { rejoinOpen = false })
+    }
     bridgeFor?.let { (a, b) ->
         val options = remember(a, b, ids) { desk.bridges(a, b) }
         if (options.isEmpty()) {
@@ -169,10 +201,11 @@ fun SetScreen(app: ManagerApp) {
 
 /** Ensaiar, ordenar e o resumo dos avisos, logo abaixo da curva. */
 @Composable
-private fun ActionsRow(issues: Int, redo: Int, master: Double?, onRehearse: () -> Unit, onSort: () -> Unit, onMaster: () -> Unit) {
+private fun ActionsRow(issues: Int, redo: Int, master: Double?, onRehearse: () -> Unit, onSort: (() -> Unit)?, onMaster: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Button(onClick = onRehearse, modifier = Modifier.height(40.dp)) { Text("ENSAIAR", fontSize = 12.sp) }
-        OutlinedButton(onClick = onSort, modifier = Modifier.height(40.dp)) { Text("ORDENAR", fontSize = 12.sp) }
+        // Numa pool a ordem é decidida na hora: não há o que ordenar.
+        if (onSort != null) OutlinedButton(onClick = onSort, modifier = Modifier.height(40.dp)) { Text("ORDENAR", fontSize = 12.sp) }
         OutlinedButton(onClick = onMaster, modifier = Modifier.height(40.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) {
             Text(if (master == null) "MASTER AUTO" else "MASTER %.0f".format(master), fontSize = 11.sp)
         }
@@ -227,7 +260,7 @@ private fun PlayButton(on: Boolean, enabled: Boolean = true, label: String? = nu
  * para tocar no master. Ponto verde entre duas faixas: troca de tom suave; laranja: não.
  */
 @Composable
-private fun FlowStrip(tracks: List<TrackItem>, masters: List<Double>, onMap: () -> Unit) {
+private fun FlowStrip(tracks: List<TrackItem>, masters: List<Double>, pool: IntRange? = null, onMap: () -> Unit) {
     val bpms = tracks.map { it.bpm }.filter { it > 0 } + masters
     if (bpms.isEmpty()) return
     val lo = bpms.min() - 2
@@ -261,6 +294,8 @@ private fun FlowStrip(tracks: List<TrackItem>, masters: List<Double>, onMap: () 
                 if (i > 0) masters.getOrNull(i - 1)?.let { pm -> drawLine(line, Offset(x(i - 1), y(pm)), Offset(x(i), y(m)), strokeWidth = 2.5.dp.toPx()) }
             }
             for (i in 0 until n - 1) {
+                // Dentro da pool não há troca marcada: a ordem é escolhida na hora.
+                if (pool != null && (i in pool || i + 1 in pool)) continue
                 val m = masters.getOrNull(i) ?: continue
                 val mn = masters.getOrNull(i + 1) ?: m
                 drawCircle(if (good[i]) ok else warn, 3.5.dp.toPx(), Offset((x(i) + x(i + 1)) / 2, (y(m) + y(mn)) / 2))
@@ -328,11 +363,11 @@ private fun BranchIcon(color: androidx.compose.ui.graphics.Color) {
     }
 }
 
-/** Criar um ramo a partir desta faixa. */
+/** O ponto de virada desta faixa: criar um ramo daqui ou fazer o resto da linha virar pool. */
 @Composable
 private fun BranchButton(onClick: () -> Unit) {
     Box(
-        Modifier.size(40.dp).clickable(onClick = onClick).semantics { contentDescription = "Criar ramo" },
+        Modifier.size(40.dp).clickable(onClick = onClick).semantics { contentDescription = "Ponto de virada" },
         contentAlignment = Alignment.Center,
     ) { BranchIcon(Palette.blue) }
 }
@@ -343,14 +378,16 @@ private fun BranchRow(app: ManagerApp, b: os.deckbridge.manager.mix.SetBranch, l
     val v = app.model.view ?: return
     val p = v.playlists.firstOrNull { it.id == b.playlistId } ?: return
     val n = v.entries[b.playlistId].orEmpty().size
-    val back = b.rejoinTrackId?.let { r -> line.indexOf(r).takeIf { it >= 0 }?.let { "volta no ${it + 1}" } } ?: "outro final"
+    // Um ramo de ramo pode voltar numa faixa que não está nesta linha (mais adiante no caminho).
+    val back = b.rejoinTrackId?.let { r -> line.indexOf(r).takeIf { it >= 0 }?.let { "volta no ${it + 1}" } ?: "volta em ${v.track(r)?.title.orEmpty()}" } ?: "outro final"
+    val size = if (app.sets.isPool(b.playlistId)) "pool de $n" else "$n faixas"
     Row(
         Modifier.fillMaxWidth().height(40.dp).clickable(onClick = onOpen).padding(start = 40.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BranchIcon(Palette.orange)
         Text(" RAMO ${app.sets.letterOf(b)}", color = Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        Text("  $n faixas · $back", color = Palette.mutedBright, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        Text("  $size · $back", color = Palette.mutedBright, fontSize = 12.sp, modifier = Modifier.weight(1f))
         Text("›", color = Palette.blue, fontSize = 18.sp)
     }
 }
@@ -358,35 +395,53 @@ private fun BranchRow(app: ManagerApp, b: os.deckbridge.manager.mix.SetBranch, l
 /** Criar um ramo daqui: quantas faixas, o rumo e se volta para a linha principal. */
 @Composable
 private fun BranchDialog(app: ManagerApp, from: Int, onClose: () -> Unit) {
+    var kind by remember { mutableStateOf(SetDesk.BranchKind.LIST) }
     var count by remember { mutableStateOf(3) }
     var shape by remember { mutableStateOf(os.deckbridge.manager.mix.SetShape.RISING) }
     var rejoin by remember { mutableStateOf(true) }
     val title = app.model.view?.track(from)?.title.orEmpty()
+    val counts = if (kind == SetDesk.BranchKind.POOL) listOf(4, 6, 8, 12) else listOf(2, 3, 4, 6)
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onClose,
         title = { Text("Ramo depois de\n$title", maxLines = 2) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("FAIXAS", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("TIPO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(2, 3, 4, 6).forEach { c -> FilterChip(count == c, { count = c }, { Text("$c") }) }
+                    listOf(SetDesk.BranchKind.LIST to "Lista", SetDesk.BranchKind.POOL to "Pool", SetDesk.BranchKind.MANUAL to "Eu escolho").forEach { (k, label) ->
+                        FilterChip(kind == k, {
+                            kind = k
+                            count = if (k == SetDesk.BranchKind.POOL) 6 else 3
+                        }, { Text(label, maxLines = 1) })
+                    }
                 }
-                Text("RUMO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(
-                        os.deckbridge.manager.mix.SetShape.RISING to "Mais energia",
-                        os.deckbridge.manager.mix.SetShape.FLOW to "Manter",
-                        os.deckbridge.manager.mix.SetShape.FALLING to "Mais calmo",
-                    ).forEach { (sh, label) -> FilterChip(shape == sh, { shape = sh }, { Text(label, maxLines = 1) }) }
+                // "Eu escolho": nasce vazio; as faixas e a volta se põem no ramo.
+                if (kind != SetDesk.BranchKind.MANUAL) {
+                    Text("FAIXAS", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        counts.forEach { c -> FilterChip(count == c, { count = c }, { Text("$c") }) }
+                    }
                 }
-                Text("VOLTA PARA A LINHA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(rejoin, { rejoin = true }, { Text("Sim") })
-                    FilterChip(!rejoin, { rejoin = false }, { Text("Não (outro final)") })
+                if (kind == SetDesk.BranchKind.LIST) {
+                    Text("RUMO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            os.deckbridge.manager.mix.SetShape.RISING to "Mais energia",
+                            os.deckbridge.manager.mix.SetShape.FLOW to "Manter",
+                            os.deckbridge.manager.mix.SetShape.FALLING to "Mais calmo",
+                        ).forEach { (sh, label) -> FilterChip(shape == sh, { shape = sh }, { Text(label, maxLines = 1) }) }
+                    }
+                }
+                if (kind != SetDesk.BranchKind.MANUAL) {
+                    Text("VOLTA PARA A LINHA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(rejoin, { rejoin = true }, { Text("Sim") })
+                        FilterChip(!rejoin, { rejoin = false }, { Text("Não (outro final)") })
+                    }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onClose(); app.sets.createBranch(from, count, shape, rejoin) }) { Text("CRIAR") } },
+        confirmButton = { TextButton(onClick = { onClose(); app.sets.createBranch(from, count, shape, rejoin, kind) }) { Text("CRIAR") } },
         dismissButton = { TextButton(onClick = onClose) { Text("Cancelar") } },
         containerColor = Palette.surfaceHigh,
     )
@@ -445,3 +500,110 @@ private fun SuggestionRow(t: TrackItem, fit: Fit, playing: Boolean, onPlay: () -
     }
 }
 
+
+/** Onde o ramo aberto volta (ou "outro final"); tocar muda. */
+@Composable
+private fun RejoinRow(app: ManagerApp, rejoin: Int?, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(40.dp).background(Palette.surface).clickable(onClick = onClick).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("VOLTA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+        Text(
+            "  " + (rejoin?.let { app.model.view?.track(it)?.title } ?: "outro final"), color = Palette.text, fontSize = 13.sp, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        Text("▾", color = Palette.blue, fontSize = 14.sp)
+    }
+}
+
+/**
+ * O bloco da pool: o cabeçalho (quantas, de onde entra e para onde sai) e as faixas. Com uma marcada como AGORA, as outras
+ * vêm na ordem da melhor troca a partir dela; as que já tocaram vão para o fim, apagadas.
+ */
+private fun androidx.compose.foundation.lazy.LazyListScope.poolItems(app: ManagerApp, ids: List<Int>, masters: List<Double>, from: Int, until: Int) {
+    val desk = app.sets
+    val v = app.model.view ?: return
+    val pool = ids.subList(from, until)
+    val entry = ids.getOrNull(from - 1)?.let { v.track(it) }
+    val now = desk.poolNow?.takeIf { it in pool }?.let { v.track(it) }
+    val ref = now ?: entry
+    val played = desk.poolPlayed
+    val ordered: List<Int> = if (ref != null) {
+        listOfNotNull(now?.id) + SetPool.next(v, ref, pool, played).map { it.first.id } + pool.filter { it in played }
+    } else pool
+    val links = SetPool.linkCount(v, pool)
+    val exit = desk.branch?.rejoinTrackId?.let { v.track(it) }
+    val exits = exit?.let { x -> pool.count { id -> v.track(id)?.let { SetPool.links(it, x) } == true } }
+    item(key = "pool") { PoolHeader(pool.size, exit?.title, exits, hasLive = now != null || played.isNotEmpty()) { desk.resetPool() } }
+    ordered.forEach { id ->
+        val t = v.track(id) ?: return@forEach
+        val n = ids.indexOf(id)
+        item(key = "p$id") {
+            PoolRow(
+                t, masters.getOrNull(n), fit = ref?.takeIf { it.id != id }?.let { SetPlanner.fit(it, t) }, links = links[id] ?: 0,
+                now = id == now?.id, played = id in played, previewing = app.preview.playingId == id,
+                onPreview = { app.preview.toggle(t) }, onNow = { desk.playingNow(id) },
+            )
+        }
+        desk.branchesHere().filter { it.fromTrackId == id }.forEach { b ->
+            item(key = "b${b.playlistId}") { BranchRow(app, b, ids) { desk.open(b.playlistId) } }
+        }
+    }
+}
+
+@Composable
+private fun PoolHeader(count: Int, exit: String?, exits: Int?, hasLive: Boolean, onReset: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(44.dp).background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.line)).padding(start = 14.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("POOL", color = Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+        Text("  $count faixas" + (if (exit != null && exits != null) " · $exits levam a $exit" else ""), color = Palette.mutedBright, fontSize = 12.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (hasLive) TextButton(onClick = onReset) { Text("ZERAR", fontSize = 12.sp) }
+    }
+}
+
+/** Uma faixa da pool: com quantas outras dela combina, a troca a partir da que está tocando e o botão AGORA. */
+@Composable
+private fun PoolRow(
+    t: TrackItem, master: Double?, fit: Fit?, links: Int, now: Boolean, played: Boolean, previewing: Boolean, onPreview: () -> Unit, onNow: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().height(56.dp).background(if (now) Palette.blueActiveFill else if (previewing) Palette.selectedRow else Palette.surface)
+            .clickable(onClick = onPreview).padding(start = 14.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                t.title.ifEmpty { t.fileName }, color = if (played) Palette.muted else Palette.text, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            Row {
+                if (fit != null && !played && !now) Text(
+                    "${fitKeys(fit)}${fitText(fit)}  ", fontSize = 12.sp, fontFamily = Mono, color = if (fit.good) Palette.keyInk else Palette.orange,
+                )
+                Text(
+                    when {
+                        now -> "tocando"
+                        played -> "tocada"
+                        links == 0 -> "isolada"
+                        else -> "liga $links"
+                    },
+                    color = if (links == 0 && !played && !now) Palette.orange else Palette.muted, fontSize = 12.sp,
+                )
+            }
+        }
+        Text(master?.let { "%.1f".format(it) } ?: "%.1f".format(t.bpm), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(end = 8.dp))
+        KeyBadge(t)
+        Box(
+            Modifier.padding(start = 6.dp).height(36.dp).clip(RbShape).background(if (now) Palette.blue else Palette.bg)
+                .border(BorderStroke(1.dp, Palette.blueActiveLine), RbShape).clickable(onClick = onNow).padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) { Text("AGORA", color = if (now) Palette.bg else Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+    }
+}
+
+/** Se o tom da troca combina ("tom ok") ou não ("tom ✗"), quando os dois têm tom. */
+private fun fitKeys(f: Fit): String = if (f.keyDistance == null) "" else if (f.keyOk) "tom ok " else "tom ✗ "

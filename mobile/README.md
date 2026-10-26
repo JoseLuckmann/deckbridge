@@ -72,6 +72,15 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
   ramo saindo e voltando, a lista dos caminhos (duração, BPM início → pico → fim, avisos) e, para o caminho escolhido,
   a hora em que cada faixa entra. › abre a linha.
 
+## Set flexível (pontos de virada e pool)
+
+- O botão em cada faixa do SET é o **ponto de virada**: criar um ramo daqui, ou "Pool depois desta" (abre com as
+  primeiras na ordem e daí em diante escolhe na hora). Vale dentro de um ramo também (ramo de ramo).
+- Ramo: **Lista** (automática), **Pool** (4–12 faixas que combinam entre si) ou **Eu escolho** (vazio; PRÓXIMA sugere,
+  VOLTA ▾ escolhe onde volta ou "outro final").
+- **POOL**: cada faixa mostra com quantas outras liga. Toque **AGORA** na que está tocando: as outras vêm na ordem da
+  melhor troca a partir dela, as tocadas vão para o fim. ZERAR recomeça.
+
 ## Teste de áudio
 
 MENU → APARELHO → **Teste de áudio**: lê 30 s de uma música da biblioteca pelo decodificador do Android e monta uma
