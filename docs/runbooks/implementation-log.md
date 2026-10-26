@@ -1011,3 +1011,11 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Telas vazias com uma ação: biblioteca vazia com IMPORTAR MÚSICAS, IMPORTAR UMA PASTA e "TENHO UM PENDRIVE DO REKORDBOX"; playlists e pendrive sem músicas levam a importar; playlist vazia com ADICIONAR MÚSICAS; MARCAR sem músicas responde em vez de ficar mudo. Avisos de troca no SET numa linha só.
 - Evidência: `NewcomerFlowTest` (app vazio mostra por onde começar e as três portas; guia passa por marcar, playlist com ＋, MIXAR, ▶ e ENSAIAR com os destaques sumindo depois de usados, pendrive em passos, fechar e religar o guia); testes antigos ajustados aos nomes novos. Capturas `docs/ui/mobile-34..38`.
 - Não verificado: com pessoas novas de verdade (é a leitura das telas, não um teste de uso) e no aparelho.
+
+## 2026-10-26 — Vídeo: montando um set com as músicas do usuário
+
+- Pedido: gravar um vídeo montando um set com as músicas enviadas.
+- `SetVideoTest` (com `VideoTestBase`, o equipamento de gravação compartilhado com a jornada): importa as 5 músicas (análise de verdade), marca, MONTAR SET (★4+, 60 min, Fluido), fixa o master em 130, ouve a primeira transição (som em `out/mix.wav`), cria um ramo no ponto de virada da 2ª faixa, faz do fim do set uma pool com AGORA e abre o MAPA. Só roda com `-PjourneyVideo=<pasta>`; as músicas ficam fora do repositório. Montagem com `tools/montar-video-jornada.py`.
+- Resultado (123 s, 720×1644): o set saiu Imagination → See You Again → How Does It Feel → Shinjuku, todas tocando a 130 (esticadas de +1% a +3%); as trocas 6A→3A e 3A→1A aparecem como "tom não combina" (com 4 faixas de nota 4+ não há ordem melhor); o ramo B leva Fuck It (135 BPM, −4% no master) e é "outro final". Som só durante a transição (conferido: silêncio antes e depois).
+- Achado ao rever: no mapa, o título do caminho B corta "→ outro final" quando o nome da música é longo. Não corrigido.
+- Não verificado: aparelho; é a tela renderizada em JVM, não o app rodando no tablet.
