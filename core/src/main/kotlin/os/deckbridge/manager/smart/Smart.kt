@@ -1,11 +1,14 @@
 package os.deckbridge.manager.smart
 
+import java.time.LocalDate
 import os.deckbridge.manager.pdb.LibraryView
 import os.deckbridge.manager.pdb.TrackItem
 
 /** Filtros prontos da biblioteca: respondem "o que ainda falta fazer?" com um toque. */
 enum class QuickFilter(val title: String, val hint: String) {
     ALL("Todas", "Toda a biblioteca"),
+    NEW("Novas", "Entraram e ainda esperam decisão (sem nota e fora das playlists). Marque uma por uma em MARCAR."),
+    FORGOTTEN("Esquecidas", "Boas (4 ou 5 estrelas), há um mês ou mais na biblioteca e em nenhum set."),
     UNANALYZED("Sem análise", "Sem grade nem cues no player. Dá para analisar todas de uma vez."),
     UNRATED("Sem nota", "Ainda não marcadas com estrelas."),
     NO_PLAYLIST("Fora de playlists", "Não estão em nenhuma playlist."),
@@ -93,8 +96,14 @@ object Smart {
 
     private fun inPlaylists(view: LibraryView): Set<Int> = view.playlists.filter { !it.folder }.flatMap { view.entries[it.id].orEmpty() }.toSet()
 
-    fun apply(filter: QuickFilter, view: LibraryView, hasAnalysis: (TrackItem) -> Boolean, ids: List<TrackItem>): List<TrackItem> = when (filter) {
+    /** [inSets]: as faixas que estão em algum set (para "Esquecidas"). */
+    fun apply(
+        filter: QuickFilter, view: LibraryView, hasAnalysis: (TrackItem) -> Boolean, ids: List<TrackItem>,
+        inSets: Set<Int> = emptySet(), today: LocalDate = LocalDate.now(),
+    ): List<TrackItem> = when (filter) {
         QuickFilter.ALL -> ids
+        QuickFilter.NEW -> inPlaylists(view).let { used -> ids.filter { Keep.isNew(it, used) } }
+        QuickFilter.FORGOTTEN -> ids.filter { Keep.isForgotten(it, inSets, today) }
         QuickFilter.UNANALYZED -> ids.filter { !hasAnalysis(it) }
         QuickFilter.UNRATED -> ids.filter { it.rating == 0 }
         QuickFilter.NO_PLAYLIST -> inPlaylists(view).let { used -> ids.filter { it.id !in used } }
@@ -105,8 +114,8 @@ object Smart {
     }
 
     /** Quantas faixas cada filtro mostra agora (para o número no botão). */
-    fun counts(view: LibraryView, hasAnalysis: (TrackItem) -> Boolean): Map<QuickFilter, Int> =
-        QuickFilter.values().associateWith { apply(it, view, hasAnalysis, view.tracks).size }
+    fun counts(view: LibraryView, hasAnalysis: (TrackItem) -> Boolean, inSets: Set<Int> = emptySet(), today: LocalDate = LocalDate.now()): Map<QuickFilter, Int> =
+        QuickFilter.values().associateWith { apply(it, view, hasAnalysis, view.tracks, inSets, today).size }
 
     // ---- tom e ordem harmônica -------------------------------------------------------------------------------
 
@@ -178,8 +187,14 @@ object Smart {
         return view.tracks.firstOrNull { norm(it.title) == t && norm(it.artist) == a && kotlin.math.abs(it.durationSeconds - durationSec) <= 2 }
     }
 
-    /** Fila da triagem: sem nota primeiro, na ordem em que foram importadas; depois as já marcadas. */
-    fun triageQueue(view: LibraryView): List<Int> = view.tracks.sortedWith(compareBy({ it.rating != 0 }, { it.id })).map { it.id }
+    /**
+     * Fila da triagem: as novas primeiro (a caixa de entrada: sem nota e fora das playlists), depois as outras sem nota,
+     * cada grupo na ordem em que foram importadas; por último as já marcadas.
+     */
+    fun triageQueue(view: LibraryView): List<Int> {
+        val used = inPlaylists(view)
+        return view.tracks.sortedWith(compareBy({ !Keep.isNew(it, used) }, { it.rating != 0 }, { it.id })).map { it.id }
+    }
 
     /** O que falta para o fluxo "importar → analisar → marcar → playlist → exportar". */
     data class Step(val title: String, val done: Boolean, val detail: String, val action: StepAction)

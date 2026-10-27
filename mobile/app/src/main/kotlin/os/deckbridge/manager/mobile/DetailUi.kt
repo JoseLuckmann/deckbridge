@@ -89,6 +89,7 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
                     }
                     Marking(app, t)
                     PlaylistChips(app, t)
+                    TrackPlaces(app, t.id)
                 }
                 DetailPage.CUES -> CueSection(app, t)
                 DetailPage.INFO -> Fields(app, t)

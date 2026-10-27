@@ -518,6 +518,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.InspectorForm(model: 
         // Cabeçalho da faixa: o que não se edita numa linha só, em fonte monoespaçada como no player.
         Label(single.title.ifEmpty { single.fileName }, Pal.Ink, 15.sp, bold = true)
         Label("%.2f BPM  ·  %s  ·  %d:%02d".format(single.bpm, single.key.ifEmpty { "—" }, single.durationSeconds / 60, single.durationSeconds % 60), Pal.Muted, 12.sp)
+        // Onde ela já entrou (sets) e quando chegou: o mesmo do celular.
+        ui.studio?.let { os.deckbridge.manager.studio.TrackPlaces(it, single.id) }
     }
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         data class F(val id: String, val title: String, val get: (TrackItem) -> String)
@@ -730,6 +732,8 @@ fun prettyStamp(stamp: String): String {
 /** Rótulo curto de cada filtro rápido. */
 fun QuickFilter.shortTitle() = when (this) {
     QuickFilter.ALL -> "Todas"
+    QuickFilter.NEW -> "Novas"
+    QuickFilter.FORGOTTEN -> "Esquecidas"
     QuickFilter.UNANALYZED -> "Sem análise"
     QuickFilter.UNRATED -> "Sem nota"
     QuickFilter.NO_PLAYLIST -> "Sem playlist"

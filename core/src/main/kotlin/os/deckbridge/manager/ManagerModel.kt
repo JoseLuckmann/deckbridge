@@ -18,6 +18,7 @@ import os.deckbridge.manager.volume.PDB_RELATIVE
 import os.deckbridge.manager.volume.SafeWriter
 import os.deckbridge.manager.volume.VolumeException
 import os.deckbridge.manager.volume.Volumes
+import os.deckbridge.manager.smart.Keep
 import os.deckbridge.manager.smart.QuickFilter
 import os.deckbridge.manager.smart.Smart
 
@@ -52,6 +53,9 @@ class ManagerModel(val backups: Backups = Backups()) {
     var sort by mutableStateOf(Sort(Column.ARTIST))
     /** Filtro rápido ativo ("Sem análise", "Sem nota"…). */
     var filter by mutableStateOf(QuickFilter.ALL)
+
+    /** As playlists que são sets (quem monta sets diz quais são; sem isso, nenhuma). Usado em "Esquecidas" e "Onde está". */
+    var setPlaylists: () -> Set<Int> = { emptySet() }
 
     /** Playlist alvo: com ela definida, adicionar uma faixa a ela é um toque. */
     var target by mutableStateOf<Int?>(null)
@@ -259,7 +263,7 @@ class ManagerModel(val backups: Backups = Backups()) {
     }
 
     /** Contagem de cada filtro rápido, para os números nos botões. */
-    fun filterCounts(): Map<QuickFilter, Int> = view?.let { v -> Smart.counts(v, { hasAnalysis(it) }) } ?: emptyMap()
+    fun filterCounts(): Map<QuickFilter, Int> = view?.let { v -> Smart.counts(v, { hasAnalysis(it) }, Keep.inSets(v, setPlaylists())) } ?: emptyMap()
 
     /** Um toque: põe a faixa na playlist alvo, ou a tira se já estiver nela. Devolve o texto do que fez, ou null se não há alvo. */
     fun toggleInTarget(trackId: Int): String? {
@@ -338,7 +342,7 @@ class ManagerModel(val backups: Backups = Backups()) {
         val q = Smart.parseQuery(query)
         var list = scopeTrackIds().mapNotNull { v.track(it) }
         if (!q.isEmpty) list = list.filter { Smart.matches(q, it) }
-        if (filter != QuickFilter.ALL) list = Smart.apply(filter, v, { hasAnalysis(it) }, list)
+        if (filter != QuickFilter.ALL) list = Smart.apply(filter, v, { hasAnalysis(it) }, list, Keep.inSets(v, setPlaylists()))
         val column = sort.column ?: return list
         val cmp: Comparator<TrackItem> = when (column) {
             Column.ID -> compareBy { it.id }

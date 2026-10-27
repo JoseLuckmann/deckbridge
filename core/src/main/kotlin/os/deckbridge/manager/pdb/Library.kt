@@ -33,6 +33,8 @@ data class TrackItem(
     val filePath: String,
     val fileName: String,
     val analyzePath: String,
+    /** Quando entrou na biblioteca (AAAA-MM-DD, como o rekordbox grava); vazio se não se sabe. */
+    val dateAdded: String = "",
 )
 
 data class PlaylistItem(val id: Int, val parentId: Int, val name: String, val folder: Boolean, val sort: Int)
@@ -84,6 +86,7 @@ class LibraryView(
                     filePath = it.filePath,
                     fileName = it.fileName,
                     analyzePath = it.analyzePath,
+                    dateAdded = it.dateAdded,
                 )
             }
             val playlists = tables(PdbType.PLAYLIST_TREE).map {

@@ -134,6 +134,17 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
   faixa abre o ponto de virada. O master fica na faixa de cima.
 - No MIX, AJUSTAR ▾ abre os ajustes finos. Tom em Camelot em todo o app (MENU → Tom troca para a nota musical).
 
+## Manter a biblioteca sem guardar de cabeça
+
+- **Novas**: o que entrou e ainda espera decisão (sem nota e fora das playlists). MARCAR começa por elas.
+- **Esquecidas**: as de 4 ou 5 estrelas, há um mês ou mais na biblioteca, que nunca entraram em set.
+- **NOS SETS** na faixa: em quais sets ela está (um toque abre) e quando entrou.
+- **Por que esta**: cada sugestão do SET diz tom, BPM, nota e se já foi usada em set.
+- **LEMBRETE** no MIX: uma frase para a hora da troca, que volta na cola e no AO VIVO.
+- No celular em pé, o MIX tem PLAY fixo embaixo e duas abas (VIRADA e AJUSTES), para nada ficar cortado.
+
+Fontes e razões: `docs/ux-cognicao.md`.
+
 ## Teste de áudio
 
 MENU → APARELHO → **Teste de áudio**: lê 30 s de uma música da biblioteca pelo decodificador do Android e monta uma

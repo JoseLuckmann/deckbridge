@@ -35,6 +35,8 @@ data class Transition(
     val swapAt: Double = 0.5,
     /** Troca de grave: 0 vira o grave de uma vez no ponto; N passa aos poucos em N compassos que terminam no ponto. */
     val swapBars: Int = 0,
+    /** Lembrete do DJ para a hora da troca ("quando o vocal entrar, tiro o grave"): aparece no MIX, na cola e ao vivo. */
+    val note: String = "",
 ) {
     enum class Mark { GOOD, REDO }
 
@@ -288,6 +290,7 @@ object SetPlanner {
             p.setProperty("$n.pace", t.pace.name)
             p.setProperty("$n.swap", t.swapAt.toString())
             p.setProperty("$n.swapBars", t.swapBars.toString())
+            if (t.note.isNotBlank()) p.setProperty("$n.note", t.note)
         }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".novo")
@@ -309,6 +312,7 @@ object SetPlanner {
                     p.getProperty("$i.pace")?.let { m -> runCatching { Transition.Pace.valueOf(m) }.getOrNull() } ?: Transition.Pace.NORMAL,
                     p.getProperty("$i.swap")?.toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.5,
                     p.getProperty("$i.swapBars")?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+                    p.getProperty("$i.note").orEmpty(),
                 )
             }.getOrNull()
         }

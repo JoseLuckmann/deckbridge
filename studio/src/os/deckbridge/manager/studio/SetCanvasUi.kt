@@ -396,6 +396,16 @@ fun LiveBar(app: StudioHost, layout: SetCanvasLayout, live: LiveView, onPick: (C
                 }
             }
         }
+        // Os lembretes que o DJ escreveu para as próximas trocas (no MIX), na hora em que importam.
+        val notes = remember(live.now, live.next) {
+            val now = live.now ?: return@remember emptyList()
+            layout.links.filter { it.from == now && it.to in live.next }.mapNotNull { l ->
+                app.sets.noteOf(l.playlistId, l.from.trackId, l.to.trackId).takeIf { it.isNotBlank() }?.let { name(l.to) to it }
+            }
+        }
+        notes.forEach { (to, note) ->
+            Text("→ $to: $note", color = Palette.orange, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+        }
     }
 }
 
@@ -426,6 +436,8 @@ fun AddToLineDialog(app: StudioHost, letter: Char, onClose: () -> Unit) {
     val v = app.model.view ?: return
     val desk = app.sets
     val choices = remember(query, v, desk.playlistId) { desk.addChoices(query) }
+    // Por que cada uma está aqui (tom, andamento, nota e se já entrou em set): decidir sem ter de lembrar de cada faixa.
+    val whys = remember(choices) { choices.associate { it.id to desk.why(it) } }
     val last = (desk.entries().lastOrNull() ?: desk.branch?.fromTrackId)?.let { v.track(it) }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onClose,
@@ -442,11 +454,12 @@ fun AddToLineDialog(app: StudioHost, letter: Char, onClose: () -> Unit) {
                 Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
                     choices.forEach { t ->
                         val fit = last?.let { SetPlanner.fit(it, t) }
-                        Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (fit != null) Box(Modifier.size(8.dp).clip(RbShape).background(if (fit.good) Palette.keyInk else Palette.orange))
                             Column(Modifier.weight(1f).padding(start = 8.dp)) {
                                 Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text("${keyLabel(t.key)} · ${bpmLabel(t.bpm)}", color = Palette.mutedBright, fontSize = 12.sp, fontFamily = Mono)
+                                Text(whys[t.id].orEmpty(), color = Palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             TextButton(onClick = { app.preview.toggle(t) }) { Text(if (app.preview.playingId == t.id) "■" else "▶", fontSize = 14.sp) }
                             OutlinedButton(onClick = { desk.append(t); query = "" }, modifier = Modifier.height(36.dp).width(48.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("＋", fontSize = 16.sp) }

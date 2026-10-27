@@ -251,4 +251,38 @@ class StudioTest {
         assertEquals(null, studio.triage)
         prefs.removeNode()
     }
+
+    @Test fun newTracksAndTheSetsATrackIsInShowOnTheComputer() = runDesktopComposeUiTest(1360, 820) {
+        val m = library()
+        val pid = m.nextPlaylistId()
+        m.submit(Edit.CreatePlaylist(pid, 0, "Sábado", false), "p")
+        m.submit(Edit.AddToPlaylist(pid, listOf("Night Signal", "Small Hours", "Glass Harbour", "Copper Sky").map { id(m, it) }), "p")
+        val prefs = java.util.prefs.Preferences.userRoot().node("deckbridge-test/${System.nanoTime()}")
+        val ui = UiState().apply { studioPrefs = prefs; studioSetsHome = TestVolumes.tempDir("dbm-sets") }
+        setContent { App(m, ui) }
+        waitForIdle()
+        fun click(text: String) {
+            val all = onAllNodes(hasText(text))
+            all[all.fetchSemanticsNodes().size - 1].performSemanticsAction(SemanticsActions.OnClick)
+            waitForIdle()
+        }
+        // A caixa de entrada: sem nota e fora das playlists (as 6 que não estão no Sábado).
+        click("Novas 6")
+        assertEquals(6, m.rows().size)
+        click("Todas")
+        // Onde a faixa está: nenhum set ainda; depois de abrir o Sábado como set, ele aparece e abre com um clique.
+        m.selection = setOf(id(m, "Night Signal"))
+        waitForIdle()
+        onAllNodes(hasText("em nenhum ainda", substring = true)).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty()) }
+        val studio = assertNotNull(ui.studio)
+        studio.sets.open(pid)
+        studio.sets.close()
+        m.selection = emptySet()
+        waitForIdle()
+        m.selection = setOf(id(m, "Night Signal"))
+        waitForIdle()
+        org.jetbrains.skia.Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)!!.let { File(out, "desktop-nos-sets.png").writeBytes(it.bytes) }
+        click("SET Sábado ›")
+        assertEquals(pid, studio.sets.playlistId)
+    }
 }

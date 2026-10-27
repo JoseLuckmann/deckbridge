@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,8 +39,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -107,6 +110,7 @@ fun MixScreen(app: StudioHost) {
     val levels = p?.levelsAt(pos) ?: Levels()
     // Simples por padrão: ondas, PLAY, compassos e estilo. "AJUSTAR" abre o resto.
     var advanced by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf(MixPage.TURN) }
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         val wide = maxWidth >= WIDE_DP.dp
         val decks = @Composable { waveH: Dp ->
@@ -120,6 +124,7 @@ fun MixScreen(app: StudioHost) {
         val mixer = @Composable {
             MixerPanel(levels)
             StepsPanel(tr, p, pos)
+            NotePanel(desk, tr)
         }
         val controls = @Composable {
             if (wide) mixer()
@@ -137,15 +142,36 @@ fun MixScreen(app: StudioHost) {
                     Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 6.dp)) { controls() }
                 }
             } else {
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                    decks(104.dp)
-                    mixer()
-                    controls()
+                // No celular: os decks em cima, o PLAY fixo embaixo (sempre ao alcance do polegar) e, no meio, uma aba de
+                // cada vez: VIRADA (mixer, passo e lembrete) ou AJUSTES (compassos, estilo…). Cada aba cabe na tela; se
+                // ainda sobrar, a borda de baixo escurece com "▾" para mostrar que rola.
+                decks(76.dp)
+                Overview(p, pos) { desk.seekMix(it) }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PadButton("VIRADA", Modifier.weight(1f), on = page == MixPage.TURN) { page = MixPage.TURN }
+                    PadButton("AJUSTES", Modifier.weight(1f), on = page == MixPage.SETTINGS) { page = MixPage.SETTINGS }
+                }
+                val scroll = rememberScrollState()
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+                        if (page == MixPage.TURN) mixer() else Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
+                    }
+                    if (scroll.canScrollForward) Box(
+                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(28.dp)
+                            .background(Brush.verticalGradient(listOf(Palette.bg.copy(alpha = 0f), Palette.bg))),
+                        contentAlignment = Alignment.BottomCenter,
+                    ) { Text("▾", color = Palette.mutedBright, fontSize = 14.sp) }
+                }
+                Box(Modifier.fillMaxWidth().border(BorderStroke(1.dp, Palette.line)).padding(vertical = 2.dp)) {
+                    Column { Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced) }
                 }
             }
         }
     }
 }
+
+/** As abas do MIX no celular: ver a virada acontecer ou ajustar como ela é. */
+enum class MixPage { TURN, SETTINGS }
 
 /** Faixa de cima, como a do player: o que está aberto, o tempo da prévia e fechar. */
 @Composable
@@ -461,6 +487,35 @@ private fun StepsPanel(tr: Transition, p: MixPreview?, pos: Int) {
         next?.let { s ->
             val left = kotlin.math.ceil(s.fromBar - bar).toInt().coerceAtLeast(1)
             Text("em $left comp. · ${s.text}", color = Palette.mutedBright, fontSize = 12.sp)
+        }
+    }
+}
+
+/**
+ * O lembrete da troca: uma frase do DJ para a hora ("quando o vocal entrar, tiro o grave"). Fica no plano e aparece na
+ * cola e ao vivo, para não ter de guardar de cabeça.
+ */
+@Composable
+private fun NotePanel(desk: SetDesk, tr: Transition) {
+    var editing by remember(tr.fromId, tr.toId) { mutableStateOf(false) }
+    var text by remember(tr.fromId, tr.toId) { mutableStateOf(tr.note) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).rbPanel().padding(horizontal = 10.dp, vertical = 4.dp)) {
+        if (editing) {
+            OutlinedTextField(
+                value = text, onValueChange = { text = it.take(140) }, maxLines = 3, textStyle = TextStyle(fontSize = 14.sp),
+                placeholder = { Text("Ex.: quando o vocal entrar, tiro o grave", fontSize = 13.sp) }, modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { text = tr.note; editing = false }) { Text("CANCELAR", fontSize = 12.sp) }
+                TextButton(onClick = { desk.setNote(text); editing = false }) { Text("GUARDAR", color = Palette.blue, fontSize = 12.sp) }
+            }
+        } else Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("LEMBRETE", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+            Text(
+                "  " + tr.note.ifEmpty { "o que lembrar na hora" }, color = if (tr.note.isEmpty()) Palette.muted else Palette.text,
+                fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { text = tr.note; editing = true }) { Text(if (tr.note.isEmpty()) "ESCREVER" else "MUDAR", fontSize = 12.sp) }
         }
     }
 }

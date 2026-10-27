@@ -1138,3 +1138,13 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Kahneman et al. 1993 (pico-fim): triagem termina num resumo com PRONTO; ensaio termina num resumo com "REFAZER A PRIMEIRA".
 - Testes ajustados ao fim novo (triagem e ensaio) e vídeos (laço até o resumo).
 - Celular completo 68 (3 pulados, 0 falhas), computador 8 (2 pulados). Versão 0.14.0.
+
+## 2026-10-27 — Menos memória de cabeça: biblioteca e sets (pesquisa em PIM, DJs e decisão)
+
+- Pedido: pesquisa para diminuir o esforço mental de manter a biblioteca (novas entram, velhas ficam, as boas não se perdem) e de montar sets, com base em artigos e experimentos. Fontes, achados e o que mudou: `docs/ux-cognicao.md`.
+- Núcleo: `TrackItem.dateAdded` (do banco); `smart/Keep.kt` — `isNew` (caixa de entrada: sem nota e fora das playlists), `isForgotten` (★4+, 30 dias ou mais, em nenhum set), `places`/`setCount` (onde a faixa está), `why` (por que uma sugestão: tom, BPM, nota, uso em sets); filtros `NEW` ("Novas") e `FORGOTTEN` ("Esquecidas"); a triagem começa pelas novas; `Transition.note` (lembrete da troca, guardado com o plano).
+- Telas (celular e computador, código `studio/`): chips Novas/Esquecidas; "NOS SETS" na faixa (aba MARCAR no celular, inspetor no computador) com um toque para abrir o set; motivo em cada sugestão de "Pôr na linha"; LEMBRETE no MIX, na cola e no AO VIVO. O que é set: playlist aberta pelo SET (marcador `<id>.set` na pasta dos sets, fora do pendrive) e as linhas e vertentes dela.
+- Relato do dono durante a rodada (print do MIX): os ajustes ficavam cortados embaixo. MIX no celular refeito: PLAY fixo embaixo; abas VIRADA (mixer, passo, lembrete) e AJUSTES (compassos, estilo, ritmo, grave, passa, marcar); ondas mais baixas; borda de baixo escurece com "▾" quando ainda rola. Deitado (largo) continua em duas colunas.
+- Evidência: núcleo 134 (15 pulados, que dependem de arquivos de fora; +`KeepTest` 5); celular `KeepFlowTest` 3 (capturas mobile-49..52), `SetFlowTest` ajustado às abas (mobile-53); computador `StudioTest.newTracksAndTheSetsATrackIsInShowOnTheComputer` (captura desktop-nos-sets).
+- Não verificado: no aparelho; nenhuma medida com DJs reais (ver "O que fica para depois" no documento).
+- Versão 0.15.0.

@@ -52,7 +52,30 @@ class SetDesk(private val app: StudioHost) {
     var masterFixed by mutableStateOf<Double?>(null)
         private set
 
+    init {
+        app.model.setPlaylists = { knownSets() }
+    }
+
+    private var known: Pair<String, Set<Int>>? = null
+
+    /**
+     * As playlists que já foram abertas como set (a linha e os ramos), pelo que está guardado na pasta dos sets. Lido de
+     * novo só quando a pasta muda.
+     */
+    fun knownSets(): Set<Int> {
+        val dir = app.setsDir
+        val stamp = "${dir.absolutePath}|${dir.lastModified()}|${branchesFile.lastModified()}"
+        known?.let { (k, ids) -> if (k == stamp) return ids }
+        val names = Regex("^(\\d+)\\.(set|properties|master|pool)$")
+        val ids = (dir.list().orEmpty().mapNotNull { names.find(it)?.groupValues?.get(1)?.toIntOrNull() } +
+            SetBranches.load(branchesFile).flatMap { listOf(it.playlistId, it.mainId) }).toSet()
+        known = stamp to ids
+        return ids
+    }
+
     fun open(id: Int) {
+        // Guarda que esta playlist é um set (para "Esquecidas" e "Onde está"), fora do pendrive.
+        runCatching { app.setsDir.mkdirs(); File(app.setsDir, "$id.set").createNewFile() }
         synchronized(grids) { grids.clear() }
         prefetch(id)
         branches = SetBranches.load(branchesFile)
@@ -480,6 +503,21 @@ class SetDesk(private val app: StudioHost) {
         return SetPlanner.plan(v, fixedPart(ids), ::grid, keep = saved, bars = app.transitionBars)
     }
 
+    /** O lembrete da troca aberta no MIX (não muda o som: não monta a prévia de novo). */
+    fun setNote(text: String) {
+        val tr = mixing ?: return
+        val changed = tr.copy(note = text.trim().take(140))
+        mixing = changed
+        update(changed)
+    }
+
+    /** Por que [t] aparece como sugestão para a linha aberta: tom, andamento, nota e em quantos sets já entrou. */
+    fun why(t: TrackItem): String {
+        val v = app.model.view ?: return ""
+        val last = (entries().lastOrNull() ?: branch?.fromTrackId)?.let { v.track(it) }
+        return os.deckbridge.manager.smart.Keep.why(last, t, os.deckbridge.manager.smart.Keep.setCount(v, t.id, knownSets()))
+    }
+
     fun update(t: Transition) {
         val id = playlistId ?: return
         saved = saved.filterNot { it.fromId == t.fromId && it.toId == t.toId } + t
@@ -687,6 +725,7 @@ class SetDesk(private val app: StudioHost) {
             if (t.style == os.deckbridge.manager.mix.MixStyle.BASS_SWAP && t.swapAt >= 0.99) "grave no fim" else null,
             if (t.style == os.deckbridge.manager.mix.MixStyle.BASS_SWAP && t.swapBars > 0) "grave em ${t.swapBars}" else null,
             when (t.mark) { Transition.Mark.GOOD -> "✓"; Transition.Mark.REDO -> "✗ refazer"; null -> null },
+            t.note.takeIf { it.isNotBlank() }?.let { "“$it”" },
         ).joinToString(" · ")
         val out = StringBuilder()
         out.append("SET ${v.playlists.firstOrNull { it.id == root }?.name.orEmpty()} · master ${masterFixed?.let { "%.0f".format(it) } ?: "automático"}\n")
@@ -737,6 +776,10 @@ class SetDesk(private val app: StudioHost) {
     }
 
     /** [c] está tocando agora: a de antes vai para as que já tocaram, e a linha dela passa a ser a escolhida. */
+    /** O lembrete da troca de [fromId] para [toId] no plano da linha [pid], se o DJ escreveu um. */
+    fun noteOf(pid: Int, fromId: Int, toId: Int): String =
+        lanePlan(pid).firstOrNull { it.fromId == fromId && it.toId == toId }?.note.orEmpty()
+
     fun liveTo(c: os.deckbridge.manager.mix.CanvasCard) {
         liveTrack?.takeIf { it != c.trackId }?.let { livePlayed = livePlayed + it }
         livePlayed = livePlayed - c.trackId
@@ -798,7 +841,8 @@ class SetDesk(private val app: StudioHost) {
     private fun keyOf(tr: Transition, tempo: Double? = tempoFor(tr)): String {
         val v = app.model.view
         val sig = listOf(tr.fromId, tr.toId).joinToString { id -> v?.track(id)?.let { "${it.filePath}:${it.bpm}" } ?: "" }
-        return "t|$tr|$sig|$tempo"
+        // O lembrete não muda o som: fora da chave, para não montar a prévia de novo.
+        return "t|${tr.copy(note = "")}|$sig|$tempo"
     }
 
     fun keyFor(tr: Transition) = keyOf(tr)

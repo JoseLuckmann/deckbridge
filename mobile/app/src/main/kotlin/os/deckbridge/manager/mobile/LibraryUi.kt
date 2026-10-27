@@ -95,6 +95,8 @@ fun LibraryTab(app: ManagerApp, actions: Actions) {
 /** Rótulo curto de cada filtro rápido (o celular não tem espaço para frases). */
 fun QuickFilter.short() = when (this) {
     QuickFilter.ALL -> "Todas"
+    QuickFilter.NEW -> "Novas"
+    QuickFilter.FORGOTTEN -> "Esquecidas"
     QuickFilter.UNANALYZED -> "Sem análise"
     QuickFilter.UNRATED -> "Sem nota"
     QuickFilter.NO_PLAYLIST -> "Sem playlist"

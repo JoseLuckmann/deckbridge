@@ -117,6 +117,10 @@ class SetFlowTest {
         // Simples por padrão: compassos e estilo à vista; o resto em AJUSTAR.
         assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("SYNC FINO")).fetchSemanticsNodes().size)
         rule.onRoot().captureRoboImage(File(out, "mobile-39-vertical-mix-simples.png").path)
+        // No celular os ajustes ficam na aba AJUSTES (a VIRADA mostra o mixer e o passo); o PLAY fica fixo embaixo.
+        rule.onNodeWithText("AJUSTES").performClick()
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage(File(out, "mobile-53-vertical-mix-ajustes.png").path)
         rule.onNodeWithText("AJUSTAR ▾").performScrollTo().performClick()
         rule.waitForIdle()
         rule.onNodeWithText("SYNC FINO").assertExists()
@@ -126,6 +130,7 @@ class SetFlowTest {
         rule.onRoot().captureRoboImage(File(out, "mobile-16-vertical-teste-de-mix.png").path)
 
         // Leva a cabeça para o meio da troca e confere os níveis do mixer (troca de grave: grave da 2 entrou).
+        rule.onNodeWithText("VIRADA").performClick()
         a.sets.seekMix(p.leadMs + p.overlapMs * 3 / 4)
         rule.waitForIdle()
         val lv = p.levelsAt(a.sets.cursorMs)
@@ -138,6 +143,7 @@ class SetFlowTest {
         // Os botões ficam abaixo da dobra com o AJUSTAR aberto: rola até cada um antes de tocar. O aviso de baixo some
         // sozinho no aparelho (aqui o relógio não anda) e ficaria por cima deles.
         a.notice = null
+        rule.onNodeWithText("AJUSTES").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("CORTE").performScrollTo().performClick()
         waitMix(a)
@@ -257,7 +263,9 @@ class SetFlowTest {
         waitMix(a)
         a.notice = null
         rule.waitForIdle()
-        // Na tela simples: ritmo e o ponto do grave, sem abrir AJUSTAR.
+        // Na aba AJUSTES: ritmo e o ponto do grave, sem abrir AJUSTAR.
+        rule.onNodeWithText("AJUSTES").performClick()
+        rule.waitForIdle()
         rule.onNodeWithText("LENTA").performScrollTo().performClick()
         waitMix(a)
         rule.onNodeWithText("3/4").performScrollTo().performClick()
@@ -271,6 +279,7 @@ class SetFlowTest {
         rule.onRoot().captureRoboImage(File(out, "mobile-40-vertical-mix-ritmo.png").path)
         // O mixer e o passo a passo andam com a cabeça: no meio da troca, o grave do CH 2 já está entrando e o PASSO diz o que fazer.
         val mid = a.sets.mixPreview!!
+        rule.onNodeWithText("VIRADA").performClick()
         a.sets.seekMix(mid.leadMs + (mid.overlapMs * 0.75 - mid.barMsA * 2).toInt())
         rule.waitForIdle()
         rule.onNodeWithText("PASSO").assertExists()
