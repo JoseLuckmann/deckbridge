@@ -88,4 +88,14 @@ class KeepTest {
         assertEquals(6, d.first())
         assertEquals(false, 4 in d)
     }
+
+    @Test fun `trocar uma faixa traz primeiro as que combinam com as duas vizinhas`() {
+        val a = t(1, bpm = 124.0, key = "8A")
+        val b = t(2, bpm = 126.0, key = "9A")
+        val v = view(listOf(a, b, t(3, bpm = 125.0, key = "8A"), t(4, bpm = 125.0, key = "3B"), t(5, bpm = 124.0, key = "8A")), emptyMap())
+        val r = os.deckbridge.manager.mix.SetDoctor.replacements(v, a, b, setOf(1, 2))
+        // 3 e 5 combinam com as duas; 4 não combina com nenhuma.
+        assertEquals(setOf(3, 5), r.take(2).map { it.id }.toSet())
+        assertEquals(false, 4 in r.map { it.id })
+    }
 }

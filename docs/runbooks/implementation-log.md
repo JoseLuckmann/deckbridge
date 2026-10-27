@@ -1179,3 +1179,13 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Design (`docs/design-referencias.md`): cor nunca sozinha (WCAG 1.4.1, Birch 2012: `FitMark`, ✓/!, fio pontilhado), auditoria de colorido e complexidade (Reinecke et al. 2013; `tools/visual_audit.py`; cores não escolhidas apagadas na faixa e na triagem), curva emphasized do Material 3, PLAY maior (Material 3 Expressive, cobertura de imprensa).
 - Achado: com texto a 200% a lista cortava artista e tom, e o cabeçalho do MIX quebrava "REMAIN" letra por letra. Corrigido (capturas `mobile-54` a `mobile-57`).
 - Evidência: núcleo `KeepTest` 6 (rumos); celular `KeepFlowTest` (rumo, não sugerir, ajustada), `LargeTextTest`, `SetBoardTest`, `SetFlowTest`, `TouchTargetTest`, `DesignSystemTest`; suíte completa no fechamento. Não verificado: aparelho (texto grande real, remover animações, voltar preditivo). Versão 0.18.0.
+
+## 2026-10-27 — Facilitadores de set (e a decisão sobre o Spotify)
+
+- Pedido: mais facilitadores para montar o set, e usar músicas do Spotify (conta conectada) para classificar, montar e mixar, sem exportar.
+- Pesquisa antes de prometer: a Developer Policy do Spotify (versão de 15/05/2025) proíbe mixar, sobrepor ou remixar conteúdo do Spotify; desde 27/11/2024 apps novos não têm audio features/análise (BPM, tom) nem prévias de 30 s; o acesso estendido exige empresa com 250 mil usuários e o modo de desenvolvimento ficou com poucos usuários Premium. Mixar faixa do Spotify aqui violaria os termos. Opções levadas ao dono (faixas planejadas por link, com ou sem conta, ou não integrar); decisão do dono: **não integrar o Spotify**.
+- Facilitadores feitos (celular e computador, código `studio/`):
+  - TROCAR no cartão do quadro: as que combinam com a de antes e a de depois primeiro (✓), depois as que combinam com uma (!); PÔR troca no mesmo lugar, um desfazer volta. Não troca faixa de onde sai vertente (avisa). Núcleo `SetDoctor.replacements`.
+  - Duração alvo (⋯): "≈1:48 / 2:00 · faltam 12", com ✓ dentro de 5%; guardada por set fora do pendrive.
+  - Duplicar set (⋯): cópia "(v2)" com as faixas, as trocas ajustadas, o master, a pool e o alvo, para testar sem mexer no original (as vertentes não vão junto; o aviso diz).
+- Evidência: núcleo `KeepTest` 7; computador `StudioTest.setHelpersReplaceGoalAndDuplicate` (captura `desktop-trocar`); suíte completa no fechamento. Não verificado: aparelho. Versão 0.19.0.

@@ -447,23 +447,71 @@ fun LiveBar(app: StudioHost, layout: SetCanvasLayout, live: LiveView, onPick: (C
     }
 }
 
-/** A faixa escolhida no quadro: ouvir, andar para os lados, dividir a linha daqui e tirar. */
+/** A faixa escolhida no quadro: ouvir, andar para os lados, trocar por outra, dividir a linha daqui e tirar. */
 @Composable
-fun BoardActions(app: StudioHost, card: CanvasCard, onMove: (Int) -> Unit, onSplit: () -> Unit, onRemove: () -> Unit) {
+fun BoardActions(app: StudioHost, card: CanvasCard, onMove: (Int) -> Unit, onSplit: () -> Unit, onRemove: () -> Unit, onReplace: () -> Unit = {}) {
     val t = app.model.view?.track(card.trackId) ?: return
     val count = app.sets.entries().size
+    val words = !app.touch
     Column(Modifier.fillMaxWidth().background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.blueActiveLine)).padding(horizontal = 10.dp, vertical = 8.dp)) {
-        Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            val words = !app.touch
+        // Em cima: ouvir e o nome; embaixo, as mudanças (cabe no celular em pé).
+        Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { app.preview.toggle(t) }, modifier = Modifier.height(40.dp)) { Text((if (app.preview.playingId == t.id) "■" else "▶") + if (words) " OUVIR" else "", fontSize = 14.sp) }
+            Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp).weight(1f))
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { onMove(-1) }, enabled = card.index > 0, modifier = Modifier.height(40.dp).semantics { contentDescription = "Para trás" }) { Text(if (words) "‹ ANTES" else "‹", fontSize = if (words) 12.sp else 18.sp) }
             OutlinedButton(onClick = { onMove(1) }, enabled = card.index < count - 1, modifier = Modifier.height(40.dp).semantics { contentDescription = "Para frente" }) { Text(if (words) "DEPOIS ›" else "›", fontSize = if (words) 12.sp else 18.sp) }
             Spacer(Modifier.weight(1f))
+            OutlinedButton(onClick = onReplace, modifier = Modifier.height(40.dp)) { Text("TROCAR", fontSize = 12.sp) }
             OutlinedButton(onClick = onSplit, modifier = Modifier.height(40.dp)) { Text("DIVIDIR", fontSize = 12.sp) }
             OutlinedButton(onClick = onRemove, modifier = Modifier.height(40.dp)) { Text("TIRAR", color = Palette.danger, fontSize = 12.sp) }
         }
     }
+}
+
+/**
+ * Trocar a faixa da posição [index] por outra que combine com a de antes e a de depois (as trocas em volta continuam
+ * fazendo sentido). Cada uma com o motivo; ▶ ouve antes de escolher.
+ */
+@Composable
+fun ReplaceDialog(app: StudioHost, index: Int, onClose: () -> Unit) {
+    val desk = app.sets
+    val v = app.model.view ?: return
+    val old = desk.entries().getOrNull(index)?.let { v.track(it) } ?: return onClose()
+    val choices = remember(index, v, desk.playlistId) { desk.replaceChoices(index) }
+    val line = desk.entries()
+    val prev = line.getOrNull(index - 1)?.let { v.track(it) }
+    val next = line.getOrNull(index + 1)?.let { v.track(it) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Trocar ${shortTitle(old.title.ifEmpty { old.fileName })}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    listOfNotNull(prev?.let { "depois de ${shortTitle(it.title)}" }, next?.let { "antes de ${shortTitle(it.title)}" }).joinToString(" · ").uppercase(),
+                    color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp,
+                )
+                if (choices.isEmpty()) Text("Nenhuma faixa fora do set combina aqui", color = Palette.muted, fontSize = 13.sp)
+                Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                    choices.forEach { t ->
+                        val both = (prev == null || SetPlanner.fit(prev, t).good) && (next == null || SetPlanner.fit(t, next).good)
+                        Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+                            FitMark(both)
+                            Column(Modifier.weight(1f).padding(start = 6.dp)) {
+                                Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("${keyLabel(t.key)} · ${bpmLabel(t.bpm)}" + if (both) " · combina com as duas" else " · combina com uma", color = Palette.mutedBright, fontSize = 12.sp, fontFamily = Mono, maxLines = 1)
+                            }
+                            TextButton(onClick = { app.preview.toggle(t) }) { Text(if (app.preview.playingId == t.id) "■" else "▶", fontSize = 14.sp) }
+                            OutlinedButton(onClick = { if (desk.replaceAt(index, t)) onClose() }, modifier = Modifier.height(36.dp)) { Text("PÔR", fontSize = 12.sp) }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("FECHAR") } },
+        containerColor = Palette.surfaceHigh,
+    )
 }
 
 /** Pôr faixas no fim de uma linha: as que combinam com a última, ou a busca na biblioteca. Fica aberto para pôr várias. */

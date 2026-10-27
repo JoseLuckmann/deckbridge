@@ -367,4 +367,56 @@ class StudioTest {
         assertTrue(fe(java.io.IOException("write failed: ENOSPC (No space left on device)")).startsWith("Acabou o espaço"))
         assertTrue(fe(IllegalStateException()).startsWith("Não deu certo (IllegalStateException)"))
     }
+
+    @Test fun setHelpersReplaceGoalAndDuplicate() = runDesktopComposeUiTest(1360, 820) {
+        val m = library()
+        val pid = m.nextPlaylistId()
+        m.submit(Edit.CreatePlaylist(pid, 0, "Sábado", false), "p")
+        m.submit(Edit.AddToPlaylist(pid, listOf("Night Signal", "Small Hours", "Glass Harbour", "Copper Sky").map { id(m, it) }), "p")
+        check(m.apply(null) != null)
+        val prefs = java.util.prefs.Preferences.userRoot().node("deckbridge-test/${System.nanoTime()}")
+        val ui = UiState().apply { studioPrefs = prefs; studioSetsHome = TestVolumes.tempDir("dbm-sets") }
+        setContent { App(m, ui) }
+        waitForIdle()
+        fun click(text: String) {
+            val all = onAllNodes(hasText(text))
+            all[all.fetchSemanticsNodes().size - 1].performSemanticsAction(SemanticsActions.OnClick)
+            waitForIdle()
+        }
+        fun shot(name: String) {
+            val roots = onAllNodes(androidx.compose.ui.test.isRoot())
+            val img = roots[roots.fetchSemanticsNodes().size - 1].captureToImage()
+            File(out, "$name.png").writeBytes(org.jetbrains.skia.Image.makeFromBitmap(img.asSkiaBitmap()).encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)!!.bytes)
+        }
+        val studio = assertNotNull(ui.studio)
+        val desk = studio.sets
+        desk.open(pid)
+        waitForIdle()
+        // TROCAR: a segunda faixa por uma que combina com a primeira e a terceira, no mesmo lugar.
+        click("Small Hours")
+        click("TROCAR")
+        onAllNodes(hasText("Trocar Small Hours")).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty()) }
+        val choices = desk.replaceChoices(1)
+        assertTrue(choices.isNotEmpty(), "há opções")
+        shot("desktop-trocar")
+        val pick = choices.first()
+        assertTrue(desk.replaceAt(1, pick))
+        assertEquals(pick.id, desk.entries()[1])
+        assertEquals(4, desk.entries().size)
+        m.undo()
+        assertEquals(id(m, "Small Hours"), desk.entries()[1])
+        // Duração alvo: guardada por set, mostrada junto da duração.
+        desk.setGoal(60)
+        waitForIdle()
+        onAllNodes(hasText("/ 60:00", substring = true)).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty(), "alvo no topo") }
+        desk.close()
+        desk.open(pid)
+        assertEquals(60, desk.goalMinutes)
+        // Duplicar: uma cópia para testar, com as mesmas faixas e o mesmo alvo; o original não muda.
+        val copy = assertNotNull(desk.duplicate())
+        assertEquals(copy, desk.playlistId)
+        assertEquals(m.view!!.entries[pid], m.view!!.entries[copy])
+        assertEquals("Sábado (v2)", m.view!!.playlists.first { it.id == copy }.name)
+        assertEquals(60, desk.goalMinutes)
+    }
 }

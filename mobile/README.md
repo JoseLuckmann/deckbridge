@@ -145,6 +145,13 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
 
 Fontes e razões: `docs/ux-cognicao.md`.
 
+## Facilitadores do set
+
+- **TROCAR** (cartão do quadro): faixas que combinam com a de antes e a de depois, para pôr no mesmo lugar.
+- **Duração alvo** (⋯): "≈1:48 / 2:00 · faltam 12".
+- **Duplicar set** (⋯): uma cópia "(v2)" para testar sem mexer no original.
+- Spotify: não integrado. Os termos do Spotify proíbem mixar o conteúdo dele em outro app, e a API nova não dá BPM nem tom.
+
 ## Teste de áudio
 
 MENU → APARELHO → **Teste de áudio**: lê 30 s de uma música da biblioteca pelo decodificador do Android e monta uma

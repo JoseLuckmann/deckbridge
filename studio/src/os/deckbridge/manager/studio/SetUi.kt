@@ -93,6 +93,8 @@ fun SetScreen(app: StudioHost) {
     val issues = remember(ids, plan, v) { desk.issues(ids, plan) }
     var sortOpen by remember { mutableStateOf(false) }
     var bridgeFor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var replaceAt by remember { mutableStateOf<Int?>(null) }
+    var goalOpen by remember { mutableStateOf(false) }
     var issueFor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // O caminho inteiro da linha escolhida (do começo ao fim do set), para ouvir e comparar vertentes.
     val boardPath = if (board) remember(v, desk.playlistId, desk.saved, desk.branches, desk.masterFixed, app.transitionBars) { desk.pathPlan() } else null
@@ -113,9 +115,9 @@ fun SetScreen(app: StudioHost) {
             }
             if (board) {
                 // No quadro, o OUVIR fica embaixo, ao alcance do polegar; em cima só a duração do caminho.
-                Text("≈" + mmss((boardPath?.lengthMs ?: 0L).toInt()), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
+                GoalLength((boardPath?.lengthMs ?: 0L).toInt(), desk.goalMinutes)
             } else {
-                Text("≈" + mmss(SetPlanner.lengthMs(v, ids, plan)), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
+                GoalLength(SetPlanner.lengthMs(v, ids, plan), desk.goalMinutes)
                 PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playAll(plan) }
             }
             // O que se usa pouco (ordenar) fica no ⋯; numa pool a ordem é escolhida na hora.
@@ -159,6 +161,7 @@ fun SetScreen(app: StudioHost) {
                     onMove = { d -> picked = card.playlistId to desk.move(card.index, d) },
                     onSplit = { turnAt = card.index + (if (branch != null) 1 else 0); picked = null },
                     onRemove = { desk.removeAt(card.index); picked = null },
+                    onReplace = { replaceAt = card.index },
                 )
                 plan.isNotEmpty() -> ActionsRow(
                     issues = issues.map { it.fromId to it.toId }.distinct().size,
@@ -249,12 +252,19 @@ fun SetScreen(app: StudioHost) {
                 add("Andamento do set" to { desk.mapOpen = true })
             }
             // Controle geral das sugestões (Amershi et al. 2019): volta a sugerir as que o DJ escondeu.
+            add("Duração alvo · " + (desk.goalMinutes?.let { "$it min" } ?: "nenhuma") to { goalOpen = true })
+            if (branch == null) add("Duplicar set (testar sem mexer)" to { picked = null; desk.duplicate() })
             if (desk.hidden.isNotEmpty()) add("Sugestões escondidas (${desk.hidden.size}) · mostrar de novo" to { desk.showAllSuggestions() })
             add((if (board) "Ver em lista" else "Ver em quadro") to { picked = null; app.setListView(board) })
         }
         ChoiceDialog("Set", options.map { it.first }, onPick = { n -> menuOpen = false; options[n].second() }, onClose = { menuOpen = false })
     }
     addTo?.let { letter -> AddToLineDialog(app, letter) { addTo = null } }
+    replaceAt?.let { index -> ReplaceDialog(app, index) { replaceAt = null; picked = null } }
+    if (goalOpen) {
+        val goals = listOf(30, 45, 60, 90, 120, 180)
+        ChoiceDialog("Duração alvo", goals.map { "${it} min" } + "Sem alvo", onPick = { n -> goalOpen = false; desk.setGoal(goals.getOrNull(n)) }, onClose = { goalOpen = false })
+    }
     // O fim do ensaio: o resultado e, se alguma ficou para refazer, o caminho direto para ela (regra pico-fim).
     desk.rehearsalDone?.let { (good, redo) ->
         val first = plan.firstOrNull { it.mark == Transition.Mark.REDO }
@@ -764,3 +774,23 @@ private fun PoolRow(
     }
 }
 
+
+/**
+ * A duração do set e, com alvo, o quanto falta ou passa: "≈1:48 / 2:00". Dentro de 5% do alvo ganha ✓ (não só a cor);
+ * fora, diz quanto falta ou sobra em minutos.
+ */
+@Composable
+private fun GoalLength(ms: Int, goalMin: Int?) {
+    val text = if (goalMin == null) "≈" + mmss(ms) else {
+        val goal = goalMin * 60_000
+        val diffMin = (ms - goal) / 60_000
+        val near = kotlin.math.abs(ms - goal) <= goal * 0.05
+        "≈" + mmss(ms) + " / " + mmss(goal) + when {
+            near -> " ✓"
+            diffMin < 0 -> " · faltam ${-diffMin}"
+            else -> " · +$diffMin"
+        }
+    }
+    val near = goalMin != null && kotlin.math.abs(ms - goalMin * 60_000) <= goalMin * 60_000 * 0.05
+    Text(text, color = if (near) Palette.keyInk else Palette.orange, fontSize = 13.sp, fontFamily = Mono, maxLines = 1, modifier = Modifier.padding(horizontal = 8.dp))
+}

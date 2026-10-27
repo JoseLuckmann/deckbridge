@@ -86,6 +86,7 @@ class SetDesk(private val app: StudioHost) {
         poolPlayed = emptySet()
         playlistId = id
         masterFixed = SetTempo.loadMode(masterFile(rootId() ?: id))
+        loadGoal()
     }
 
     /**
@@ -1071,6 +1072,90 @@ class SetDesk(private val app: StudioHost) {
         if (n != 2) return null
         open(id)
         app.did("$name · ${order.size} faixas")
+        return id
+    }
+
+    // ---- facilitadores: trocar uma faixa, duração alvo, duplicar o set ----------------------------------------------
+
+    /** Faixas para pôr no lugar da posição [index] da linha aberta: combinam com a de antes e a de depois. */
+    fun replaceChoices(index: Int): List<TrackItem> {
+        val v = app.model.view ?: return emptyList()
+        val line = entries()
+        val busy = line.toSet() + tree().flatMap { v.entries[it.playlistId].orEmpty() } + (rootId()?.let { v.entries[it].orEmpty() } ?: emptyList()) + hidden
+        val prev = (line.getOrNull(index - 1) ?: if (index == 0) branch?.fromTrackId else null)?.let { v.track(it) }
+        val next = (line.getOrNull(index + 1) ?: if (index == line.lastIndex) branch?.rejoinTrackId else null)?.let { v.track(it) }
+        return os.deckbridge.manager.mix.SetDoctor.replacements(v, prev, next, busy)
+    }
+
+    /**
+     * Põe [t] no lugar da faixa da posição [index] da linha aberta, na mesma posição (um desfazer volta). Não troca uma faixa
+     * de onde sai uma vertente (a vertente sairia de outra música).
+     */
+    fun replaceAt(index: Int, t: TrackItem): Boolean {
+        val pid = playlistId ?: return false
+        val line = entries()
+        val old = line.getOrNull(index) ?: return false
+        if (branchesAt(index).isNotEmpty()) {
+            app.notice = os.deckbridge.manager.Banner("Dessa faixa sai uma vertente: troque a vertente de lugar antes", true)
+            return false
+        }
+        val order = line.toMutableList().apply { set(index, t.id) }
+        val oldTitle = app.model.view?.track(old)?.title.orEmpty()
+        val edits = listOf(
+            Edit.RemoveFromPlaylist(pid, listOf(old)) to "Tirar \"$oldTitle\"",
+            Edit.AddToPlaylist(pid, listOf(t.id) + if (old in order) listOf(old) else emptyList()) to "Pôr \"${t.title}\"",
+            Edit.ReorderPlaylist(pid, order) to "Ordem do set",
+        )
+        if (app.model.submitAll(edits) != edits.size) return false
+        app.did("⇄ $oldTitle → ${t.title}")
+        return true
+    }
+
+    private fun goalFile(root: Int) = File(app.setsDir, "$root.goal")
+
+    /** Quanto o DJ quer que o set dure (minutos), ou null. Mostrado junto da duração: "≈1:48 / 2:00". */
+    var goalMinutes by mutableStateOf<Int?>(null)
+        private set
+
+    fun loadGoal() {
+        goalMinutes = rootId()?.let { runCatching { goalFile(it).readText().trim().toInt() }.getOrNull() }
+    }
+
+    fun setGoal(minutes: Int?) {
+        val root = rootId() ?: return
+        goalMinutes = minutes
+        runCatching {
+            app.setsDir.mkdirs()
+            if (minutes == null) goalFile(root).delete() else goalFile(root).writeText(minutes.toString())
+        }
+    }
+
+    /**
+     * Uma cópia do set (a linha principal, as trocas ajustadas, o master, a pool e a duração alvo) com outro nome, para
+     * testar mudanças sem mexer no original. As vertentes não vão junto. Abre a cópia e devolve o id.
+     */
+    fun duplicate(): Int? {
+        val v = app.model.view ?: return null
+        val root = rootId() ?: return null
+        val name = v.playlists.firstOrNull { it.id == root }?.name ?: return null
+        val taken = v.playlists.map { it.name }.toSet()
+        val copyName = (2..99).map { "$name (v$it)" }.firstOrNull { it !in taken } ?: "$name (cópia)"
+        val ids = v.entries[root].orEmpty().filter { v.track(it) != null }
+        val id = app.model.nextPlaylistId()
+        val n = app.model.submitAll(listOf(
+            Edit.CreatePlaylist(id, 0, copyName, false) to "Copiar \"$name\"",
+            Edit.AddToPlaylist(id, ids) to "Faixas de \"$copyName\"",
+        ))
+        if (n != 2) return null
+        runCatching {
+            for (ext in listOf("properties", "master", "pool", "goal")) {
+                val from = File(app.setsDir, "$root.$ext")
+                if (from.isFile) from.copyTo(File(app.setsDir, "$id.$ext"), overwrite = true)
+            }
+        }
+        val hadBranches = tree().isNotEmpty()
+        open(id)
+        app.did("$copyName · cópia para testar" + if (hadBranches) " (sem as vertentes)" else "")
         return id
     }
 }

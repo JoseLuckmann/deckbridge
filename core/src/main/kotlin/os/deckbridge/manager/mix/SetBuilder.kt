@@ -271,4 +271,20 @@ object SetDoctor {
             .filter { (t, _) -> SetPlanner.fit(a, t).good && SetPlanner.fit(t, b).good }
             .sortedWith(compareBy({ it.second }, { it.first.id }))
             .take(limit).map { it.first }
+
+    /**
+     * Para trocar uma faixa do set sem desmanchar as trocas em volta: as que combinam com a de antes ([prev]) e com a de
+     * depois ([next]) primeiro (como uma ponte); depois as que combinam com uma das duas. Sem vizinho de um lado, só o outro
+     * conta.
+     */
+    fun replacements(view: LibraryView, prev: TrackItem?, next: TrackItem?, exclude: Set<Int>, limit: Int = 6): List<TrackItem> {
+        if (prev == null && next == null) return view.tracks.filter { it.id !in exclude }.sortedByDescending { it.rating }.take(limit)
+        fun cost(t: TrackItem) = (prev?.let { SetBuilder.cost(it, t) } ?: 0.0) + (next?.let { SetBuilder.cost(t, it) } ?: 0.0) - t.rating * 0.3
+        fun good(t: TrackItem) = (prev == null || SetPlanner.fit(prev, t).good) to (next == null || SetPlanner.fit(t, next).good)
+        return view.tracks.filter { it.id !in exclude && it.bpm > 0 }
+            .map { t -> Triple(t, good(t), cost(t)) }
+            .filter { (_, g, _) -> g.first || g.second }
+            .sortedWith(compareBy({ !(it.second.first && it.second.second) }, { it.third }, { it.first.id }))
+            .take(limit).map { it.first }
+    }
 }
