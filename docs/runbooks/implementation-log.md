@@ -1109,3 +1109,11 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Item 8, em parte: a triagem (MARCAR: uma faixa por vez, estrelas e cor grandes, playlist alvo, onda que toca) passou para o código compartilhado (`studio/TriageUi.kt`, `Wave.kt`) e o computador ganhou **MARCAR ▸** ao lado dos filtros (Esc fecha). Desktop `StudioTest.markingOneByOneWorksOnTheComputer` (3 estrelas pela tela → nota 3 e passa para a próxima). Não passaram: o guia de primeiros passos e a importação em segundo plano (o computador tem a sua importação, com janela de revisão).
 - Não verificado: aparelho (toque longo para arrastar, rolagem com zoom, compartilhar), som no computador.
 - Fechamento da rodada: celular 67 testes (3 vídeos pulados, 0 falhas; `SetBuildingTest` passou a desfazer a ponte com um desfazer só, como o comentário dele já dizia), computador 8 (2 pulados: capturas antigas e a medição), núcleo 127. Versão 0.11.0.
+
+## 2026-10-27 — Mixer e passo a passo no MIX (relato do dono no aparelho)
+
+- Relato com print do MIX no celular (0.11.0): faltava ver o que acontece por baixo — grave, médio, agudo, faders — para aprender a fazer a virada.
+- O mixer existia só em AJUSTAR (barras HI/LOW/FADER). Agora fica sempre à vista, como o da controladora: botões HI, MID e LOW por canal (meio-dia = normal, 7 horas = cortado, vermelho e KILL), fader de canal de pé, crossfader no meio (a prévia usa os faders de canal) e ECHO. Na prévia, agudos e médios andam juntos (um filtro só), então HI e MID mostram o mesmo valor.
+- `MixGuide.steps` (núcleo): os passos da virada ditos em gestos, a partir dos mesmos pontos de `MixRenderer.levels` (entrada do CH 2 com o LOW fechado, abrir HI/MID até a troca do grave, trocar o grave de uma vez ou aos poucos, baixar o fader do CH 1; mistura, eco e corte também). `MixGuide.at`: o que está acontecendo e o próximo. Tela: PASSO com "comp. 4 / 8" (ou "saída em N comp."), o passo atual aceso e "em N comp. · próximo".
+- Evidência: core `os passos da virada seguem o que a previa faz` (conferido contra os níveis nos compassos 16, 24, 25); mobile `SetFlowTest` (no meio da troca, PASSO diz "Troca o grave aos poucos"); captura `docs/ui/mobile-47`.
+- Não verificado: no aparelho.

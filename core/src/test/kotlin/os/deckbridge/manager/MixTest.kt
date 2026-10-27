@@ -368,4 +368,32 @@ class MixMoreTest {
         val tr = listOf(Transition(1, 2, 150_000, 10_000), Transition(2, 3, 160_000, 0))
         assertEquals(150_000 + 150_000 + 200_000, SetPlanner.lengthMs(v, listOf(1, 2, 3), tr))
     }
+
+    @Test fun `os passos da virada seguem o que a previa faz`() {
+        val g = os.deckbridge.manager.mix.MixGuide
+        // Troca de grave de 32, grave no meio, de uma vez: entra, abre agudos até o 16, troca no 16, baixa o fader do 24 ao 32.
+        val tr = Transition(1, 2, 0, 0, 32, MixStyle.BASS_SWAP)
+        val s = g.steps(tr)
+        assertEquals(listOf(0.0, 0.0, 16.0, 24.0), s.map { it.fromBar })
+        assertTrue(s[2].instant && s[2].text.startsWith("Troca o grave"))
+        val (now, next) = g.at(s, 16.5)
+        assertEquals(listOf(s[2]), now)
+        assertEquals(24.0, next?.fromBar)
+        // Conferido contra os níveis: no 16 o grave já passou; no 24 o fader do CH 1 começa a descer.
+        val lv = os.deckbridge.manager.mix.Levels()
+        val bar = 2000.0
+        MixRenderer.levels(MixStyle.BASS_SWAP, 16 * bar, 32 * bar, bar, lv)
+        assertEquals(1f, lv.bLow)
+        MixRenderer.levels(MixStyle.BASS_SWAP, 24 * bar, 32 * bar, bar, lv)
+        assertEquals(1f, lv.aVol, 0.001f)
+        MixRenderer.levels(MixStyle.BASS_SWAP, 25 * bar, 32 * bar, bar, lv)
+        assertTrue(lv.aVol < 1f)
+        // Aos poucos em 8 no drop (fim): o grave cruza do 24 ao 32.
+        val slow = g.steps(tr.copy(swapAt = 1.0, swapBars = 8))
+        assertTrue(slow.any { it.fromBar == 24.0 && it.toBar == 32.0 && it.text.contains("aos poucos") })
+        // Antes de começar: nada acontecendo, o próximo é a entrada.
+        assertEquals(emptyList(), g.at(s, -3.0).first)
+        assertEquals(0.0, g.at(s, -3.0).second?.fromBar)
+        assertEquals(1, g.steps(tr.copy(style = MixStyle.CUT)).size)
+    }
 }

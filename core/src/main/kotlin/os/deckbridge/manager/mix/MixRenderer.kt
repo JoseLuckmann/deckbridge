@@ -74,6 +74,76 @@ class MixPreview(
  * caindo exatamente no ponto de saída, batida com batida. Com Master Tempo (padrão) o tom fica; sem, muda junto, como
  * um toca-discos.
  */
+/**
+ * Um passo da virada, para o DJ fazer no mixer: de [fromBar] a [toBar] compassos depois do ponto de saída (iguais: é um
+ * gesto de uma vez, no começo daquele compasso).
+ */
+data class MixStep(val fromBar: Double, val toBar: Double, val text: String) {
+    val instant get() = toBar <= fromBar
+}
+
+/**
+ * Os passos da virada [tr] no mixer, na ordem — o mesmo que a prévia faz com os níveis ([MixRenderer.levels]), dito em
+ * gestos: subir o fader, abrir os agudos e médios, trocar o grave, baixar o fader. [bars] é quantos compassos a troca dura.
+ */
+object MixGuide {
+    fun steps(tr: Transition, bars: Int = tr.bars): List<MixStep> {
+        val n = bars.coerceAtLeast(1).toDouble()
+        fun frac(f: Double) = f * n
+        return when (tr.style) {
+            MixStyle.BASS_SWAP -> {
+                // Os mesmos pontos de [MixRenderer.levels]: grave num início de compasso, agudos até lá, o fader no fim.
+                val s = Math.round(tr.swapAt.coerceIn(0.0, 1.0) * n).coerceAtLeast(1).toDouble().coerceAtMost(n)
+                val highsEnd = if (tr.pace == Transition.Pace.FAST) s / 4 else s
+                val fade = when (tr.pace) {
+                    Transition.Pace.FAST -> 0.125
+                    Transition.Pace.NORMAL -> 0.25
+                    Transition.Pace.SLOW -> 0.5
+                }
+                val swap = if (tr.swapBars > 0) {
+                    val g = tr.swapBars.toDouble().coerceAtMost(n)
+                    val from = (s - g).coerceAtLeast(0.0)
+                    MixStep(from, (from + g).coerceAtMost(n), "Troca o grave aos poucos: LOW do CH 1 desce enquanto o do CH 2 sobe")
+                } else MixStep(s, s, "Troca o grave: corta o LOW do CH 1 e abre o do CH 2 de uma vez")
+                listOf(
+                    MixStep(0.0, 0.0, "Entra o CH 2: fader em cima, LOW fechado"),
+                    MixStep(0.0, highsEnd, "Abre o HI e o MID do CH 2 aos poucos"),
+                    swap,
+                    MixStep(frac(1 - fade), n, "Baixa o fader do CH 1 até fechar"),
+                ).sortedBy { it.fromBar }
+            }
+            MixStyle.BLEND -> when (tr.pace) {
+                Transition.Pace.NORMAL -> listOf(MixStep(0.0, n, "Cruza os faders devagar: CH 2 sobe enquanto o CH 1 desce"))
+                Transition.Pace.FAST -> listOf(MixStep(frac(0.375), frac(0.625), "Cruza os faders rápido: CH 2 sobe, CH 1 desce"))
+                Transition.Pace.SLOW -> listOf(
+                    MixStep(0.0, frac(0.5), "Sobe o fader do CH 2 (as duas juntas no meio)"),
+                    MixStep(frac(0.5), n, "Baixa o fader do CH 1"),
+                )
+            }
+            MixStyle.ECHO -> {
+                val rise = when (tr.pace) {
+                    Transition.Pace.FAST -> 0.125
+                    Transition.Pace.NORMAL -> 0.25
+                    Transition.Pace.SLOW -> 0.5
+                }
+                listOf(
+                    MixStep(0.0, 0.0, "Liga o ECHO no CH 1"),
+                    MixStep(0.0, frac(rise), "Sobe o fader do CH 2"),
+                    MixStep(1.0, 1.0, "Fecha o CH 1: fica só o eco"),
+                ).sortedBy { it.fromBar }
+            }
+            MixStyle.CUT -> listOf(MixStep(0.0, 0.0, "Corte seco: troca de canal no início do compasso"))
+        }
+    }
+
+    /** Os passos acontecendo em [bar] (os gestos de uma vez valem por um compasso) e o próximo que ainda vem. */
+    fun at(steps: List<MixStep>, bar: Double): Pair<List<MixStep>, MixStep?> {
+        val now = steps.filter { if (it.instant) bar >= it.fromBar && bar < it.fromBar + 1 else bar >= it.fromBar && bar < it.toBar }
+        val next = steps.filter { it.fromBar > bar && it !in now }.minByOrNull { it.fromBar }
+        return now to next
+    }
+}
+
 object MixRenderer {
     const val RATE = 44100
 

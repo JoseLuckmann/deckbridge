@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LinearProgressIndicator
@@ -114,9 +115,15 @@ fun MixScreen(app: StudioHost) {
             DeckWave(p, p?.waveB, pos, gb, isA = false, height = waveH, tr = tr) { desk.seekMix(it) }
             DeckHeader(2, b, tr, p, pos, gb, master = false, from = a)
         }
+        // O mixer (EQ e faders de cada canal) e o passo a passo da virada, sempre à vista: dá para ver o que a prévia
+        // está fazendo e aprender a fazer igual na controladora.
+        val mixer = @Composable {
+            MixerPanel(levels)
+            StepsPanel(tr, p, pos)
+        }
         val controls = @Composable {
+            if (wide) mixer()
             Overview(p, pos) { desk.seekMix(it) }
-            if (advanced) MixerStrip(levels)
             Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced)
             Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
         }
@@ -132,6 +139,7 @@ fun MixScreen(app: StudioHost) {
             } else {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     decks(104.dp)
+                    mixer()
                     controls()
                 }
             }
@@ -342,52 +350,118 @@ private fun Overview(p: MixPreview?, pos: Int, onSeek: (Int) -> Unit) {
     }
 }
 
-/** O mixer da transição, nos mesmos medidores do mixer do player: LOW, HI e FADER de cada canal. Grave cortado em vermelho. */
+/**
+ * O mixer da prévia, como o da controladora: em cada canal HI, MID e LOW (meio-dia é o normal; todo para a esquerda é
+ * cortado, em vermelho) e o fader do canal; no meio, o crossfader (a prévia usa os faders de canal, ele fica no meio) e o
+ * ECHO. Anda junto com a música.
+ */
 @Composable
-private fun MixerStrip(lv: Levels) {
-    Row(Modifier.fillMaxWidth().height(104.dp).padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Channel("CH 1", lv.aLow, lv.aHigh, lv.aVol, lv.echo, Modifier.weight(1f))
-        Column(Modifier.width(70.dp).fillMaxHeight().rbPanel().padding(6.dp), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("X FADER", color = Palette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            val total = (lv.aVol + lv.bVol).coerceAtLeast(0.001f)
-            val xf = lv.bVol / total
-            Canvas(Modifier.fillMaxWidth().height(14.dp)) {
+private fun MixerPanel(lv: Levels) {
+    Row(Modifier.fillMaxWidth().height(132.dp).padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Na prévia, agudos e médios andam juntos (um filtro só); o grave é separado.
+        MixerChannel("CH 1", lv.aHigh, lv.aLow, lv.aVol, lv.echo, Modifier.weight(1f))
+        Column(Modifier.width(64.dp).fillMaxHeight().rbPanel().padding(6.dp), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("ECHO", color = if (lv.echo) Palette.bg else Palette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RbShape).background(if (lv.echo) Palette.blue else Palette.bg).padding(horizontal = 5.dp, vertical = 2.dp))
+            Spacer(Modifier.weight(1f))
+            Text("X-FADER", color = Palette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            Canvas(Modifier.fillMaxWidth().height(16.dp)) {
                 drawRect(Palette.bg, Offset(0f, size.height / 2 - 2f), Size(size.width, 4f))
-                val cx = xf * (size.width - 10f)
-                drawRect(Palette.blue, Offset(cx, 0f), Size(10f, size.height))
+                drawRect(Palette.line, Offset(size.width / 2 - 1f, 0f), Size(2f, size.height))
+                drawRect(Palette.text, Offset(size.width / 2 - 6f, 1f), Size(12f, size.height - 2f))
             }
-            Text(if (xf < 0.34f) "◀ CH 1" else if (xf > 0.66f) "CH 2 ▶" else "◀ ▶", color = Palette.text, fontSize = 10.sp, fontFamily = Mono)
         }
-        Channel("CH 2", lv.bLow, lv.bHigh, lv.bVol, false, Modifier.weight(1f))
+        MixerChannel("CH 2", lv.bHigh, lv.bLow, lv.bVol, false, Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun Channel(name: String, low: Float, high: Float, vol: Float, echo: Boolean, modifier: Modifier) {
-    Column(modifier.fillMaxHeight().rbPanel().padding(horizontal = 6.dp, vertical = 4.dp)) {
+private fun MixerChannel(name: String, high: Float, low: Float, vol: Float, echo: Boolean, modifier: Modifier) {
+    Row(modifier.fillMaxHeight().rbPanel().padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(name, color = Palette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (echo) Text("ECHO", color = Palette.bg, fontSize = 8.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(RbShape).background(Palette.blue).padding(horizontal = 3.dp))
+            }
+            Knob("HI", high)
+            Knob("MID", high)
+            Knob("LOW", low)
+        }
+        Fader(vol, Modifier.width(26.dp).fillMaxHeight())
+    }
+}
+
+/** Botão de EQ: o arco vai do corte total (7 horas) ao normal (meio-dia). Cortado, fica vermelho e diz KILL. */
+@Composable
+private fun Knob(label: String, value: Float) {
+    val v = value.coerceIn(0f, 1f)
+    val kill = v < 0.02f
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        val ink = if (kill) Palette.danger else Palette.blue
+        val ring = Palette.line
+        val dot = Palette.text
+        Canvas(Modifier.size(24.dp)) {
+            val r = size.minDimension / 2 - 2f
+            val c = Offset(size.width / 2, size.height / 2)
+            val stroke = androidx.compose.ui.graphics.drawscope.Stroke(3f)
+            drawArc(ring, 135f, 270f, false, Offset(c.x - r, c.y - r), Size(2 * r, 2 * r), style = stroke)
+            drawArc(ink, 135f, 135f * v, false, Offset(c.x - r, c.y - r), Size(2 * r, 2 * r), style = stroke)
+            val a = Math.toRadians((135.0 + 135.0 * v))
+            drawLine(dot, c, Offset(c.x + (r - 2f) * kotlin.math.cos(a).toFloat(), c.y + (r - 2f) * kotlin.math.sin(a).toFloat()), 3f)
+        }
+        Text(if (kill) "KILL" else label, color = if (kill) Palette.danger else Palette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** Fader do canal, de pé: em cima é o volume cheio. */
+@Composable
+private fun Fader(value: Float, modifier: Modifier) {
+    val v = value.coerceIn(0f, 1f)
+    val track = Palette.bg
+    val line = Palette.line
+    val cap = Palette.text
+    val fill = Palette.blue
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val capH = 12f
+        val usable = h - capH
+        drawRect(track, Offset(w / 2 - 3f, 0f), Size(6f, h))
+        drawRect(line, Offset(w / 2 - 3f, 0f), Size(6f, h), style = androidx.compose.ui.graphics.drawscope.Stroke(1f))
+        val y = (1 - v) * usable
+        drawRect(fill, Offset(w / 2 - 3f, y + capH / 2), Size(6f, h - y - capH / 2))
+        drawRect(cap, Offset(2f, y), Size(w - 4f, capH))
+    }
+}
+
+/**
+ * O passo a passo da virada: em que compasso da troca a cabeça está, o que fazer agora (aceso) e o que vem depois, com
+ * quantos compassos faltam. É o mesmo que a prévia faz no mixer acima.
+ */
+@Composable
+private fun StepsPanel(tr: Transition, p: MixPreview?, pos: Int) {
+    val steps = remember(tr) { os.deckbridge.manager.mix.MixGuide.steps(tr) }
+    val bar = if (p == null) -1.0 else (pos - p.leadMs) / p.barMsA
+    val (now, next) = os.deckbridge.manager.mix.MixGuide.at(steps, bar)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).rbPanel().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(name, color = Palette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            if (echo) Text("ECHO", color = Palette.bg, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(RbShape).background(Palette.blue).padding(horizontal = 4.dp))
+            Text("PASSO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.weight(1f))
+            Text(
+                when {
+                    p == null -> ""
+                    bar < 0 -> "saída em ${kotlin.math.ceil(-bar).toInt()} comp."
+                    bar < tr.bars -> "comp. ${bar.toInt() + 1} / ${tr.bars}"
+                    else -> "troca feita"
+                },
+                color = Palette.orange, fontSize = 12.sp, fontFamily = Mono,
+            )
         }
-        Row(Modifier.weight(1f).padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Meter("HI", high, Modifier.weight(1f))
-            Meter("LOW", low, Modifier.weight(1f))
-            Meter("FADER", vol, Modifier.weight(1f))
+        if (now.isEmpty() && next == null) Text(if (bar >= tr.bars) "Só o CH 2 tocando" else "—", color = Palette.muted, fontSize = 13.sp)
+        now.forEach { s -> Text("▶ " + s.text, color = Palette.text, fontSize = 13.sp, fontWeight = FontWeight.Medium) }
+        next?.let { s ->
+            val left = kotlin.math.ceil(s.fromBar - bar).toInt().coerceAtLeast(1)
+            Text("em $left comp. · ${s.text}", color = Palette.mutedBright, fontSize = 12.sp)
         }
-    }
-}
-
-@Composable
-private fun Meter(label: String, value: Float, modifier: Modifier) {
-    val kill = value < 0.02f && label != "FADER"
-    Column(modifier.fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier.weight(1f).fillMaxWidth().background(if (kill) Palette.dangerBg else Palette.bg).border(BorderStroke(1.dp, if (kill) Palette.danger else Palette.line)),
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            Box(Modifier.fillMaxWidth().fillMaxHeight(value.coerceIn(0f, 1f)).background(Palette.blue))
-        }
-        Text(if (kill) "KILL" else label, color = if (kill) Palette.danger else Palette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 

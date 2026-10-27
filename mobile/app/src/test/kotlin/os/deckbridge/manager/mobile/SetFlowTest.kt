@@ -117,7 +117,7 @@ class SetFlowTest {
         // Simples por padrão: compassos e estilo à vista; o resto em AJUSTAR.
         assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("SYNC FINO")).fetchSemanticsNodes().size)
         rule.onRoot().captureRoboImage(File(out, "mobile-39-vertical-mix-simples.png").path)
-        rule.onNodeWithText("AJUSTAR ▾").performClick()
+        rule.onNodeWithText("AJUSTAR ▾").performScrollTo().performClick()
         rule.waitForIdle()
         rule.onNodeWithText("SYNC FINO").assertExists()
         assertTrue(a.sets.mixing!!.phaseLock, "sync fino ligado por padrão")
@@ -269,6 +269,13 @@ class SetFlowTest {
         assertEquals(0.75, tr.swapAt)
         assertEquals(4, tr.swapBars, "troca de ${tr.bars} compassos")
         rule.onRoot().captureRoboImage(File(out, "mobile-40-vertical-mix-ritmo.png").path)
+        // O mixer e o passo a passo andam com a cabeça: no meio da troca, o grave do CH 2 já está entrando e o PASSO diz o que fazer.
+        val mid = a.sets.mixPreview!!
+        a.sets.seekMix(mid.leadMs + (mid.overlapMs * 0.75 - mid.barMsA * 2).toInt())
+        rule.waitForIdle()
+        rule.onNodeWithText("PASSO").assertExists()
+        rule.onNodeWithText("Troca o grave aos poucos", substring = true).assertExists()
+        rule.onRoot().captureRoboImage(File(out, "mobile-47-vertical-mix-mixer.png").path)
         // A prévia segue a troca escolhida: perto do ponto do grave, os dois graves estão se cruzando (aos poucos).
         val p = a.sets.mixPreview!!
         val lv = p.levelsAt(p.leadMs + (p.overlapMs * 0.75 - p.barMsA * 2).toInt())

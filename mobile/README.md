@@ -95,6 +95,9 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
 - Arrastar: segure um cartão e arraste — para outra posição ou para outra linha (um desfazer volta tudo). No computador, o
   mouse arrasta direto.
 - OUVIR no quadro toca o caminho inteiro da linha escolhida ("OUVIR C" = abertura → C → fechamento), para comparar vertentes.
+- No MIX, o mixer fica sempre à vista e anda com a música: HI, MID e LOW de cada canal (meio-dia é o normal; cortado fica
+  vermelho, KILL), o fader de cada canal e o crossfader. Embaixo, PASSO: em que compasso da troca a cabeça está, o que fazer
+  agora e o que vem depois ("em 4 comp. · Baixa o fader do CH 1") — o mesmo que a prévia faz, para repetir na controladora.
 - No MIX, MARCAR: INTRO / DROP / OUTRO AQUI marcam onde a cabeça está (no compasso) quando a análise errou; a troca se acerta
   na hora e o ponto fica na faixa (vale para as outras trocas com ela).
 - ⋯ → Ao vivo: toque na que está tocando; o que pode vir depois fica com contorno verde (e em botões embaixo), o resto apaga.
