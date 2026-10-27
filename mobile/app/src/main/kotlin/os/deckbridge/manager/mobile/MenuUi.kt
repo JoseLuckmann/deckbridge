@@ -39,6 +39,8 @@ fun MenuTab(app: ManagerApp, actions: Actions) {
         Section("Ajuda")
         Line("Guia para começar", if (app.guideHidden) "desligado" else "ligado") { if (app.guideHidden) app.showGuide() else app.hideGuide() }
         Line("Buscar e filtrar", "") { app.tab = Tab.LIBRARY; app.helpRequested = true }
+        Section("Set")
+        Line("Transição", app.transitionBars?.let { "$it compassos" } ?: "Auto (até o drop)") { app.nextTransitionBars() }
         Section("Tela")
         Line("Tom", if (KeyStyle.musical) "Am (musical)" else "8A (Camelot)") { app.setMusicalKeys(!KeyStyle.musical) }
         Section("Aparelho")

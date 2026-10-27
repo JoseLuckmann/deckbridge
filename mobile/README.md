@@ -94,6 +94,12 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
 - A importação roda em segundo plano: uma faixa fina no topo mostra "IMPORTANDO 7/40" e ✕ para parar. Dá para marcar,
   montar playlists e ouvir enquanto isso; cada música aparece na lista assim que fica pronta. Repetidas são puladas.
 
+## Transições
+
+- Automáticas pela estrutura: a próxima entra no começo dela e a troca dura até o drop dela (o drop cai quando a outra
+  termina de sair); sem drop, o outro; sem nada, 32 compassos. A que sai começa no outro dela, em frases.
+- MENU → Set → Transição fixa a duração (16/32/64). No MIX, "ATÉ O DROP" acerta a troca para o drop da próxima.
+
 ## Simples por padrão
 
 - **Grava sozinho** (20 s depois da última mudança e ao sair do app); ↶ ↷ no topo enquanto há o que desfazer.

@@ -436,7 +436,18 @@ private fun Controls(app: ManagerApp, a: TrackItem, b: TrackItem, tr: Transition
     Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             RowLabel("COMP.")
-            listOf(4, 8, 16, 32).forEach { n -> PadButton("$n", Modifier.weight(1f), on = tr.bars == n) { edit(tr.copy(bars = n)) } }
+            // Trocar a duração recua a saída de frase em frase se a troca não couber mais antes do fim.
+            listOf(8, 16, 32, 64).forEach { n -> PadButton("$n", Modifier.weight(1f), on = tr.bars == n) { edit(tr.copy(bars = n, outMs = SetPlanner.fitOut(a, ga, tr.outMs, n))) } }
+        }
+        // O drop da próxima: um toque deixa a troca do tamanho exato para ele cair quando a outra termina de sair.
+        val toDrop = SetPlanner.barsToDrop(b, gb, tr.inMs)
+        if (toDrop != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            RowLabel("DROP")
+            if (toDrop == tr.bars) {
+                Text("o drop da próxima cai no fim da troca", color = Palette.keyInk, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            } else {
+                PadButton("ATÉ O DROP · $toDrop", Modifier.weight(1f)) { edit(tr.copy(bars = toDrop, outMs = SetPlanner.fitOut(a, ga, tr.outMs, toDrop))) }
+            }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             RowLabel("ESTILO")

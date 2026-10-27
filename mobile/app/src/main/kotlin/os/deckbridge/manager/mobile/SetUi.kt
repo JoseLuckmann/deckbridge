@@ -464,8 +464,8 @@ private fun BranchDialog(app: ManagerApp, from: Int, onClose: () -> Unit) {
 private fun fitText(f: Fit): String = if (f.bpmDiffPct == 0.0) "=" else "%+.1f%%".format(f.bpmDiffPct)
 
 /**
- * Uma transição numa linha: o tom de uma para a outra e quanto a que entra estica até o master; o estilo e os compassos só
- * quando foram mudados. O fio verde ou laranja já diz se a troca combina; o ⚠ abre o aviso. Tocar na linha abre o mix.
+ * Uma transição numa linha: o tom de uma para a outra, quanto a que entra estica até o master e quantos compassos dura;
+ * o estilo só quando foi mudado. O fio verde ou laranja já diz se a troca combina; o ⚠ abre o aviso. Tocar na linha abre o mix.
  */
 @Composable
 private fun TransitionRow(
@@ -490,8 +490,10 @@ private fun TransitionRow(
                 "  " + pctLabel(stretch), fontSize = 12.sp, fontFamily = Mono,
                 color = if (kotlin.math.abs(stretch) <= SetTempo.COMFORT_PCT) Palette.mutedBright else if (kotlin.math.abs(stretch) <= SetTempo.MAX_PCT) Palette.orange else Palette.danger,
             )
-            if (tr.style != MixStyle.BASS_SWAP || tr.bars != 16) Text(
-                "  ${tr.style.title} · ${tr.bars}", color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            // Quantos compassos a troca dura (o automático varia com a música); o estilo só quando foi mudado.
+            Text(
+                "  ${tr.bars} comp." + if (tr.style != MixStyle.BASS_SWAP) " · ${tr.style.title}" else "", color = Palette.muted, fontSize = 12.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
         if (issues.isNotEmpty()) Box(

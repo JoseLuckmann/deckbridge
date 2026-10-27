@@ -132,6 +132,21 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         KeyStyle.musical = prefs.getBoolean("tomMusical", false)
     }
 
+    /** Duração das transições automáticas: null é pela estrutura (até o drop da que entra; 32 sem dados), ou fixa. */
+    var transitionBars by mutableStateOf(prefs.getInt("transicao", 0).takeIf { it > 0 })
+        private set
+
+    /** Passa para a próxima opção de duração: Auto → 16 → 32 → 64 → Auto. */
+    fun nextTransitionBars() {
+        transitionBars = when (transitionBars) {
+            null -> 16
+            16 -> 32
+            32 -> 64
+            else -> null
+        }
+        prefs.edit().putInt("transicao", transitionBars ?: 0).apply()
+    }
+
     /** Tom em nota musical (Am) em vez de Camelot (8A), em todo o app. */
     fun setMusicalKeys(on: Boolean) {
         KeyStyle.musical = on

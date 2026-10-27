@@ -221,6 +221,48 @@ class MixTest {
         assertEquals(164_100, SetPlanner.defaultOut(t(1), early, 16))
     }
 
+    @Test fun `transicao automatica pela estrutura - intro sobre outro com o drop no fim`() {
+        // 128 BPM: compasso de 1875 ms. Faixas de 6 min.
+        val bar = 1875.0
+        val a = t(1, 128.0, dur = 360)
+        val b = t(2, 128.0, dur = 360)
+        fun at(bars: Int) = (bars * bar).toInt()
+        // A: outro nos últimos 32 compassos. B: drop depois de 32 compassos de intro.
+        val ga = grid(128.0, 360_000, 0, listOf(Cue(-1, at(160), comment = "Outro")))
+        val gb = grid(128.0, 360_000, 0, listOf(Cue(-1, at(32), comment = "Drop")))
+        val (tr, basis) = SetPlanner.auto(a, ga, b, gb)
+        assertEquals(SetPlanner.Basis.DROP, basis)
+        assertEquals(32, tr.bars, "dura a intro da que entra")
+        assertEquals(at(160), tr.outMs, "sai no outro")
+        assertEquals(0, tr.inMs, "entra no começo")
+        // O drop de B cai quando a troca termina (A acabou de sair).
+        assertEquals(at(32), tr.inMs + at(tr.bars))
+
+        // Intro longa (64) e outro curto (16): a troca é de 64; a saída recua de frase em frase até caber.
+        val shortOutro = grid(128.0, 360_000, 0, listOf(Cue(-1, at(176), comment = "Outro")))
+        val longIntro = grid(128.0, 360_000, 0, listOf(Cue(-1, at(64), comment = "Drop")))
+        val (long, _) = SetPlanner.auto(a, shortOutro, b, longIntro)
+        assertEquals(64, long.bars)
+        assertTrue(long.outMs + at(64) <= 360_000, "cabe na faixa")
+        assertEquals(0, (Math.round(long.outMs / bar) % 8).toInt(), "sai num início de frase")
+
+        // Sem estrutura: 32 compassos (eletrônica mixa longo), numa frase que cabe com folga.
+        val (plain, why) = SetPlanner.auto(a, grid(128.0, 360_000), b, grid(128.0, 360_000))
+        assertEquals(SetPlanner.Basis.DEFAULT, why)
+        assertEquals(SetPlanner.DEFAULT_BARS, plain.bars)
+        assertEquals(0, (Math.round(plain.outMs / bar) % 8).toInt())
+        assertTrue(plain.outMs + at(32) < 360_000)
+        // Só o outro: a troca dura o outro.
+        val (byOutro, why2) = SetPlanner.auto(a, ga, b, grid(128.0, 360_000))
+        assertEquals(SetPlanner.Basis.OUTRO, why2)
+        assertEquals(32, byOutro.bars, "o outro de A vai do compasso 160 ao fim (192)")
+        // Duração escolhida à mão vale.
+        assertEquals(16, SetPlanner.auto(a, ga, b, gb, fixedBars = 16).first.bars)
+        // Intro curta demais (8) não fica abaixo do mínimo.
+        val shortIntro = grid(128.0, 360_000, 0, listOf(Cue(-1, at(8), comment = "Drop")))
+        assertEquals(SetPlanner.MIN_BARS, SetPlanner.auto(a, ga, b, shortIntro).first.bars)
+    }
+
     @Test fun `plano, encaixe e sugestoes`() {
         val tracks = listOf(t(1, 120.0, "Am"), t(2, 124.0, "Em"), t(3, 140.0, "Am"), t(4, 121.0, "C#m", rating = 5), t(5, 122.0, "Am", rating = 3))
         val v = view(tracks)

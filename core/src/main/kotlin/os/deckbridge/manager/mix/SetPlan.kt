@@ -115,6 +115,93 @@ object SetPlanner {
     /** Entrada automática: o primeiro início de compasso (o começo da faixa, se não há grade). */
     fun defaultIn(g: TrackGrid?): Int = downbeats(g).firstOrNull() ?: 0
 
+    /** Sem estrutura detectada: eletrônica mixa longo (eram 16, a virada ficava só no fim). */
+    const val DEFAULT_BARS = 32
+
+    /** O automático nunca fica mais curto nem mais longo que isso. */
+    const val MIN_BARS = 16
+    const val MAX_BARS = 64
+
+    /** Frase: as músicas eletrônicas mudam de parte a cada 8 compassos (16, 32…). A saída recua de frase em frase. */
+    const val PHRASE_BARS = 8
+
+    /** Sem outro detectado, a saída começa num início de bloco de 16 compassos (como se fraseia eletrônica). */
+    const val BLOCK_BARS = 16
+
+    private fun cue(g: TrackGrid?, name: String): Int? = g?.cues?.firstOrNull { it.comment.equals(name, ignoreCase = true) }?.timeMs
+
+    /** Arredonda [bars] para baixo numa frase (múltiplo de 8). */
+    private fun phraseBars(bars: Int): Int = (bars / PHRASE_BARS) * PHRASE_BARS
+
+    /** O início de bloco (a cada [BLOCK_BARS] compassos a partir do primeiro) mais perto de [ms], sem passar dele. */
+    fun phraseStart(g: TrackGrid?, ms: Int): Int {
+        val d = downbeats(g)
+        if (d.isEmpty()) return ms
+        val k = d.indices.lastOrNull { d[it] <= ms } ?: return d.first()
+        return d[k - k % BLOCK_BARS]
+    }
+
+    /**
+     * Por que a transição tem esse tamanho: até o drop da que entra (o drop cai quando a outra acaba de sair), o outro da
+     * que sai, o padrão, ou o que o DJ escolheu.
+     */
+    enum class Basis { DROP, OUTRO, DEFAULT, FIXED }
+
+    /**
+     * Transição automática pela estrutura, como se mixa eletrônica: a que entra começa no começo dela (intro) e a troca
+     * dura até o drop dela — o drop cai exatamente quando a que sai termina de sair. A que sai começa a sair no Outro
+     * dela (recuando de frase em frase se o outro for curto). Sem drop detectado, a troca dura o outro; sem nada,
+     * [DEFAULT_BARS]. Sempre entre [MIN_BARS] e [MAX_BARS], em frases; [fixedBars] escolhe a duração à mão.
+     */
+    fun auto(a: TrackItem, ga: TrackGrid?, b: TrackItem, gb: TrackGrid?, fixedBars: Int? = null): Pair<Transition, Basis> {
+        val barA = barMs(a.bpm)
+        val barB = barMs(b.bpm)
+        val durA = ga?.durationMs?.takeIf { it > 0 } ?: (a.durationSeconds * 1000)
+        val durB = gb?.durationMs?.takeIf { it > 0 } ?: (b.durationSeconds * 1000)
+        val inB = cue(gb, "Intro") ?: defaultIn(gb)
+        // O drop da que entra: depois de pelo menos uma frase de intro e antes de 60% da faixa (senão é análise errada).
+        val dropB = cue(gb, "Drop")?.takeIf { it >= inB + PHRASE_BARS * barB && it <= durB * 0.6 }
+        val outroA = cue(ga, "Outro")?.takeIf { it >= durA / 2 && it + PHRASE_BARS * barA <= durA }
+        // Até o drop, exato (a análise nem sempre põe o drop num múltiplo de 8: arredondar faria ele cair fora do fim da troca).
+        val introBars = dropB?.let { Math.round((it - inB) / barB).toInt() }
+        val outroBars = outroA?.let { phraseBars(((durA - it) / barA).toInt()) }
+        val (wanted, basis) = when {
+            fixedBars != null -> fixedBars to Basis.FIXED
+            introBars != null -> introBars.coerceIn(MIN_BARS, MAX_BARS) to Basis.DROP
+            outroBars != null -> outroBars.coerceIn(MIN_BARS, MAX_BARS) to Basis.OUTRO
+            else -> DEFAULT_BARS to Basis.DEFAULT
+        }
+        // Não pode ser maior que a faixa que sai (do primeiro compasso ao fim).
+        val firstA = defaultIn(ga)
+        val room = ((durA - firstA) / barA).toInt()
+        val bars = if (wanted <= room) wanted else phraseBars(room).coerceAtLeast(PHRASE_BARS).coerceAtMost(wanted)
+        val len = (bars * barA).toInt()
+        // Saída: o outro; se a troca não cabe depois dele, recua de frase em frase. Sem outro, a última frase que cabe.
+        val out = fitOut(a, ga, outroA ?: phraseStart(ga, durA - len - barA.toInt()), bars)
+        return Transition(a.id, b.id, out, inB, bars) to basis
+    }
+
+    /** A saída [out] de [a], recuada de frase em frase (8 compassos) até [bars] compassos caberem antes do fim. */
+    fun fitOut(a: TrackItem, ga: TrackGrid?, out: Int, bars: Int): Int {
+        val barA = barMs(a.bpm)
+        val durA = ga?.durationMs?.takeIf { it > 0 } ?: (a.durationSeconds * 1000)
+        val firstA = defaultIn(ga)
+        val len = (bars * barA).toInt()
+        var o = out
+        while (o + len > durA && o - PHRASE_BARS * barA >= firstA) o -= (PHRASE_BARS * barA).toInt()
+        return snap(ga, o.coerceAtLeast(firstA))
+    }
+
+    /**
+     * Quantos compassos da entrada [inMs] até o drop de [b] (de 8 a [MAX_BARS]): com essa duração o drop cai
+     * quando a outra termina de sair. Null se [b] não tem drop depois da entrada.
+     */
+    fun barsToDrop(b: TrackItem, gb: TrackGrid?, inMs: Int): Int? {
+        val drop = cue(gb, "Drop")?.takeIf { it > inMs } ?: return null
+        val bars = Math.round((drop - inMs) / barMs(b.bpm)).toInt()
+        return bars.takeIf { it >= PHRASE_BARS }?.coerceAtMost(MAX_BARS)
+    }
+
     /** Quantos semitons o tom muda tocando a [speed] sem Master Tempo. */
     fun semitones(speed: Double): Double = if (speed > 0) 12 * kotlin.math.ln(speed) / kotlin.math.ln(2.0) else 0.0
 
@@ -129,13 +216,16 @@ object SetPlanner {
         return Fit(dist, diff)
     }
 
-    /** Transições automáticas para a ordem [ids], mantendo as que já existem para o mesmo par. */
-    fun plan(view: LibraryView, ids: List<Int>, grids: (TrackItem) -> TrackGrid?, keep: List<Transition> = emptyList(), bars: Int = 16): List<Transition> =
+    /**
+     * Transições automáticas para a ordem [ids] (pela estrutura, ver [auto]; [bars] fixa a duração), mantendo as que já
+     * existem para o mesmo par.
+     */
+    fun plan(view: LibraryView, ids: List<Int>, grids: (TrackItem) -> TrackGrid?, keep: List<Transition> = emptyList(), bars: Int? = null): List<Transition> =
         ids.zipWithNext().mapNotNull { (a, b) ->
             keep.firstOrNull { it.fromId == a && it.toId == b } ?: run {
                 val ta = view.track(a) ?: return@mapNotNull null
                 val tb = view.track(b) ?: return@mapNotNull null
-                Transition(a, b, defaultOut(ta, grids(ta), bars), defaultIn(grids(tb)), bars)
+                auto(ta, grids(ta), tb, grids(tb), bars).first
             }
         }
 

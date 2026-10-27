@@ -227,7 +227,7 @@ class SetDesk(private val app: ManagerApp) {
         val keep = (listOf(root) + tree.map { it.playlistId }).flatMap { runCatching { SetPlanner.load(file(it)) }.getOrDefault(emptyList()) }
         return rawRoutes().map { r ->
             val masters = SetTempo.plan(r.ids.map { v.track(it)?.bpm ?: 0.0 }, masterFixed)
-            val plan = SetPlanner.plan(v, r.ids, ::grid, keep = keep)
+            val plan = SetPlanner.plan(v, r.ids, ::grid, keep = keep, bars = app.transitionBars)
             // Dentro de uma pool não há troca programada (a ordem é escolhida na hora): não conta como aviso.
             val issues = os.deckbridge.manager.mix.SetDoctor.check(v, r.ids, plan, ::grid, masters)
                 .filter { i -> r.ids.indices.none { n -> r.ids[n] == i.fromId && n + 1 < r.ids.size && r.ids[n + 1] == i.toId && (r.pool[n] || r.pool[n + 1]) } }
@@ -305,7 +305,7 @@ class SetDesk(private val app: ManagerApp) {
     /** As transições da linha aberta: só na parte com ordem (numa pool a ordem é escolhida na hora). */
     fun plan(ids: List<Int> = ids()): List<Transition> {
         val v = app.model.view ?: return emptyList()
-        return SetPlanner.plan(v, fixedPart(ids), ::grid, keep = saved)
+        return SetPlanner.plan(v, fixedPart(ids), ::grid, keep = saved, bars = app.transitionBars)
     }
 
     fun update(t: Transition) {
