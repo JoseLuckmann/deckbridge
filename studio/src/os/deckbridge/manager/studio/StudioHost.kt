@@ -105,3 +105,28 @@ fun jobFraction(text: String): Float? {
     if (total <= 0) return null
     return (m.groupValues[1].toFloat() / total).coerceIn(0f, 1f)
 }
+
+/**
+ * Um erro dito em palavras do DJ, com o que fazer (Nielsen, heurística 9: ajudar a reconhecer, entender e sair do erro).
+ * Em vez de "Falhou: ENOSPC" ou o nome da exceção, diz a causa provável e o próximo passo.
+ */
+fun friendlyError(e: Throwable): String {
+    val msg = e.message.orEmpty()
+    val low = msg.lowercase()
+    return when {
+        e is java.io.FileNotFoundException || "no such file" in low || "enoent" in low ->
+            "Não achei um arquivo${fileOf(msg)}. Ele foi movido ou apagado? Confira a pasta, ou importe a música de novo."
+        "no space" in low || "enospc" in low || "disk full" in low ->
+            "Acabou o espaço. Libere espaço no aparelho ou no pendrive e tente de novo; nada foi perdido."
+        e is SecurityException || "permission" in low || "eacces" in low || "read-only" in low ->
+            "Sem permissão para gravar ali. No pendrive, confira se ele não está travado e escolha a pasta de novo."
+        e is OutOfMemoryError -> "Faltou memória para essa faixa. Feche outros apps e tente de novo."
+        "unsupported" in low || "unknown format" in low || "invalid format" in low ->
+            "Esse formato de áudio não deu para ler. Converta para MP3, WAV, AIFF ou FLAC e importe de novo."
+        msg.isNotBlank() -> "Não deu certo: $msg"
+        else -> "Não deu certo (${e.javaClass.simpleName}). Tente de novo; se repetir, reinicie o app."
+    }
+}
+
+private fun fileOf(msg: String): String =
+    Regex("""([^/\\(:]+?\.(mp3|wav|aiff?|flac|m4a|ogg|dat|ext|pdb))\b""", RegexOption.IGNORE_CASE).find(msg)?.value?.trim()?.let { ": $it" } ?: ""

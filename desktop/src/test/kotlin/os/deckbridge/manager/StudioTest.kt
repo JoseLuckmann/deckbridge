@@ -361,5 +361,10 @@ class StudioTest {
         // Trabalho com "n/N": a porcentagem.
         assertEquals(0.3f, os.deckbridge.manager.studio.jobFraction("3/10: Night Signal"))
         assertEquals(null, os.deckbridge.manager.studio.jobFraction("Gravando"))
+        // Erros ditos com causa e o que fazer, não o nome da exceção.
+        val fe: (Throwable) -> String = { os.deckbridge.manager.studio.friendlyError(it) }
+        assertEquals("Não achei um arquivo: Night Signal.wav. Ele foi movido ou apagado? Confira a pasta, ou importe a música de novo.", fe(java.io.FileNotFoundException("/x/Contents/Night Signal.wav (No such file or directory)")).replace("Night Signal.wav", "Night Signal.wav"))
+        assertTrue(fe(java.io.IOException("write failed: ENOSPC (No space left on device)")).startsWith("Acabou o espaço"))
+        assertTrue(fe(IllegalStateException()).startsWith("Não deu certo (IllegalStateException)"))
     }
 }

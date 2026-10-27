@@ -23,6 +23,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -144,6 +147,7 @@ private fun Board(
     onJoin: (CanvasLane) -> Unit, onMove: (CanvasCard, Int, Int) -> Unit, live: LiveView?,
 ) {
     val v = app.model.view ?: return
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     // Arrastar um cartão: onde ele está agora (o quanto andou) e onde cairia se soltasse.
     var dragged by remember { mutableStateOf<CanvasCard?>(null) }
     var moved by remember { mutableStateOf(Offset.Zero) }
@@ -164,11 +168,22 @@ private fun Board(
     val good = Palette.keyInk
     val warn = Palette.orange
     val loose = Palette.muted
+    // Quando o quadro muda (pôr, tirar, mover, dividir): os cartões deslizam até o lugar novo e só depois os fios e os
+    // compassos aparecem, em etapas. Animação em etapas ajuda a seguir o que mudou (Heer & Robertson 2007).
+    val shape = layout.lanes.flatMap { l -> l.cards.map { Triple(it.playlistId, it.trackId, it.col) } }
+    val wires = remember { androidx.compose.animation.core.Animatable(1f) }
+    var lastShape by remember { mutableStateOf(shape) }
+    LaunchedEffect(shape) {
+        if (shape == lastShape) return@LaunchedEffect
+        lastShape = shape
+        wires.snapTo(0f)
+        wires.animateTo(1f, androidx.compose.animation.core.tween(MOVE_MS, delayMillis = MOVE_MS))
+    }
     Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())) {
         Box(Modifier.size(width, height).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onSelect(null) }) {
             // Os fios: dentro da linha, do fim de uma ao começo da outra; o ramo sai pelo lado da faixa de onde se divide e
             // chega pelo lado da faixa onde volta.
-            Canvas(Modifier.size(width, height)) {
+            Canvas(Modifier.size(width, height).graphicsLayer { alpha = wires.value }) {
                 val cw = g.cardW.toPx()
                 val ch = g.cardH.toPx()
                 val pl = PLUS.toPx()
@@ -229,9 +244,13 @@ private fun Board(
                 }
                 lane.cards.forEach { c ->
                     val t = v.track(c.trackId) ?: return@forEach
+                    // Pela identidade do cartão: o deslize acompanha a faixa, não a posição na lista.
+                    androidx.compose.runtime.key(c.playlistId, c.trackId) {
                     val drag = Modifier.pointerInput(c, app.touch) {
-                        val start = { _: Offset -> dragged = c; moved = Offset.Zero }
+                        // No toque, um tranco ao pegar e outro ao soltar: o dedo sabe que pegou e que soltou (Hoggan et al. 2008).
+                        val start = { _: Offset -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); dragged = c; moved = Offset.Zero }
                         val end = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             target(c)?.let { (l, i) -> onMove(c, l.playlistId, i) }
                             dragged = null
                             moved = Offset.Zero
@@ -251,7 +270,7 @@ private fun Board(
                             else -> null
                         } },
                     ) { onSelect(if (selected == c) null else c) }
-                }
+                } }
                 PlusCard(g, lane, laneColor(lane.row)) { onAdd(lane) }
                 // Num ramo: onde ele junta de volta (ou FIM, se é outro final); tocar muda.
                 if (lane.branch != null) {
@@ -287,7 +306,7 @@ private fun Board(
                     else -> if (g.vertical) g.plusX(lane) + PLUS + 6.dp to g.plusY(lane) + PLUS / 2 - 11.dp
                     else g.plusX(lane) + PLUS + 6.dp to g.plusY(lane) - 22.dp
                 }
-                LinkPill(tr, issue, on = rehearsing == tr, playing = app.preview.playingKey == desk.keyFor(tr), modifier = Modifier.offset(x, y)) { onMix(l, tr) }
+                LinkPill(tr, issue, on = rehearsing == tr, playing = app.preview.playingKey == desk.keyFor(tr), modifier = Modifier.offset(x, y).graphicsLayer { alpha = wires.value }) { onMix(l, tr) }
             }
             // Onde o cartão arrastado cai: uma barra azul antes da posição.
             dragged?.let { c -> target(c) }?.let { (lane, i) ->
@@ -320,8 +339,11 @@ private fun BoardCard(
         else -> Palette.line
     }
     val thick = selected || live == LiveMark.NOW || live == LiveMark.NEXT
+    // Desliza até o lugar novo quando o quadro muda (ver [MOVE_MS]).
+    val x by androidx.compose.animation.core.animateDpAsState(g.x(c), androidx.compose.animation.core.tween(MOVE_MS), label = "x")
+    val y by androidx.compose.animation.core.animateDpAsState(g.y(c), androidx.compose.animation.core.tween(MOVE_MS), label = "y")
     Column(
-        Modifier.offset(g.x(c), g.y(c)).offset { androidx.compose.ui.unit.IntOffset(shift.x.toInt(), shift.y.toInt()) }
+        Modifier.offset(x, y).offset { androidx.compose.ui.unit.IntOffset(shift.x.toInt(), shift.y.toInt()) }
             .then(if (shift != Offset.Zero) Modifier.zIndex(1f) else Modifier).then(gesture).size(g.cardW, g.cardH)
             .alpha(when (live) { LiveMark.PLAYED -> 0.3f; LiveMark.OTHER -> 0.45f; else -> 1f }).clip(RbShape)
             .background(fill)
@@ -340,6 +362,9 @@ private fun BoardCard(
         }
     }
 }
+
+/** Quanto dura o deslize dos cartões (e a espera antes dos fios aparecerem). */
+private const val MOVE_MS = 220
 
 @Composable
 private fun PlusCard(g: Geo, lane: CanvasLane, color: Color, onClick: () -> Unit) {

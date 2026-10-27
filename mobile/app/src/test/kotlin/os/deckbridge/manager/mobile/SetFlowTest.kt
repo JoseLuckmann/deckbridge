@@ -107,6 +107,8 @@ class SetFlowTest {
         assertNotNull(a.sets.mixing)
         waitMix(a)
         val p = assertNotNull(a.sets.mixPreview, a.sets.mixError)
+        // A próxima espera vai dizer quanto deve levar (pela montagem que acabou).
+        assertNotNull(a.sets.lastBuildMs)
         assertNotNull(p.waveA)
         assertNotNull(p.waveB)
         assertTrue(a.sets.mixing!!.masterTempo, "master tempo ligado por padrão")

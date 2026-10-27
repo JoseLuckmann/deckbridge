@@ -595,6 +595,10 @@ class SetDesk(private val app: StudioHost) {
         private set
     var mixBusy by mutableStateOf(false)
         private set
+
+    /** Quanto a última prévia levou para montar (ms), para dizer quanto a próxima deve demorar; null antes da primeira. */
+    var lastBuildMs by mutableStateOf<Long?>(null)
+        private set
     var mixError by mutableStateOf<String?>(null)
         private set
 
@@ -641,14 +645,19 @@ class SetDesk(private val app: StudioHost) {
         val tempo = tempoFor(tr)
         val key = keyOf(tr, tempo)
         worker.execute {
+            val started = System.currentTimeMillis()
+            var built = false
             val result = runCatching {
-                val p = synchronized(previews) { previews[key] } ?: render(tr, 12_000, 12_000, waves = true, tempo = tempo)?.also { synchronized(previews) { previews[key] = it } }
+                val p = synchronized(previews) { previews[key] } ?: render(tr, 12_000, 12_000, waves = true, tempo = tempo)?.also { built = true; synchronized(previews) { previews[key] = it } }
                     ?: throw IllegalStateException("Não consegui ler o áudio das duas faixas")
                 val out = cacheFile(key)
                 if (!out.isFile) publish(out) { it.writeBytes(MixRenderer.wav(p.audio)) }
                 p to out
             }
+            val took = System.currentTimeMillis() - started
             onMain {
+                // Quanto a última montagem levou: a próxima espera mostra uma previsão.
+                if (built) lastBuildMs = took
                 if (gen != generation) return@onMain
                 mixBusy = false
                 result.onSuccess { (p, f) ->

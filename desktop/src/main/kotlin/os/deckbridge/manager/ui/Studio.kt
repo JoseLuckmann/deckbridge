@@ -138,7 +138,7 @@ class DesktopStudio(
             try {
                 block(j)
             } catch (e: Exception) {
-                onMain { notice = Banner("Falhou: ${e.message ?: e.javaClass.simpleName}", true) }
+                onMain { notice = Banner(os.deckbridge.manager.studio.friendlyError(e), true) }
             } finally {
                 onMain { if (job === j) job = null }
             }

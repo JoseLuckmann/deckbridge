@@ -411,7 +411,7 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
             } catch (e: ExportException) {
                 say(e.message ?: e.code, error = true)
             } catch (e: Exception) {
-                say("Falhou: ${e.message ?: e.javaClass.simpleName}", error = true)
+                say(friendlyError(e), error = true)
             } finally {
                 job = null
             }

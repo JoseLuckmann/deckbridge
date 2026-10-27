@@ -1160,3 +1160,14 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Achado durante a rodada: a lista de atalhos usava o diálogo sem o tema e o título saiu quase invisível; agora usa `ManagerTheme` e só OK.
 - Evidência: celular `ContrastTest`, `SetBoardTest` (DESFAZER traz a vertente de volta); computador `StudioTest.keyboardShortcutsAreShownAndWork` (atalhos, dicas, rótulos, aviso com DESFAZER, `jobFraction`; capturas desktop-atalhos e desktop-desfazer).
 - Não verificado: teclado ABNT2 real (o `?` depende do leiaute; F1 funciona em qualquer um); aparelho. Versão 0.16.0.
+
+## 2026-10-27 — UX com referências, rodada 3 (celular e computador)
+
+- Pedido: mais pesquisa, mais artigos, mais conceitos aplicados. Fontes e mudanças: `docs/ux-referencias.md` ("Rodada 3").
+- Heer & Robertson 2007: cartões do quadro deslizam até o lugar novo (por identidade da faixa); fios e compassos aparecem depois, em etapas.
+- Hoggan et al. 2008: retorno tátil nos botões do MIX e ao pegar e soltar cartão (celular).
+- Maister 1985: "MONTANDO A PRÉVIA · ≈N s" pelo tempo da última montagem (`SetDesk.lastBuildMs`).
+- Palmer 1992: AJUSTES do MIX em três molduras com título.
+- Nielsen, heurística 9: `friendlyError` (causa e próximo passo) no celular, no computador e na janela de pendrive.
+- Achados: o Compose gerava método inválido com `return@key` dentro de `key {}` (ClassFormatError no computador); reorganizado. `mixBusy` passou a ter set privado.
+- Evidência: computador `StudioTest` 4/4 (inclui `friendlyError`); celular `SetFlowTest` (estimativa), suíte completa no fechamento. Não verificado: tato e animação no aparelho. Versão 0.17.0.

@@ -119,7 +119,7 @@ fun TransferModal(model: ManagerModel, st: TransferState, chooser: () -> File?, 
                         } catch (e: ExportException) {
                             st.error = e.message
                         } catch (e: Exception) {
-                            st.error = "Falhou: ${e.message}"
+                            st.error = os.deckbridge.manager.studio.friendlyError(e)
                         } finally {
                             st.status = null
                         }

@@ -134,7 +134,7 @@ fun MixScreen(app: StudioHost) {
             Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
         }
         Column(Modifier.fillMaxSize()) {
-            StatusStrip(a, b, p, pos, busy = desk.mixBusy) { desk.closeMix() }
+            StatusStrip(a, b, p, pos, busy = desk.mixBusy, estimateMs = desk.lastBuildMs) { desk.closeMix() }
             if (desk.mixBusy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = Palette.blue, trackColor = Palette.bg)
             desk.mixError?.let { Text(it, color = Palette.danger, fontSize = 12.sp, modifier = Modifier.padding(8.dp)) }
             if (wide) {
@@ -176,11 +176,14 @@ enum class MixPage { TURN, SETTINGS }
 
 /** Faixa de cima, como a do player: o que está aberto, o tempo da prévia e fechar. */
 @Composable
-private fun StatusStrip(a: TrackItem, b: TrackItem, p: MixPreview?, pos: Int, busy: Boolean, onClose: () -> Unit) {
+private fun StatusStrip(a: TrackItem, b: TrackItem, p: MixPreview?, pos: Int, busy: Boolean, estimateMs: Long?, onClose: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(44.dp).border(BorderStroke(1.dp, Palette.line)).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("MIX", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+        // A espera diz o que está acontecendo e quanto deve levar (pela última montagem): espera explicada e com fim
+        // conhecido parece mais curta (Maister 1985). Os ajustes continuam mexíveis enquanto isso.
         Text(
-            if (busy) "  MONTANDO…" else "", color = Palette.noteInk, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+            if (busy) "  MONTANDO A PRÉVIA" + (estimateMs?.let { " · ≈${((it + 999) / 1000).coerceAtLeast(1)} s" } ?: "…") else "",
+            color = Palette.noteInk, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (p != null) {
@@ -546,12 +549,24 @@ private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSe
 /** Botão das fileiras do player: painel escuro, contorno de linha, texto azul-claro; ativo em azul cheio. */
 @Composable
 private fun PadButton(text: String, modifier: Modifier = Modifier, on: Boolean = false, color: Color? = null, enabled: Boolean = true, onClick: () -> Unit) {
+    // Um toque leve no aparelho a cada botão: confirma pelo tato o que o dedo apertou (Hoggan et al. 2008). No computador não faz nada.
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     Box(
         modifier.height(38.dp).clip(RbShape).background(if (on) Palette.blue else Palette.surfaceHigh)
-            .border(BorderStroke(1.dp, if (on) Palette.blue else Palette.line), RbShape).clickable(enabled = enabled, onClick = onClick),
+            .border(BorderStroke(1.dp, if (on) Palette.blue else Palette.line), RbShape)
+            .clickable(enabled = enabled) { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove); onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Text(text, color = if (on) Palette.bg else color ?: if (enabled) Palette.blue else Palette.muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 2.dp))
+    }
+}
+
+/** Uma moldura com título para um grupo de fileiras de ajuste. */
+@Composable
+private fun Group(title: String, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().rbPanel().padding(horizontal = 6.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.padding(start = 2.dp))
+        content()
     }
 }
 
@@ -563,7 +578,10 @@ private fun RowLabel(text: String) = Text(text, color = Palette.text, fontSize =
 private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition, ga: TrackGrid?, gb: TrackGrid?, advanced: Boolean, onToggle: () -> Unit) {
     val desk = app.sets
     fun edit(t: Transition) = desk.editMix(t)
-    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      // Os ajustes em grupos dentro de molduras: o que está na mesma moldura se lê como uma coisa só (região comum,
+      // Palmer 1992). A troca; o grave; corrigir a análise.
+      Group("A TROCA") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             RowLabel("COMP.")
             // Trocar a duração recua a saída de frase em frase se a troca não couber mais antes do fim.
@@ -592,6 +610,8 @@ private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition
                 PadButton(label, Modifier.weight(1f), on = tr.pace == p) { edit(tr.copy(pace = p)) }
             }
         }
+      }
+      if (tr.style == MixStyle.BASS_SWAP) Group("O GRAVE") {
         // Na troca de grave: quando o grave passa de uma para a outra (no fim é no drop, se a troca vai até ele).
         if (tr.style == MixStyle.BASS_SWAP) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             RowLabel("GRAVE")
@@ -608,6 +628,8 @@ private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition
                 PadButton(label, Modifier.weight(if (n == 0) 1.4f else 1f), on = tr.swapBars == n, enabled = n < tr.bars) { edit(tr.copy(swapBars = n)) }
             }
         }
+      }
+      Group("CORRIGIR A ANÁLISE") {
         // A análise errou o começo, o drop ou o fim: põe a cabeça no lugar certo e marca (fica na faixa).
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             RowLabel("MARCAR")
@@ -615,6 +637,7 @@ private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition
                 PadButton(label, Modifier.weight(1f), enabled = desk.mixPreview != null) { desk.markHere(s) }
             }
         }
+      }
         PadButton(if (advanced) "MENOS ▴" else "AJUSTAR ▾", Modifier.fillMaxWidth()) { onToggle() }
         if (ga == null || gb == null) Text("Sem grade: analise as faixas para cair na batida.", color = Palette.noteInk, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         if (!advanced) {
