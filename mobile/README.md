@@ -92,6 +92,14 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
 - Vertentes: abertura e fechamento fixos na linha A e o meio em vertentes. Escolha a última da abertura → DIVIDIR → ramo;
   "↩ junta em" escolhe a faixa do fechamento. A segunda vertente do mesmo ponto já junta no mesmo lugar; o "↩" no fim de
   cada vertente no quadro muda onde ela junta (ou FIM, outro final).
+- Arrastar: segure um cartão e arraste — para outra posição ou para outra linha (um desfazer volta tudo). No computador, o
+  mouse arrasta direto.
+- OUVIR no quadro toca o caminho inteiro da linha escolhida ("OUVIR C" = abertura → C → fechamento), para comparar vertentes.
+- No MIX, MARCAR: INTRO / DROP / OUTRO AQUI marcam onde a cabeça está (no compasso) quando a análise errou; a troca se acerta
+  na hora e o ponto fica na faixa (vale para as outras trocas com ela).
+- ⋯ → Ao vivo: toque na que está tocando; o que pode vir depois fica com contorno verde (e em botões embaixo), o resto apaga.
+- ⋯ → Cola do set: as linhas, onde cada vertente sai e junta e as trocas, em texto para compartilhar.
+- − / TUDO / + no canto: afastar, ver o set inteiro, aproximar.
 - O quadro é uma linha do tempo: a faixa onde um ramo volta fica depois do fim dele, então o ramo corre ao lado do trecho
   que troca. A lista de antes continua no ⋯ (Ver em lista), junto com master, andamento e ordenar.
 
