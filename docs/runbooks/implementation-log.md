@@ -1196,3 +1196,14 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Núcleo: `smart/Show.kt` — `ShowCheck.check` (áudio, grade, cues Intro/Drop/Outro, repetidas, trocas com aviso, não ensaiadas) e `Request.route` (menor caminho em camadas, até 3 faixas, só arestas que combinam).
 - Studio (celular e computador): ⋯ → "Pronto pro show?" (`ShowDialog`), ARRUMAR (`prepareForShow`: análise e cues de estrutura onde faltam, sem mexer nos do DJ, em segundo plano com n/N, um desfazer); AO VIVO → PEDIDO (`RequestDialog`, PÔR NO SET logo depois da que toca); ao sair do AO VIVO, "Guardar o que tocou?" (`savePlayed`, playlist "Tocado dd/MM", marcada como set).
 - Evidência: núcleo `ShowTest` 2; celular `ShowFlowTest` 3 (capturas mobile-58, mobile-59); computador `StudioTest.aRequestFromTheFloorGetsABridgeIntoTheSet` (8A → 7A → 6A; captura desktop-pedido); suíte completa no fechamento. Não verificado: aparelho, cabine. Versão 0.20.0.
+
+## 2026-10-27 — Um conceito, um lugar (ADR-0011) e AO VIVO guardado
+
+- Pedido: cuidado com duplicações (efeitos, sync, faixas), o ideal é tudo no core; tirar o AO VIVO da biblioteca por enquanto, guardado.
+- `os.deckbridge.logic` saiu de dentro do app de performance para `core/src/main/kotlin/os/deckbridge/logic/` (git mv); o app de performance compila de lá por `srcDir`; o núcleo deixou de apontar para a pasta do app.
+- Tom: um parser (`camelotOf` com sustenido, bemol, ♯/♭, "min"), uma distância (`camelotDistance`), um deslocamento (`camelotShift`); `Smart` e `SetPlanner` delegam. Achado: o parser da performance não entendia "G#m", "A#", "Gb".
+- Partes da faixa: `Section` (Intro, Build, Drop, Break, Outro) no lugar do texto solto em 6 arquivos.
+- Eco: a prévia do MIX usa as contas do ECHO do motor (`EchoSpec`, quantidade 0,8 na prévia); `EchoSpecTest` lê `dsp.h`. Achado: com a quantidade do meio (0,5) o eco do motor some antes do compasso seguinte (o teste da saída com eco pegou).
+- AO VIVO: `Features.liveMode = false`; menu, pedido e "guardar o que tocou" fora da tela; testes ligam a chave só para eles; teste confirma que "Ao vivo" não aparece no app.
+- Pendente (proposto no ADR-0011): prévia do MIX pelo motor C++ (render offline por JNI) para tirar a última duplicação de efeitos.
+- Evidência: núcleo 139 (+`EchoSpecTest`), app de performance 149 (compilando a lógica do núcleo), computador e celular na suíte de fechamento.

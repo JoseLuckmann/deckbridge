@@ -38,7 +38,7 @@ O ADR-0002 e o AGENTS.md proíbem escrita no pendrive rekordbox. O próprio ADR-
 
 ## Consequências
 
-- O `desktop/` é um build Gradle separado, que compila os mesmos fontes de `android/app/src/main/java/os/deckbridge/logic/` (puro JVM, sem import de Android). Não toca no build do Android.
+- O `desktop/` é um build Gradle separado, que compila os mesmos fontes de `core/src/main/kotlin/os/deckbridge/logic/` (puro JVM, sem import de Android; antes em `android/app/src/main/java/os/deckbridge/logic/`, ver ADR-0011). Não toca no build do Android.
 - A automação futura (classificar, pontuar, renomear, preencher metadados) entra como mais uma fonte de mudanças pendentes, passando pela mesma fila, revisão e gravação segura. Nada grava sem o "Aplicar".
 - Escrever o ANLZ (cue points, grade, ondas das faixas importadas), copiar áudio para o pendrive e renomear arquivos passam pelas mesmas salvaguardas. Isso foi implementado em 2026-10-25 (ver abaixo).
 

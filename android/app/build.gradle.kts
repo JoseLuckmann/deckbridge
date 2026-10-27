@@ -81,6 +81,10 @@ android {
         prefab = true
     }
 
+    // A lógica compartilhada (leitores do pendrive, análise, tom, sync, cores) mora no núcleo, `core/`: o app de
+    // performance compila os mesmos fontes que a biblioteca usa, então cada conceito existe uma vez só (ADR-0011).
+    sourceSets["main"].java.srcDir("../../core/src/main/kotlin/os/deckbridge/logic")
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")

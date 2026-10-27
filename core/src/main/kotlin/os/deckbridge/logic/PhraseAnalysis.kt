@@ -229,7 +229,7 @@ internal fun labelPhrases(f: BarFeatures, cuts: List<Int>): PhrasePlan {
     val total = DoubleArray(n) { mean(f.totalDb, it) }
     val kick = DoubleArray(n) { mean(f.kick, it) }
     val audible = (0 until n).filter { total[it] > SILENCE_DB }
-    if (audible.isEmpty()) return PhrasePlan(cuts, List(n) { "Intro" }, List(n) { null })
+    if (audible.isEmpty()) return PhrasePlan(cuts, List(n) { Section.INTRO }, List(n) { null })
     val loudest = audible.maxOf { low[it] }
     val plateau = audible.map { low[it] }.filter { it >= loudest - 2.0 }.average()
     // Agudo do patamar: o das frases que estão no patamar de grave.
@@ -250,7 +250,7 @@ internal fun labelPhrases(f: BarFeatures, cuts: List<Int>): PhrasePlan {
     // Na abertura isso é só a Intro sem pratos.
     for (i in firstChorus + 1 until lastChorus) if (kinds[i] == "Chorus" && high[i] <= plateauHigh - 6.0) kinds[i] = "Down"
     if (firstChorus > 0) {
-        for (i in 0 until firstChorus) kinds[i] = "Intro"
+        for (i in 0 until firstChorus) kinds[i] = Section.INTRO
         // O build: a frase antes do primeiro Chorus que já saiu do grave da abertura.
         val pre = firstChorus - 1
         if (pre >= 1 && low[pre] > low[0] + 2.0) {
@@ -259,14 +259,14 @@ internal fun labelPhrases(f: BarFeatures, cuts: List<Int>): PhrasePlan {
             for (i in start..pre) kinds[i] = "Up"
         }
     }
-    if (lastChorus >= 0) for (i in lastChorus + 1 until n) if (kinds[i] != "Silence") kinds[i] = "Outro"
+    if (lastChorus >= 0) for (i in lastChorus + 1 until n) if (kinds[i] != "Silence") kinds[i] = Section.OUTRO
     // A faixa fecha com Outro, como no rekordbox: se a última frase de som ainda é Chorus e curta (até 16 compassos),
     // ela vira o Outro.
     val lastSound = (0 until n).lastOrNull { kinds[it] != "Silence" }
     if (lastSound != null && lastSound > 0 && kinds[lastSound] == "Chorus" && cuts[lastSound + 1] - cuts[lastSound] <= 16) {
-        kinds[lastSound] = "Outro"
+        kinds[lastSound] = Section.OUTRO
     }
-    for (i in 0 until n) if (kinds[i] == "Silence") kinds[i] = if (i == 0) "Intro" else if (i > lastChorus) "Outro" else "Down"
+    for (i in 0 until n) if (kinds[i] == "Silence") kinds[i] = if (i == 0) Section.INTRO else if (i > lastChorus) Section.OUTRO else "Down"
     // Fill-in: o último compasso da frase pulsa bem menos que a frase (o bumbo sai antes da frase seguinte).
     val fills = (0 until n).map { i ->
         val last = cuts[i + 1] - 1
@@ -297,6 +297,6 @@ internal fun phraseSections(samples: FloatArray, rate: Int, bpm: Double, originS
     val upBefore = spans.lastOrNull { it.kind == "Up" && it.startMs < (firstChorus?.startMs ?: Int.MAX_VALUE) }
     val buildSec = upBefore?.startMs?.div(1000.0) ?: max(0.0, dropSec - 8 * f.barSec)
     val breakSec = spans.firstOrNull { it.kind == "Down" && it.startMs > (firstChorus?.startMs ?: -1) }?.startMs?.div(1000.0) ?: dropSec
-    val outroSec = spans.firstOrNull { it.kind == "Outro" }?.startMs?.div(1000.0) ?: duration
+    val outroSec = spans.firstOrNull { it.kind == Section.OUTRO }?.startMs?.div(1000.0) ?: duration
     return SectionRead(StructurePoints(0.0, buildSec, dropSec, breakSec, outroSec), spans)
 }

@@ -242,7 +242,7 @@ object ImportPrep {
         val read = analyzeTrack(mono.samples, mono.rate)
         val waves = wavesFromPcm(mono.samples, mono.rate)
         val s = read.structure
-        val points = listOf("Intro" to s.introSec, "Build" to s.buildSec, "Drop" to s.dropSec, "Break" to s.breakSec, "Outro" to s.outroSec)
+        val points = listOf(os.deckbridge.logic.Section.INTRO to s.introSec, os.deckbridge.logic.Section.BUILD to s.buildSec, os.deckbridge.logic.Section.DROP to s.dropSec, os.deckbridge.logic.Section.BREAK to s.breakSec, os.deckbridge.logic.Section.OUTRO to s.outroSec)
         val limit = info.durationSec * 1000
         val hot = points.mapIndexedNotNull { n, (name, sec) ->
             val ms = (sec * 1000).toInt()

@@ -15,10 +15,6 @@ java {
 kotlin {
     jvmToolchain(21)
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
-    sourceSets.main {
-        // Os leitores e a análise do app de performance (puro JVM, sem import de Android) são os mesmos aqui.
-        kotlin.srcDir("../android/app/src/main/java/os/deckbridge/logic")
-    }
 }
 
 dependencies {

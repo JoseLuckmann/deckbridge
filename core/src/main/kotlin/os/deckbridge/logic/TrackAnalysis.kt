@@ -14,6 +14,21 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+/**
+ * Os nomes das partes de uma faixa, iguais no app inteiro: cues sugeridos na análise, frases, a montagem automática das
+ * trocas, o "Pronto pro show?" e as telas (ADR-0011). Quem precisa de "Intro", "Drop" ou "Outro" usa estes.
+ */
+object Section {
+    const val INTRO = "Intro"
+    const val BUILD = "Build"
+    const val DROP = "Drop"
+    const val BREAK = "Break"
+    const val OUTRO = "Outro"
+
+    /** As três que a montagem de trocas usa: entrar no intro, trocar no drop, sair no outro. */
+    val MIX = listOf(INTRO, DROP, OUTRO)
+}
+
 data class StructurePoints(
     val introSec: Double,
     val buildSec: Double,

@@ -30,6 +30,10 @@ class ShowFlowTest {
 
     private val out = File(System.getProperty("prints.dir") ?: "build/prints").apply { mkdirs() }
 
+    /** O AO VIVO está guardado (Features.liveMode); os testes dele o ligam e aqui ele volta a ficar desligado. */
+    @org.junit.After fun liveOff() { os.deckbridge.manager.studio.Features.liveMode = false }
+
+
     private fun app(): ManagerApp {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         return ManagerApp(ctx, File(ctx.cacheDir, "show-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 40); it.hideGuide() }
@@ -89,6 +93,7 @@ class ShowFlowTest {
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
         rule.waitForIdle()
         val cards = a.sets.canvas()!!.lanes[0].cards
+        os.deckbridge.manager.studio.Features.liveMode = true
         a.sets.startLive()
         // Tocou a 1ª, pulou para a 3ª (mudou de ideia na hora) e depois a 2ª.
         a.sets.liveTo(cards[0])
@@ -111,6 +116,7 @@ class ShowFlowTest {
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
         rule.waitForIdle()
         val lane = a.sets.canvas()!!.lanes[0]
+        os.deckbridge.manager.studio.Features.liveMode = true
         a.sets.startLive()
         a.sets.liveTo(lane.cards[0])
         rule.waitForIdle()

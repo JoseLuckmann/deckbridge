@@ -30,7 +30,7 @@ object ShowCheck {
     }
 
     /** As marcas de estrutura que a montagem automática procura nas faixas. */
-    val STRUCTURE = listOf("Intro", "Drop", "Outro")
+    val STRUCTURE = os.deckbridge.logic.Section.MIX
 
     /**
      * Confere as faixas [ids] do set (todas as linhas, na ordem do caminho). [cueNames] dá os nomes dos cues da faixa;

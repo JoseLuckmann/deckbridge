@@ -34,6 +34,10 @@ class SetBoardTest {
 
     private val out = File(System.getProperty("prints.dir") ?: "build/prints").apply { mkdirs() }
 
+    /** O AO VIVO está guardado (Features.liveMode); os testes dele o ligam e aqui ele volta a ficar desligado. */
+    @org.junit.After fun liveOff() { os.deckbridge.manager.studio.Features.liveMode = false }
+
+
     private fun app(): ManagerApp {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val a = ManagerApp(ctx, File(ctx.cacheDir, "qd-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 40) }
@@ -181,7 +185,12 @@ class SetBoardTest {
         tap("Ver tudo")
         rule.onRoot().captureRoboImage(File(out, "mobile-45-vertical-set-ver-tudo.png").path)
         tap("Aproximar")
-        // Ao vivo no celular: tocar na que toca mostra as vertentes possíveis.
+        // O AO VIVO está guardado: fora do menu do app.
+        tap("Mais")
+        assertTrue(rule.onAllNodes(hasText("Ao vivo")).fetchSemanticsNodes().isEmpty(), "Ao vivo fora do app")
+        click("Cancelar")
+        os.deckbridge.manager.studio.Features.liveMode = true
+        // Ao vivo no celular (guardado, testado): tocar na que toca mostra as vertentes possíveis.
         tap("Mais")
         click("Ao vivo")
         click("Small Hours")

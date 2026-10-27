@@ -836,7 +836,7 @@ class SetDesk(private val app: StudioHost) {
         live = false
         liveNow = null
         liveTrack = null
-        if (liveOrder.size >= 2) playedToSave = liveOrder
+        if (liveOrder.size >= 2 && Features.liveMode) playedToSave = liveOrder
         liveOrder = emptyList()
     }
 
@@ -876,7 +876,7 @@ class SetDesk(private val app: StudioHost) {
     }
 
     /** Os pontos que o DJ marca na onda quando a análise errou: o começo e o drop da que entra, o outro da que sai. */
-    enum class Spot(val cue: String) { INTRO("Intro"), DROP("Drop"), OUTRO("Outro") }
+    enum class Spot(val cue: String) { INTRO(os.deckbridge.logic.Section.INTRO), DROP(os.deckbridge.logic.Section.DROP), OUTRO(os.deckbridge.logic.Section.OUTRO) }
 
     /**
      * Marca [spot] onde a cabeça está (no início de compasso mais perto), como um cue de memória com o nome ("Intro", "Drop",

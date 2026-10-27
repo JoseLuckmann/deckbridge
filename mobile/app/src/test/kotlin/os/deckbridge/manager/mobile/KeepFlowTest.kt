@@ -36,6 +36,10 @@ class KeepFlowTest {
 
     private val out = File(System.getProperty("prints.dir") ?: "build/prints").apply { mkdirs() }
 
+    /** O AO VIVO está guardado (Features.liveMode); os testes dele o ligam e aqui ele volta a ficar desligado. */
+    @org.junit.After fun liveOff() { os.deckbridge.manager.studio.Features.liveMode = false }
+
+
     private fun app(): ManagerApp {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         return ManagerApp(ctx, File(ctx.cacheDir, "keep-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 40); it.hideGuide() }
@@ -131,6 +135,7 @@ class KeepFlowTest {
         rule.onRoot().captureRoboImage(File(out, "mobile-52-vertical-mix-lembrete.png").path)
         a.sets.closeMix()
         assertTrue("“segurar o grave até o vocal”" in a.sets.sheet())
+        os.deckbridge.manager.studio.Features.liveMode = true
         a.sets.startLive()
         a.sets.liveTo(a.sets.canvas()!!.lanes[0].cards.first { it.trackId == tr.fromId })
         rule.waitForIdle()

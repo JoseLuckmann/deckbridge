@@ -250,7 +250,7 @@ fun SetScreen(app: StudioHost) {
             if (canSort) add("Ordenar para mixar" to { sortOpen = true })
             add("Transição · " + (app.transitionBars?.let { "$it compassos" } ?: "até o drop") to { app.nextTransitionBars() })
             if (board) {
-                add("Ao vivo" to { picked = null; desk.startLive() })
+                if (Features.liveMode) add("Ao vivo" to { picked = null; desk.startLive() })
                 add("Cola do set" to { app.share("Set ${v.playlists.firstOrNull { it.id == desk.rootId() }?.name.orEmpty()}", desk.sheet()) })
                 add("Master · " + (desk.masterFixed?.let { "%.0f".format(it) } ?: "automático") to { masterOpen = true })
                 add("Andamento do set" to { desk.mapOpen = true })
@@ -266,8 +266,10 @@ fun SetScreen(app: StudioHost) {
     addTo?.let { letter -> AddToLineDialog(app, letter) { addTo = null } }
     replaceAt?.let { index -> ReplaceDialog(app, index) { replaceAt = null; picked = null } }
     if (showOpen) ShowDialog(app, onRehearse = { if (plan.isNotEmpty()) desk.startRehearsal(plan) }) { showOpen = false }
-    if (requestOpen) RequestDialog(app) { requestOpen = false }
-    SavePlayedDialog(app)
+    if (Features.liveMode) {
+        if (requestOpen) RequestDialog(app) { requestOpen = false }
+        SavePlayedDialog(app)
+    }
     if (goalOpen) {
         val goals = listOf(30, 45, 60, 90, 120, 180)
         ChoiceDialog("Duração alvo", goals.map { "${it} min" } + "Sem alvo", onPick = { n -> goalOpen = false; desk.setGoal(goals.getOrNull(n)) }, onClose = { goalOpen = false })

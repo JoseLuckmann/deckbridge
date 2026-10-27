@@ -117,7 +117,7 @@ object SetPlanner {
         val dur = g?.durationMs?.takeIf { it > 0 } ?: (t.durationSeconds * 1000)
         val len = (bars * barMs(t.bpm)).toInt()
         // Um "Outro" na primeira metade é análise errada (ou faixa curta demais): não serve de saída.
-        val outro = g?.cues?.firstOrNull { it.comment.equals("Outro", ignoreCase = true) && it.timeMs >= dur / 2 }?.timeMs
+        val outro = g?.cues?.firstOrNull { it.comment.equals(os.deckbridge.logic.Section.OUTRO, ignoreCase = true) && it.timeMs >= dur / 2 }?.timeMs
         val wanted = if (outro != null && outro + len <= dur) outro else dur - len - (2 * barMs(t.bpm)).toInt()
         return snap(g, wanted.coerceAtLeast(0))
     }
@@ -168,10 +168,10 @@ object SetPlanner {
         val barB = barMs(b.bpm)
         val durA = ga?.durationMs?.takeIf { it > 0 } ?: (a.durationSeconds * 1000)
         val durB = gb?.durationMs?.takeIf { it > 0 } ?: (b.durationSeconds * 1000)
-        val inB = cue(gb, "Intro") ?: defaultIn(gb)
+        val inB = cue(gb, os.deckbridge.logic.Section.INTRO) ?: defaultIn(gb)
         // O drop da que entra: depois de pelo menos uma frase de intro e antes de 60% da faixa (senão é análise errada).
-        val dropB = cue(gb, "Drop")?.takeIf { it >= inB + PHRASE_BARS * barB && it <= durB * 0.6 }
-        val outroA = cue(ga, "Outro")?.takeIf { it >= durA / 2 && it + PHRASE_BARS * barA <= durA }
+        val dropB = cue(gb, os.deckbridge.logic.Section.DROP)?.takeIf { it >= inB + PHRASE_BARS * barB && it <= durB * 0.6 }
+        val outroA = cue(ga, os.deckbridge.logic.Section.OUTRO)?.takeIf { it >= durA / 2 && it + PHRASE_BARS * barA <= durA }
         // Até o drop, exato (a análise nem sempre põe o drop num múltiplo de 8: arredondar faria ele cair fora do fim da troca).
         val introBars = dropB?.let { Math.round((it - inB) / barB).toInt() }
         val outroBars = outroA?.let { phraseBars(((durA - it) / barA).toInt()) }
@@ -214,7 +214,7 @@ object SetPlanner {
      * quando a outra termina de sair. Null se [b] não tem drop depois da entrada.
      */
     fun barsToDrop(b: TrackItem, gb: TrackGrid?, inMs: Int): Int? {
-        val drop = cue(gb, "Drop")?.takeIf { it > inMs } ?: return null
+        val drop = cue(gb, os.deckbridge.logic.Section.DROP)?.takeIf { it > inMs } ?: return null
         val bars = Math.round((drop - inMs) / barMs(b.bpm)).toInt()
         return bars.takeIf { it >= PHRASE_BARS }?.coerceAtMost(MAX_BARS)
     }
@@ -223,7 +223,7 @@ object SetPlanner {
     fun semitones(speed: Double): Double = if (speed > 0) 12 * kotlin.math.ln(speed) / kotlin.math.ln(2.0) else 0.0
 
     /** O tom (Camelot) depois de subir [semi] semitons: cada semitom anda 7 casas na roda. */
-    fun shiftKey(key: Pair<Int, Char>, semi: Int): Pair<Int, Char> = (Math.floorMod(key.first - 1 + 7 * semi, 12) + 1) to key.second
+    fun shiftKey(key: Pair<Int, Char>, semi: Int): Pair<Int, Char> = os.deckbridge.logic.camelotShift(key, semi)
 
     fun fit(a: TrackItem, b: TrackItem): Fit {
         val ka = Smart.camelot(a.key)

@@ -23,24 +23,24 @@ data class PhraseSpan(
 
 /** Cores deste app para os nomes publicados da frase. Não é um asset copiado. */
 fun phraseKindColor(kind: String): Int = when (kind) {
-    "Intro" -> 0x3B6CFF
+    Section.INTRO -> 0x3B6CFF
     "Up" -> 0xFF8A1E
     "Down" -> 0x3DDC6A
     "Chorus" -> 0xE23B4A
     "Bridge" -> 0xB44DFF
     "Verse" -> 0x2EE0FF
-    "Outro" -> 0x5C6B7A
+    Section.OUTRO -> 0x5C6B7A
     else -> 0x7A4DFF
 }
 
 fun phraseFamily(label: String): String = when {
-    label.startsWith("Intro") -> "Intro"
+    label.startsWith(Section.INTRO) -> Section.INTRO
     label.startsWith("Up") -> "Up"
     label.startsWith("Down") -> "Down"
     label.startsWith("Chorus") -> "Chorus"
     label.startsWith("Bridge") -> "Bridge"
     label.startsWith("Verse") -> "Verse"
-    label.startsWith("Outro") -> "Outro"
+    label.startsWith(Section.OUTRO) -> Section.OUTRO
     else -> label
 }
 
@@ -170,7 +170,7 @@ fun phrasesFromPoints(points: StructurePoints, durationSec: Double, mood: String
     if (durationSec <= 0.0) return emptyList()
     val end = (durationSec * 1000).roundToInt()
     val marks = listOf(
-        0 to "Intro",
+        0 to Section.INTRO,
         (points.buildSec * 1000).roundToInt() to "Up",
         (points.dropSec * 1000).roundToInt() to "Chorus",
         (points.breakSec * 1000).roundToInt() to "Down",
@@ -318,6 +318,11 @@ fun suggestRows(
 fun camelotDistance(left: String, right: String): Int {
     val a = camelotNumber(left) ?: return 6
     val b = camelotNumber(right) ?: return 6
+    return camelotDistance(a, b)
+}
+
+/** 0 = mesmo tom, 1 = vizinho na roda (±1 ou troca A/B), maior = mais longe. A medida única de "combina" (ADR-0011). */
+fun camelotDistance(a: Pair<Int, Char>, b: Pair<Int, Char>): Int {
     val number = min(abs(a.first - b.first), 12 - abs(a.first - b.first))
     val letter = if (a.second == b.second) 0 else 1
     return number + letter

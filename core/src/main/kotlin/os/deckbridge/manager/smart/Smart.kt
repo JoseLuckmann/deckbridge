@@ -119,25 +119,11 @@ object Smart {
 
     // ---- tom e ordem harmônica -------------------------------------------------------------------------------
 
-    private val majorCamelot = mapOf("b" to 1, "f#" to 2, "gb" to 2, "db" to 3, "c#" to 3, "ab" to 4, "g#" to 4, "eb" to 5, "d#" to 5, "bb" to 6, "a#" to 6, "f" to 7, "c" to 8, "g" to 9, "d" to 10, "a" to 11, "e" to 12)
-    private val minorCamelot = mapOf("g#" to 1, "ab" to 1, "d#" to 2, "eb" to 2, "bb" to 3, "a#" to 3, "f" to 4, "c" to 5, "g" to 6, "d" to 7, "a" to 8, "e" to 9, "b" to 10, "f#" to 11, "gb" to 11, "c#" to 12, "db" to 12)
+    /** Número (1–12) e letra (A menor, B maior) do tom, aceitando "8A", "Am", "F#m", "Bb". Null se não entender. Usa a tabela única do núcleo. */
+    fun camelot(key: String): Pair<Int, Char>? = os.deckbridge.logic.camelotNumber(key)
 
-    /** Número (1–12) e letra (A menor, B maior) do tom, aceitando "8A", "Am", "F#m", "Bb". Null se não entender. */
-    fun camelot(key: String): Pair<Int, Char>? {
-        val k = key.trim()
-        Regex("^(1[0-2]|[1-9])([ABab])$").matchEntire(k)?.let { return it.groupValues[1].toInt() to it.groupValues[2].uppercase()[0] }
-        val m = Regex("^([A-Ga-g][#b♯♭]?)(m|min|minor)?$").matchEntire(k) ?: return null
-        val note = m.groupValues[1].lowercase().replace('♯', '#').replace('♭', 'b')
-        val minor = m.groupValues[2].isNotEmpty()
-        val n = (if (minor) minorCamelot[note] else majorCamelot[note]) ?: return null
-        return n to if (minor) 'A' else 'B'
-    }
-
-    /** 0 = igual, 1 = vizinho harmônico (±1 na roda ou troca A/B), maior = pior. */
-    fun harmonicDistance(a: Pair<Int, Char>, b: Pair<Int, Char>): Int {
-        val d = Math.floorMod(a.first - b.first, 12).let { minOf(it, 12 - it) }
-        return d + if (a.second != b.second) 1 else 0
-    }
+    /** 0 = igual, 1 = vizinho harmônico (±1 na roda ou troca A/B), maior = pior. A mesma medida do app de performance. */
+    fun harmonicDistance(a: Pair<Int, Char>, b: Pair<Int, Char>): Int = os.deckbridge.logic.camelotDistance(a, b)
 
     enum class SortMode(val title: String) { BPM_UP("BPM crescente"), BPM_DOWN("BPM decrescente"), TITLE("Título"), ARTIST("Artista"), RATING("Nota"), HARMONIC("Harmônica (tom e BPM)") }
 

@@ -273,11 +273,12 @@ object MixRenderer {
             var oal = (la * lv.aLow + (al - la) * lv.aHigh) * lv.aVol
             var oar = (ra * lv.aLow + (ar - ra) * lv.aHigh) * lv.aVol
             if (lv.echo) {
+                // O mesmo eco do motor (ECHO do Beat FX em dsp.h), na quantidade de [EchoSpec.PREVIEW_AMOUNT].
                 val el = echoL[echoAt]; val er = echoR[echoAt]
-                echoL[echoAt] = oal * 0.5f + el * 0.55f
-                echoR[echoAt] = oar * 0.5f + er * 0.55f
+                echoL[echoAt] = oal + el * EchoSpec.feedback(EchoSpec.PREVIEW_AMOUNT)
+                echoR[echoAt] = oar + er * EchoSpec.feedback(EchoSpec.PREVIEW_AMOUNT)
                 echoAt = (echoAt + 1) % echoL.size
-                if (j >= 0) { oal += el; oar += er }
+                if (j >= 0) { val w = EchoSpec.wet(EchoSpec.PREVIEW_AMOUNT); oal += el * w; oar += er * w }
             }
             val obl = (lb * lv.bLow + (bl - lb) * lv.bHigh) * lv.bVol
             val obr = (rb * lv.bLow + (br - rb) * lv.bHigh) * lv.bVol
@@ -460,4 +461,20 @@ object MixRenderer {
         }
         return out
     }
+}
+
+/**
+ * O eco da prévia do MIX segue as contas do ECHO do motor de performance (`echoFamily` em
+ * `android/app/src/main/cpp/dsp.h`): realimentação 0,16 + 0,5 × quantidade (no máximo 0,82), mistura 0,1 + 0,58 ×
+ * quantidade, atraso de 1 tempo. A prévia é offline e em Kotlin (o motor é C++ e o computador não o carrega); o
+ * `EchoSpecTest` lê o dsp.h e falha se um lado mudar sem o outro. Ver ADR-0011.
+ */
+object EchoSpec {
+    /**
+     * A quantidade (0–1) do eco na prévia: alta, como numa saída com eco (no meio do botão o eco do motor some antes do
+     * compasso seguinte, e a saída com eco é justamente segurar a que sai depois de ela parar).
+     */
+    const val PREVIEW_AMOUNT = 0.8f
+    fun feedback(amount: Float) = minOf(0.82f, 0.16f + 0.5f * amount)
+    fun wet(amount: Float) = 0.1f + 0.58f * amount
 }

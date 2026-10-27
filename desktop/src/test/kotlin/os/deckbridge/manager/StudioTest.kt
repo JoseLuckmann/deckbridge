@@ -37,6 +37,10 @@ import os.deckbridge.manager.volume.Backups
 class StudioTest {
     private val out = File(System.getenv("SHOTS_DIR") ?: "build/prints").apply { mkdirs() }
 
+    /** O AO VIVO está guardado (Features.liveMode); os testes dele o ligam e aqui ele volta a ficar desligado. */
+    @org.junit.After fun liveOff() { os.deckbridge.manager.studio.Features.liveMode = false }
+
+
     /** Biblioteca local com faixas sintéticas (cliques no andamento), nomes inventados, tons escolhidos. */
     private fun library(): ManagerModel {
         val root = File(TestVolumes.tempDir("dbm-set"), "library")
@@ -156,6 +160,8 @@ class StudioTest {
         assertTrue("⑂ vertente B, C" in sheet, sheet)
         assertTrue("comp." in sheet)
         File(out, "desktop-cola-do-set.txt").writeText(sheet)
+        // O AO VIVO está guardado (fora do menu); ligado só aqui para testar o código que fica pronto para voltar.
+        os.deckbridge.manager.studio.Features.liveMode = true
         // Ao vivo: tocar na que está tocando mostra o que pode vir depois (a linha segue ou entra numa vertente).
         tap("Mais")
         click("Ao vivo")
@@ -447,6 +453,7 @@ class StudioTest {
         }
         val desk = assertNotNull(ui.studio).sets
         desk.open(pid)
+        os.deckbridge.manager.studio.Features.liveMode = true
         desk.startLive()
         desk.liveTo(desk.canvas()!!.lanes[0].cards[0])
         waitForIdle()

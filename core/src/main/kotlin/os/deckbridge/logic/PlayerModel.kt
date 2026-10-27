@@ -494,19 +494,22 @@ fun beatFxBeats(fractionLabel: String): Double = when (fractionLabel) {
     else -> 1.0
 }
 
-private val MUSICAL_KEYS = listOf("Abm", "Ebm", "Bbm", "Fm", "Cm", "Gm", "Dm", "Am", "Em", "Bm", "F#m", "C#m", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F", "C", "G", "D", "A")
+// Camelot de cada nota: maior (B) e menor (A), com sustenido e bemol. A tabela única do app inteiro (performance,
+// biblioteca, computador): quem precisa de tom usa [camelotOf] / [camelotNumber] / [camelotDistance] (ADR-0011).
+private val MAJOR_CAMELOT = mapOf("b" to 1, "cb" to 1, "f#" to 2, "gb" to 2, "db" to 3, "c#" to 3, "ab" to 4, "g#" to 4, "eb" to 5, "d#" to 5, "bb" to 6, "a#" to 6, "f" to 7, "e#" to 7, "c" to 8, "b#" to 8, "g" to 9, "d" to 10, "a" to 11, "e" to 12, "fb" to 12)
+private val MINOR_CAMELOT = mapOf("g#" to 1, "ab" to 1, "d#" to 2, "eb" to 2, "bb" to 3, "a#" to 3, "f" to 4, "e#" to 4, "c" to 5, "b#" to 5, "g" to 6, "d" to 7, "a" to 8, "e" to 9, "fb" to 9, "b" to 10, "cb" to 10, "f#" to 11, "gb" to 11, "c#" to 12, "db" to 12)
 
-/** Camelot da notação musical. Uma chave que já é Camelot volta igual. */
+/** Camelot da notação musical ("Am", "F#m", "Bbmin", "C♯", "8a"). Uma chave que já é Camelot volta igual. Null se não entender. */
 fun camelotOf(name: String): String? {
     val trimmed = name.trim()
     if (trimmed.isEmpty()) return null
-    val camelot = Regex("(\\d{1,2})([ABab])").matchEntire(trimmed)
-    if (camelot != null) return camelot.groupValues[1] + camelot.groupValues[2].uppercase()
-    val index = MUSICAL_KEYS.indexOfFirst { it.equals(trimmed, ignoreCase = true) }
-    if (index < 0) return null
-    val number = if (index < 12) index + 1 else if (index == 12) 12 else index - 12
-    val letter = if (index < 12) "A" else "B"
-    return "$number$letter"
+    val camelot = Regex("(1[0-2]|0?[1-9])([ABab])").matchEntire(trimmed)
+    if (camelot != null) return camelot.groupValues[1].toInt().toString() + camelot.groupValues[2].uppercase()
+    val m = Regex("([A-Ga-g][#b♯♭]?)\\s*(m|min|minor|maj|major)?", RegexOption.IGNORE_CASE).matchEntire(trimmed) ?: return null
+    val note = m.groupValues[1].lowercase().replace('♯', '#').replace('♭', 'b')
+    val minor = m.groupValues[2].lowercase().let { it == "m" || it.startsWith("min") }
+    val n = (if (minor) MINOR_CAMELOT[note] else MAJOR_CAMELOT[note]) ?: return null
+    return "$n" + if (minor) "A" else "B"
 }
 
 private val ROOT_PITCH = intArrayOf(
@@ -549,6 +552,9 @@ fun relatedCamelot(name: String): List<String> {
         "${wrap(number + 1)}$other",
     )
 }
+
+/** O tom (Camelot) depois de subir [semi] semitons (tocar mais rápido sem Master Tempo): cada semitom anda 7 casas. */
+fun camelotShift(key: Pair<Int, Char>, semi: Int): Pair<Int, Char> = (Math.floorMod(key.first - 1 + 7 * semi, 12) + 1) to key.second
 
 /** Semitons para o tom do master, entre os seis vizinhos descritos no manual do leitor. */
 fun keySyncShift(playingKey: String, masterKey: String): Int {
