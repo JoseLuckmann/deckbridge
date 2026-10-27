@@ -240,7 +240,6 @@ fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean) {
 }
 
 fun stars(n: Int) = "★".repeat(n.coerceIn(0, 5)) + "☆".repeat(5 - n.coerceIn(0, 5))
-fun formatDuration(sec: Int) = "%d:%02d".format(sec / 60, sec % 60)
 
 sealed interface Dialog {
     data object AddToPlaylist : Dialog

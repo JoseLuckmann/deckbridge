@@ -9,6 +9,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.graphics.asSkiaBitmap
@@ -223,6 +224,31 @@ class StudioTest {
         assertTrue(studio.back())
         waitForIdle()
         assertEquals(null, studio.sets.playlistId, "Esc fecha o SET")
+        prefs.removeNode()
+    }
+
+    @Test fun markingOneByOneWorksOnTheComputer() = runDesktopComposeUiTest(1360, 820) {
+        val m = library()
+        val prefs = java.util.prefs.Preferences.userRoot().node("deckbridge-test/${System.nanoTime()}")
+        val ui = UiState().apply { studioPrefs = prefs; studioSetsHome = TestVolumes.tempDir("dbm-sets") }
+        setContent { App(m, ui) }
+        waitForIdle()
+        val studio = assertNotNull(ui.studio)
+        onAllNodes(hasText("MARCAR ▸")).let { it[it.fetchSemanticsNodes().size - 1] }.performSemanticsAction(SemanticsActions.OnClick)
+        waitForIdle()
+        val queue = assertNotNull(studio.triage, "a triagem abre")
+        val first = queue.first()
+        // Três estrelas: marca e já passa para a próxima.
+        // As estrelas da triagem são as últimas cinco (a tabela da biblioteca fica embaixo e também tem estrelas).
+        onAllNodes(hasText("☆")).let { it[it.fetchSemanticsNodes().size - 3] }.performClick()
+        waitForIdle()
+        assertEquals(3, m.view!!.track(first)!!.rating)
+        assertEquals(1, studio.triageAt)
+        val img = onRoot().captureToImage()
+        File(out, "desktop-marcar.png").writeBytes(org.jetbrains.skia.Image.makeFromBitmap(img.asSkiaBitmap()).encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)!!.bytes)
+        assertTrue(studio.back(), "Esc fecha a triagem")
+        waitForIdle()
+        assertEquals(null, studio.triage)
         prefs.removeNode()
     }
 }

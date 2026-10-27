@@ -136,6 +136,23 @@ class DesktopStudio(
 
     override fun onMain(block: () -> Unit) = javax.swing.SwingUtilities.invokeLater(block)
 
+    override var triage by mutableStateOf<List<Int>?>(null)
+    override var triageAt by mutableStateOf(0)
+
+    /** Marcar uma por vez (as que faltam: sem nota, sem cor), como no celular. */
+    fun startTriage() {
+        val v = model.view ?: return
+        val ids = os.deckbridge.manager.smart.Smart.triageQueue(v)
+        if (ids.isEmpty()) return did(if (v.tracks.isEmpty()) "Importe músicas primeiro" else "Tudo marcado ✓")
+        triage = ids
+        triageAt = 0
+    }
+
+    override fun endTriage() {
+        triage = null
+        preview.stop()
+    }
+
     /** O último texto entregue (para conferir): no computador vai para a área de transferência. */
     var shared: String? = null
         private set
@@ -290,7 +307,7 @@ class DesktopPreview(private val host: DesktopStudio) : StudioPreview {
  */
 @Composable
 fun StudioOverlay(studio: DesktopStudio) {
-    if (studio.sets.playlistId == null) return
+    if (studio.sets.playlistId == null && studio.triage == null) return
     ManagerTheme {
         CompositionLocalProvider(LocalBack provides { onBack ->
             val current by rememberUpdatedState(onBack)
@@ -301,9 +318,13 @@ fun StudioOverlay(studio: DesktopStudio) {
             }
         }) {
             Box(Modifier.fillMaxSize().background(Palette.bg)) {
-                SetScreen(studio)
-                if (studio.sets.mapOpen) SetMapScreen(studio)
+                if (studio.sets.playlistId != null) SetScreen(studio)
+                if (studio.sets.playlistId != null && studio.sets.mapOpen) SetMapScreen(studio)
                 if (studio.sets.mixing != null) MixScreen(studio)
+                if (studio.triage != null) {
+                    BackHandlerFor(studio) { studio.endTriage() }
+                    os.deckbridge.manager.studio.TriageScreen(studio)
+                }
                 Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     studio.job?.let { j -> StudioToast("${j.title}${if (j.text.isNotEmpty()) " · ${j.text}" else ""}…", false) }
                     studio.notice?.let { n ->
@@ -320,6 +341,10 @@ fun StudioOverlay(studio: DesktopStudio) {
         }
     }
 }
+
+/** A triagem não tem "voltar" próprio (no celular é o ✕): no computador, Esc fecha. */
+@Composable
+private fun BackHandlerFor(studio: DesktopStudio, onBack: () -> Unit) = os.deckbridge.manager.studio.BackHandler(onBack)
 
 @Composable
 private fun StudioToast(text: String, error: Boolean, onClose: (() -> Unit)? = null) {

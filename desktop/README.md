@@ -117,4 +117,8 @@ Filtros rápidos com contagem (Sem análise, Sem nota, Fora de playlists, 4 ou 5
 - Verificado offscreen (`StudioTest`, com cliques): SET ▸, pôr pelo ＋, duas vertentes juntando na mesma faixa, MIX com a
   prévia montada do áudio, RITMO/PASSA, Esc, mapa, lista. Capturas `docs/ui/desktop-set-*.png`. Não verificado: som de
   verdade (o teste não tem placa de som) e uso numa janela real.
+- Também no computador (mesmo código): arrastar cartões com o mouse, OUVIR o caminho inteiro de uma vertente, MARCAR
+  intro/drop/outro no MIX, Ao vivo, zoom (− / TUDO / +) e Cola do set (vai para a área de transferência).
+- **MARCAR ▸** (ao lado dos filtros): a triagem do celular — uma faixa por vez, estrelas e cor grandes, playlist alvo e a
+  onda que toca do ponto clicado. Esc fecha.
 

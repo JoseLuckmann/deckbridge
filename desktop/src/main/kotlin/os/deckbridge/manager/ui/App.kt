@@ -351,6 +351,8 @@ private fun Center(model: ManagerModel, ui: UiState, modifier: Modifier) {
         // Filtros rápidos: "o que ainda falta fazer?" com um clique, com a contagem.
         val counts = model.filterCounts()
         Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Marcar uma por vez, com botões grandes e a onda que toca (a mesma tela do celular).
+            Btn("MARCAR ▸", { ui.studio?.startTriage() }, primary = true, enabled = view.tracks.isNotEmpty())
             QuickFilter.values().filter { it == QuickFilter.ALL || it == model.filter || (counts[it] ?: 0) > 0 }.forEach { f ->
                 Btn(if (f == QuickFilter.ALL) "Todas" else "${f.shortTitle()} ${counts[f] ?: 0}", { model.filter = f }, primary = model.filter == f)
             }

@@ -174,6 +174,19 @@ class SetBoardTest {
         assertTrue(layout.lanes.drop(1).all { end.col > it.endCol })
         rule.waitForIdle()
         rule.onRoot().captureRoboImage(File(out, "mobile-44-vertical-set-vertentes.png").path)
+        // Ver tudo: o set inteiro cabe na tela do celular.
+        tap("Ver tudo")
+        rule.onRoot().captureRoboImage(File(out, "mobile-45-vertical-set-ver-tudo.png").path)
+        tap("Aproximar")
+        // Ao vivo no celular: tocar na que toca mostra as vertentes possíveis.
+        tap("Mais")
+        click("Ao vivo")
+        click("Small Hours")
+        assertEquals(pid to 1, a.sets.liveNow)
+        rule.onNodeWithText("AO VIVO").assertExists()
+        rule.onRoot().captureRoboImage(File(out, "mobile-46-vertical-set-ao-vivo.png").path)
+        click("SAIR")
+        assertTrue(!a.sets.live)
         // O ↩ no fim de cada vertente muda onde ela junta.
         tap("Junta C")
         rule.onNodeWithText("Junta em").assertExists()

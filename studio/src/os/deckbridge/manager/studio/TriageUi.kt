@@ -1,6 +1,4 @@
-package os.deckbridge.manager.mobile
-
-import os.deckbridge.manager.studio.*
+package os.deckbridge.manager.studio
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,7 +36,7 @@ import os.deckbridge.manager.pdb.TrackPatch
  * marcar. Com playlist alvo, um botão grande põe a faixa nela. Ouvir (▶) usa o player do aparelho.
  */
 @Composable
-fun TriageScreen(app: ManagerApp) {
+fun TriageScreen(app: StudioHost) {
     val ids = app.triage ?: return
     val m = app.model
     val at = app.triageAt.coerceIn(0, ids.lastIndex.coerceAtLeast(0))
@@ -80,7 +78,7 @@ fun TriageScreen(app: ManagerApp) {
 }
 
 @Composable
-private fun TrackCard(app: ManagerApp, t: TrackItem) {
+private fun TrackCard(app: StudioHost, t: TrackItem) {
     val playing = app.preview.playingId == t.id
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -101,7 +99,7 @@ private fun TrackCard(app: ManagerApp, t: TrackItem) {
 }
 
 @Composable
-private fun Controls(app: ManagerApp, t: TrackItem, at: Int, total: Int, compact: Boolean, advance: () -> Unit) {
+private fun Controls(app: StudioHost, t: TrackItem, at: Int, total: Int, compact: Boolean, advance: () -> Unit) {
     val big = if (compact) 52.dp else 64.dp
     val mid = if (compact) 44.dp else 56.dp
     val m = app.model

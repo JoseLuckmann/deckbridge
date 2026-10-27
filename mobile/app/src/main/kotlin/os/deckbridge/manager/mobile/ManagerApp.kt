@@ -102,8 +102,8 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
     var noticeUndo by mutableStateOf(false)
 
     // Triagem: passar pelas faixas uma a uma marcando (nota, cor, playlist alvo).
-    var triage by mutableStateOf<List<Int>?>(null)
-    var triageAt by mutableStateOf(0)
+    override var triage by mutableStateOf<List<Int>?>(null)
+    override var triageAt by mutableStateOf(0)
 
     // "Arrumar tudo": sugestões por regra.
     var tidy by mutableStateOf<List<Suggestion>?>(null)
@@ -256,7 +256,7 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
         detailId = null
     }
 
-    fun endTriage() {
+    override fun endTriage() {
         triage = null
         preview.stop()
     }

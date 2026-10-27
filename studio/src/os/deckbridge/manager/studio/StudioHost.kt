@@ -55,6 +55,11 @@ interface StudioHost {
     /** Roda [block] fora da thread da tela, com o andamento visível; erros viram aviso. */
     fun background(title: String, block: (StudioJob) -> Unit)
 
+    /** Triagem: as faixas a marcar, uma por vez, e em qual está. */
+    var triage: List<Int>?
+    var triageAt: Int
+    fun endTriage()
+
     /** Entrega um texto para fora do app (celular: compartilhar; computador: área de transferência). */
     fun share(title: String, text: String)
 
