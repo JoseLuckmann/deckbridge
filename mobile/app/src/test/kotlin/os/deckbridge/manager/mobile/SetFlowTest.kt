@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
@@ -19,6 +20,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import os.deckbridge.logic.decodeWav
 import os.deckbridge.manager.mix.MixStyle
+import os.deckbridge.manager.mix.Transition
 import os.deckbridge.manager.mix.SetPlanner
 
 /**
@@ -131,11 +133,15 @@ class SetFlowTest {
         rule.onRoot().captureRoboImage(File(out, "mobile-17-vertical-mix-no-meio.png").path)
 
         // Ajuste pela fileira: CORTE e 8 compassos, sem master tempo. Monta de novo e guarda no plano.
-        rule.onNodeWithText("CORTE").performClick()
+        // Os botões ficam abaixo da dobra com o AJUSTAR aberto: rola até cada um antes de tocar. O aviso de baixo some
+        // sozinho no aparelho (aqui o relógio não anda) e ficaria por cima deles.
+        a.notice = null
+        rule.waitForIdle()
+        rule.onNodeWithText("CORTE").performScrollTo().performClick()
         waitMix(a)
-        rule.onNodeWithText("8").performClick()
+        rule.onNodeWithText("8").performScrollTo().performClick()
         waitMix(a)
-        rule.onNodeWithText("MASTER TEMPO").performClick()
+        rule.onNodeWithText("MASTER TEMPO").performScrollTo().performClick()
         waitMix(a)
         val tr = a.sets.mixing!!
         assertEquals(MixStyle.CUT, tr.style)
@@ -236,5 +242,36 @@ class SetFlowTest {
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
         assertTrue(a.preview.isPlaying, "a prévia pronta devia tocar com o SET aberto")
         a.preview.stop()
+    }
+
+    @Test fun paceAndTheBassSwapPointChangeTheTransition() {
+        val a = app()
+        a.hideGuide()
+        a.sets.open(1)
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        rule.waitForIdle()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("→", substring = true))[0].performClick()
+        rule.waitForIdle()
+        waitMix(a)
+        a.notice = null
+        rule.waitForIdle()
+        // Na tela simples: ritmo e o ponto do grave, sem abrir AJUSTAR.
+        rule.onNodeWithText("LENTA").performScrollTo().performClick()
+        waitMix(a)
+        rule.onNodeWithText("3/4").performScrollTo().performClick()
+        waitMix(a)
+        val tr = a.sets.mixing!!
+        assertEquals(Transition.Pace.SLOW, tr.pace)
+        assertEquals(0.75, tr.swapAt)
+        rule.onRoot().captureRoboImage(File(out, "mobile-40-vertical-mix-ritmo.png").path)
+        // A prévia segue a troca escolhida: perto do ponto do grave, os dois graves estão se cruzando (lenta).
+        val p = a.sets.mixPreview!!
+        val lv = p.levelsAt(p.leadMs + (p.overlapMs * 0.75 - p.barMsA * 4).toInt())
+        assertTrue(lv.bLow in 0.1f..0.9f, "grave entrando aos poucos: ${lv.bLow}")
+        // Guardado no plano e mostrado na linha da troca.
+        assertEquals(tr, a.sets.plan().first { it.fromId == tr.fromId && it.toId == tr.toId })
+        rule.onNodeWithText("✕").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("lenta", substring = true).assertExists()
     }
 }

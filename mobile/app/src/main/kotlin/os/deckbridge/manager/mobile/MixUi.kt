@@ -455,6 +455,21 @@ private fun Controls(app: ManagerApp, a: TrackItem, b: TrackItem, tr: Transition
                 PadButton(label, Modifier.weight(1f), on = tr.style == s) { edit(tr.copy(style = s)) }
             }
         }
+        // O ritmo: rápida, média ou lenta (no corte seco não há o que variar).
+        if (tr.style != MixStyle.CUT) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            RowLabel("RITMO")
+            listOf(Transition.Pace.FAST to "RÁPIDA", Transition.Pace.NORMAL to "MÉDIA", Transition.Pace.SLOW to "LENTA").forEach { (p, label) ->
+                PadButton(label, Modifier.weight(1f), on = tr.pace == p) { edit(tr.copy(pace = p)) }
+            }
+        }
+        // Na troca de grave: quando o grave passa de uma para a outra (no fim é no drop, se a troca vai até ele).
+        if (tr.style == MixStyle.BASS_SWAP) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            RowLabel("GRAVE")
+            val end = if (SetPlanner.barsToDrop(b, gb, tr.inMs) == tr.bars) "NO DROP" else "NO FIM"
+            listOf(0.25 to "1/4", 0.5 to "1/2", 0.75 to "3/4", 1.0 to end).forEach { (at, label) ->
+                PadButton(label, Modifier.weight(1f), on = kotlin.math.abs(tr.swapAt - at) < 0.01) { edit(tr.copy(swapAt = at)) }
+            }
+        }
         PadButton(if (advanced) "MENOS ▴" else "AJUSTAR ▾", Modifier.fillMaxWidth()) { onToggle() }
         if (ga == null || gb == null) Text("Sem grade: analise as faixas para cair na batida.", color = Palette.noteInk, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         if (!advanced) {

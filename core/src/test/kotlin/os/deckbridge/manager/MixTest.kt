@@ -147,6 +147,50 @@ class MixTest {
         assertEquals(396.0, c2 / ((plain.frames - 2 * from) / 44100.0), 4.0)
     }
 
+    @Test fun `ritmo e ponto da troca de grave`() {
+        val lv = os.deckbridge.manager.mix.Levels()
+        val bar = 2000.0
+        val overlap = 32 * bar
+        fun at(bars: Double, pace: Transition.Pace, swap: Double = 0.5, style: MixStyle = MixStyle.BASS_SWAP) =
+            MixRenderer.levels(style, bars * bar, overlap, bar, lv, pace, swap)
+        // Grave no fim (no drop): até o último compasso a que sai ainda tem grave; no fim, troca.
+        at(31.5, Transition.Pace.NORMAL, swap = 1.0)
+        assertEquals(1f, lv.aLow); assertEquals(0f, lv.bLow)
+        at(32.0, Transition.Pace.NORMAL, swap = 1.0)
+        assertEquals(1f, lv.bLow)
+        // Grave em 1/4 cai num início de compasso (o 8º).
+        at(7.9, Transition.Pace.NORMAL, swap = 0.25)
+        assertEquals(0f, lv.bLow)
+        at(8.0, Transition.Pace.NORMAL, swap = 0.25)
+        assertEquals(1f, lv.bLow)
+        // Lenta: o grave passa aos poucos nos 8 compassos antes da troca.
+        at(12.0, Transition.Pace.SLOW)
+        assertEquals(0.5f, lv.bLow, 0.01f)
+        assertEquals(0.5f, lv.aLow, 0.01f)
+        // Rápida: agudos da que entra já cheios num quarto do caminho até a troca; a que sai só some no último oitavo.
+        at(4.0, Transition.Pace.FAST)
+        assertEquals(1f, lv.bHigh)
+        at(26.0, Transition.Pace.FAST)
+        assertEquals(1f, lv.aVol)
+        at(26.0, Transition.Pace.SLOW)
+        assertTrue(lv.aVol < 1f, "lenta: a que sai já está descendo")
+        // Mistura rápida cruza no meio; lenta deixa as duas cheias no meio.
+        at(8.0, Transition.Pace.FAST, style = MixStyle.BLEND)
+        assertEquals(1f, lv.aVol); assertEquals(0f, lv.bVol)
+        at(16.0, Transition.Pace.SLOW, style = MixStyle.BLEND)
+        assertEquals(1f, lv.aVol, 0.001f); assertEquals(1f, lv.bVol, 0.001f)
+        // Guardado no plano.
+        val tr = Transition(1, 2, 1000, 0, 32, MixStyle.BASS_SWAP, pace = Transition.Pace.SLOW, swapAt = 1.0)
+        val file = Files.createTempDirectory("set").resolve("x.properties").toFile()
+        SetPlanner.save(file, listOf(tr))
+        assertEquals(listOf(tr), SetPlanner.load(file))
+        // Até o drop, o automático troca o grave no drop.
+        val a = t(1, 128.0, dur = 360)
+        val gb = grid(128.0, 360_000, 0, listOf(Cue(-1, (32 * 1875.0).toInt(), comment = "Drop")))
+        assertEquals(1.0, SetPlanner.auto(a, grid(128.0, 360_000), t(2, 128.0, dur = 360), gb).first.swapAt)
+        assertEquals(0.5, SetPlanner.auto(a, grid(128.0, 360_000), t(2, 128.0, dur = 360), grid(128.0, 360_000)).first.swapAt)
+    }
+
     @Test fun `niveis do mixer por estilo`() {
         val lv = os.deckbridge.manager.mix.Levels()
         MixRenderer.levels(MixStyle.BASS_SWAP, 1000.0, 8000.0, 2000.0, lv)

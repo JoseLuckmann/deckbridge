@@ -29,8 +29,14 @@ data class Transition(
     val phaseLock: Boolean = true,
     /** O que o DJ achou ao ensaiar: boa, refazer, ou ainda não ouviu. */
     val mark: Mark? = null,
+    /** O ritmo da troca: rápida, média ou lenta (o quanto os agudos, o grave e o volume demoram para passar). */
+    val pace: Pace = Pace.NORMAL,
+    /** Troca de grave: em que ponto da transição o grave passa de uma para a outra (0,5 = no meio; 1 = no fim, no drop). */
+    val swapAt: Double = 0.5,
 ) {
     enum class Mark { GOOD, REDO }
+
+    enum class Pace(val title: String) { FAST("Rápida"), NORMAL("Média"), SLOW("Lenta") }
 }
 
 /** O que se sabe de uma faixa para planejar: grade e cues (do ANLZ) e a duração. */
@@ -133,12 +139,12 @@ object SetPlanner {
     /** Arredonda [bars] para baixo numa frase (múltiplo de 8). */
     private fun phraseBars(bars: Int): Int = (bars / PHRASE_BARS) * PHRASE_BARS
 
-    /** O início de bloco (a cada [BLOCK_BARS] compassos a partir do primeiro) mais perto de [ms], sem passar dele. */
-    fun phraseStart(g: TrackGrid?, ms: Int): Int {
+    /** O início de bloco (a cada [block] compassos a partir do primeiro) mais perto de [ms], sem passar dele. */
+    fun phraseStart(g: TrackGrid?, ms: Int, block: Int = BLOCK_BARS): Int {
         val d = downbeats(g)
         if (d.isEmpty()) return ms
         val k = d.indices.lastOrNull { d[it] <= ms } ?: return d.first()
-        return d[k - k % BLOCK_BARS]
+        return d[k - k % block]
     }
 
     /**
@@ -171,14 +177,21 @@ object SetPlanner {
             outroBars != null -> outroBars.coerceIn(MIN_BARS, MAX_BARS) to Basis.OUTRO
             else -> DEFAULT_BARS to Basis.DEFAULT
         }
-        // Não pode ser maior que a faixa que sai (do primeiro compasso ao fim).
+        // No máximo metade da faixa que sai (a outra metade também recebe a troca de entrada dela): uma faixa curta não
+        // vira só transição.
         val firstA = defaultIn(ga)
-        val room = ((durA - firstA) / barA).toInt()
+        val room = ((durA - firstA) / barA / 2).toInt()
         val bars = if (wanted <= room) wanted else phraseBars(room).coerceAtLeast(PHRASE_BARS).coerceAtMost(wanted)
         val len = (bars * barA).toInt()
         // Saída: o outro; se a troca não cabe depois dele, recua de frase em frase. Sem outro, a última frase que cabe.
-        val out = fitOut(a, ga, outroA ?: phraseStart(ga, durA - len - barA.toInt()), bars)
-        return Transition(a.id, b.id, out, inB, bars) to basis
+        // Sem outro: o último bloco de 16 onde a troca cabe; numa faixa curta (o bloco cairia na primeira metade), a frase
+        // de 8; e, se nem ela, o compasso.
+        val target = durA - len - barA.toInt()
+        val noOutro = listOf(phraseStart(ga, target), phraseStart(ga, target, PHRASE_BARS)).firstOrNull { it >= durA / 2 } ?: snap(ga, target)
+        val out = fitOut(a, ga, outroA ?: noOutro, bars)
+        // Até o drop, o grave troca no drop (o clássico da eletrônica); nos outros casos, no meio.
+        val swapAt = if (basis == Basis.DROP && bars == introBars) 1.0 else 0.5
+        return Transition(a.id, b.id, out, inB, bars, swapAt = swapAt) to basis
     }
 
     /** A saída [out] de [a], recuada de frase em frase (8 compassos) até [bars] compassos caberem antes do fim. */
@@ -270,6 +283,8 @@ object SetPlanner {
             p.setProperty("$n.mt", t.masterTempo.toString())
             p.setProperty("$n.lock", t.phaseLock.toString())
             t.mark?.let { p.setProperty("$n.mark", it.name) }
+            p.setProperty("$n.pace", t.pace.name)
+            p.setProperty("$n.swap", t.swapAt.toString())
         }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".novo")
@@ -288,6 +303,8 @@ object SetPlanner {
                     p.getProperty("$i.bars").toInt(), MixStyle.valueOf(p.getProperty("$i.style")), p.getProperty("$i.mt")?.toBooleanStrictOrNull() ?: true,
                     p.getProperty("$i.lock")?.toBooleanStrictOrNull() ?: true,
                     p.getProperty("$i.mark")?.let { m -> runCatching { Transition.Mark.valueOf(m) }.getOrNull() },
+                    p.getProperty("$i.pace")?.let { m -> runCatching { Transition.Pace.valueOf(m) }.getOrNull() } ?: Transition.Pace.NORMAL,
+                    p.getProperty("$i.swap")?.toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.5,
                 )
             }.getOrNull()
         }

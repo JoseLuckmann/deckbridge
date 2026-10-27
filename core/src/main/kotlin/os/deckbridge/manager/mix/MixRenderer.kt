@@ -64,7 +64,8 @@ class MixPreview(
     /** Instante da prévia em que a faixa que sai passa por [trackMs]. */
     fun fromA(trackMs: Int) = ((trackMs - aStartMs) / speedA).toInt()
     fun fromB(trackMs: Int) = leadMs + ((trackMs - transition.inMs) / speed - phaseMs).toInt()
-    fun levelsAt(ms: Int, into: Levels = Levels()) = MixRenderer.levels(transition.style, (ms - leadMs).toDouble(), overlapMs.toDouble(), barMsA, into)
+    fun levelsAt(ms: Int, into: Levels = Levels()) =
+        MixRenderer.levels(transition.style, (ms - leadMs).toDouble(), overlapMs.toDouble(), barMsA, into, transition.pace, transition.swapAt)
 }
 
 /**
@@ -76,8 +77,15 @@ class MixPreview(
 object MixRenderer {
     const val RATE = 44100
 
-    /** Os níveis dos dois canais a [relMs] do ponto de saída (negativo: antes), conforme o estilo. */
-    fun levels(style: MixStyle, relMs: Double, overlapMs: Double, barMs: Double, out: Levels): Levels {
+    /**
+     * Os níveis dos dois canais a [relMs] do ponto de saída (negativo: antes), conforme o estilo, o ritmo ([pace]) e, na
+     * troca de grave, o ponto em que o grave passa ([swapAt], 0 a 1, num início de compasso). Ritmo médio com o grave no
+     * meio é a troca de sempre.
+     */
+    fun levels(
+        style: MixStyle, relMs: Double, overlapMs: Double, barMs: Double, out: Levels,
+        pace: Transition.Pace = Transition.Pace.NORMAL, swapAt: Double = 0.5,
+    ): Levels {
         val x = if (overlapMs <= 0) (if (relMs >= 0) 1.0 else 0.0) else (relMs / overlapMs).coerceIn(0.0, 1.0)
         out.aLow = 1f; out.aHigh = 1f; out.bLow = 1f; out.bHigh = 1f; out.echo = false
         if (relMs < 0) {
@@ -85,19 +93,37 @@ object MixRenderer {
             if (style == MixStyle.BASS_SWAP) out.bLow = 0f
             return out
         }
+        /** 0 antes de [from], 1 depois de [to], subindo em linha reta entre os dois. */
+        fun ramp(from: Double, to: Double) = if (to <= from) (if (x >= to) 1.0 else 0.0) else ((x - from) / (to - from)).coerceIn(0.0, 1.0)
         when (style) {
             MixStyle.BLEND -> {
-                out.aVol = cos(x * PI / 2).toFloat()
-                out.bVol = sin(x * PI / 2).toFloat()
+                // Média: cruza a troca inteira. Rápida: cruza só num trecho curto no meio. Lenta: as duas juntas no meio
+                // (a que entra sobe na primeira metade, a que sai só desce na segunda).
+                val (bIn, aOut) = when (pace) {
+                    Transition.Pace.NORMAL -> ramp(0.0, 1.0) to ramp(0.0, 1.0)
+                    Transition.Pace.FAST -> ramp(0.375, 0.625) to ramp(0.375, 0.625)
+                    Transition.Pace.SLOW -> ramp(0.0, 0.5) to ramp(0.5, 1.0)
+                }
+                out.aVol = cos(aOut * PI / 2).toFloat()
+                out.bVol = sin(bIn * PI / 2).toFloat()
             }
             MixStyle.BASS_SWAP -> {
-                // Agudos e médios da que entra sobem na primeira metade; no meio, os graves trocam de uma para outra;
-                // a que sai desce no último quarto.
-                val swap = x >= 0.5
-                out.aLow = if (swap) 0f else 1f
-                out.aVol = if (relMs >= overlapMs) 0f else if (x < 0.75) 1f else cos((x - 0.75) / 0.25 * PI / 2).toFloat()
-                out.bLow = if (swap) 1f else 0f
-                out.bHigh = min(1.0, x * 2).toFloat()
+                // O ponto da troca de grave, num início de compasso (pelo menos um compasso depois da saída).
+                val bars = if (overlapMs > 0) overlapMs / barMs else 1.0
+                val s = if (overlapMs <= 0) 0.5 else (Math.round(swapAt.coerceIn(0.0, 1.0) * bars).coerceAtLeast(1) / bars).coerceAtMost(1.0)
+                // Agudos e médios da que entra sobem até a troca (rápida: no primeiro quarto desse trecho).
+                out.bHigh = ramp(0.0, if (pace == Transition.Pace.FAST) s / 4 else s).toFloat()
+                // O grave: seco no início do compasso; lenta, passa aos poucos em até 8 compassos que terminam na troca.
+                val swap = if (pace == Transition.Pace.SLOW) ramp((s - 8 / bars).coerceAtLeast(0.0), s) else if (x >= s) 1.0 else 0.0
+                out.aLow = (1 - swap).toFloat()
+                out.bLow = swap.toFloat()
+                // A que sai desce no fim: rápida no último oitavo, média no último quarto, lenta na última metade.
+                val fade = when (pace) {
+                    Transition.Pace.FAST -> 0.125
+                    Transition.Pace.NORMAL -> 0.25
+                    Transition.Pace.SLOW -> 0.5
+                }
+                out.aVol = if (relMs >= overlapMs) 0f else cos(ramp(1 - fade, 1.0) * PI / 2).toFloat()
                 out.bVol = 1f
             }
             MixStyle.CUT -> {
@@ -107,10 +133,16 @@ object MixRenderer {
                 out.bVol = g
             }
             MixStyle.ECHO -> {
-                // A que sai para um compasso depois do ponto de saída e fica só o eco (uma batida, realimentado).
+                // A que sai para um compasso depois do ponto de saída e fica só o eco (uma batida, realimentado); a que
+                // entra sobe no primeiro quarto (rápida: oitavo; lenta: metade).
                 out.aVol = if (relMs < barMs) 1f else 0f
                 out.echo = true
-                out.bVol = (x * 4).coerceAtMost(1.0).toFloat()
+                val rise = when (pace) {
+                    Transition.Pace.FAST -> 0.125
+                    Transition.Pace.NORMAL -> 0.25
+                    Transition.Pace.SLOW -> 0.5
+                }
+                out.bVol = ramp(0.0, rise).toFloat()
             }
         }
         return out
@@ -158,7 +190,7 @@ object MixRenderer {
             val inB = j >= 0 && jb >= 0 && jb < sb.frames
             val bl = if (inB) sb.left[jb] else 0f
             val br = if (inB) sb.right[jb] else 0f
-            levels(t.style, j * 1000.0 / RATE, overlapMs.toDouble(), barMs, lv)
+            levels(t.style, j * 1000.0 / RATE, overlapMs.toDouble(), barMs, lv, t.pace, t.swapAt)
             val la = lowA.step(al); val ra = lowAR.step(ar)
             val lb = lowB.step(bl); val rb = lowBR.step(br)
             var oal = (la * lv.aLow + (al - la) * lv.aHigh) * lv.aVol

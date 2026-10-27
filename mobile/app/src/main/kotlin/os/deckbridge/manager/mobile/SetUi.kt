@@ -492,7 +492,8 @@ private fun TransitionRow(
             )
             // Quantos compassos a troca dura (o automático varia com a música); o estilo só quando foi mudado.
             Text(
-                "  ${tr.bars} comp." + if (tr.style != MixStyle.BASS_SWAP) " · ${tr.style.title}" else "", color = Palette.muted, fontSize = 12.sp,
+                "  ${tr.bars} comp." + (if (tr.style != MixStyle.BASS_SWAP) " · ${tr.style.title}" else "") +
+                    (if (tr.pace != Transition.Pace.NORMAL) " · ${tr.pace.title.lowercase()}" else ""), color = Palette.muted, fontSize = 12.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
