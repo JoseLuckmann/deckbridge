@@ -68,7 +68,8 @@ class ShowFlowTest {
         rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("Mais"))[0].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
         click("Pronto pro show?")
-        val until = System.currentTimeMillis() + 30_000
+        // A conferência lê as grades do disco fora da tela; numa máquina carregada pode levar mais.
+        val until = System.currentTimeMillis() + 120_000
         while (rule.onAllNodes(hasText("Conferindo…")).fetchSemanticsNodes().isNotEmpty() && System.currentTimeMillis() < until) {
             Thread.sleep(20)
             rule.waitForIdle()
