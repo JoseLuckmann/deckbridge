@@ -294,4 +294,22 @@ class SetTempoAndBranchTest {
         assertEquals(5, poolBack)
         assertEquals(4, pool.size)
     }
+
+    @Test fun aoVivoMostraOQuePodeVirDepois() {
+        val tracks = (1..14).map { t(it, 124.0, "Am") }
+        val v = view(tracks, mapOf(1 to listOf(1, 2, 3, 4, 5), 20 to listOf(10, 11), 21 to listOf(12, 13)))
+        val b = os.deckbridge.manager.mix.SetBranch(20, 1, 2, 4)
+        val c = os.deckbridge.manager.mix.SetBranch(21, 20, 11, 5)
+        val q = os.deckbridge.manager.mix.SetCanvas.layout(v, 1, listOf(b, c), { if (it == 21) 0 else null })
+        fun card(pid: Int, id: Int) = q.lanes.first { it.playlistId == pid }.cards.first { it.trackId == id }
+        fun next(pid: Int, id: Int, played: Set<Int> = emptySet()) = os.deckbridge.manager.mix.SetCanvas.nextFrom(q, card(pid, id), played).map { it.trackId }.toSet()
+        // Da 2: segue a linha (3) ou entra no ramo B (10).
+        assertEquals(setOf(3, 10), next(1, 2))
+        // Do fim de B: volta na 4.
+        assertEquals(setOf(4), next(20, 10).let { next(20, 11) - 12 })
+        assertEquals(setOf(4, 12), next(20, 11), "da 11 também sai o ramo C")
+        // Dentro da pool C: as outras da pool e a volta; as que já tocaram saem.
+        assertEquals(setOf(13), next(21, 12, played = setOf(5)) - 5)
+        assertEquals(setOf(12), next(21, 13, played = setOf(5)))
+    }
 }

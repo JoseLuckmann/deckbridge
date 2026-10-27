@@ -671,6 +671,42 @@ class SetDesk(private val app: StudioHost) {
         }
     }
 
+    // ---- ao vivo: no dia do set, o quadro vira o mapa de onde estou ------------------------------------------------
+
+    /** O quadro está ao vivo: tocar num cartão diz "esta está tocando", em vez de escolher para editar. */
+    var live by mutableStateOf(false)
+        private set
+
+    /** A que está tocando (linha e posição) e as que já tocaram (faixas). */
+    var liveNow by mutableStateOf<Pair<Int, Int>?>(null)
+        private set
+    var livePlayed by mutableStateOf<Set<Int>>(emptySet())
+        private set
+    private var liveTrack: Int? = null
+
+    fun startLive() {
+        stopRehearsal()
+        live = true
+        liveNow = null
+        liveTrack = null
+        livePlayed = emptySet()
+    }
+
+    fun stopLive() {
+        live = false
+        liveNow = null
+        liveTrack = null
+    }
+
+    /** [c] está tocando agora: a de antes vai para as que já tocaram, e a linha dela passa a ser a escolhida. */
+    fun liveTo(c: os.deckbridge.manager.mix.CanvasCard) {
+        liveTrack?.takeIf { it != c.trackId }?.let { livePlayed = livePlayed + it }
+        livePlayed = livePlayed - c.trackId
+        liveTrack = c.trackId
+        liveNow = c.playlistId to c.index
+        focus(c.playlistId)
+    }
+
     /** Os pontos que o DJ marca na onda quando a análise errou: o começo e o drop da que entra, o outro da que sai. */
     enum class Spot(val cue: String) { INTRO("Intro"), DROP("Drop"), OUTRO("Outro") }
 

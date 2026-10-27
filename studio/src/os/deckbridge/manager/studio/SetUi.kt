@@ -77,6 +77,7 @@ fun SetScreen(app: StudioHost) {
     var removeAsk by remember { mutableStateOf<Int?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     fun back() = when {
+        desk.live -> desk.stopLive()
         desk.rehearsal != null -> desk.stopRehearsal()
         board && picked != null -> picked = null
         branch != null && !board -> desk.openMain()
@@ -133,20 +134,30 @@ fun SetScreen(app: StudioHost) {
                 value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { desk.issuePairs() }
             }
             val card = picked?.let { (pid, i) -> layout.lanes.firstOrNull { it.playlistId == pid }?.cards?.getOrNull(i) }
+            val liveView = if (!desk.live) null else {
+                val now = desk.liveNow?.let { (pid, i) -> layout.lanes.firstOrNull { it.playlistId == pid }?.cards?.getOrNull(i) }
+                LiveView(now, now?.let { os.deckbridge.manager.mix.SetCanvas.nextFrom(layout, it, desk.livePlayed).toSet() } ?: emptySet(), desk.livePlayed)
+            }
             SetBoard(
                 app, layout, plans, boardIssues, card, rehearsing = desk.rehearsal?.let { plan.getOrNull(it) },
                 onSelect = { c ->
-                    if (c != null) desk.focus(c.playlistId)
-                    picked = c?.let { it.playlistId to it.index }
+                    if (desk.live) {
+                        if (c != null) desk.liveTo(c)
+                    } else {
+                        if (c != null) desk.focus(c.playlistId)
+                        picked = c?.let { it.playlistId to it.index }
+                    }
                 },
                 onAdd = { lane -> desk.focus(lane.playlistId); picked = null; addTo = lane.letter },
                 onMix = { l, tr -> desk.focus(l.playlistId); desk.openMix(tr) },
                 onJoin = { lane -> desk.focus(lane.playlistId); picked = null; rejoinOpen = true },
                 onMove = { c, pid, i -> if (desk.moveCard(c.playlistId, c.index, pid, i)) picked = null },
+                live = liveView,
                 modifier = Modifier.weight(1f),
             )
             val rehearsal = desk.rehearsal?.let { at -> plan.getOrNull(at)?.let { at to it } }
             when {
+                liveView != null -> LiveBar(app, layout, liveView, onPick = { desk.liveTo(it) }, onStop = { desk.stopLive() })
                 rehearsal != null -> RehearsalBar(app, rehearsal.first, plan, rehearsal.second)
                 card != null -> BoardActions(
                     app, card,
@@ -228,6 +239,7 @@ fun SetScreen(app: StudioHost) {
             if (canSort) add("Ordenar para mixar" to { sortOpen = true })
             add("Transição · " + (app.transitionBars?.let { "$it compassos" } ?: "até o drop") to { app.nextTransitionBars() })
             if (board) {
+                add("Ao vivo" to { picked = null; desk.startLive() })
                 add("Master · " + (desk.masterFixed?.let { "%.0f".format(it) } ?: "automático") to { masterOpen = true })
                 add("Andamento do set" to { desk.mapOpen = true })
             }

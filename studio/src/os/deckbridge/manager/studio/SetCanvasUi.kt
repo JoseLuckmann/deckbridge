@@ -46,6 +46,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.alpha
 import os.deckbridge.manager.mix.CanvasCard
 import os.deckbridge.manager.mix.CanvasLane
 import os.deckbridge.manager.mix.CanvasLink
@@ -101,10 +102,10 @@ private fun laneColor(row: Int): Color =
 fun SetBoard(
     app: StudioHost, layout: SetCanvasLayout, plans: Map<Int, List<Transition>>, issues: Set<Pair<Int, Int>>, selected: CanvasCard?,
     rehearsing: Transition?, onSelect: (CanvasCard?) -> Unit, onAdd: (CanvasLane) -> Unit, onMix: (CanvasLink, Transition) -> Unit,
-    onJoin: (CanvasLane) -> Unit, onMove: (CanvasCard, Int, Int) -> Unit = { _, _, _ -> }, modifier: Modifier = Modifier,
+    onJoin: (CanvasLane) -> Unit, onMove: (CanvasCard, Int, Int) -> Unit = { _, _, _ -> }, live: LiveView? = null, modifier: Modifier = Modifier,
 ) {
     androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxSize().background(Palette.bg)) {
-        Board(app, Geo(vertical = maxHeight > maxWidth), layout, plans, issues, selected, rehearsing, onSelect, onAdd, onMix, onJoin, onMove)
+        Board(app, Geo(vertical = maxHeight > maxWidth), layout, plans, issues, selected, rehearsing, onSelect, onAdd, onMix, onJoin, onMove, live)
     }
 }
 
@@ -112,7 +113,7 @@ fun SetBoard(
 private fun Board(
     app: StudioHost, g: Geo, layout: SetCanvasLayout, plans: Map<Int, List<Transition>>, issues: Set<Pair<Int, Int>>, selected: CanvasCard?,
     rehearsing: Transition?, onSelect: (CanvasCard?) -> Unit, onAdd: (CanvasLane) -> Unit, onMix: (CanvasLink, Transition) -> Unit,
-    onJoin: (CanvasLane) -> Unit, onMove: (CanvasCard, Int, Int) -> Unit,
+    onJoin: (CanvasLane) -> Unit, onMove: (CanvasCard, Int, Int) -> Unit, live: LiveView?,
 ) {
     val v = app.model.view ?: return
     // Arrastar um cartão: onde ele está agora (o quanto andou) e onde cairia se soltasse.
@@ -213,7 +214,14 @@ private fun Board(
                     }
                     BoardCard(
                         g, t, c, selected = selected == c, playing = app.preview.playingId == c.trackId, color = laneColor(lane.row),
-                        shift = if (dragged == c) moved else Offset.Zero, gesture = drag,
+                        shift = if (dragged == c) moved else Offset.Zero, gesture = if (live == null) drag else Modifier,
+                        live = live?.let { l -> when {
+                            l.now == c -> LiveMark.NOW
+                            c in l.next -> LiveMark.NEXT
+                            c.trackId in l.played -> LiveMark.PLAYED
+                            l.now != null -> LiveMark.OTHER
+                            else -> null
+                        } },
                     ) { onSelect(if (selected == c) null else c) }
                 }
                 PlusCard(g, lane, laneColor(lane.row)) { onAdd(lane) }
@@ -267,13 +275,29 @@ private fun Board(
 
 @Composable
 private fun BoardCard(
-    g: Geo, t: TrackItem, c: CanvasCard, selected: Boolean, playing: Boolean, color: Color, shift: Offset = Offset.Zero, gesture: Modifier = Modifier, onClick: () -> Unit,
+    g: Geo, t: TrackItem, c: CanvasCard, selected: Boolean, playing: Boolean, color: Color, shift: Offset = Offset.Zero, gesture: Modifier = Modifier,
+    live: LiveMark? = null, onClick: () -> Unit,
 ) {
+    // Ao vivo: a que toca em azul, as que podem vir depois com contorno verde, o resto apagado.
+    val fill = when {
+        live == LiveMark.NOW -> Palette.blueActiveFill
+        playing -> Palette.selectedRow
+        c.pool -> Palette.bg
+        else -> Palette.surface
+    }
+    val edge = when {
+        live == LiveMark.NOW || selected -> Palette.blue
+        live == LiveMark.NEXT -> Palette.keyInk
+        c.pool -> Palette.orange.copy(alpha = 0.5f)
+        else -> Palette.line
+    }
+    val thick = selected || live == LiveMark.NOW || live == LiveMark.NEXT
     Column(
         Modifier.offset(g.x(c), g.y(c)).offset { androidx.compose.ui.unit.IntOffset(shift.x.toInt(), shift.y.toInt()) }
-            .then(if (shift != Offset.Zero) Modifier.zIndex(1f) else Modifier).then(gesture).size(g.cardW, g.cardH).clip(RbShape)
-            .background(if (playing) Palette.selectedRow else if (c.pool) Palette.bg else Palette.surface)
-            .border(BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Palette.blue else if (c.pool) Palette.orange.copy(alpha = 0.5f) else Palette.line), RbShape)
+            .then(if (shift != Offset.Zero) Modifier.zIndex(1f) else Modifier).then(gesture).size(g.cardW, g.cardH)
+            .alpha(when (live) { LiveMark.PLAYED -> 0.3f; LiveMark.OTHER -> 0.45f; else -> 1f }).clip(RbShape)
+            .background(fill)
+            .border(BorderStroke(if (thick) 2.dp else 1.dp, edge), RbShape)
             .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -314,6 +338,38 @@ private fun LinkPill(tr: Transition, issue: Boolean, on: Boolean, playing: Boole
             else -> ""
         }
         Text(mark + tr.bars, color = if (tr.mark == Transition.Mark.GOOD && !issue) Palette.keyInk else ink, fontSize = 11.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** O quadro ao vivo: a que toca, as que podem vir depois e as que já tocaram. */
+class LiveView(val now: CanvasCard?, val next: Set<CanvasCard>, val played: Set<Int>)
+
+enum class LiveMark { NOW, NEXT, PLAYED, OTHER }
+
+/** Ao vivo: a que toca e, em botões, as que podem vir depois (tocar uma diz que ela entrou). */
+@Composable
+fun LiveBar(app: StudioHost, layout: SetCanvasLayout, live: LiveView, onPick: (CanvasCard) -> Unit, onStop: () -> Unit) {
+    val v = app.model.view ?: return
+    fun name(c: CanvasCard) = shortTitle(v.track(c.trackId)?.title.orEmpty())
+    val letters = layout.lanes.associate { it.playlistId to it.letter }
+    Column(Modifier.fillMaxWidth().background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.blueActiveLine)).padding(horizontal = 10.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("AO VIVO", color = Palette.danger, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+            Text(
+                "  " + (live.now?.let { name(it) } ?: "toque na que está tocando"), color = Palette.text, fontSize = 14.sp, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onStop) { Text("SAIR", fontSize = 12.sp) }
+        }
+        if (live.now != null) Row(Modifier.fillMaxWidth().padding(top = 6.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (live.next.isEmpty()) Text("fim do caminho", color = Palette.muted, fontSize = 13.sp)
+            live.next.sortedWith(compareBy({ it.row }, { it.col })).forEach { c ->
+                OutlinedButton(onClick = { onPick(c) }, modifier = Modifier.height(40.dp)) {
+                    Text("${letters[c.playlistId] ?: ' '} ", color = laneColor(c.row), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(name(c), fontSize = 13.sp, maxLines = 1)
+                }
+            }
+        }
     }
 }
 

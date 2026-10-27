@@ -113,4 +113,14 @@ object SetCanvas {
         }
         return SetCanvasLayout(lanes, links)
     }
+
+    /**
+     * Ao vivo: o que pode vir depois de [now] — a seguinte na linha, o começo de cada ramo que sai dela, a faixa onde o ramo
+     * volta (se [now] é a última dele) e, numa pool, as outras da pool que ainda não tocaram. Fora as que já tocaram ([played]).
+     */
+    fun nextFrom(layout: SetCanvasLayout, now: CanvasCard, played: Set<Int> = emptySet()): List<CanvasCard> {
+        val out = layout.links.filter { it.from == now }.map { it.to }.toMutableList()
+        if (now.pool) layout.lanes.firstOrNull { it.playlistId == now.playlistId }?.cards?.filter { it.pool && it != now }?.let { out += it }
+        return out.distinct().filter { it.trackId !in played && it != now }
+    }
 }

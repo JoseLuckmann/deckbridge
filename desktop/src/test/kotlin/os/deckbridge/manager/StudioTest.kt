@@ -141,6 +141,24 @@ class StudioTest {
         m.undo()
         waitForIdle()
         assertEquals(moving.id, m.view!!.entries[bLane.playlistId].orEmpty().first(), "um desfazer volta")
+        // Ao vivo: tocar na que está tocando mostra o que pode vir depois (a linha segue ou entra numa vertente).
+        tap("Mais")
+        click("Ao vivo")
+        assertTrue(studio.sets.live)
+        click("Small Hours")
+        val nowLayout = studio.sets.canvas()!!
+        val small = nowLayout.lanes[0].cards.first { it.trackId == id(m, "Small Hours") }
+        val options = os.deckbridge.manager.mix.SetCanvas.nextFrom(nowLayout, small).map { it.trackId }.toSet()
+        assertEquals(setOf(id(m, "Glass Harbour"), nowLayout.lanes[1].cards.first().trackId, nowLayout.lanes[2].cards.first().trackId), options)
+        shot("desktop-set-ao-vivo")
+        // Escolher a vertente C pela barra: ela passa a tocar, a Small Hours vai para as tocadas.
+        val cFirst = m.view!!.track(nowLayout.lanes[2].cards.first().trackId)!!
+        click(cFirst.title)
+        assertEquals(nowLayout.lanes[2].playlistId to 0, studio.sets.liveNow)
+        assertTrue(id(m, "Small Hours") in studio.sets.livePlayed)
+        assertTrue(studio.back(), "Esc sai do ao vivo")
+        waitForIdle()
+        assertTrue(!studio.sets.live)
         // A troca abre o MIX (a mesma tela do celular); Esc volta.
         val first = studio.sets.lanePlan(pid).first()
         studio.sets.focus(pid)
