@@ -1137,3 +1137,4 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Kivetz et al. 2006 (gradiente de objetivo): "faltam N" nas três últimas da triagem.
 - Kahneman et al. 1993 (pico-fim): triagem termina num resumo com PRONTO; ensaio termina num resumo com "REFAZER A PRIMEIRA".
 - Testes ajustados ao fim novo (triagem e ensaio) e vídeos (laço até o resumo).
+- Celular completo 68 (3 pulados, 0 falhas), computador 8 (2 pulados). Versão 0.14.0.
