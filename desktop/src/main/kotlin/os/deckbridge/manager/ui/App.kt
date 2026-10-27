@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -219,12 +220,17 @@ fun localLibraryRoot(): File = File(System.getProperty("user.home"), ".deckbridg
 @Composable
 private fun Welcome(model: ManagerModel, ui: UiState) {
     val found = remember { VolumeDetector.find() }
+    // A porta de entrada: o ícone e o nome do app, uma frase do que ele faz e onde abrir a biblioteca.
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(Modifier.width(360.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Label("BIBLIOTECA", Pal.Blue, 13.sp, bold = true)
-            Btn("Neste computador", { os.deckbridge.manager.transfer.LocalLibrary.ensure(localLibraryRoot()); model.open(localLibraryRoot()) }, Modifier.fillMaxWidth(), primary = true)
-            found.forEach { f -> Btn("Pendrive · ${f.name.ifEmpty { f.path }}", { model.open(f) }, Modifier.fillMaxWidth()) }
-            Btn("Outra pasta…", { ui.chooser()?.let { model.open(it) } }, Modifier.fillMaxWidth())
+        Column(Modifier.width(400.dp), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            androidx.compose.foundation.Image(os.deckbridge.manager.AppIcon, contentDescription = null, modifier = Modifier.size(88.dp))
+            Label("DeckBridge Biblioteca", Pal.Ink, 22.sp, bold = true)
+            Label("Marque as músicas, monte sets com vertentes e leve tudo para o pendrive do rekordbox.", Pal.Muted, 13.sp, maxLines = 2)
+            Spacer(Modifier.height(18.dp))
+            Label("ABRIR A BIBLIOTECA", Pal.Blue, 11.sp, bold = true, modifier = Modifier.fillMaxWidth())
+            Btn("Neste computador", { os.deckbridge.manager.transfer.LocalLibrary.ensure(localLibraryRoot()); model.open(localLibraryRoot()) }, Modifier.fillMaxWidth().height(44.dp), primary = true)
+            found.forEach { f -> Btn("Pendrive · ${f.name.ifEmpty { f.path }}", { model.open(f) }, Modifier.fillMaxWidth().height(44.dp)) }
+            Btn("Outra pasta…", { ui.chooser()?.let { model.open(it) } }, Modifier.fillMaxWidth().height(44.dp))
         }
     }
 }
