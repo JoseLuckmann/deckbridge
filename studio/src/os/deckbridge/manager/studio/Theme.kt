@@ -99,3 +99,21 @@ fun ManagerTheme(content: @Composable () -> Unit) {
         content = content,
     )
 }
+
+/**
+ * A curva "emphasized" do Material 3: sai rápido e assenta devagar (cubic-bezier 0,2 0 0 1), para o olho acompanhar o
+ * que se moveu e onde parou.
+ */
+val Emphasized = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
+/**
+ * Texto grande dentro de um instrumento de geometria fixa (o quadro, o MIX): cresce até [max] e para. Listas, menus e
+ * diálogos crescem inteiros (o Android 14 vai até 200%); aqui o espaço é medido em compassos e cartões, e texto maior
+ * que isso só corta.
+ */
+@Composable
+fun CappedText(max: Float = 1.3f, content: @Composable () -> Unit) {
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    if (d.fontScale <= max) return content()
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, max), content = content)
+}

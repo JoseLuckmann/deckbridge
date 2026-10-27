@@ -115,7 +115,7 @@ fun SetBoard(
         var zoom by remember { mutableStateOf(1f) }
         val fit = minOf(maxWidth / g.width(layout), maxHeight / g.height(layout)).coerceIn(ZOOMS.first(), 1f)
         val base = androidx.compose.ui.platform.LocalDensity.current
-        CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(base.density * zoom, base.fontScale)) {
+        CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(base.density * zoom, minOf(base.fontScale, 1.3f))) {
             Board(app, g, layout, plans, issues, selected, rehearsing, onSelect, onAdd, onMix, onJoin, onMove, live)
         }
         Row(Modifier.align(Alignment.BottomEnd).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -177,7 +177,7 @@ private fun Board(
         if (shape == lastShape) return@LaunchedEffect
         lastShape = shape
         wires.snapTo(0f)
-        wires.animateTo(1f, androidx.compose.animation.core.tween(MOVE_MS, delayMillis = MOVE_MS))
+        if (app.reduceMotion) wires.snapTo(1f) else wires.animateTo(1f, androidx.compose.animation.core.tween(MOVE_MS / 2, delayMillis = MOVE_MS))
     }
     Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())) {
         Box(Modifier.size(width, height).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onSelect(null) }) {
@@ -196,7 +196,7 @@ private fun Board(
                 fun plusIn(lane: CanvasLane) = Offset(g.plusX(lane).toPx(), g.plusY(lane).toPx()).let { if (g.vertical) Offset(it.x + pl / 2, it.y) else Offset(it.x, it.y + pl / 2) }
                 fun plusOut(lane: CanvasLane) = Offset(g.plusX(lane).toPx(), g.plusY(lane).toPx()).let { if (g.vertical) Offset(it.x + pl / 2, it.y + pl) else Offset(it.x + pl, it.y + pl / 2) }
                 /** [leaving]: sai pelo lado (vai para a outra linha antes de seguir); senão segue a linha antes de virar. */
-                fun curve(a: Offset, b: Offset, leaving: Boolean, color: Color, dashed: Boolean) {
+                fun curve(a: Offset, b: Offset, leaving: Boolean, color: Color, dashed: Boolean, dotted: Boolean = false) {
                     val p = Path().apply {
                         moveTo(a.x, a.y)
                         if (a.x == b.x || a.y == b.y) lineTo(b.x, b.y) else {
@@ -205,7 +205,11 @@ private fun Board(
                             cubicTo(c.x, c.y, c.x, c.y, b.x, b.y)
                         }
                     }
-                    drawPath(p, color, style = Stroke(2.dp.toPx(), pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(8f, 8f)) else null))
+                    drawPath(p, color, style = Stroke(2.dp.toPx(), pathEffect = when {
+                        dashed -> PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
+                        dotted -> PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 4.dp.toPx()))
+                        else -> null
+                    }))
                 }
                 for (l in layout.links) {
                     val lane = laneOf[l.playlistId] ?: continue
@@ -216,13 +220,16 @@ private fun Board(
                         v.track(l.from.trackId)?.let { a -> v.track(l.to.trackId)?.let { b -> SetPlanner.fit(a, b).good } } == true -> good
                         else -> warn
                     }.copy(alpha = 0.8f)
+                    // Troca com aviso: além do laranja, fio pontilhado (cor não pode ser o único sinal: WCAG 1.4.1; ~8% dos
+                    // homens não distinguem bem verde de vermelho/laranja, Birch 2012).
+                    val dotted = !l.pool && color != loose.copy(alpha = 0.8f) && color != good.copy(alpha = 0.8f)
                     val start = if (l.from.row == lane.row) out(l.from) else side(l.from)
                     if (l.to.row == lane.row) {
-                        curve(start, into(l.to), leaving = l.from.row != lane.row, color, l.pool)
+                        curve(start, into(l.to), leaving = l.from.row != lane.row, color, l.pool, dotted)
                     } else {
                         // Chega na volta: passa pelo ＋ do fim do ramo e entra pelo lado da faixa onde volta.
-                        if (l.from.row != lane.row) curve(start, plusIn(lane), leaving = true, color, l.pool)
-                        curve(plusOut(lane), side(l.to), leaving = false, color, l.pool)
+                        if (l.from.row != lane.row) curve(start, plusIn(lane), leaving = true, color, l.pool, dotted)
+                        curve(plusOut(lane), side(l.to), leaving = false, color, l.pool, dotted)
                     }
                 }
             }
@@ -262,6 +269,7 @@ private fun Board(
                     BoardCard(
                         g, t, c, selected = selected == c, playing = app.preview.playingId == c.trackId, color = laneColor(lane.row),
                         shift = if (dragged == c) moved else Offset.Zero, gesture = if (live == null) drag else Modifier,
+                        motionMs = if (app.reduceMotion) 0 else MOVE_MS,
                         live = live?.let { l -> when {
                             l.now == c -> LiveMark.NOW
                             c in l.next -> LiveMark.NEXT
@@ -306,7 +314,7 @@ private fun Board(
                     else -> if (g.vertical) g.plusX(lane) + PLUS + 6.dp to g.plusY(lane) + PLUS / 2 - 11.dp
                     else g.plusX(lane) + PLUS + 6.dp to g.plusY(lane) - 22.dp
                 }
-                LinkPill(tr, issue, on = rehearsing == tr, playing = app.preview.playingKey == desk.keyFor(tr), modifier = Modifier.offset(x, y).graphicsLayer { alpha = wires.value }) { onMix(l, tr) }
+                LinkPill(tr, issue, on = rehearsing == tr, playing = app.preview.playingKey == desk.keyFor(tr), adjusted = (tr.fromId to tr.toId) in desk.adjustedPairs(l.playlistId), modifier = Modifier.offset(x, y).graphicsLayer { alpha = wires.value }) { onMix(l, tr) }
             }
             // Onde o cartão arrastado cai: uma barra azul antes da posição.
             dragged?.let { c -> target(c) }?.let { (lane, i) ->
@@ -323,7 +331,7 @@ private fun Board(
 @Composable
 private fun BoardCard(
     g: Geo, t: TrackItem, c: CanvasCard, selected: Boolean, playing: Boolean, color: Color, shift: Offset = Offset.Zero, gesture: Modifier = Modifier,
-    live: LiveMark? = null, onClick: () -> Unit,
+    live: LiveMark? = null, motionMs: Int = MOVE_MS, onClick: () -> Unit,
 ) {
     // Ao vivo: a que toca em azul, as que podem vir depois com contorno verde, o resto apagado.
     val fill = when {
@@ -340,8 +348,9 @@ private fun BoardCard(
     }
     val thick = selected || live == LiveMark.NOW || live == LiveMark.NEXT
     // Desliza até o lugar novo quando o quadro muda (ver [MOVE_MS]).
-    val x by androidx.compose.animation.core.animateDpAsState(g.x(c), androidx.compose.animation.core.tween(MOVE_MS), label = "x")
-    val y by androidx.compose.animation.core.animateDpAsState(g.y(c), androidx.compose.animation.core.tween(MOVE_MS), label = "y")
+    val spec = androidx.compose.animation.core.tween<androidx.compose.ui.unit.Dp>(motionMs, easing = Emphasized)
+    val x by androidx.compose.animation.core.animateDpAsState(g.x(c), spec, label = "x")
+    val y by androidx.compose.animation.core.animateDpAsState(g.y(c), spec, label = "y")
     Column(
         Modifier.offset(x, y).offset { androidx.compose.ui.unit.IntOffset(shift.x.toInt(), shift.y.toInt()) }
             .then(if (shift != Offset.Zero) Modifier.zIndex(1f) else Modifier).then(gesture).size(g.cardW, g.cardH)
@@ -364,7 +373,7 @@ private fun BoardCard(
 }
 
 /** Quanto dura o deslize dos cartões (e a espera antes dos fios aparecerem). */
-private const val MOVE_MS = 220
+private const val MOVE_MS = 300
 
 @Composable
 private fun PlusCard(g: Geo, lane: CanvasLane, color: Color, onClick: () -> Unit) {
@@ -376,18 +385,20 @@ private fun PlusCard(g: Geo, lane: CanvasLane, color: Color, onClick: () -> Unit
     ) { Text("＋", color = color, fontSize = 18.sp) }
 }
 @Composable
-private fun LinkPill(tr: Transition, issue: Boolean, on: Boolean, playing: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val ink = if (issue) Palette.orange else Palette.mutedBright
+private fun LinkPill(tr: Transition, issue: Boolean, on: Boolean, playing: Boolean, adjusted: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    // Ajustada pelo DJ: texto claro e "•" na frente; automática: cinza. Não é só cor (ver Palette.dimOn e o fio).
+    val ink = if (issue) Palette.orange else if (adjusted) Palette.text else Palette.mutedBright
     Box(
         modifier.size(36.dp, 22.dp).clip(RbShape).background(if (on || playing) Palette.blueActiveFill else Palette.surfaceHigh)
             .border(BorderStroke(1.dp, if (on || playing) Palette.blue else ink.copy(alpha = 0.5f)), RbShape).clickable(onClick = onClick)
-            .semantics { contentDescription = "Troca ${tr.fromId}→${tr.toId}" },
+            .semantics { contentDescription = "Troca ${tr.fromId}→${tr.toId}" + if (adjusted) " (ajustada)" else " (automática)" },
         contentAlignment = Alignment.Center,
     ) {
         val mark = when {
             issue -> "⚠"
             tr.mark == Transition.Mark.GOOD -> "✓"
             tr.mark == Transition.Mark.REDO -> "✗"
+            adjusted -> "•"
             else -> ""
         }
         Text(mark + tr.bars, color = if (tr.mark == Transition.Mark.GOOD && !issue) Palette.keyInk else ink, fontSize = 11.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
@@ -463,7 +474,9 @@ fun AddToLineDialog(app: StudioHost, letter: Char, onClose: () -> Unit) {
     var searching by remember { mutableStateOf(false) }
     val v = app.model.view ?: return
     val desk = app.sets
-    val choices = remember(query, v, desk.playlistId) { desk.addChoices(query) }
+    // O rumo da sugestão: o DJ escolhe (poucos controles, um toque; ver Steer).
+    var steer by remember { mutableStateOf(os.deckbridge.manager.smart.Steer.MATCH) }
+    val choices = remember(query, v, desk.playlistId, steer, desk.hidden) { desk.addChoices(query, steer) }
     // Por que cada uma está aqui (tom, andamento, nota e se já entrou em set): decidir sem ter de lembrar de cada faixa.
     val whys = remember(choices) { choices.associate { it.id to desk.why(it) } }
     val last = (desk.entries().lastOrNull() ?: desk.branch?.fromTrackId)?.let { v.track(it) }
@@ -478,17 +491,24 @@ fun AddToLineDialog(app: StudioHost, letter: Char, onClose: () -> Unit) {
                     Text(if (last != null) "COMBINAM COM A ÚLTIMA" else "DA BIBLIOTECA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.weight(1f))
                     TextButton(onClick = { searching = true }) { Text("BUSCAR", fontSize = 12.sp) }
                 }
+                if (!searching && last != null && desk.poolStart() == null) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        os.deckbridge.manager.smart.Steer.values().forEach { st -> FilterChip(selected = steer == st, onClick = { steer = st }, label = { Text(st.title, fontSize = 11.sp) }) }
+                    }
+                }
                 if (choices.isEmpty()) Text("Nada para pôr", color = Palette.muted, fontSize = 13.sp)
                 Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
                     choices.forEach { t ->
                         val fit = last?.let { SetPlanner.fit(it, t) }
                         Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (fit != null) Box(Modifier.size(8.dp).clip(RbShape).background(if (fit.good) Palette.keyInk else Palette.orange))
+                            if (fit != null) FitMark(fit.good)
                             Column(Modifier.weight(1f).padding(start = 8.dp)) {
                                 Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text("${keyLabel(t.key)} · ${bpmLabel(t.bpm)}", color = Palette.mutedBright, fontSize = 12.sp, fontFamily = Mono)
                                 Text(whys[t.id].orEmpty(), color = Palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
+                            // Não sugerir esta: retorno pontual sobre a sugestão (Amershi et al. 2019). A busca ainda acha.
+                            if (!searching) TextButton(onClick = { desk.hideSuggestion(t) }, modifier = Modifier.semantics { contentDescription = "Não sugerir ${t.title}" }) { Text("✕", color = Palette.muted, fontSize = 12.sp) }
                             TextButton(onClick = { app.preview.toggle(t) }) { Text(if (app.preview.playingId == t.id) "■" else "▶", fontSize = 14.sp) }
                             OutlinedButton(onClick = { desk.append(t); query = "" }, modifier = Modifier.height(36.dp).width(48.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("＋", fontSize = 16.sp) }
                         }

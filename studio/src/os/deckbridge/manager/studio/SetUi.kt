@@ -248,6 +248,8 @@ fun SetScreen(app: StudioHost) {
                 add("Master · " + (desk.masterFixed?.let { "%.0f".format(it) } ?: "automático") to { masterOpen = true })
                 add("Andamento do set" to { desk.mapOpen = true })
             }
+            // Controle geral das sugestões (Amershi et al. 2019): volta a sugerir as que o DJ escondeu.
+            if (desk.hidden.isNotEmpty()) add("Sugestões escondidas (${desk.hidden.size}) · mostrar de novo" to { desk.showAllSuggestions() })
             add((if (board) "Ver em lista" else "Ver em quadro") to { picked = null; app.setListView(board) })
         }
         ChoiceDialog("Set", options.map { it.first }, onPick = { n -> menuOpen = false; options[n].second() }, onClose = { menuOpen = false })
@@ -624,7 +626,7 @@ private fun TransitionRow(
                 Transition.Mark.REDO -> Text("✗ ", color = Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 null -> {}
             }
-            Text("${keyLabel(a.key)}→${keyLabel(b.key)}", color = if (fit.keyOk) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
+            Text((if (fit.keyOk) "✓ " else "! ") + "${keyLabel(a.key)}→${keyLabel(b.key)}", color = if (fit.keyOk) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
             Text(
                 "  " + pctLabel(stretch), fontSize = 12.sp, fontFamily = Mono,
                 color = if (kotlin.math.abs(stretch) <= SetTempo.COMFORT_PCT) Palette.mutedBright else if (kotlin.math.abs(stretch) <= SetTempo.MAX_PCT) Palette.orange else Palette.danger,
@@ -650,7 +652,7 @@ private fun SuggestionRow(t: TrackItem, fit: Fit, playing: Boolean, onPlay: () -
     Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${keyLabel(t.key)} · ${fitText(fit)}", color = if (fit.good) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono)
+            Text((if (fit.good) "✓ " else "! ") + "${keyLabel(t.key)} · ${fitText(fit)}", color = if (fit.good) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono)
         }
         PlayButton(on = playing, onClick = onPlay)
         OutlinedButton(onClick = onAdd, modifier = Modifier.padding(start = 6.dp).height(38.dp)) { Text("＋", fontSize = 16.sp) }
@@ -744,7 +746,7 @@ private fun PoolRow(
                     played -> Text("tocada", color = Palette.dimOn(previewing), fontSize = 12.sp)
                     else -> {
                         if (fit != null) {
-                            Box(Modifier.size(8.dp).clip(RbShape).background(if (fit.good) Palette.keyInk else Palette.orange))
+                            FitMark(fit.good)
                             Text(" ${fitText(fit)}", color = Palette.mutedBright, fontSize = 12.sp, fontFamily = Mono)
                         }
                         if (links == 0) Text("  isolada", color = Palette.orange, fontSize = 12.sp)

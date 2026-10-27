@@ -79,7 +79,7 @@ class StudioTest {
             waitForIdle()
         }
         fun tap(description: String) {
-            onAllNodes(hasContentDescription(description))[0].performSemanticsAction(SemanticsActions.OnClick)
+            onAllNodes(hasContentDescription(description, substring = true))[0].performSemanticsAction(SemanticsActions.OnClick)
             waitForIdle()
         }
         fun shot(name: String) {

@@ -122,7 +122,9 @@ private fun Marking(app: ManagerApp, t: TrackItem) {
             Palette.trackColors.forEachIndexed { n, c ->
                 val on = t.colorId == n + 1
                 Box(
-                    Modifier.weight(1f).height(40.dp).clip(RbShape).background(c).clickable { m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(colorId = if (on) 0 else n + 1)), "Cor em \"${t.title}\"") },
+                    // A escolhida em cor cheia; as outras mais apagadas (tela menos colorida e a escolha salta; ver
+                    // docs/design-referencias.md, Reinecke et al. 2013).
+                    Modifier.weight(1f).height(40.dp).clip(RbShape).background(if (on) c else c.copy(alpha = 0.55f)).clickable { m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(colorId = if (on) 0 else n + 1)), "Cor em \"${t.title}\"") },
                     contentAlignment = Alignment.Center,
                 ) { if (on) Text("✓", color = Palette.bg, fontWeight = FontWeight.Bold) }
             }

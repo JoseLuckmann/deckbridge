@@ -101,7 +101,21 @@ class KeepFlowTest {
         click("＋")
         rule.onNodeWithText(why).assertExists()
         rule.onRoot().captureRoboImage(File(out, "mobile-51-vertical-sugestao-com-motivo.png").path)
+        // O DJ dá o rumo (Jin et al. 2020): SOBE só traz as mais rápidas.
+        click("SOBE")
+        val up = a.sets.addChoices("", os.deckbridge.manager.smart.Steer.UP)
+        assertTrue(up.all { it.bpm > last.bpm }, up.joinToString { "${it.title} ${it.bpm}" })
+        click("COMBINA")
+        // "Não sugerir esta" (Amershi et al. 2019): sai das sugestões e volta pelo ⋯.
+        rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("Não sugerir ${pick.title}"))[0]
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        rule.waitForIdle()
+        assertTrue(pick.id in a.sets.hidden)
+        assertTrue(a.sets.addChoices("").none { it.id == pick.id })
+        assertTrue(a.sets.addChoices(pick.title).any { it.id == pick.id }, "a busca ainda acha")
         click("PRONTO")
+        a.sets.showAllSuggestions()
+        assertTrue(a.sets.hidden.isEmpty())
         // O lembrete da troca: escrito no MIX, guardado no plano, na cola e ao vivo.
         val tr = a.sets.plan().first()
         a.sets.openMix(tr)
@@ -111,6 +125,8 @@ class KeepFlowTest {
         rule.onAllNodes(hasSetTextAction())[0].performTextInput("segurar o grave até o vocal")
         click("GUARDAR")
         assertEquals("segurar o grave até o vocal", a.sets.plan().first().note)
+        // Ajustada pelo DJ: o quadro marca diferente das automáticas.
+        assertTrue((tr.fromId to tr.toId) in a.sets.adjustedPairs(1))
         rule.onNodeWithText("LEMBRETE").performScrollTo()
         rule.onRoot().captureRoboImage(File(out, "mobile-52-vertical-mix-lembrete.png").path)
         a.sets.closeMix()

@@ -66,6 +66,12 @@ interface StudioHost {
     /** Tela de toque (arrastar um cartão começa com um toque longo, para não brigar com a rolagem); no mouse, arrasta direto. */
     val touch: Boolean get() = true
 
+    /**
+     * O sistema pede menos movimento (no Android, "remover animações"): as telas trocam sem deslizar. Quem é sensível a
+     * movimento (labirintite, enxaqueca) passa mal com animação que não pediu (WCAG 2.3.3).
+     */
+    val reduceMotion: Boolean get() = false
+
     /** Roda [block] na thread da tela. */
     fun onMain(block: () -> Unit)
 }

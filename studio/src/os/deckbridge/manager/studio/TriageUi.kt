@@ -122,7 +122,7 @@ private fun Controls(app: StudioHost, t: TrackItem, at: Int, total: Int, compact
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Palette.trackColors.forEachIndexed { n, c ->
-            Box(Modifier.weight(1f).height(if (compact) 38.dp else 48.dp).clip(RbShape).background(c).clickable {
+            Box(Modifier.weight(1f).height(if (compact) 38.dp else 48.dp).clip(RbShape).background(if (t.colorId == n + 1) c else c.copy(alpha = 0.55f)).clickable {
                 m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(colorId = if (t.colorId == n + 1) 0 else n + 1)), "Cor em \"${t.title}\"")
             }, contentAlignment = Alignment.Center) { if (t.colorId == n + 1) Text("✓", color = Palette.bg, fontWeight = FontWeight.Bold) }
         }

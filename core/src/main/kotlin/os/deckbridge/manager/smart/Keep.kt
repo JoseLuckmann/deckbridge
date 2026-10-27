@@ -69,3 +69,28 @@ object Keep {
         add(if (sets == 0) "nunca em set" else if (sets == 1) "em 1 set" else "em $sets sets")
     }.joinToString(" · ")
 }
+
+/**
+ * Para onde o DJ quer levar a próxima: o mesmo clima (o que combina), subir ou descer o andamento, ou descobrir as que
+ * nunca entraram em set. Dar esse controle a quem recebe a sugestão aumenta a satisfação, desde que sejam poucos
+ * controles (Jin, Tintarev, Htun & Verbert 2020).
+ */
+enum class Steer(val title: String) { MATCH("COMBINA"), UP("SOBE"), DOWN("DESCE"), DISCOVER("DESCOBRIR") }
+
+object Suggest {
+    /** Até [limit] faixas para depois de [last], fora de [exclude], no rumo [steer]; [inSets] são as que já entraram em set. */
+    fun next(view: LibraryView, last: TrackItem, exclude: Set<Int>, steer: Steer, inSets: Set<Int>, limit: Int = 6): List<TrackItem> {
+        val pool = view.tracks.filter { it.id !in exclude && it.id != last.id }
+        fun byFit(list: List<TrackItem>) = list.map { it to SetPlanner.fit(last, it) }
+            .sortedWith(compareBy<Pair<TrackItem, os.deckbridge.manager.mix.Fit>>({ !it.second.keyOk }, { it.second.keyDistance ?: 9 }, { kotlin.math.abs(it.second.bpmDiffPct) }, { -it.first.rating }))
+            .map { it.first }
+        return when (steer) {
+            Steer.MATCH -> SetPlanner.suggestNext(view, last, exclude, limit)
+            // Sobe: mais rápida, até 6% (o que o pitch alcança sem estranhar); desce: o contrário.
+            Steer.UP -> byFit(pool.filter { last.bpm > 0 && SetPlanner.fit(last, it).bpmDiffPct in 0.5..6.0 }).take(limit)
+            Steer.DOWN -> byFit(pool.filter { last.bpm > 0 && SetPlanner.fit(last, it).bpmDiffPct in -6.0..-0.5 }).take(limit)
+            // Descobrir: as que nunca entraram em set, as de nota maior primeiro, e dentro disso as que combinam.
+            Steer.DISCOVER -> byFit(pool.filter { it.id !in inSets }).sortedByDescending { it.rating.coerceAtMost(5) >= 3 }.take(limit)
+        }
+    }
+}

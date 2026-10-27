@@ -77,6 +77,7 @@ class SetDesk(private val app: StudioHost) {
         // Guarda que esta playlist é um set (para "Esquecidas" e "Onde está"), fora do pendrive.
         runCatching { app.setsDir.mkdirs(); File(app.setsDir, "$id.set").createNewFile() }
         synchronized(grids) { grids.clear() }
+        hidden = loadHidden()
         prefetch(id)
         branches = SetBranches.load(branchesFile)
         saved = SetPlanner.load(file(id))
@@ -354,11 +355,11 @@ class SetDesk(private val app: StudioHost) {
         val rest = ids.toMutableList().apply { removeAt(index) }
         val title = app.model.view?.track(id)?.title.orEmpty()
         // Sem pedir confirmação: tira e avisa com DESFAZER (as vertentes que saem dela voltam junto).
-        val hidden = branchesAt(index).joinToString(", ") { "${letterOf(it)}" }
+        val gone = branchesAt(index).joinToString(", ") { "${letterOf(it)}" }
         // A mesma faixa duas vezes na linha: tira as duas e põe de volta a que fica, no lugar.
         val edits = listOf(Edit.RemoveFromPlaylist(pid, listOf(id)) to "Tirar \"$title\" do set") +
             if (id in rest) listOf(Edit.AddToPlaylist(pid, listOf(id)) to "Manter \"$title\"", Edit.ReorderPlaylist(pid, rest) to "Ordem do set") else emptyList()
-        if (app.model.submitAll(edits) == edits.size) app.did("− $title" + if (hidden.isNotEmpty()) " · a vertente $hidden some junto" else "")
+        if (app.model.submitAll(edits) == edits.size) app.did("− $title" + if (gone.isNotEmpty()) " · a vertente $gone some junto" else "")
     }
 
     /**
@@ -413,16 +414,58 @@ class SetDesk(private val app: StudioHost) {
      * O que pôr no fim da linha aberta: com [query], as faixas da biblioteca que batem com a busca; sem, as que combinam com
      * a última (num ramo que volta, também). Nada que já está no set.
      */
-    fun addChoices(query: String): List<TrackItem> {
+    fun addChoices(query: String, steer: os.deckbridge.manager.smart.Steer = os.deckbridge.manager.smart.Steer.MATCH): List<TrackItem> {
         val v = app.model.view ?: return emptyList()
         val ids = ids()
         val busy = ids.toSet() + tree().flatMap { v.entries[it.playlistId].orEmpty() } + (rootId()?.let { v.entries[it].orEmpty() } ?: emptyList())
         val words = query.lowercase().split(' ').filter { it.isNotBlank() }
+        // Buscar acha qualquer uma; as que o DJ pediu para não sugerir ficam fora só das sugestões.
         if (words.isNotEmpty()) return v.tracks.filter { it.id !in busy && words.all { w -> "${it.title} ${it.artist}".lowercase().contains(w) } }.take(30)
-        if (poolStart(ids) != null) return suggestions(ids)
+        val skip = busy + hidden
+        if (poolStart(ids) != null) return suggestions(ids).filter { it.id !in hidden }
         val last = (entries().lastOrNull() ?: branch?.fromTrackId)?.let { v.track(it) }
-            ?: return v.tracks.filter { it.id !in busy }.sortedByDescending { it.rating }.take(12)
-        return SetPlanner.suggestNext(v, last, busy, limit = 6)
+            ?: return v.tracks.filter { it.id !in skip }.sortedByDescending { it.rating }.take(12)
+        val inSets = os.deckbridge.manager.smart.Keep.inSets(v, knownSets())
+        return os.deckbridge.manager.smart.Suggest.next(v, last, skip, steer, inSets)
+    }
+
+    private val hiddenFile get() = File(app.setsDir, "nao-sugerir.txt")
+
+    /**
+     * As faixas que o DJ pediu para não sugerir (retorno pontual sobre uma sugestão; ver Amershi et al. 2019). Ficam na
+     * pasta dos sets, fora do pendrive; a busca ainda acha.
+     */
+    var hidden by mutableStateOf(loadHidden())
+        private set
+
+    private fun loadHidden(): Set<Int> = runCatching { hiddenFile.readLines().mapNotNull { it.trim().toIntOrNull() }.toSet() }.getOrDefault(emptySet())
+
+    fun hideSuggestion(t: TrackItem) {
+        hidden = hidden + t.id
+        runCatching { app.setsDir.mkdirs(); hiddenFile.writeText(hidden.joinToString("\n")) }
+        app.notice = os.deckbridge.manager.Banner("Não vou mais sugerir \"${t.title.ifEmpty { t.fileName }}\" (⋯ → Sugestões escondidas)", false)
+    }
+
+    /** Controle geral: volta a sugerir todas. */
+    fun showAllSuggestions() {
+        hidden = emptySet()
+        runCatching { hiddenFile.delete() }
+    }
+
+    private val adjustedCache = HashMap<Int, Pair<Long, Set<Pair<Int, Int>>>>()
+
+    /**
+     * As trocas da linha [pid] que o DJ ajustou (as outras são as automáticas). O quadro mostra a diferença: deixar claro o
+     * que o sistema fez sozinho (Amershi et al. 2019).
+     */
+    fun adjustedPairs(pid: Int): Set<Pair<Int, Int>> {
+        if (pid == playlistId) return saved.map { it.fromId to it.toId }.toSet()
+        val f = file(pid)
+        val stamp = f.lastModified()
+        adjustedCache[pid]?.let { (k, v) -> if (k == stamp) return v }
+        val pairs = runCatching { SetPlanner.load(f).map { it.fromId to it.toId }.toSet() }.getOrDefault(emptySet())
+        adjustedCache[pid] = stamp to pairs
+        return pairs
     }
 
     /** Como o ramo é montado: uma lista automática, uma pool automática ou vazio (o DJ escolhe as faixas). */

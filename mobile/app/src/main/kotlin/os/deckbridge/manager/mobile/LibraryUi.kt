@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -192,7 +194,8 @@ fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean) {
     // Sobre a linha azul o cinza normal fica sem contraste (WCAG 1.4.3): troca pelo claro.
     val dim = Palette.dimOn(selected || open)
     Row(
-        Modifier.fillMaxWidth().height(60.dp)
+        // Altura mínima, não fixa: com texto grande (até 200% no Android 14) a linha cresce em vez de cortar.
+        Modifier.fillMaxWidth().heightIn(min = 60.dp)
             .background(if (selected || open) Palette.selectedRow else Color.Transparent)
             .combinedClickable(
                 onClick = {
@@ -225,9 +228,10 @@ fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean) {
         }
         if (t.rating > 0) Text("★".repeat(t.rating), color = Palette.orange, fontSize = 11.sp, modifier = Modifier.padding(start = 6.dp, end = 8.dp))
         // Sem análise: o BPM fica apagado, sem texto extra.
-        Text(bpmLabel(t.bpm), color = if (analyzed) Palette.text else dim, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.width(52.dp))
-        Box(Modifier.width(40.dp).height(24.dp).background(if (compatible) Palette.keyFill else Color.Transparent), contentAlignment = Alignment.Center) {
-            Text(keyLabel(t.key), color = if (compatible) Palette.keyInk else Palette.mutedBright, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(bpmLabel(t.bpm), color = if (analyzed) Palette.text else dim, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.widthIn(min = 52.dp).padding(end = 6.dp))
+        Box(Modifier.widthIn(min = 40.dp).heightIn(min = 24.dp).background(if (compatible) Palette.keyFill else Color.Transparent), contentAlignment = Alignment.Center) {
+            // Compatível com a aberta: verde e "✓" (cor nunca é o único sinal: WCAG 1.4.1).
+            Text((if (compatible) "✓" else "") + keyLabel(t.key), color = if (compatible) Palette.keyInk else Palette.mutedBright, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
         if (m.target != null && !app.selecting) {
             Box(Modifier.size(52.dp).clickable { app.did(m.toggleInTarget(t.id)) }, contentAlignment = Alignment.Center) {

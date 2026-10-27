@@ -72,4 +72,20 @@ class KeepTest {
         assertEquals("quando o vocal entrar, tiro o grave", back[0].note)
         assertEquals("", back[1].note)
     }
+
+    @Test fun `o DJ escolhe o rumo da sugestao`() {
+        val last = t(1, bpm = 124.0, key = "8A")
+        val v = view(
+            listOf(last, t(2, bpm = 126.0, key = "8A"), t(3, bpm = 121.0, key = "8A"), t(4, bpm = 124.0, key = "9A", rating = 4), t(5, bpm = 140.0, key = "8A"), t(6, bpm = 124.0, key = "3B", rating = 5)),
+            mapOf(40 to listOf(4)),
+        )
+        val inSets = Keep.inSets(v, setOf(40))
+        fun ids(s: os.deckbridge.manager.smart.Steer) = os.deckbridge.manager.smart.Suggest.next(v, last, setOf(1), s, inSets).map { it.id }
+        assertEquals(listOf(2), ids(os.deckbridge.manager.smart.Steer.UP))
+        assertEquals(listOf(3), ids(os.deckbridge.manager.smart.Steer.DOWN))
+        // Descobrir não traz a que já está num set (4); as de nota 3+ primeiro.
+        val d = ids(os.deckbridge.manager.smart.Steer.DISCOVER)
+        assertEquals(6, d.first())
+        assertEquals(false, 4 in d)
+    }
 }

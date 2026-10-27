@@ -84,7 +84,10 @@ private fun keyText(k: Pair<Int, Char>?, t: TrackItem) = k?.let { "${it.first}${
  * ajustar. Cada ajuste monta a prévia de novo, sem sair da tela.
  */
 @Composable
-fun MixScreen(app: StudioHost) {
+fun MixScreen(app: StudioHost) = CappedText { MixContent(app) }
+
+@Composable
+private fun MixContent(app: StudioHost) {
     val desk = app.sets
     val tr = desk.mixing ?: return
     val v = app.model.view ?: return
@@ -240,7 +243,7 @@ private fun DeckHeader(n: Int, t: TrackItem, tr: Transition, p: MixPreview?, pos
             )
         }
         Box(Modifier.padding(start = 6.dp).clip(RbShape).background(if (ok) Palette.keyFill else Palette.dangerBg).padding(horizontal = 6.dp, vertical = 3.dp)) {
-            Text(keyText(shifted ?: key, t), color = if (ok) Palette.keyInk else Palette.orange, fontSize = 13.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
+            Text((if (ok) "" else "! ") + keyText(shifted ?: key, t), color = if (ok) Palette.keyInk else Palette.orange, fontSize = 13.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -532,7 +535,9 @@ private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSe
         PadButton("◀◀ 4", Modifier.weight(1f)) { onSeek(pos - (4 * bar).toInt()) }
         PadButton("◀ 1", Modifier.weight(1f)) { onSeek(pos - bar.toInt()) }
         Box(
-            Modifier.weight(1.6f).height(48.dp).clip(RbShape).background(if (playing) Palette.blueActiveFill else Palette.playBg)
+            // A ação principal da tela maior que as outras e de outra cor: acha-se de relance (pesquisa do Material 3
+            // Expressive, Google 2025; ver docs/design-referencias.md).
+            Modifier.weight(2f).height(56.dp).clip(RbShape).background(if (playing) Palette.blueActiveFill else Palette.playBg)
                 .border(BorderStroke(1.dp, if (playing) Palette.blue else Palette.playInk.copy(alpha = 0.4f)), RbShape).clickable(enabled = p != null, onClick = onPlay),
             contentAlignment = Alignment.Center,
         ) { Text(if (playing) "❚❚ PAUSE" else "▶ PLAY", color = if (playing) Palette.text else Palette.playInk, fontSize = 15.sp, fontWeight = FontWeight.Bold) }

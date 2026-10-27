@@ -128,6 +128,9 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
         pruneBackups()
         return true
     }
+    /** "Remover animações" ligado no Android (escala de animação zero). */
+    override val reduceMotion: Boolean
+        get() = runCatching { android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false)
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     override fun onMain(block: () -> Unit) {
         mainHandler.post(block)

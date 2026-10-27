@@ -1171,3 +1171,11 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Nielsen, heurística 9: `friendlyError` (causa e próximo passo) no celular, no computador e na janela de pendrive.
 - Achados: o Compose gerava método inválido com `return@key` dentro de `key {}` (ClassFormatError no computador); reorganizado. `mixBusy` passou a ter set privado.
 - Evidência: computador `StudioTest` 4/4 (inclui `friendlyError`); celular `SetFlowTest` (estimativa), suíte completa no fechamento. Não verificado: tato e animação no aparelho. Versão 0.17.0.
+
+## 2026-10-27 — Pesquisas recentes (UX) e rodada de design
+
+- Pedido: conceitos de artigos recentes (modernidade) e depois artigos de design aplicados ao produto.
+- UX recente (`docs/ux-referencias.md`, "Rodada 4"): Amershi et al. 2019 (trocas ajustadas × automáticas no quadro; "não sugerir esta" e controle geral no ⋯), Jin et al. 2020 (rumos COMBINA/SOBE/DESCE/DESCOBRIR; `Suggest.next`), Millecamp et al. 2019 (motivo curto), Android 14 texto até 200% (`LargeTextTest`; linhas com altura mínima; `CappedText` no quadro e no MIX), WCAG 2.3.3 (`reduceMotion`), voltar preditivo.
+- Design (`docs/design-referencias.md`): cor nunca sozinha (WCAG 1.4.1, Birch 2012: `FitMark`, ✓/!, fio pontilhado), auditoria de colorido e complexidade (Reinecke et al. 2013; `tools/visual_audit.py`; cores não escolhidas apagadas na faixa e na triagem), curva emphasized do Material 3, PLAY maior (Material 3 Expressive, cobertura de imprensa).
+- Achado: com texto a 200% a lista cortava artista e tom, e o cabeçalho do MIX quebrava "REMAIN" letra por letra. Corrigido (capturas `mobile-54` a `mobile-57`).
+- Evidência: núcleo `KeepTest` 6 (rumos); celular `KeepFlowTest` (rumo, não sugerir, ajustada), `LargeTextTest`, `SetBoardTest`, `SetFlowTest`, `TouchTargetTest`, `DesignSystemTest`; suíte completa no fechamento. Não verificado: aparelho (texto grande real, remover animações, voltar preditivo). Versão 0.18.0.

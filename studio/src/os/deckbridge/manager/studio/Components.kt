@@ -118,3 +118,13 @@ fun shortTitle(title: String): String = title.substringBefore(" (").trim().ifEmp
 
 /** Uma porcentagem com sinal e sem casa decimal; o que arredonda para zero aparece "0%" (nunca "-0%"). */
 fun pctLabel(pct: Double): String = Math.round(pct).let { if (it == 0L) "0%" else "%+d%%".format(it) }
+
+/**
+ * Combina ou não: verde com ✓, laranja com "!". Cor nunca é o único sinal (WCAG 1.4.1): perto de 8% dos homens de
+ * origem europeia não distinguem bem verde de vermelho e laranja (Birch 2012).
+ */
+@Composable
+fun FitMark(good: Boolean) = androidx.compose.material3.Text(
+    if (good) "✓" else "!", color = if (good) Palette.keyInk else Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+    modifier = Modifier.padding(horizontal = 2.dp),
+)

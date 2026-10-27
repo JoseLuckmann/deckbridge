@@ -59,7 +59,7 @@ class SetBoardTest {
 
     private fun tap(description: String) {
         // O quadro rola nos dois sentidos e o controle pode estar fora da tela: aciona o toque dele direto.
-        rule.onAllNodes(hasContentDescription(description))[0].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        rule.onAllNodes(hasContentDescription(description, substring = true))[0].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
     }
 
