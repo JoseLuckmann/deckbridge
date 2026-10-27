@@ -174,6 +174,10 @@ class StudioTest {
         assertTrue(studio.back(), "Esc sai do ao vivo")
         waitForIdle()
         assertTrue(!studio.sets.live)
+        // Saindo do ao vivo com duas ou mais tocadas, o app pergunta se guarda o que tocou; aqui, não.
+        onAllNodes(hasText("Guardar o que tocou?")).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty()) }
+        click("Cancelar")
+        assertEquals(null, studio.sets.playedToSave)
         // A troca abre o MIX (a mesma tela do celular); Esc volta.
         val first = studio.sets.lanePlan(pid).first()
         studio.sets.focus(pid)
