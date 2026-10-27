@@ -1,5 +1,7 @@
 package os.deckbridge.manager.mobile
 
+import os.deckbridge.manager.studio.*
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi

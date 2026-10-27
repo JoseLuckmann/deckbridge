@@ -1,4 +1,4 @@
-package os.deckbridge.manager.mobile
+package os.deckbridge.manager.studio
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -88,7 +88,7 @@ private fun laneColor(row: Int): Color =
  */
 @Composable
 fun SetBoard(
-    app: ManagerApp, layout: SetCanvasLayout, plans: Map<Int, List<Transition>>, issues: Set<Pair<Int, Int>>, selected: CanvasCard?,
+    app: StudioHost, layout: SetCanvasLayout, plans: Map<Int, List<Transition>>, issues: Set<Pair<Int, Int>>, selected: CanvasCard?,
     rehearsing: Transition?, onSelect: (CanvasCard?) -> Unit, onAdd: (CanvasLane) -> Unit, onMix: (CanvasLink, Transition) -> Unit,
     onJoin: (CanvasLane) -> Unit, modifier: Modifier = Modifier,
 ) {
@@ -99,7 +99,7 @@ fun SetBoard(
 
 @Composable
 private fun Board(
-    app: ManagerApp, g: Geo, layout: SetCanvasLayout, plans: Map<Int, List<Transition>>, issues: Set<Pair<Int, Int>>, selected: CanvasCard?,
+    app: StudioHost, g: Geo, layout: SetCanvasLayout, plans: Map<Int, List<Transition>>, issues: Set<Pair<Int, Int>>, selected: CanvasCard?,
     rehearsing: Transition?, onSelect: (CanvasCard?) -> Unit, onAdd: (CanvasLane) -> Unit, onMix: (CanvasLink, Transition) -> Unit,
     onJoin: (CanvasLane) -> Unit,
 ) {
@@ -271,7 +271,7 @@ private fun LinkPill(tr: Transition, issue: Boolean, on: Boolean, playing: Boole
 
 /** A faixa escolhida no quadro: ouvir, andar para os lados, dividir a linha daqui e tirar. */
 @Composable
-fun BoardActions(app: ManagerApp, card: CanvasCard, onMove: (Int) -> Unit, onSplit: () -> Unit, onRemove: () -> Unit) {
+fun BoardActions(app: StudioHost, card: CanvasCard, onMove: (Int) -> Unit, onSplit: () -> Unit, onRemove: () -> Unit) {
     val t = app.model.view?.track(card.trackId) ?: return
     val count = app.sets.entries().size
     Column(Modifier.fillMaxWidth().background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.blueActiveLine)).padding(horizontal = 10.dp, vertical = 8.dp)) {
@@ -289,7 +289,7 @@ fun BoardActions(app: ManagerApp, card: CanvasCard, onMove: (Int) -> Unit, onSpl
 
 /** Pôr faixas no fim de uma linha: as que combinam com a última, ou a busca na biblioteca. Fica aberto para pôr várias. */
 @Composable
-fun AddToLineDialog(app: ManagerApp, letter: Char, onClose: () -> Unit) {
+fun AddToLineDialog(app: StudioHost, letter: Char, onClose: () -> Unit) {
     var query by remember { mutableStateOf("") }
     // A busca só aparece quando se pede: o normal é escolher entre as que combinam.
     var searching by remember { mutableStateOf(false) }

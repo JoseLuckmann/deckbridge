@@ -1,4 +1,4 @@
-package os.deckbridge.manager.mobile
+package os.deckbridge.manager.studio
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -80,7 +80,7 @@ private fun keyText(k: Pair<Int, Char>?, t: TrackItem) = k?.let { "${it.first}${
  * ajustar. Cada ajuste monta a prévia de novo, sem sair da tela.
  */
 @Composable
-fun MixScreen(app: ManagerApp) {
+fun MixScreen(app: StudioHost) {
     val desk = app.sets
     val tr = desk.mixing ?: return
     val v = app.model.view ?: return
@@ -90,7 +90,7 @@ fun MixScreen(app: ManagerApp) {
         desk.closeMix()
         return
     }
-    androidx.activity.compose.BackHandler { desk.closeMix() }
+    BackHandler { desk.closeMix() }
     val p = desk.mixPreview
     val playing = desk.mixPlaying
     // Enquanto toca, a cabeça segue o player a cada quadro.
@@ -430,7 +430,7 @@ private fun RowLabel(text: String) = Text(text, color = Palette.text, fontSize =
 
 /** Os ajustes, em fileiras como LOOP / KEY do player. */
 @Composable
-private fun Controls(app: ManagerApp, a: TrackItem, b: TrackItem, tr: Transition, ga: TrackGrid?, gb: TrackGrid?, advanced: Boolean, onToggle: () -> Unit) {
+private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition, ga: TrackGrid?, gb: TrackGrid?, advanced: Boolean, onToggle: () -> Unit) {
     val desk = app.sets
     fun edit(t: Transition) = desk.editMix(t)
     Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

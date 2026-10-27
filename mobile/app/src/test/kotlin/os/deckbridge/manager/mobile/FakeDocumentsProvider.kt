@@ -1,5 +1,7 @@
 package os.deckbridge.manager.mobile
 
+import os.deckbridge.manager.studio.*
+
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor

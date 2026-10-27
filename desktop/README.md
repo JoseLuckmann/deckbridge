@@ -103,3 +103,18 @@ O teste do Kaitai precisa de `KAITAI_PARSERS` (veja `tools/setup_kaitai.sh`); se
 ## Atalhos (rodada de UX 1)
 
 Filtros rápidos com contagem (Sem análise, Sem nota, Fora de playlists, 4 ou 5 estrelas, Recentes…), busca com `bpm:120-128 tom:8A nota:4 cor:verde genero:house`, "Salvar lista como playlist", ordenar playlist por BPM, nota ou ordem harmônica, e Refazer ao lado de Desfazer. A lógica é a mesma do celular (`core/smart`, testada em `SmartTest` e `ManagerModelTest`).
+
+## Montar set (as mesmas telas do celular)
+
+- Numa playlist, **SET ▸** abre as telas de montar set: quadro (deitado, o tempo corre para a direita), lista, MIX, mapa
+  do andamento, ramos/vertentes, pool, ensaio e prévias. O código é o mesmo do app de celular (`studio/`, compilado pelos
+  dois apps); só muda o que é do computador (`ui/Studio.kt`): Esc volta, clique de mouse, saída de som padrão.
+- Ouvir: a faixa é decodificada pelo mesmo caminho da análise (WAV aqui, MP3/FLAC/AAC pelo `ffmpeg`); as prévias montadas
+  são WAV.
+- Onde ficam os planos: biblioteca local → `~/.deckbridge/sets` (ao lado dela, como no celular); pendrive →
+  `~/.deckbridge/sets/<pendrive>`, nunca no pendrive. Playlists de ramo e mudanças de faixa entram na fila como qualquer
+  edição; com o pendrive aberto, só são gravadas quando você aplica (GRADE D2 no MIX também fica na fila).
+- Verificado offscreen (`StudioTest`, com cliques): SET ▸, pôr pelo ＋, duas vertentes juntando na mesma faixa, MIX com a
+  prévia montada do áudio, RITMO/PASSA, Esc, mapa, lista. Capturas `docs/ui/desktop-set-*.png`. Não verificado: som de
+  verdade (o teste não tem placa de som) e uso numa janela real.
+

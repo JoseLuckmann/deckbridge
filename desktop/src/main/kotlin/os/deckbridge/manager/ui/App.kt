@@ -66,6 +66,12 @@ import os.deckbridge.manager.volume.BackupRecord
 
 /** Estado só da tela: janelas abertas, pastas expandidas. O que vale para o pendrive fica no [ManagerModel]. */
 class UiState {
+    /** As telas de montar set (as mesmas do celular), ligadas à biblioteca aberta. */
+    var studio: DesktopStudio? = null
+
+    /** Preferências e pasta dos planos de set (os testes usam outras, para não mexer nas do usuário). */
+    var studioPrefs: java.util.prefs.Preferences = java.util.prefs.Preferences.userRoot().node("deckbridge/biblioteca")
+    var studioSetsHome: File = File(System.getProperty("user.home"), ".deckbridge/sets")
     var prompt by mutableStateOf<Prompt?>(null)
     var confirm by mutableStateOf<ConfirmAsk?>(null)
     var review by mutableStateOf(false)
@@ -135,6 +141,7 @@ class ConfirmAsk(val title: String, val text: String, val action: String, val da
 @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun App(model: ManagerModel, ui: UiState = remember { UiState() }) {
+    val studio = remember(model) { DesktopStudio(model, ui.studioPrefs, ui.studioSetsHome).also { ui.studio = it } }
     val dropTarget = remember(model, ui) {
         object : DragAndDropTarget {
             override fun onDrop(event: DragAndDropEvent): Boolean {
@@ -170,6 +177,7 @@ fun App(model: ManagerModel, ui: UiState = remember { UiState() }) {
         if (ui.review) Box(Modifier.fillMaxSize()) { ReviewModal(model, ui) }
         if (ui.backups) Box(Modifier.fillMaxSize()) { BackupsModal(model, ui) }
         ui.transfer?.let { t -> Box(Modifier.fillMaxSize()) { TransferModal(model, t, ui.chooser) { ui.transfer = null } } }
+        StudioOverlay(studio)
         ui.drag?.let { d ->
             Box(Modifier.offset { IntOffset(d.pos.x.toInt() + 14, d.pos.y.toInt() + 10) }.background(Pal.Blue).padding(horizontal = 10.dp, vertical = 5.dp)) { Label(d.label, Pal.Bg, 12.sp, bold = true) }
         }
@@ -330,6 +338,8 @@ private fun Center(model: ManagerModel, ui: UiState, modifier: Modifier) {
                 }, danger = true, enabled = sel.isNotEmpty())
             }
             if (inTrackPlaylist) {
+                // Montar o set desta playlist: as mesmas telas do celular (quadro, MIX, mapa, ramos).
+                Btn("SET ▸", { ui.studio?.sets?.open(open!!.id) }, primary = true, enabled = view.entries[open!!.id].orEmpty().isNotEmpty())
                 val ordered = model.sort.column == null
                 val ids = view.entries[open!!.id].orEmpty()
                 val sel = model.selection.filter { it in ids }

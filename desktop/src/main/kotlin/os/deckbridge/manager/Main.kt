@@ -4,6 +4,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
@@ -44,6 +46,8 @@ fun main(args: Array<String>) = application {
         title = "DeckBridge Biblioteca",
         icon = remember { AppIcon },
         state = rememberWindowState(size = DpSize(1360.dp, 820.dp)),
+        // Esc volta nas telas de set (como o "voltar" do celular).
+        onKeyEvent = { e -> e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.Escape && ui.studio?.back() == true },
     ) { App(model, ui) }
 }
 

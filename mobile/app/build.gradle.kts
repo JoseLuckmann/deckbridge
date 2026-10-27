@@ -6,6 +6,8 @@ plugins {
 }
 
 android {
+    // As telas de montar set são as mesmas do app de computador (studio/).
+    sourceSets["main"].java.srcDir("../../studio/src")
     namespace = "os.deckbridge.manager.mobile"
     compileSdk = 35
 

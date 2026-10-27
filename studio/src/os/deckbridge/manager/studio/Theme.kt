@@ -1,4 +1,4 @@
-package os.deckbridge.manager.mobile
+package os.deckbridge.manager.studio
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -74,6 +74,9 @@ fun rgb(v: Int?, fallback: Color = Color.Gray): Color = if (v == null) fallback 
 
 /** Cor do pad de hot cue (1 = A … 8 = H), a mesma do player, como RGB gravável no cue. */
 fun padRgb(hot: Int): Int = StagePalette.pads[(hot - 1).coerceIn(0, 7)] and 0xFFFFFF
+
+/** A partir desta largura a tela vira duas colunas (celular deitado, tablet, computador). */
+const val WIDE_DP = 600
 
 /** Cantos quase retos, como os botões e painéis do player. */
 val RbShape = RoundedCornerShape(3.dp)

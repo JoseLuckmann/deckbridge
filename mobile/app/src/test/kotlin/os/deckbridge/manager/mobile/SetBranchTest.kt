@@ -1,5 +1,7 @@
 package os.deckbridge.manager.mobile
 
+import os.deckbridge.manager.studio.*
+
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule

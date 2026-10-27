@@ -1,5 +1,7 @@
 package os.deckbridge.manager.mobile
 
+import os.deckbridge.manager.studio.*
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -32,8 +34,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Largura a partir da qual a tela vira duas colunas (celular deitado, tablet): lista à esquerda e detalhes à direita. */
-const val WIDE_DP = 600
 
 /**
  * A raiz, no estilo do player: fundo preto, faixa do topo com rótulo azul em caixa alta, e embaixo uma fileira de botões
@@ -42,7 +42,8 @@ const val WIDE_DP = 600
  */
 @Composable
 fun ManagerRoot(app: ManagerApp, actions: Actions) {
-    ManagerTheme {
+    // As telas de set são compartilhadas com o computador: o "voltar" delas é o botão de voltar do Android.
+    ManagerTheme { androidx.compose.runtime.CompositionLocalProvider(LocalBack provides { onBack -> androidx.activity.compose.BackHandler(onBack = onBack) }) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg)) {
             val wide = maxWidth >= WIDE_DP.dp
             val open = app.detailId?.let { app.model.view?.track(it) }
@@ -89,6 +90,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
             JobOverlay(app)
             NoticeToast(app)
         }
+    }
     }
 }
 

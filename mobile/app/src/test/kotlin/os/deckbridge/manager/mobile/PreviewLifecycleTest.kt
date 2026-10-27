@@ -1,5 +1,7 @@
 package os.deckbridge.manager.mobile
 
+import os.deckbridge.manager.studio.*
+
 import java.io.File
 import kotlin.test.assertFalse
 import kotlin.test.assertSame

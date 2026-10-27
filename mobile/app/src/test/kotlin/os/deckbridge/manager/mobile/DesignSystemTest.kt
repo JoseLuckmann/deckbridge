@@ -1,5 +1,7 @@
 package os.deckbridge.manager.mobile
 
+import os.deckbridge.manager.studio.*
+
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,7 +14,9 @@ import os.deckbridge.logic.StagePalette
  * app de biblioteca volte a ter paleta, formas ou componentes próprios.
  */
 class DesignSystemTest {
-    private val sources = File("src/main/kotlin/os/deckbridge/manager/mobile").listFiles { f -> f.extension == "kt" }!!.toList()
+    // O app e as telas de set compartilhadas com o computador (studio/).
+    private val sources = listOf("src/main/kotlin/os/deckbridge/manager/mobile", "../../studio/src/os/deckbridge/manager/studio")
+        .flatMap { File(it).listFiles { f -> f.extension == "kt" }!!.toList() }
 
     @Test fun `nenhuma cor escrita a mao fora do tema`() {
         val offenders = sources.filter { it.name != "Theme.kt" }.flatMap { f ->

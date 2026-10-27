@@ -1,4 +1,4 @@
-package os.deckbridge.manager.mobile
+package os.deckbridge.manager.studio
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -51,7 +51,7 @@ private fun routeColor(n: Int): Color =
  * com a hora em que entram; ABRIR leva para a linha (a principal ou a do ramo).
  */
 @Composable
-fun SetMapScreen(app: ManagerApp) {
+fun SetMapScreen(app: StudioHost) {
     val desk = app.sets
     val v = app.model.view ?: return
     val root = desk.rootId() ?: return
@@ -59,7 +59,7 @@ fun SetMapScreen(app: ManagerApp) {
     val routes = remember(v, desk.branches, desk.masterFixed, root) { desk.routes() }
     // Começa no caminho que está aberto (o ramo, se a tela de trás é a de um ramo).
     var picked by remember { mutableStateOf(routes.indexOfFirst { it.route.branch?.playlistId == desk.playlistId }.coerceAtLeast(0)) }
-    androidx.activity.compose.BackHandler { desk.mapOpen = false }
+    BackHandler { desk.mapOpen = false }
     Column(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(52.dp).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { desk.mapOpen = false }) { Text("‹", fontSize = 22.sp) }
@@ -179,7 +179,7 @@ private fun RouteChart(routes: List<SetDesk.RouteView>, picked: Int, natives: (I
 
 /** Um caminho: a cor, a letra, de onde sai e onde volta, e o andamento resumido. Tocar escolhe; › abre a linha. */
 @Composable
-private fun RouteRow(app: ManagerApp, n: Int, r: SetDesk.RouteView, selected: Boolean, onPick: () -> Unit, onOpen: () -> Unit) {
+private fun RouteRow(app: StudioHost, n: Int, r: SetDesk.RouteView, selected: Boolean, onPick: () -> Unit, onOpen: () -> Unit) {
     val v = app.model.view ?: return
     val route = r.route
     fun title(id: Int) = v.track(id)?.let { shortTitle(it.title.ifEmpty { it.fileName }) }.orEmpty()

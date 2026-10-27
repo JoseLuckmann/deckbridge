@@ -1,5 +1,7 @@
 package os.deckbridge.manager.mobile
 
+import os.deckbridge.manager.studio.*
+
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -56,9 +58,9 @@ const val NOTICE_MS = 3_500L
 enum class Tab(val title: String) { LIBRARY("Biblioteca"), PLAYLISTS("Playlists"), USB("Pendrive"), MENU("Menu") }
 
 /** Um trabalho longo em andamento (importar, analisar, exportar). A tela mostra o texto e o botão de cancelar. */
-class Job(val title: String) {
-    var text by mutableStateOf("")
-    @Volatile var cancelled = false
+class Job(val title: String) : StudioJob {
+    override var text by mutableStateOf("")
+    @Volatile override var cancelled = false
 }
 
 /** O pendrive escolhido e o que há nele. */
@@ -68,10 +70,10 @@ class UsbChoice(val tree: Uri, val label: String, val storage: Storage, val exis
  * Estado do app inteiro. A biblioteca mora numa pasta do app, no aparelho, no mesmo formato de um pendrive do rekordbox;
  * o pendrive só é tocado quando o usuário manda exportar (ou trazer). Tudo que é pesado roda fora da thread de interface.
  */
-class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
+class ManagerApp(val context: Context, override val root: File = defaultRoot(context)) : StudioHost {
     val backupsDir = File(root.parentFile, "backups")
     // A aba FAIXAS é a biblioteca toda, mesmo com uma playlist aberta na aba PLAYLISTS.
-    val model = ManagerModel(Backups(backupsDir)).also { it.scopeToOpenPlaylist = false }
+    override val model = ManagerModel(Backups(backupsDir)).also { it.scopeToOpenPlaylist = false }
 
     var tab by mutableStateOf(Tab.LIBRARY)
     var detailId by mutableStateOf<Int?>(null)
@@ -88,7 +90,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     private val noticeTimer = android.os.Handler(android.os.Looper.getMainLooper())
 
     /** O aviso de baixo. Some sozinho em [NOTICE_MS] (um erro fica até o OK). */
-    var notice: Banner?
+    override var notice: Banner?
         get() = shownNotice
         set(value) {
             shownNotice = value
@@ -109,8 +111,21 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     /** Pedido do MENU para abrir a ajuda de busca na Biblioteca. */
     var helpRequested by mutableStateOf(false)
 
-    val preview = Preview(this)
-    val sets = SetDesk(this)
+    override val preview = Preview(this)
+    override val sets = SetDesk(this)
+    override val setsDir get() = File(root.parentFile, "sets")
+    override val cacheDir: File get() = context.cacheDir
+
+    // A biblioteca é do aparelho: gravar é sempre na hora.
+    override fun saveNow(progress: (String) -> Unit): Boolean {
+        model.apply(null, progress) ?: throw IllegalStateException(model.banner?.text ?: "Não consegui salvar")
+        pruneBackups()
+        return true
+    }
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    override fun onMain(block: () -> Unit) {
+        mainHandler.post(block)
+    }
 
     private val prefs = context.getSharedPreferences("biblioteca", Context.MODE_PRIVATE)
     var guideHidden by mutableStateOf(prefs.getBoolean("guiaOculto", false))
@@ -133,11 +148,11 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     }
 
     /** Duração das transições automáticas: null é pela estrutura (até o drop da que entra; 32 sem dados), ou fixa. */
-    var transitionBars by mutableStateOf(prefs.getInt("transicao", 0).takeIf { it > 0 })
+    override var transitionBars by mutableStateOf(prefs.getInt("transicao", 0).takeIf { it > 0 })
         private set
 
     /** Passa para a próxima opção de duração: Auto → 16 → 32 → 64 → Auto. */
-    fun nextTransitionBars() {
+    override fun nextTransitionBars() {
         transitionBars = when (transitionBars) {
             null -> 16
             16 -> 32
@@ -148,10 +163,10 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     }
 
     /** O SET em lista (a tela antiga, com tudo por extenso) em vez do quadro. */
-    var setAsList by mutableStateOf(prefs.getBoolean("setLista", false))
+    override var setAsList by mutableStateOf(prefs.getBoolean("setLista", false))
         private set
 
-    fun setListView(on: Boolean) {
+    override fun setListView(on: Boolean) {
         setAsList = on
         prefs.edit().putBoolean("setLista", on).apply()
     }
@@ -177,10 +192,10 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     private var coachSeen by mutableStateOf(prefs.getStringSet("visto", emptySet())!!.toSet())
 
     /** Destacar o controle [key]: o guia está ligado e a pessoa ainda não o usou. */
-    fun hint(key: String): Boolean = !guideHidden && key !in coachSeen
+    override fun hint(key: String): Boolean = !guideHidden && key !in coachSeen
 
     /** A pessoa usou o controle [key]: o destaque dele some de vez. */
-    fun seen(key: String) {
+    override fun seen(key: String) {
         if (key in coachSeen) return
         coachSeen = coachSeen + key
         prefs.edit().putStringSet("visto", coachSeen).apply()
@@ -207,7 +222,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     }
 
     /** Avisa o que uma ação rápida fez, com "Desfazer" no aviso. */
-    fun did(text: String?) {
+    override fun did(text: String?) {
         if (text != null) say(text, undo = true)
     }
 
@@ -378,7 +393,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     }
 
     /** Roda [block] numa thread própria, com [Job] visível. Erros viram aviso; nada derruba o app. */
-    fun background(title: String, block: (Job) -> Unit) {
+    override fun background(title: String, block: (StudioJob) -> Unit) {
         if (job != null) return
         val j = Job(title)
         job = j
@@ -398,7 +413,7 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
     }
 
     /** Dentro de uma tarefa que vai reler a biblioteca: grava antes o que está na fila (nada se perde). */
-    private fun saveFirst(j: Job) {
+    private fun saveFirst(j: StudioJob) {
         if (!model.dirty) return
         j.text = "Gravando"
         if (model.apply(null) { j.text = it } == null) throw ExportException("E_SAVE", model.banner?.text ?: "Não consegui gravar.")

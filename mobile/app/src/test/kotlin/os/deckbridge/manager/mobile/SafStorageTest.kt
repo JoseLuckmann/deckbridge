@@ -1,5 +1,7 @@
 package os.deckbridge.manager.mobile
 
+import os.deckbridge.manager.studio.*
+
 import android.content.pm.ProviderInfo
 import android.provider.DocumentsContract
 import androidx.test.core.app.ApplicationProvider

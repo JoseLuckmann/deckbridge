@@ -1,5 +1,7 @@
 package os.deckbridge.manager.mobile
 
+import os.deckbridge.manager.studio.*
+
 import android.net.Uri
 import android.content.BroadcastReceiver
 import android.content.Context

@@ -11,12 +11,17 @@ version = "0.1.0"
 
 kotlin {
     jvmToolchain(21)
+    // As telas de montar set são as mesmas do app de celular (studio/).
+    sourceSets["main"].kotlin.srcDir("../studio/src")
 }
 
 dependencies {
     implementation("os.deckbridge:core")
     implementation(compose.desktop.currentOs)
+    implementation(compose.material3)
     testImplementation(kotlin("test"))
+    @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+    testImplementation(compose.uiTest)
 }
 
 compose.desktop {

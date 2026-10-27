@@ -1,5 +1,7 @@
 package os.deckbridge.manager.mobile
 
+import os.deckbridge.manager.studio.*
+
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat

@@ -1,4 +1,4 @@
-package os.deckbridge.manager.mobile
+package os.deckbridge.manager.studio
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,7 +28,7 @@ import os.deckbridge.manager.pdb.TrackItem
  * juntos e como), a prévia de cada uma montada no aparelho, e as "só transições" em sequência para ouvir o set de ponta a
  * ponta. O plano fica num arquivo ao lado da biblioteca (o rekordbox não tem onde guardar isso); o pendrive não muda.
  */
-class SetDesk(private val app: ManagerApp) {
+class SetDesk(private val app: StudioHost) {
     var playlistId by mutableStateOf<Int?>(null)
         private set
 
@@ -38,10 +38,10 @@ class SetDesk(private val app: ManagerApp) {
 
     private val grids = HashMap<Int, TrackGrid?>()
 
-    private fun file(id: Int) = File(app.root.parentFile, "sets/$id.properties")
+    private fun file(id: Int) = File(app.setsDir, "$id.properties")
 
-    private val branchesFile get() = File(app.root.parentFile, "sets/branches.properties")
-    private fun masterFile(id: Int) = File(app.root.parentFile, "sets/$id.master")
+    private val branchesFile get() = File(app.setsDir, "branches.properties")
+    private fun masterFile(id: Int) = File(app.setsDir, "$id.master")
 
     /** Os ramos de todos os sets (as playlists de ramo e de onde saem). */
     var branches by mutableStateOf<List<SetBranch>>(emptyList())
@@ -139,7 +139,7 @@ class SetDesk(private val app: ManagerApp) {
 
     // ---- pool: um trecho sem ordem, escolhido na hora -----------------------------------------------------------
 
-    private fun poolFile(id: Int) = File(app.root.parentFile, "sets/$id.pool")
+    private fun poolFile(id: Int) = File(app.setsDir, "$id.pool")
 
     private fun poolFromOf(id: Int): Int? = runCatching { SetPool.load(poolFile(id)) }.getOrNull()
 
@@ -586,16 +586,17 @@ class SetDesk(private val app: ManagerApp) {
         if (!app.model.submit(Edit.SetGrid(b.id, b.bpm, newFirst), "Grade de \"${b.title}\": %+d ms".format(delta))) return
         val fixed = tr.copy(inMs = (tr.inMs + delta).coerceAtLeast(0))
         app.background("Salvando a grade") { j ->
-            app.model.apply(null) { j.text = it } ?: throw IllegalStateException(app.model.banner?.text ?: "Não consegui salvar a grade")
+            // No computador com o pendrive aberto, a grade fica na fila até o usuário gravar.
+            val saved = app.saveNow { j.text = it }
             onMain {
                 synchronized(grids) { grids.remove(b.id) }
                 editMix(fixed)
-                app.did("Grade de ${b.title}: %+d ms".format(delta))
+                app.did("Grade de ${b.title}: %+d ms".format(delta) + if (saved) "" else " (na fila)")
             }
         }
     }
 
-    private fun cacheFile(key: String) = File(app.context.cacheDir, "mix/${key.hashCode().toUInt()}.wav")
+    private fun cacheFile(key: String) = File(app.cacheDir, "mix/${key.hashCode().toUInt()}.wav")
 
     private fun keyOf(tr: Transition, tempo: Double? = tempoFor(tr)): String {
         val v = app.model.view
@@ -640,7 +641,7 @@ class SetDesk(private val app: ManagerApp) {
     fun setKey(plan: List<Transition>, tempos: List<Double?> = plan.map { tempoFor(it) }) =
         "all|" + plan.withIndex().joinToString(";") { (i, tr) -> keyOf(tr, tempos[i]) }
 
-    private fun onMain(block: () -> Unit) = android.os.Handler(android.os.Looper.getMainLooper()).post(block)
+    private fun onMain(block: () -> Unit) = app.onMain(block)
 
     /** Monta (se ainda não tem) e toca a prévia de uma transição; tocar de novo para. */
     fun play(tr: Transition) {

@@ -1,4 +1,4 @@
-package os.deckbridge.manager.mobile
+package os.deckbridge.manager.studio
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -78,7 +78,7 @@ fun Modifier.rbPad(h: Int, v: Int): Modifier = this.padding(horizontal = h.dp, v
 
 /**
  * Destaque do próximo controle: um segundo contorno azul por fora, parado (sem piscar). Diz "é aqui" sem texto; some
- * quando a pessoa usa o controle uma vez (ver [ManagerApp.hint]).
+ * quando a pessoa usa o controle uma vez (ver [StudioHost.hint]).
  */
 fun Modifier.spotlight(on: Boolean): Modifier =
     if (!on) this else this.drawWithContent {

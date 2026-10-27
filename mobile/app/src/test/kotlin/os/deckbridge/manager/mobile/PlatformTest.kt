@@ -1,5 +1,7 @@
 package os.deckbridge.manager.mobile
 
+import os.deckbridge.manager.studio.*
+
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas

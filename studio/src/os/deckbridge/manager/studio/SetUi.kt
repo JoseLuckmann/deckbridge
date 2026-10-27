@@ -1,4 +1,4 @@
-package os.deckbridge.manager.mobile
+package os.deckbridge.manager.studio
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -60,7 +60,7 @@ private fun mmss(ms: Int): String = "%d:%02d".format(ms / 60000, ms / 1000 % 60)
  * Embaixo, as próximas que combinam com a última.
  */
 @Composable
-fun SetScreen(app: ManagerApp) {
+fun SetScreen(app: StudioHost) {
     val desk = app.sets
     val m = app.model
     val v = m.view ?: return
@@ -82,7 +82,7 @@ fun SetScreen(app: ManagerApp) {
         branch != null && !board -> desk.openMain()
         else -> desk.close()
     }
-    androidx.activity.compose.BackHandler { back() }
+    BackHandler { back() }
     var masterOpen by remember { mutableStateOf(false) }
     var branchFrom by remember { mutableStateOf<Int?>(null) }
     var turnAt by remember { mutableStateOf<Int?>(null) }
@@ -211,6 +211,7 @@ fun SetScreen(app: ManagerApp) {
         val canSort = poolAt == null && ids.size >= 3
         val options = buildList {
             if (canSort) add("Ordenar para mixar" to { sortOpen = true })
+            add("Transição · " + (app.transitionBars?.let { "$it compassos" } ?: "até o drop") to { app.nextTransitionBars() })
             if (board) {
                 add("Master · " + (desk.masterFixed?.let { "%.0f".format(it) } ?: "automático") to { masterOpen = true })
                 add("Andamento do set" to { desk.mapOpen = true })
@@ -299,7 +300,7 @@ private fun ActionsRow(issues: Int, redo: Int, onRehearse: () -> Unit, rehearseS
 
 /** O ensaio: a transição que está tocando e os botões para dizer se ficou boa. */
 @Composable
-private fun RehearsalBar(app: ManagerApp, at: Int, plan: List<Transition>, tr: Transition) {
+private fun RehearsalBar(app: StudioHost, at: Int, plan: List<Transition>, tr: Transition) {
     val v = app.model.view ?: return
     val a = v.track(tr.fromId)
     val b = v.track(tr.toId)
@@ -455,7 +456,7 @@ private fun BranchButton(onClick: () -> Unit) {
 
 /** Um ramo que sai desta faixa: a letra, quantas faixas e onde volta. Tocar abre o SET do ramo. */
 @Composable
-private fun BranchRow(app: ManagerApp, b: os.deckbridge.manager.mix.SetBranch, line: List<Int>, onOpen: () -> Unit) {
+private fun BranchRow(app: StudioHost, b: os.deckbridge.manager.mix.SetBranch, line: List<Int>, onOpen: () -> Unit) {
     val v = app.model.view ?: return
     val p = v.playlists.firstOrNull { it.id == b.playlistId } ?: return
     val n = v.entries[b.playlistId].orEmpty().size
@@ -475,7 +476,7 @@ private fun BranchRow(app: ManagerApp, b: os.deckbridge.manager.mix.SetBranch, l
 
 /** Criar um ramo daqui: quantas faixas, o rumo e se volta para a linha principal. */
 @Composable
-private fun BranchDialog(app: ManagerApp, from: Int, onClose: () -> Unit) {
+private fun BranchDialog(app: StudioHost, from: Int, onClose: () -> Unit) {
     var kind by remember { mutableStateOf(SetDesk.BranchKind.LIST) }
     var count by remember { mutableStateOf(3) }
     var shape by remember { mutableStateOf(os.deckbridge.manager.mix.SetShape.RISING) }
@@ -624,7 +625,7 @@ private fun SuggestionRow(t: TrackItem, fit: Fit, playing: Boolean, onPlay: () -
 
 /** Onde o ramo aberto volta (ou "outro final"); tocar muda. */
 @Composable
-private fun RejoinRow(app: ManagerApp, rejoin: Int?, onClick: () -> Unit) {
+private fun RejoinRow(app: StudioHost, rejoin: Int?, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().height(40.dp).background(Palette.surface).clickable(onClick = onClick).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -642,7 +643,7 @@ private fun RejoinRow(app: ManagerApp, rejoin: Int?, onClick: () -> Unit) {
  * O bloco da pool: o cabeçalho (quantas, de onde entra e para onde sai) e as faixas. Com uma marcada como AGORA, as outras
  * vêm na ordem da melhor troca a partir dela; as que já tocaram vão para o fim, apagadas.
  */
-private fun androidx.compose.foundation.lazy.LazyListScope.poolItems(app: ManagerApp, ids: List<Int>, masters: List<Double>, from: Int, until: Int) {
+private fun androidx.compose.foundation.lazy.LazyListScope.poolItems(app: StudioHost, ids: List<Int>, masters: List<Double>, from: Int, until: Int) {
     val desk = app.sets
     val v = app.model.view ?: return
     val pool = ids.subList(from, until)
