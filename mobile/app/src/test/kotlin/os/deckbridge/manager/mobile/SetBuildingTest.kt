@@ -110,8 +110,7 @@ class SetBuildingTest {
         assertEquals(id(a, "Copper Sky"), ids.last())
         assertEquals("Em", a.model.view!!.track(ids[1])!!.key)
         assertTrue(a.sets.issues(ids, a.sets.plan()).isEmpty(), "trocas ok")
-        // Um desfazer tira a ponte inteira.
-        a.model.undo()
+        // Um desfazer tira a ponte inteira (pôr na playlist e o lugar dela saem juntos).
         a.model.undo()
         assertEquals(2, a.sets.ids().size)
     }
