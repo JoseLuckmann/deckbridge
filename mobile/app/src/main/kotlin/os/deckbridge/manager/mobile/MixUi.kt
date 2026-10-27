@@ -470,6 +470,14 @@ private fun Controls(app: ManagerApp, a: TrackItem, b: TrackItem, tr: Transition
                 PadButton(label, Modifier.weight(1f), on = kotlin.math.abs(tr.swapAt - at) < 0.01) { edit(tr.copy(swapAt = at)) }
             }
         }
+        // E como ele passa: de uma vez no ponto, ou aos poucos em 4, 8 ou 16 compassos que terminam no ponto.
+        if (tr.style == MixStyle.BASS_SWAP) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            RowLabel("PASSA")
+            listOf(0 to "DE UMA VEZ", 4 to "4 COMP.", 8 to "8 COMP.", 16 to "16 COMP.").forEach { (n, label) ->
+                // Mais compassos que a troca inteira não faz sentido: fica apagado.
+                PadButton(label, Modifier.weight(if (n == 0) 1.4f else 1f), on = tr.swapBars == n, enabled = n < tr.bars) { edit(tr.copy(swapBars = n)) }
+            }
+        }
         PadButton(if (advanced) "MENOS ▴" else "AJUSTAR ▾", Modifier.fillMaxWidth()) { onToggle() }
         if (ga == null || gb == null) Text("Sem grade: analise as faixas para cair na batida.", color = Palette.noteInk, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         if (!advanced) {

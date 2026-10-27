@@ -99,8 +99,8 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
 - Automáticas pela estrutura: a próxima entra no começo dela e a troca dura até o drop dela (o drop cai quando a outra
   termina de sair); sem drop, o outro; sem nada, 32 compassos. A que sai começa no outro dela, em frases.
 - MENU → Set → Transição fixa a duração (16/32/64). No MIX, "ATÉ O DROP" acerta a troca para o drop da próxima.
-- No MIX: RITMO (rápida, média, lenta) e, na troca de grave, GRAVE (1/4, 1/2, 3/4, no drop): quando e quão rápido o
-  grave passa de uma para a outra.
+- No MIX: RITMO (rápida, média, lenta) e, na troca de grave, GRAVE (1/4, 1/2, 3/4, no drop) e PASSA (de uma vez, ou
+  aos poucos em 4, 8 ou 16 compassos que terminam no ponto do grave).
 
 ## Simples por padrão
 

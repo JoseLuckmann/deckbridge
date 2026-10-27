@@ -139,7 +139,7 @@ class SetFlowTest {
         rule.waitForIdle()
         rule.onNodeWithText("CORTE").performScrollTo().performClick()
         waitMix(a)
-        rule.onNodeWithText("8").performScrollTo().performClick()
+        rule.onNodeWithText("8 COMP.").performScrollTo().performClick()
         waitMix(a)
         rule.onNodeWithText("MASTER TEMPO").performScrollTo().performClick()
         waitMix(a)
@@ -260,11 +260,14 @@ class SetFlowTest {
         waitMix(a)
         rule.onNodeWithText("3/4").performScrollTo().performClick()
         waitMix(a)
+        rule.onNodeWithText("8 COMP.").performScrollTo().performClick()
+        waitMix(a)
         val tr = a.sets.mixing!!
         assertEquals(Transition.Pace.SLOW, tr.pace)
         assertEquals(0.75, tr.swapAt)
+        assertEquals(8, tr.swapBars)
         rule.onRoot().captureRoboImage(File(out, "mobile-40-vertical-mix-ritmo.png").path)
-        // A prévia segue a troca escolhida: perto do ponto do grave, os dois graves estão se cruzando (lenta).
+        // A prévia segue a troca escolhida: perto do ponto do grave, os dois graves estão se cruzando (aos poucos).
         val p = a.sets.mixPreview!!
         val lv = p.levelsAt(p.leadMs + (p.overlapMs * 0.75 - p.barMsA * 4).toInt())
         assertTrue(lv.bLow in 0.1f..0.9f, "grave entrando aos poucos: ${lv.bLow}")
@@ -272,6 +275,6 @@ class SetFlowTest {
         assertEquals(tr, a.sets.plan().first { it.fromId == tr.fromId && it.toId == tr.toId })
         rule.onNodeWithText("✕").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("lenta", substring = true).assertExists()
+        rule.onNodeWithText("lenta · grave aos poucos", substring = true).assertExists()
     }
 }

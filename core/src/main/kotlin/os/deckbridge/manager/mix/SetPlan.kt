@@ -33,6 +33,8 @@ data class Transition(
     val pace: Pace = Pace.NORMAL,
     /** Troca de grave: em que ponto da transição o grave passa de uma para a outra (0,5 = no meio; 1 = no fim, no drop). */
     val swapAt: Double = 0.5,
+    /** Troca de grave: 0 vira o grave de uma vez no ponto; N passa aos poucos em N compassos que terminam no ponto. */
+    val swapBars: Int = 0,
 ) {
     enum class Mark { GOOD, REDO }
 
@@ -285,6 +287,7 @@ object SetPlanner {
             t.mark?.let { p.setProperty("$n.mark", it.name) }
             p.setProperty("$n.pace", t.pace.name)
             p.setProperty("$n.swap", t.swapAt.toString())
+            p.setProperty("$n.swapBars", t.swapBars.toString())
         }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".novo")
@@ -305,6 +308,7 @@ object SetPlanner {
                     p.getProperty("$i.mark")?.let { m -> runCatching { Transition.Mark.valueOf(m) }.getOrNull() },
                     p.getProperty("$i.pace")?.let { m -> runCatching { Transition.Pace.valueOf(m) }.getOrNull() } ?: Transition.Pace.NORMAL,
                     p.getProperty("$i.swap")?.toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.5,
+                    p.getProperty("$i.swapBars")?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
                 )
             }.getOrNull()
         }

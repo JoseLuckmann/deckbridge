@@ -65,7 +65,7 @@ class MixPreview(
     fun fromA(trackMs: Int) = ((trackMs - aStartMs) / speedA).toInt()
     fun fromB(trackMs: Int) = leadMs + ((trackMs - transition.inMs) / speed - phaseMs).toInt()
     fun levelsAt(ms: Int, into: Levels = Levels()) =
-        MixRenderer.levels(transition.style, (ms - leadMs).toDouble(), overlapMs.toDouble(), barMsA, into, transition.pace, transition.swapAt)
+        MixRenderer.levels(transition.style, (ms - leadMs).toDouble(), overlapMs.toDouble(), barMsA, into, transition.pace, transition.swapAt, transition.swapBars)
 }
 
 /**
@@ -79,12 +79,12 @@ object MixRenderer {
 
     /**
      * Os níveis dos dois canais a [relMs] do ponto de saída (negativo: antes), conforme o estilo, o ritmo ([pace]) e, na
-     * troca de grave, o ponto em que o grave passa ([swapAt], 0 a 1, num início de compasso). Ritmo médio com o grave no
-     * meio é a troca de sempre.
+     * troca de grave, o ponto em que o grave passa ([swapAt], 0 a 1, num início de compasso) e em quantos compassos
+     * ([swapBars]: 0 de uma vez, N aos poucos terminando no ponto). Ritmo médio com o grave seco no meio é a troca de sempre.
      */
     fun levels(
         style: MixStyle, relMs: Double, overlapMs: Double, barMs: Double, out: Levels,
-        pace: Transition.Pace = Transition.Pace.NORMAL, swapAt: Double = 0.5,
+        pace: Transition.Pace = Transition.Pace.NORMAL, swapAt: Double = 0.5, swapBars: Int = 0,
     ): Levels {
         val x = if (overlapMs <= 0) (if (relMs >= 0) 1.0 else 0.0) else (relMs / overlapMs).coerceIn(0.0, 1.0)
         out.aLow = 1f; out.aHigh = 1f; out.bLow = 1f; out.bHigh = 1f; out.echo = false
@@ -113,8 +113,15 @@ object MixRenderer {
                 val s = if (overlapMs <= 0) 0.5 else (Math.round(swapAt.coerceIn(0.0, 1.0) * bars).coerceAtLeast(1) / bars).coerceAtMost(1.0)
                 // Agudos e médios da que entra sobem até a troca (rápida: no primeiro quarto desse trecho).
                 out.bHigh = ramp(0.0, if (pace == Transition.Pace.FAST) s / 4 else s).toFloat()
-                // O grave: seco no início do compasso; lenta, passa aos poucos em até 8 compassos que terminam na troca.
-                val swap = if (pace == Transition.Pace.SLOW) ramp((s - 8 / bars).coerceAtLeast(0.0), s) else if (x >= s) 1.0 else 0.0
+                // O grave: de uma vez no início do compasso, ou aos poucos em [swapBars] compassos que terminam no ponto (sem
+                // espaço antes do ponto, começa na saída e termina mais adiante).
+                val swap = if (swapBars <= 0 || overlapMs <= 0) {
+                    if (x >= s) 1.0 else 0.0
+                } else {
+                    val g = (swapBars / bars).coerceAtMost(1.0)
+                    val from = (s - g).coerceAtLeast(0.0)
+                    ramp(from, (from + g).coerceAtMost(1.0))
+                }
                 out.aLow = (1 - swap).toFloat()
                 out.bLow = swap.toFloat()
                 // A que sai desce no fim: rápida no último oitavo, média no último quarto, lenta na última metade.
@@ -190,7 +197,7 @@ object MixRenderer {
             val inB = j >= 0 && jb >= 0 && jb < sb.frames
             val bl = if (inB) sb.left[jb] else 0f
             val br = if (inB) sb.right[jb] else 0f
-            levels(t.style, j * 1000.0 / RATE, overlapMs.toDouble(), barMs, lv, t.pace, t.swapAt)
+            levels(t.style, j * 1000.0 / RATE, overlapMs.toDouble(), barMs, lv, t.pace, t.swapAt, t.swapBars)
             val la = lowA.step(al); val ra = lowAR.step(ar)
             val lb = lowB.step(bl); val rb = lowBR.step(br)
             var oal = (la * lv.aLow + (al - la) * lv.aHigh) * lv.aVol

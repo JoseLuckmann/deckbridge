@@ -151,8 +151,8 @@ class MixTest {
         val lv = os.deckbridge.manager.mix.Levels()
         val bar = 2000.0
         val overlap = 32 * bar
-        fun at(bars: Double, pace: Transition.Pace, swap: Double = 0.5, style: MixStyle = MixStyle.BASS_SWAP) =
-            MixRenderer.levels(style, bars * bar, overlap, bar, lv, pace, swap)
+        fun at(bars: Double, pace: Transition.Pace, swap: Double = 0.5, style: MixStyle = MixStyle.BASS_SWAP, swapBars: Int = 0) =
+            MixRenderer.levels(style, bars * bar, overlap, bar, lv, pace, swap, swapBars)
         // Grave no fim (no drop): até o último compasso a que sai ainda tem grave; no fim, troca.
         at(31.5, Transition.Pace.NORMAL, swap = 1.0)
         assertEquals(1f, lv.aLow); assertEquals(0f, lv.bLow)
@@ -163,10 +163,22 @@ class MixTest {
         assertEquals(0f, lv.bLow)
         at(8.0, Transition.Pace.NORMAL, swap = 0.25)
         assertEquals(1f, lv.bLow)
-        // Lenta: o grave passa aos poucos nos 8 compassos antes da troca.
-        at(12.0, Transition.Pace.SLOW)
+        // De uma vez em qualquer ritmo (o ritmo não mexe no grave).
+        at(15.9, Transition.Pace.SLOW)
+        assertEquals(1f, lv.aLow); assertEquals(0f, lv.bLow)
+        // Aos poucos em 8 compassos: cruza entre o 8º e o 16º, terminando no ponto.
+        at(12.0, Transition.Pace.NORMAL, swapBars = 8)
         assertEquals(0.5f, lv.bLow, 0.01f)
         assertEquals(0.5f, lv.aLow, 0.01f)
+        at(7.9, Transition.Pace.NORMAL, swapBars = 8)
+        assertEquals(0f, lv.bLow, 0.02f)
+        at(16.0, Transition.Pace.NORMAL, swapBars = 8)
+        assertEquals(1f, lv.bLow)
+        // Aos poucos em 16 com o ponto em 1/4 (8º compasso): não cabe antes, começa na saída e termina no 16º.
+        at(8.0, Transition.Pace.NORMAL, swap = 0.25, swapBars = 16)
+        assertEquals(0.5f, lv.bLow, 0.01f)
+        at(16.0, Transition.Pace.NORMAL, swap = 0.25, swapBars = 16)
+        assertEquals(1f, lv.bLow)
         // Rápida: agudos da que entra já cheios num quarto do caminho até a troca; a que sai só some no último oitavo.
         at(4.0, Transition.Pace.FAST)
         assertEquals(1f, lv.bHigh)
@@ -180,7 +192,7 @@ class MixTest {
         at(16.0, Transition.Pace.SLOW, style = MixStyle.BLEND)
         assertEquals(1f, lv.aVol, 0.001f); assertEquals(1f, lv.bVol, 0.001f)
         // Guardado no plano.
-        val tr = Transition(1, 2, 1000, 0, 32, MixStyle.BASS_SWAP, pace = Transition.Pace.SLOW, swapAt = 1.0)
+        val tr = Transition(1, 2, 1000, 0, 32, MixStyle.BASS_SWAP, pace = Transition.Pace.SLOW, swapAt = 1.0, swapBars = 8)
         val file = Files.createTempDirectory("set").resolve("x.properties").toFile()
         SetPlanner.save(file, listOf(tr))
         assertEquals(listOf(tr), SetPlanner.load(file))

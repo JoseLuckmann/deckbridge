@@ -1056,3 +1056,11 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Achado: ao incluir as linhas, a RITMO entrou por engano dentro da linha ESTILO (sem os botões de estilo); o `SetFlowTest` pegou (o CORTE não estava na tela) e foi corrigido. Também: faixas curtas — a transição automática passou a ter no máximo metade da faixa que sai, e sem outro a saída tenta o bloco de 16, depois a frase de 8, depois o compasso (antes, faixas de 40 s ficavam com saída no começo).
 - Evidência: core 124 (`ritmo e ponto da troca de grave`: grave no fim, em 1/4 num compasso, lenta passando aos poucos, rápida e lenta no volume, mistura rápida e lenta, guardado no plano, automático no drop); mobile `SetFlowTest.paceAndTheBassSwapPointChangeTheTransition` (LENTA e 3/4 pela tela, prévia com o grave se cruzando, guardado e mostrado na linha). Captura `docs/ui/mobile-40`.
 - Não verificado: de ouvido no aparelho.
+
+## 2026-10-27 — Grave de uma vez ou aos poucos
+
+- Pedido: virar o grave todo de uma vez num ponto, ou ir mudando aos poucos, conforme a situação.
+- Núcleo: `Transition.swapBars` (0 = de uma vez no ponto; 4/8/16 = o grave de uma desce enquanto o da outra sobe, em N compassos que terminam no ponto do GRAVE; sem espaço antes do ponto, começa na saída e termina adiante), guardado no plano. O ritmo deixou de mexer no grave (antes, "lenta" passava o grave aos poucos em 8 compassos fixos): ritmo fica com agudos e volume, PASSA com o grave.
+- Celular: no MIX, linha PASSA (DE UMA VEZ / 4 COMP. / 8 COMP. / 16 COMP.; mais compassos que a troca ficam apagados); no SET, "grave aos poucos" na linha da troca.
+- Evidência: core 124 (`ritmo e ponto da troca de grave` ampliado: seco em qualquer ritmo, 8 compassos cruzando até o ponto, 16 sem espaço antes do ponto); mobile `SetFlowTest.paceAndTheBassSwapPointChangeTheTransition` (LENTA, 3/4 e 8 COMP. pela tela, prévia com os graves se cruzando, linha do SET).
+- Não verificado: de ouvido no aparelho.
