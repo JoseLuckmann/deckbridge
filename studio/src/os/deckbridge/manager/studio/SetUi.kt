@@ -109,8 +109,19 @@ fun SetScreen(app: StudioHost) {
                 Text("SET", color = Palette.blue, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
                 Text(p.name, color = Palette.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
             }
-            Text("≈" + mmss(SetPlanner.lengthMs(v, ids, plan)), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
-            PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playAll(plan) }
+            if (board) {
+                // No quadro: o caminho inteiro da linha escolhida (do começo ao fim do set), para comparar vertentes.
+                val path = remember(v, desk.playlistId, desk.saved, desk.branches, desk.masterFixed, app.transitionBars) { desk.pathPlan() }
+                val letter = desk.branch?.let { desk.letterOf(it) } ?: 'A'
+                Text("≈" + mmss((path?.lengthMs ?: 0L).toInt()), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
+                PlayButton(
+                    on = path != null && app.preview.playingKey == desk.setKey(path.plan, path.tempos), enabled = path?.plan?.isNotEmpty() == true,
+                    label = if (desk.tree().isNotEmpty()) "OUVIR $letter" else "OUVIR",
+                ) { path?.let { desk.playPath(it) } }
+            } else {
+                Text("≈" + mmss(SetPlanner.lengthMs(v, ids, plan)), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
+                PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playAll(plan) }
+            }
             // O que se usa pouco (ordenar) fica no ⋯; numa pool a ordem é escolhida na hora.
             TextButton(onClick = { menuOpen = true }, modifier = Modifier.semantics { contentDescription = "Mais" }) { Text("⋯", fontSize = 20.sp) }
         }

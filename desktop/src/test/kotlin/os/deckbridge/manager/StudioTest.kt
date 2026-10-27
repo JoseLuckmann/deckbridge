@@ -113,6 +113,16 @@ class StudioTest {
         assertEquals(3, layout.rows)
         assertTrue(layout.lanes.drop(1).all { it.rejoin?.trackId == id(m, "Glass Harbour") })
         shot("desktop-set-quadro")
+        // Ouvir uma vertente é ouvir o caminho inteiro por ela: abertura → C → fechamento.
+        val c = layout.lanes[2]
+        studio.sets.focus(c.playlistId)
+        waitForIdle()
+        val path = assertNotNull(studio.sets.pathPlan())
+        val opening = listOf("Night Signal", "Small Hours").map { id(m, it) }
+        val ending = m.view!!.entries[pid]!!.dropWhile { it != id(m, "Glass Harbour") }
+        assertEquals(opening + c.cards.map { it.trackId } + ending, path.route.ids)
+        assertEquals(path.route.ids.size - 1, path.plan.size)
+        assertTrue(onAllNodes(hasText("OUVIR C", substring = true)).fetchSemanticsNodes().isNotEmpty(), "o OUVIR diz qual caminho")
         // A troca abre o MIX (a mesma tela do celular); Esc volta.
         val first = studio.sets.lanePlan(pid).first()
         studio.sets.focus(pid)

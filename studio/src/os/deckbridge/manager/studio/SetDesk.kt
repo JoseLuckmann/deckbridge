@@ -250,6 +250,27 @@ class SetDesk(private val app: StudioHost) {
         }
     }
 
+    /**
+     * Um caminho inteiro do set, do começo ao fim: as trocas programadas (sem as de dentro de uma pool), o master de cada uma
+     * e a duração. É o que se ouve para comparar vertentes ("abertura → B → fechamento" contra "→ C →").
+     */
+    class PathPlan(val route: SetRoute, val plan: List<Transition>, val tempos: List<Double?>, val lengthMs: Long)
+
+    /** O caminho que passa pela linha [pid] (a principal: ela mesma; um ramo: até ele, ele e o resto depois da volta). */
+    fun pathPlan(pid: Int? = playlistId): PathPlan? {
+        val v = app.model.view ?: return null
+        val root = rootId() ?: return null
+        val r = rawRoutes().firstOrNull { (it.branch?.playlistId ?: root) == pid } ?: return null
+        val keep = (listOf(root) + tree().map { it.playlistId }).flatMap { runCatching { SetPlanner.load(file(it)) }.getOrDefault(emptyList()) }
+        val masters = SetTempo.plan(r.ids.map { v.track(it)?.bpm ?: 0.0 }, masterFixed)
+        val all = SetPlanner.plan(v, r.ids, ::grid, keep = keep, bars = app.transitionBars)
+        val steps = all.indices.filter { i -> !(r.pool.getOrElse(i) { false } || r.pool.getOrElse(i + 1) { false }) }
+        return PathPlan(r, steps.map { all[it] }, steps.map { masters.getOrNull(it) }, SetRoutes.tempo(v, r.ids, all, masters).lengthMs)
+    }
+
+    /** Ouve o caminho [path] inteiro: as trocas uma depois da outra, cada uma no master daquele ponto do caminho. */
+    fun playPath(path: PathPlan) = playAll(path.plan, path.tempos)
+
     /** Abre a linha de um caminho do mapa: a principal ou a do ramo. */
     fun openRoute(r: SetRoute) {
         mapOpen = false
@@ -724,14 +745,13 @@ class SetDesk(private val app: StudioHost) {
     }
 
     /** As transições do set uma depois da outra, para ouvir o set de ponta a ponta. */
-    fun playAll(plan: List<Transition>) {
+    fun playAll(plan: List<Transition>, tempos: List<Double?> = plan.map { tempoFor(it) }) {
         if (plan.isEmpty()) return
-        val key = setKey(plan)
+        val key = setKey(plan, tempos)
         if (app.preview.playingKey == key) return app.preview.stop()
         val ready = cacheFile(key)
         if (ready.isFile) return app.preview.toggleFile(ready, key, "set")
         val opened = playlistId
-        val tempos = plan.map { tempoFor(it) }
         app.background("Montando o set") { j ->
             val f = renderSet(plan, { j.cancelled }, tempos) { j.text = "${it + 1}/${plan.size}" } ?: return@background
             onMain { if (playlistId == opened && opened != null) app.preview.toggleFile(f, key, "set") }
