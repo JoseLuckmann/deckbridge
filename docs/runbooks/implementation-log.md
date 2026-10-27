@@ -1117,3 +1117,4 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - `MixGuide.steps` (núcleo): os passos da virada ditos em gestos, a partir dos mesmos pontos de `MixRenderer.levels` (entrada do CH 2 com o LOW fechado, abrir HI/MID até a troca do grave, trocar o grave de uma vez ou aos poucos, baixar o fader do CH 1; mistura, eco e corte também). `MixGuide.at`: o que está acontecendo e o próximo. Tela: PASSO com "comp. 4 / 8" (ou "saída em N comp."), o passo atual aceso e "em N comp. · próximo".
 - Evidência: core `os passos da virada seguem o que a previa faz` (conferido contra os níveis nos compassos 16, 24, 25); mobile `SetFlowTest` (no meio da troca, PASSO diz "Troca o grave aos poucos"); captura `docs/ui/mobile-47`.
 - Não verificado: no aparelho.
+- Celular completo 67 (3 pulados, 0 falhas), computador 8 (2 pulados), núcleo verde. Versão 0.12.0.
