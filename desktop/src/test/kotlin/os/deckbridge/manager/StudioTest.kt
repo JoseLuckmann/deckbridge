@@ -130,6 +130,19 @@ class StudioTest {
         click("8 COMP.")
         assertEquals(8, studio.sets.mixing?.swapBars)
         shot("desktop-set-mix")
+        // A análise errou o drop: põe a cabeça 10 compassos depois da entrada da que entra e marca. A troca passa a durar
+        // até ele, o grave troca no drop, e o cue vai para a fila da faixa.
+        val p = studio.sets.mixPreview!!
+        val b = m.view!!.track(p.transition.toId)!!
+        val barB = 4 * 60000.0 / b.bpm
+        studio.sets.seekMix(p.fromB(p.transition.inMs + (10 * barB).toInt()))
+        waitForIdle()
+        click("DROP AQUI")
+        val marked = studio.sets.mixing!!
+        assertEquals(10, marked.bars)
+        assertEquals(1.0, marked.swapAt)
+        assertTrue(m.pending.any { (it.edit as? Edit.SetCues)?.trackId == b.id }, "o drop entra na fila da faixa")
+        assertEquals(10, os.deckbridge.manager.mix.SetPlanner.barsToDrop(b, studio.sets.grid(b), marked.inMs), "e já vale para as outras trocas com ela")
         assertTrue(studio.back(), "Esc fecha o MIX")
         waitForIdle()
         assertEquals(null, studio.sets.mixing)

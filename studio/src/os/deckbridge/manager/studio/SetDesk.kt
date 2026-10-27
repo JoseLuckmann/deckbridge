@@ -37,6 +37,7 @@ class SetDesk(private val app: StudioHost) {
         private set
 
     private val grids = HashMap<Int, TrackGrid?>()
+    private val loader = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "deckbridge-grades").apply { isDaemon = true } }
 
     private fun file(id: Int) = File(app.setsDir, "$id.properties")
 
@@ -53,6 +54,7 @@ class SetDesk(private val app: StudioHost) {
 
     fun open(id: Int) {
         synchronized(grids) { grids.clear() }
+        prefetch(id)
         branches = SetBranches.load(branchesFile)
         saved = SetPlanner.load(file(id))
         poolFrom = poolFromOf(id)
@@ -60,6 +62,18 @@ class SetDesk(private val app: StudioHost) {
         poolPlayed = emptySet()
         playlistId = id
         masterFixed = SetTempo.loadMode(masterFile(rootId() ?: id))
+    }
+
+    /**
+     * Lê as grades das faixas do set (a linha e os ramos) numa thread de fundo, para a tela não esperar o disco quando
+     * calcula as trocas. O que a tela pedir antes de chegar é lido na hora, como antes.
+     */
+    private fun prefetch(id: Int) {
+        val v = app.model.view ?: return
+        val all = SetBranches.load(branchesFile)
+        val root = SetBranches.rootOf(all, id)
+        val tracks = (listOf(root) + SetBranches.tree(all, root).map { it.playlistId }).flatMap { v.entries[it].orEmpty() }.distinct().mapNotNull { v.track(it) }
+        loader.execute { for (t in tracks) if (playlistId != null) grid(t) }
     }
 
     /** O ramo aberto, se a playlist aberta é um ramo de outro set. */
@@ -392,11 +406,13 @@ class SetDesk(private val app: StudioHost) {
     /** As grades mudaram (refazer grades): lê de novo na próxima vez. */
     fun forgetGrids() = synchronized(grids) { grids.clear() }
 
-    fun grid(t: TrackItem): TrackGrid? = synchronized(grids) {
-        grids.getOrPut(t.id) {
-            val f = runCatching { app.model.trackFiles(t) }.getOrNull()
-            if (f == null || f.beats.isEmpty()) null else TrackGrid(f.beats, f.cues, f.durationMs)
-        }
+    fun grid(t: TrackItem): TrackGrid? {
+        synchronized(grids) { if (grids.containsKey(t.id)) return grids[t.id] }
+        // Lê fora da trava: a tela não espera a leitura de outra faixa que a thread de fundo esteja fazendo.
+        val f = runCatching { app.model.trackGrid(t) }.getOrNull()
+        val g = if (f == null || f.beats.isEmpty()) null else TrackGrid(f.beats, f.cues, f.durationMs)
+        synchronized(grids) { grids[t.id] = g }
+        return g
     }
 
     /** As transições da linha aberta: só na parte com ordem (numa pool a ordem é escolhida na hora). */
@@ -594,6 +610,54 @@ class SetDesk(private val app: StudioHost) {
                 app.did("Grade de ${b.title}: %+d ms".format(delta) + if (saved) "" else " (na fila)")
             }
         }
+    }
+
+    /** Os pontos que o DJ marca na onda quando a análise errou: o começo e o drop da que entra, o outro da que sai. */
+    enum class Spot(val cue: String) { INTRO("Intro"), DROP("Drop"), OUTRO("Outro") }
+
+    /**
+     * Marca [spot] onde a cabeça está (no início de compasso mais perto), como um cue de memória com o nome ("Intro", "Drop",
+     * "Outro") — o mesmo que a montagem automática procura — e acerta a troca aberta por ele: a entrada vai para o Intro, a
+     * saída para o Outro, e com o Drop a troca dura até ele (o grave troca no drop). Vai para a fila de mudanças da faixa
+     * (gravada como as outras: sozinha no celular, ao aplicar no computador) e vale para as outras trocas com ela também.
+     * Devolve falso se a cabeça está fora da faixa.
+     */
+    fun markHere(spot: Spot): Boolean {
+        val p = mixPreview ?: return false
+        val tr = mixing ?: return false
+        val v = app.model.view ?: return false
+        val a = v.track(tr.fromId) ?: return false
+        val b = v.track(tr.toId) ?: return false
+        val t = if (spot == Spot.OUTRO) a else b
+        val raw = if (spot == Spot.OUTRO) p.aAt(cursorMs) else p.bAt(cursorMs)
+        val g = grid(t)
+        val dur = g?.durationMs?.takeIf { it > 0 } ?: (t.durationSeconds * 1000)
+        if (raw < 0 || raw > dur) {
+            app.notice = os.deckbridge.manager.Banner(if (spot == Spot.OUTRO) "A cabeça já passou do fim da que sai" else "Ponha a cabeça onde a que entra já toca", true)
+            return false
+        }
+        val at = SetPlanner.snap(g, raw)
+        val base = g?.cues ?: runCatching { app.model.trackGrid(t).cues }.getOrDefault(emptyList())
+        val cues = base.filterNot { !it.isHot && it.comment.equals(spot.cue, ignoreCase = true) } + os.deckbridge.manager.anlz.Cue(0, at, comment = spot.cue)
+        if (!app.model.submit(Edit.SetCues(t.id, cues), "${spot.cue} de \"${t.title}\" em ${at / 60000}:%02d".format(at / 1000 % 60))) return false
+        // A grade em memória já tem o ponto novo (no computador, o arquivo só muda quando o usuário aplica).
+        synchronized(grids) { grids[t.id] = g?.let { TrackGrid(it.beats, cues, it.durationMs) } }
+        val ga = grid(a)
+        val gb = grid(b)
+        val fixed = when (spot) {
+            Spot.INTRO -> tr.copy(inMs = at)
+            Spot.OUTRO -> tr.copy(outMs = SetPlanner.fitOut(a, ga, at, tr.bars))
+            Spot.DROP -> SetPlanner.barsToDrop(b, gb, tr.inMs)?.let { n -> tr.copy(bars = n, outMs = SetPlanner.fitOut(a, ga, tr.outMs, n), swapAt = 1.0) } ?: tr
+        }
+        editMix(fixed)
+        app.did(
+            when (spot) {
+                Spot.DROP -> if (fixed !== tr) "Drop marcado · troca de ${fixed.bars} compassos" else "Drop marcado"
+                Spot.INTRO -> "Entrada no intro"
+                Spot.OUTRO -> "Saída no outro"
+            },
+        )
+        return true
     }
 
     private fun cacheFile(key: String) = File(app.cacheDir, "mix/${key.hashCode().toUInt()}.wav")

@@ -164,7 +164,13 @@ class ManagerModel(val backups: Backups = Backups()) {
         return rel.isNotEmpty() && editor?.files?.exists(rel) == true
     }
 
-    fun trackFiles(t: os.deckbridge.manager.pdb.TrackItem): TrackFilesView {
+    /**
+     * Grade e cues de [t] sem as ondas (o que montar set e transições precisam): lê os mesmos arquivos, mas não decodifica
+     * as prévias de onda, que são a maior parte do trabalho.
+     */
+    fun trackGrid(t: os.deckbridge.manager.pdb.TrackItem): TrackFilesView = trackFiles(t, waves = false)
+
+    fun trackFiles(t: os.deckbridge.manager.pdb.TrackItem, waves: Boolean = true): TrackFilesView {
         val files = editor?.files ?: return TrackFilesView(emptyList(), emptyList(), ByteArray(0), t.durationSeconds * 1000, "nada aberto")
         val rel = t.analyzePath.replace('\\', '/').trimStart('/')
         val datBytes = files.read(rel) ?: return TrackFilesView(emptyList(), emptyList(), ByteArray(0), t.durationSeconds * 1000, "A faixa não tem arquivo de análise no pendrive.")
@@ -174,8 +180,11 @@ class ManagerModel(val backups: Backups = Backups()) {
             val extRel = rel.dropLast(3) + if (tail == tail.uppercase()) "EXT" else "ext"
             val extBytes = files.read(extRel)
             val ext = extBytes?.let { os.deckbridge.manager.anlz.AnlzModel.parse(it) }
+            val grid = os.deckbridge.manager.anlz.GridIo.read(dat)
+            val cues = os.deckbridge.manager.anlz.CueIo.read(dat, ext).cues.sortedWith(compareBy({ it.hot == 0 }, { it.hot }, { it.timeMs }))
+            if (!waves) return TrackFilesView(grid, cues, ByteArray(0), t.durationSeconds * 1000, null)
             val merged = os.deckbridge.logic.mergeAnalysis(os.deckbridge.logic.parseAnlz(datBytes), extBytes?.let { os.deckbridge.logic.parseAnlz(it) })
-            TrackFilesView(os.deckbridge.manager.anlz.GridIo.read(dat), os.deckbridge.manager.anlz.CueIo.read(dat, ext).cues.sortedWith(compareBy({ it.hot == 0 }, { it.hot }, { it.timeMs })), merged.bluePreview, t.durationSeconds * 1000, null, merged.rgbPreview?.height ?: ByteArray(0), merged.rgbPreview?.rgb ?: IntArray(0))
+            TrackFilesView(grid, cues, merged.bluePreview, t.durationSeconds * 1000, null, merged.rgbPreview?.height ?: ByteArray(0), merged.rgbPreview?.rgb ?: IntArray(0))
         } catch (e: os.deckbridge.manager.anlz.AnlzFormatException) {
             TrackFilesView(emptyList(), emptyList(), ByteArray(0), t.durationSeconds * 1000, "Arquivo de análise inválido: ${e.message}")
         }

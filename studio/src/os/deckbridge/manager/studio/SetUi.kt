@@ -117,7 +117,10 @@ fun SetScreen(app: StudioHost) {
         val layout = if (board) remember(v, desk.branches, desk.poolFrom, desk.rootId()) { desk.canvas() } else null
         if (layout != null) {
             val plans = remember(layout, desk.saved, app.transitionBars) { layout.lanes.associate { it.playlistId to desk.lanePlan(it.playlistId) } }
-            val boardIssues = remember(v, desk.branches, desk.masterFixed, desk.saved, app.transitionBars) { desk.issuePairs() }
+            // Os avisos de todos os caminhos (a parte mais pesada) são calculados fora da thread da tela e chegam depois.
+            val boardIssues by androidx.compose.runtime.produceState(emptySet<Pair<Int, Int>>(), v, desk.branches, desk.masterFixed, desk.saved, app.transitionBars) {
+                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { desk.issuePairs() }
+            }
             val card = picked?.let { (pid, i) -> layout.lanes.firstOrNull { it.playlistId == pid }?.cards?.getOrNull(i) }
             SetBoard(
                 app, layout, plans, boardIssues, card, rehearsing = desk.rehearsal?.let { plan.getOrNull(it) },

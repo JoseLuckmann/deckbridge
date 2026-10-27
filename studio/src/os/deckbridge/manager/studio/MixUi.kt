@@ -478,6 +478,13 @@ private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition
                 PadButton(label, Modifier.weight(if (n == 0) 1.4f else 1f), on = tr.swapBars == n, enabled = n < tr.bars) { edit(tr.copy(swapBars = n)) }
             }
         }
+        // A análise errou o começo, o drop ou o fim: põe a cabeça no lugar certo e marca (fica na faixa).
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            RowLabel("MARCAR")
+            listOf(SetDesk.Spot.INTRO to "INTRO AQUI", SetDesk.Spot.DROP to "DROP AQUI", SetDesk.Spot.OUTRO to "OUTRO AQUI").forEach { (s, label) ->
+                PadButton(label, Modifier.weight(1f), enabled = desk.mixPreview != null) { desk.markHere(s) }
+            }
+        }
         PadButton(if (advanced) "MENOS ▴" else "AJUSTAR ▾", Modifier.fillMaxWidth()) { onToggle() }
         if (ga == null || gb == null) Text("Sem grade: analise as faixas para cair na batida.", color = Palette.noteInk, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         if (!advanced) {
