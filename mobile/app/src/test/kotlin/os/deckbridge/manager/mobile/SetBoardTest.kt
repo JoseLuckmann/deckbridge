@@ -106,12 +106,15 @@ class SetBoardTest {
         click("TIRAR")
         assertTrue(id(a, "Night Signal") !in a.sets.entries())
         a.notice = null
-        // De onde sai um ramo, pergunta antes.
+        // De onde sai um ramo também sai direto, sem pergunta (desfazer em vez de confirmar): o aviso diz que a vertente
+        // some junto e o DESFAZER traz as duas de volta.
         click("Small Hours")
         click("TIRAR")
-        rule.onNodeWithText("Tirar do set").assertExists()
-        click("Cancelar")
+        assertTrue(id(a, "Small Hours") !in a.sets.entries())
+        rule.onNodeWithText("a vertente", substring = true).assertExists()
+        click("DESFAZER")
         assertTrue(id(a, "Small Hours") in a.sets.entries())
+        assertTrue(a.sets.branchesAt(a.sets.entries().indexOf(id(a, "Small Hours"))).isNotEmpty(), "a vertente voltou")
         // O número entre dois cartões é a troca: tocar abre o MIX dela.
         val first = a.sets.lanePlan(pid).first()
         tap("Troca ${first.fromId}→${first.toId}")

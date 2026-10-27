@@ -26,6 +26,12 @@ object Palette {
     val muted = c(StagePalette.mutedInk)
     val mutedBright = c(StagePalette.inkMuted)
 
+    /**
+     * Texto secundário sobre [selected] (linha azul, botão ativo): o cinza normal fica abaixo de 4,5:1 ali (WCAG 1.4.3),
+     * então troca pelo cinza claro.
+     */
+    fun dimOn(selected: Boolean) = if (selected) mutedBright else muted
+
     /** Azul de rótulo e de botão. */
     val blue = c(StagePalette.accentBlue)
     val blueActiveFill = c(StagePalette.activeFill)

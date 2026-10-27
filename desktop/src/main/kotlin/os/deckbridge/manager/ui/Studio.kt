@@ -1,5 +1,6 @@
 package os.deckbridge.manager.ui
 
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
@@ -73,10 +74,20 @@ class DesktopStudio(
     private var shown by mutableStateOf<Banner?>(null)
     override var notice: Banner?
         get() = shown
-        set(value) { shown = value }
+        set(value) {
+            shown = value
+            noticeUndo = false
+        }
 
+    /** O aviso atual veio de [did]: dá para desfazer pelo próprio aviso. */
+    var noticeUndo by mutableStateOf(false)
+        private set
+
+    /** Ação rápida feita: avisa com DESFAZER (Ctrl+Z), em vez de pedir confirmação antes (dá para voltar atrás). */
     override fun did(text: String?) {
-        if (text != null) notice = Banner(text, false)
+        if (text == null) return
+        notice = Banner(text, false)
+        noticeUndo = true
     }
 
     private var seenKeys by mutableStateOf(prefs.get("visto", "").split(',').filter { it.isNotEmpty() }.toSet())
@@ -326,15 +337,21 @@ fun StudioOverlay(studio: DesktopStudio) {
                     os.deckbridge.manager.studio.TriageScreen(studio)
                 }
                 Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    studio.job?.let { j -> StudioToast("${j.title}${if (j.text.isNotEmpty()) " · ${j.text}" else ""}…", false) }
+                    // Trabalho longo: com "n/N" no texto, a porcentagem e a barra cheia até ali (Myers 1985).
+                    studio.job?.let { j ->
+                        val f = os.deckbridge.manager.studio.jobFraction(j.text)
+                        StudioToast("${j.title}${if (j.text.isNotEmpty()) " · ${j.text}" else ""}${f?.let { " · ${(it * 100).toInt()}%" } ?: "…"}", false, fraction = f)
+                    }
                     studio.notice?.let { n ->
+                        val undo = studio.noticeUndo && studio.model.dirty
                         LaunchedEffect(n) {
                             if (!n.error) {
-                                kotlinx.coroutines.delay(3500)
+                                // Com DESFAZER fica mais tempo, para dar tempo de usar.
+                                kotlinx.coroutines.delay(if (studio.noticeUndo) 8000 else 3500)
                                 if (studio.notice === n) studio.notice = null
                             }
                         }
-                        StudioToast(n.text, n.error) { studio.notice = null }
+                        StudioToast(n.text, n.error, onUndo = if (undo) ({ studio.model.undo(); studio.notice = null }) else null) { studio.notice = null }
                     }
                 }
             }
@@ -347,13 +364,18 @@ fun StudioOverlay(studio: DesktopStudio) {
 private fun BackHandlerFor(studio: DesktopStudio, onBack: () -> Unit) = os.deckbridge.manager.studio.BackHandler(onBack)
 
 @Composable
-private fun StudioToast(text: String, error: Boolean, onClose: (() -> Unit)? = null) {
-    Row(
+private fun StudioToast(text: String, error: Boolean, fraction: Float? = null, onUndo: (() -> Unit)? = null, onClose: (() -> Unit)? = null) {
+    Column(
         Modifier.padding(top = 6.dp).widthIn(max = 640.dp).clip(RbShape).background(if (error) Palette.dangerBg else Palette.surfaceHigh)
-            .border(BorderStroke(1.dp, if (error) Palette.danger else Palette.line), RbShape).padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .border(BorderStroke(1.dp, if (error) Palette.danger else Palette.line), RbShape),
     ) {
-        Text(text, color = Palette.text, fontSize = 13.sp, modifier = Modifier.weight(1f, fill = false))
-        if (onClose != null && error) os.deckbridge.manager.studio.TextButton(onClick = onClose) { Text("OK", fontSize = 12.sp) }
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(text, color = Palette.text, fontSize = 13.sp, modifier = Modifier.weight(1f, fill = false))
+            if (onUndo != null) os.deckbridge.manager.studio.TextButton(onClick = onUndo) { Text("DESFAZER  Ctrl+Z", color = Palette.orange, fontSize = 12.sp) }
+            if (onClose != null && error) os.deckbridge.manager.studio.TextButton(onClick = onClose) { Text("OK", fontSize = 12.sp) }
+        }
+        if (fraction != null) androidx.compose.material3.LinearProgressIndicator(
+            progress = { fraction }, modifier = Modifier.fillMaxWidth().height(2.dp), color = Palette.blue, trackColor = Palette.line,
+        )
     }
 }

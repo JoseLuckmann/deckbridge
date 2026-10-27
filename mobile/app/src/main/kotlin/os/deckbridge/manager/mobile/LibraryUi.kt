@@ -189,6 +189,8 @@ fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean) {
     val master = app.detailId?.let { m.view?.track(it) }
     val compatible = master != null && master.id != t.id && Smart.camelot(master.key)?.let { a -> Smart.camelot(t.key)?.let { b -> Smart.harmonicDistance(a, b) <= 1 } } == true
     val analyzed = m.hasAnalysis(t)
+    // Sobre a linha azul o cinza normal fica sem contraste (WCAG 1.4.3): troca pelo claro.
+    val dim = Palette.dimOn(selected || open)
     Row(
         Modifier.fillMaxWidth().height(60.dp)
             .background(if (selected || open) Palette.selectedRow else Color.Transparent)
@@ -219,11 +221,11 @@ fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             }
-            Text(t.artist.ifEmpty { "—" }, color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(t.artist.ifEmpty { "—" }, color = dim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (t.rating > 0) Text("★".repeat(t.rating), color = Palette.orange, fontSize = 11.sp, modifier = Modifier.padding(start = 6.dp, end = 8.dp))
         // Sem análise: o BPM fica apagado, sem texto extra.
-        Text(bpmLabel(t.bpm), color = if (analyzed) Palette.text else Palette.muted, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.width(52.dp))
+        Text(bpmLabel(t.bpm), color = if (analyzed) Palette.text else dim, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.width(52.dp))
         Box(Modifier.width(40.dp).height(24.dp).background(if (compatible) Palette.keyFill else Color.Transparent), contentAlignment = Alignment.Center) {
             Text(keyLabel(t.key), color = if (compatible) Palette.keyInk else Palette.mutedBright, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }

@@ -255,7 +255,12 @@ private fun JobOverlay(app: ManagerApp) {
         Column(Modifier.padding(32.dp).rbPanel().background(Palette.surfaceHigh).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(j.title.uppercase(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Palette.blue, letterSpacing = 0.6.sp)
             if (j.text.isNotEmpty()) Text(j.text, fontSize = 13.sp, color = Palette.mutedBright, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            LinearProgressIndicator(Modifier.fillMaxWidth(), color = Palette.blue, trackColor = Palette.line)
+            // Com "n/N" no texto, a barra enche e diz a porcentagem (Myers 1985: quem vê quanto falta espera melhor).
+            val f = jobFraction(j.text)
+            if (f != null) {
+                Text("${(f * 100).toInt()}%", fontSize = 20.sp, color = Palette.orange, fontFamily = Mono)
+                LinearProgressIndicator(progress = { f }, modifier = Modifier.fillMaxWidth(), color = Palette.blue, trackColor = Palette.line)
+            } else LinearProgressIndicator(Modifier.fillMaxWidth(), color = Palette.blue, trackColor = Palette.line)
             OutlinedButton(onClick = { j.cancelled = true }) { Text("CANCELAR", fontSize = 12.sp) }
         }
     }
@@ -271,9 +276,10 @@ private fun NoticeToast(app: ManagerApp) {
                 .padding(start = 12.dp, top = 2.dp, bottom = 2.dp, end = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(n.text, Modifier.weight(1f), color = if (n.error) Palette.danger else Palette.noteInk, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            // Erro: borda vermelha e texto claro (vermelho sobre o fundo vermelho-escuro fica abaixo de 4,5:1, WCAG 1.4.3).
+            Text(n.text, Modifier.weight(1f), color = if (n.error) Palette.text else Palette.noteInk, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             if (app.noticeUndo && app.model.dirty) TextButton(onClick = { app.undoFromNotice() }) { Text("DESFAZER", color = Palette.noteInk, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
-            TextButton(onClick = { app.notice = null }) { Text("OK", color = if (n.error) Palette.danger else Palette.noteInk, fontSize = 12.sp) }
+            TextButton(onClick = { app.notice = null }) { Text("OK", color = if (n.error) Palette.text else Palette.noteInk, fontSize = 12.sp) }
         }
     }
 }

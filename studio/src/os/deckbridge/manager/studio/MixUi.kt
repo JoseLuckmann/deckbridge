@@ -130,6 +130,7 @@ fun MixScreen(app: StudioHost) {
             if (wide) mixer()
             Overview(p, pos) { desk.seekMix(it) }
             Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced)
+            KeyHint(app, "Espaço toca / para  ·  ← → um compasso  ·  Esc fecha  ·  ? atalhos")
             Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
         }
         Column(Modifier.fillMaxSize()) {
@@ -503,7 +504,7 @@ private fun NotePanel(desk: SetDesk, tr: Transition) {
         if (editing) {
             OutlinedTextField(
                 value = text, onValueChange = { text = it.take(140) }, maxLines = 3, textStyle = TextStyle(fontSize = 14.sp),
-                placeholder = { Text("Ex.: quando o vocal entrar, tiro o grave", fontSize = 13.sp) }, modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Ex.: quando o vocal entrar, tiro o grave", fontSize = 13.sp) }, modifier = Modifier.fillMaxWidth().typingField(),
             )
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = { text = tr.note; editing = false }) { Text("CANCELAR", fontSize = 12.sp) }

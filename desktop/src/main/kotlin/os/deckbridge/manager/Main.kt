@@ -46,8 +46,13 @@ fun main(args: Array<String>) = application {
         title = "DeckBridge Biblioteca",
         icon = remember { AppIcon },
         state = rememberWindowState(size = DpSize(1360.dp, 820.dp)),
-        // Esc volta nas telas de set (como o "voltar" do celular).
-        onKeyEvent = { e -> e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.Escape && ui.studio?.back() == true },
+        // Esc volta nas telas de set (como o "voltar" do celular); os outros atalhos estão em StudioKeys (? mostra a lista).
+        onKeyEvent = { e ->
+            val esc = e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.Escape
+            if (esc && os.deckbridge.manager.studio.StudioKeys.helpOpen) { os.deckbridge.manager.studio.StudioKeys.helpOpen = false; true }
+            else if (esc) ui.studio?.back() == true
+            else ui.studio?.let { os.deckbridge.manager.studio.StudioKeys.handle(it, e) } == true
+        },
     ) { App(model, ui) }
 }
 

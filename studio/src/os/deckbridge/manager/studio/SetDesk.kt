@@ -353,10 +353,12 @@ class SetDesk(private val app: StudioHost) {
         val id = ids.getOrNull(index) ?: return
         val rest = ids.toMutableList().apply { removeAt(index) }
         val title = app.model.view?.track(id)?.title.orEmpty()
+        // Sem pedir confirmação: tira e avisa com DESFAZER (as vertentes que saem dela voltam junto).
+        val hidden = branchesAt(index).joinToString(", ") { "${letterOf(it)}" }
         // A mesma faixa duas vezes na linha: tira as duas e põe de volta a que fica, no lugar.
         val edits = listOf(Edit.RemoveFromPlaylist(pid, listOf(id)) to "Tirar \"$title\" do set") +
             if (id in rest) listOf(Edit.AddToPlaylist(pid, listOf(id)) to "Manter \"$title\"", Edit.ReorderPlaylist(pid, rest) to "Ordem do set") else emptyList()
-        if (app.model.submitAll(edits) == edits.size) app.did("− $title")
+        if (app.model.submitAll(edits) == edits.size) app.did("− $title" + if (hidden.isNotEmpty()) " · a vertente $hidden some junto" else "")
     }
 
     /**

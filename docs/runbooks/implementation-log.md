@@ -1148,3 +1148,15 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Evidência: núcleo 134 (15 pulados, que dependem de arquivos de fora; +`KeepTest` 5); celular `KeepFlowTest` 3 (capturas mobile-49..52), `SetFlowTest` ajustado às abas (mobile-53); computador `StudioTest.newTracksAndTheSetsATrackIsInShowOnTheComputer` (captura desktop-nos-sets).
 - Não verificado: no aparelho; nenhuma medida com DJs reais (ver "O que fica para depois" no documento).
 - Versão 0.15.0.
+
+## 2026-10-27 — UX com referências, rodada 2 (celular e computador)
+
+- Pedido: nova pesquisa em artigos e comprovações de UX, aplicada aos dois apps. Fontes e mudanças: `docs/ux-referencias.md` (seção "Rodada 2").
+- Contraste (WCAG 1.4.3): medidos todos os pares de texto e fundo. Corrigidos o cinza sobre a linha selecionada e o botão ativo (`Palette.dimOn`; computador `Pal.MutedBright` na linha da tabela) e o texto do aviso de erro. `ContrastTest`.
+- Desfazer em vez de perguntar (Shneiderman; Bravo-Lillo et al.): tirar faixa de onde sai vertente sai direto, com DESFAZER. Computador: o aviso de ação rápida tem DESFAZER (Ctrl+Z) e dura 8 s. A confirmação ficou só para o que não volta (exportar, apagar).
+- Progresso (Myers 1985): `jobFraction` lê "n/N" do texto do trabalho; barra que enche e porcentagem no celular e no computador.
+- Atalhos (Lane et al. 2005; Grossman et al. 2007): `StudioKeys` (Espaço, ← →, 1–5, 0, Ctrl+Z/Y, Esc, ?/F1), a tecla escrita ao lado dos botões, lista em `?`; desligados quando um campo de texto tem o foco (`typingField`).
+- Rótulos nos ícones (Wiedenbeck 1999), no computador: zoom e ações do cartão com palavra.
+- Achado durante a rodada: a lista de atalhos usava o diálogo sem o tema e o título saiu quase invisível; agora usa `ManagerTheme` e só OK.
+- Evidência: celular `ContrastTest`, `SetBoardTest` (DESFAZER traz a vertente de volta); computador `StudioTest.keyboardShortcutsAreShownAndWork` (atalhos, dicas, rótulos, aviso com DESFAZER, `jobFraction`; capturas desktop-atalhos e desktop-desfazer).
+- Não verificado: teclado ABNT2 real (o `?` depende do leiaute; F1 funciona em qualquer um); aparelho. Versão 0.16.0.

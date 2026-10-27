@@ -1,5 +1,6 @@
 package os.deckbridge.manager.ui
 
+import os.deckbridge.manager.studio.typingField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,6 +38,7 @@ object Pal {
     val Line = Color(StagePalette.line)
     val Ink = Color(StagePalette.ink)
     val Muted = Color(StagePalette.mutedInk)
+    val MutedBright = Color(StagePalette.inkMuted)
     val Orange = Color(StagePalette.accentOrange)
     val Blue = Color(StagePalette.accentBlue)
     val Red = Color(StagePalette.danger)
@@ -95,7 +97,8 @@ fun TextBox(value: String, onChange: (String) -> Unit, modifier: Modifier = Modi
             singleLine = !multiline,
             textStyle = TextStyle(color = Pal.Ink, fontSize = 13.sp),
             cursorBrush = SolidColor(Pal.Orange),
-            modifier = Modifier.fillMaxWidth(),
+            // Com o foco aqui, as teclas são texto (os atalhos de uma tecla ficam desligados).
+            modifier = Modifier.fillMaxWidth().typingField(),
         )
         if (value.isEmpty() && placeholder.isNotEmpty()) Label(placeholder, Pal.Muted, 13.sp)
     }

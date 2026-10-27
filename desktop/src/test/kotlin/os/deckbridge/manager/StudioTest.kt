@@ -285,4 +285,81 @@ class StudioTest {
         click("SET Sábado ›")
         assertEquals(pid, studio.sets.playlistId)
     }
+
+    @Test fun keyboardShortcutsAreShownAndWork() = runDesktopComposeUiTest(1360, 820) {
+        val m = library()
+        val pid = m.nextPlaylistId()
+        m.submit(Edit.CreatePlaylist(pid, 0, "Sábado", false), "p")
+        m.submit(Edit.AddToPlaylist(pid, listOf("Night Signal", "Small Hours", "Glass Harbour", "Copper Sky").map { id(m, it) }), "p")
+        check(m.apply(null) != null)
+        val prefs = java.util.prefs.Preferences.userRoot().node("deckbridge-test/${System.nanoTime()}")
+        val ui = UiState().apply { studioPrefs = prefs; studioSetsHome = TestVolumes.tempDir("dbm-sets") }
+        setContent { App(m, ui) }
+        waitForIdle()
+        fun click(text: String) {
+            val all = onAllNodes(hasText(text))
+            all[all.fetchSemanticsNodes().size - 1].performSemanticsAction(SemanticsActions.OnClick)
+            waitForIdle()
+        }
+        fun shot(name: String) {
+            // Com diálogo aberto há duas raízes: a de cima é a do diálogo.
+            val roots = onAllNodes(androidx.compose.ui.test.isRoot())
+            val img = roots[roots.fetchSemanticsNodes().size - 1].captureToImage()
+            val data = org.jetbrains.skia.Image.makeFromBitmap(img.asSkiaBitmap()).encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)!!
+            File(out, "$name.png").writeBytes(data.bytes)
+        }
+        val studio = assertNotNull(ui.studio)
+        val keys = os.deckbridge.manager.studio.StudioKeys
+        val K = androidx.compose.ui.input.key.Key
+        // A tecla aparece ao lado do botão (barra de baixo) e ? abre a lista.
+        onAllNodes(hasText("↶ Desfazer  Ctrl+Z")).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty()) }
+        assertTrue(keys.press(studio, K.F1))
+        waitForIdle()
+        onAllNodes(hasText("Atalhos do teclado")).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty()) }
+        shot("desktop-atalhos")
+        click("OK")
+        assertTrue(!keys.helpOpen)
+        // MARCAR pelo teclado: 3 dá a nota e passa; Ctrl+Z desfaz.
+        click("MARCAR ▸")
+        onAllNodes(hasText("Teclas 1–5", substring = true)).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty(), "dica de tecla na triagem") }
+        val first = studio.triage!![0]
+        assertTrue(keys.press(studio, K.Three))
+        waitForIdle()
+        assertEquals(3, m.view!!.track(first)!!.rating)
+        assertEquals(1, studio.triageAt)
+        assertTrue(keys.press(studio, K.DirectionLeft))
+        assertEquals(0, studio.triageAt)
+        assertTrue(keys.press(studio, K.Z, ctrl = true))
+        assertEquals(0, m.view!!.track(first)!!.rating)
+        assertTrue(keys.press(studio, K.Y, ctrl = true))
+        assertEquals(3, m.view!!.track(first)!!.rating)
+        // Escrevendo num campo, as teclas de uma letra não são atalhos.
+        keys.typing = true
+        assertTrue(!keys.press(studio, K.Four))
+        keys.typing = false
+        studio.endTriage()
+        waitForIdle()
+        // SET: os ícones vêm com palavra; tirar uma faixa de onde sai uma vertente não pergunta, avisa com DESFAZER.
+        studio.sets.open(pid)
+        waitForIdle()
+        onAllNodes(hasText("VER TUDO")).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty(), "zoom com rótulo") }
+        val small = id(m, "Small Hours")
+        studio.sets.createBranch(small, 1, os.deckbridge.manager.mix.SetShape.values().first(), rejoin = true, kind = os.deckbridge.manager.studio.SetDesk.BranchKind.MANUAL)
+        studio.sets.openMain()
+        waitForIdle()
+        val index = studio.sets.entries().indexOf(small)
+        // O relógio do teste anda sozinho enquanto espera e o aviso sumiria (8 s): parado aqui.
+        mainClock.autoAdvance = false
+        studio.sets.removeAt(index)
+        waitForIdle()
+        assertTrue(small !in studio.sets.entries())
+        onAllNodes(hasText("DESFAZER  Ctrl+Z")).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty(), "aviso com desfazer: ${studio.notice} ${studio.noticeUndo} ${m.dirty}") }
+        shot("desktop-desfazer")
+        click("DESFAZER  Ctrl+Z")
+        assertTrue(small in studio.sets.entries())
+        mainClock.autoAdvance = true
+        // Trabalho com "n/N": a porcentagem.
+        assertEquals(0.3f, os.deckbridge.manager.studio.jobFraction("3/10: Night Signal"))
+        assertEquals(null, os.deckbridge.manager.studio.jobFraction("Gravando"))
+    }
 }

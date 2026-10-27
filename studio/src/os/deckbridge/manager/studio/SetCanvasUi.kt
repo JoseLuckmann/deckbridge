@@ -116,9 +116,11 @@ fun SetBoard(
             Board(app, g, layout, plans, issues, selected, rehearsing, onSelect, onAdd, onMix, onJoin, onMove, live)
         }
         Row(Modifier.align(Alignment.BottomEnd).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            ZoomButton("−", "Afastar", enabled = zoom > ZOOMS.first()) { zoom = ZOOMS.lastOrNull { it < zoom - 0.01f } ?: ZOOMS.first() }
-            ZoomButton("TUDO", "Ver tudo", enabled = kotlin.math.abs(zoom - fit) > 0.01f) { zoom = fit }
-            ZoomButton("+", "Aproximar", enabled = zoom < ZOOMS.last()) { zoom = ZOOMS.firstOrNull { it > zoom + 0.01f } ?: ZOOMS.last() }
+            // Com mouse (tela larga), o ícone vem com a palavra: rótulo junto do ícone se aprende mais rápido (Wiedenbeck 1999).
+            val words = !app.touch
+            ZoomButton(if (words) "− AFASTAR" else "−", "Afastar", enabled = zoom > ZOOMS.first()) { zoom = ZOOMS.lastOrNull { it < zoom - 0.01f } ?: ZOOMS.first() }
+            ZoomButton(if (words) "VER TUDO" else "TUDO", "Ver tudo", enabled = kotlin.math.abs(zoom - fit) > 0.01f) { zoom = fit }
+            ZoomButton(if (words) "APROXIMAR +" else "+", "Aproximar", enabled = zoom < ZOOMS.last()) { zoom = ZOOMS.firstOrNull { it > zoom + 0.01f } ?: ZOOMS.last() }
         }
     }
 }
@@ -417,9 +419,10 @@ fun BoardActions(app: StudioHost, card: CanvasCard, onMove: (Int) -> Unit, onSpl
     Column(Modifier.fillMaxWidth().background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.blueActiveLine)).padding(horizontal = 10.dp, vertical = 8.dp)) {
         Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { app.preview.toggle(t) }, modifier = Modifier.height(40.dp)) { Text(if (app.preview.playingId == t.id) "■" else "▶", fontSize = 14.sp) }
-            OutlinedButton(onClick = { onMove(-1) }, enabled = card.index > 0, modifier = Modifier.height(40.dp).semantics { contentDescription = "Para trás" }) { Text("‹", fontSize = 18.sp) }
-            OutlinedButton(onClick = { onMove(1) }, enabled = card.index < count - 1, modifier = Modifier.height(40.dp).semantics { contentDescription = "Para frente" }) { Text("›", fontSize = 18.sp) }
+            val words = !app.touch
+            OutlinedButton(onClick = { app.preview.toggle(t) }, modifier = Modifier.height(40.dp)) { Text((if (app.preview.playingId == t.id) "■" else "▶") + if (words) " OUVIR" else "", fontSize = 14.sp) }
+            OutlinedButton(onClick = { onMove(-1) }, enabled = card.index > 0, modifier = Modifier.height(40.dp).semantics { contentDescription = "Para trás" }) { Text(if (words) "‹ ANTES" else "‹", fontSize = if (words) 12.sp else 18.sp) }
+            OutlinedButton(onClick = { onMove(1) }, enabled = card.index < count - 1, modifier = Modifier.height(40.dp).semantics { contentDescription = "Para frente" }) { Text(if (words) "DEPOIS ›" else "›", fontSize = if (words) 12.sp else 18.sp) }
             Spacer(Modifier.weight(1f))
             OutlinedButton(onClick = onSplit, modifier = Modifier.height(40.dp)) { Text("DIVIDIR", fontSize = 12.sp) }
             OutlinedButton(onClick = onRemove, modifier = Modifier.height(40.dp)) { Text("TIRAR", color = Palette.danger, fontSize = 12.sp) }
@@ -445,7 +448,7 @@ fun AddToLineDialog(app: StudioHost, letter: Char, onClose: () -> Unit) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (searching) {
-                    androidx.compose.material3.OutlinedTextField(query, { query = it }, placeholder = { Text("Buscar") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    androidx.compose.material3.OutlinedTextField(query, { query = it }, placeholder = { Text("Buscar") }, singleLine = true, modifier = Modifier.fillMaxWidth().typingField())
                 } else Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (last != null) "COMBINAM COM A ÚLTIMA" else "DA BIBLIOTECA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.weight(1f))
                     TextButton(onClick = { searching = true }) { Text("BUSCAR", fontSize = 12.sp) }

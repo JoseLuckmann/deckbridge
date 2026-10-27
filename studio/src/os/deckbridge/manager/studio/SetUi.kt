@@ -74,7 +74,6 @@ fun SetScreen(app: StudioHost) {
     val board = !app.setAsList
     var picked by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var addTo by remember { mutableStateOf<Char?>(null) }
-    var removeAsk by remember { mutableStateOf<Int?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     fun back() = when {
         desk.live -> desk.stopLive()
@@ -159,7 +158,7 @@ fun SetScreen(app: StudioHost) {
                     app, card,
                     onMove = { d -> picked = card.playlistId to desk.move(card.index, d) },
                     onSplit = { turnAt = card.index + (if (branch != null) 1 else 0); picked = null },
-                    onRemove = { if (desk.branchesAt(card.index).isNotEmpty()) removeAsk = card.index else { desk.removeAt(card.index); picked = null } },
+                    onRemove = { desk.removeAt(card.index); picked = null },
                 )
                 plan.isNotEmpty() -> ActionsRow(
                     issues = issues.map { it.fromId to it.toId }.distinct().size,
@@ -263,14 +262,6 @@ fun SetScreen(app: StudioHost) {
             onConfirm = { desk.rehearsalDone = null; if (first != null) desk.openMix(first) },
             onClose = { desk.rehearsalDone = null },
         )
-    }
-    removeAsk?.let { index ->
-        val letters = desk.branchesAt(index).joinToString(", ") { "${desk.letterOf(it)}" }
-        ConfirmDialog("Tirar do set", "O ramo $letters sai desta faixa e deixa de aparecer no set.", "TIRAR", danger = true, onConfirm = {
-            removeAsk = null
-            picked = null
-            desk.removeAt(index)
-        }, onClose = { removeAsk = null })
     }
     if (sortOpen) {
         val shapes = os.deckbridge.manager.mix.SetShape.values().toList()
@@ -454,10 +445,10 @@ private fun SetTrackRow(n: Int, t: TrackItem, master: Double?, playing: Boolean,
             .padding(start = 14.dp, end = if (onBranch != null) 0.dp else 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(if (anchor) "↔" else "$n", color = if (anchor) Palette.orange else Palette.muted, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.width(26.dp))
+        Text(if (anchor) "↔" else "$n", color = if (anchor) Palette.orange else Palette.dimOn(playing), fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.width(26.dp))
         Column(Modifier.weight(1f)) {
             Text(t.title.ifEmpty { t.fileName }, color = if (anchor) Palette.mutedBright else Palette.text, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(if (anchor) "linha principal" else t.artist, color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (anchor) "linha principal" else t.artist, color = Palette.dimOn(playing), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         // O BPM em que toca (o master). O da faixa e quanto estica só aparecem quando passa do confortável (10%).
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 8.dp)) {
@@ -743,14 +734,14 @@ private fun PoolRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                t.title.ifEmpty { t.fileName }, color = if (played) Palette.muted else Palette.text, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                t.title.ifEmpty { t.fileName }, color = if (played) Palette.dimOn(now || previewing) else Palette.text, fontSize = 15.sp, fontWeight = FontWeight.Medium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             // Embaixo: tocando / tocada, ou um ponto verde/laranja (a troca a partir da que está tocando) e quanto estica.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 when {
-                    now -> Text("tocando", color = Palette.muted, fontSize = 12.sp)
-                    played -> Text("tocada", color = Palette.muted, fontSize = 12.sp)
+                    now -> Text("tocando", color = Palette.dimOn(true), fontSize = 12.sp)
+                    played -> Text("tocada", color = Palette.dimOn(previewing), fontSize = 12.sp)
                     else -> {
                         if (fit != null) {
                             Box(Modifier.size(8.dp).clip(RbShape).background(if (fit.good) Palette.keyInk else Palette.orange))

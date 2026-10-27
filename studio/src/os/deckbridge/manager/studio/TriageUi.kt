@@ -111,6 +111,7 @@ private fun Controls(app: StudioHost, t: TrackItem, at: Int, total: Int, compact
         m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(rating = n)), "Nota $n em \"${t.title}\"")
         advance()
     }
+    KeyHint(app, "Teclas 1–5 dão a nota  ·  → pula  ·  ← volta  ·  Espaço ouve")
     // Cinco estrelas grandes: tocar na terceira dá 3 e já passa para a próxima.
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         for (n in 1..5) {

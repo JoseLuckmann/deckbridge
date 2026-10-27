@@ -179,6 +179,7 @@ fun App(model: ManagerModel, ui: UiState = remember { UiState() }) {
         if (ui.backups) Box(Modifier.fillMaxSize()) { BackupsModal(model, ui) }
         ui.transfer?.let { t -> Box(Modifier.fillMaxSize()) { TransferModal(model, t, ui.chooser) { ui.transfer = null } } }
         StudioOverlay(studio)
+        os.deckbridge.manager.studio.KeysSheet()
         ui.drag?.let { d ->
             Box(Modifier.offset { IntOffset(d.pos.x.toInt() + 14, d.pos.y.toInt() + 10) }.background(Pal.Blue).padding(horizontal = 10.dp, vertical = 5.dp)) { Label(d.label, Pal.Bg, 12.sp, bold = true) }
         }
@@ -450,6 +451,8 @@ private fun TrackRowView(
     var origin by remember { mutableStateOf(Offset.Zero) }
     var at by remember { mutableStateOf(Offset.Zero) }
     DisposableEffect(t.id) { onDispose { ui.rects.remove("row:${t.id}") } }
+    // Sobre a linha azul o cinza normal fica sem contraste (WCAG 1.4.3): troca pelo claro.
+    val dim = if (selected) Pal.MutedBright else Pal.Muted
     Row(
         Modifier.fillMaxWidth().height(28.dp).background(if (selected) Pal.SelectedRow else Color.Transparent)
             .onGloballyPositioned {
@@ -471,16 +474,16 @@ private fun TrackRowView(
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Label((position ?: t.id).toString(), Pal.Muted, 12.sp, modifier = cellModifier(Col.ID))
+        Label((position ?: t.id).toString(), dim, 12.sp, modifier = cellModifier(Col.ID))
         Label((if (edited) "● " else "") + t.title, ink, 13.sp, bold = edited, modifier = Modifier.weight(2.2f).padding(end = 8.dp))
         Label(t.artist, ink, 13.sp, modifier = Modifier.weight(1.6f).padding(end = 8.dp))
-        Label(t.album, Pal.Muted, 13.sp, modifier = Modifier.weight(1.6f).padding(end = 8.dp))
-        Label(t.genre, Pal.Muted, 13.sp, modifier = cellModifier(Col.GENRE))
+        Label(t.album, dim, 13.sp, modifier = Modifier.weight(1.6f).padding(end = 8.dp))
+        Label(t.genre, dim, 13.sp, modifier = cellModifier(Col.GENRE))
         Label(t.key, Pal.Green, 12.sp, bold = true, modifier = cellModifier(Col.KEY))
         Label(if (t.bpm > 0) "%.1f".format(t.bpm) else "", Pal.Ink, 12.sp, modifier = cellModifier(Col.BPM))
         Box(cellModifier(Col.RATING)) { Stars(t.rating, null, 12.sp) }
-        Label(if (t.year > 0) t.year.toString() else "", Pal.Muted, 12.sp, modifier = cellModifier(Col.YEAR))
-        Label("%d:%02d".format(t.durationSeconds / 60, t.durationSeconds % 60), Pal.Muted, 12.sp, modifier = cellModifier(Col.TIME))
+        Label(if (t.year > 0) t.year.toString() else "", dim, 12.sp, modifier = cellModifier(Col.YEAR))
+        Label("%d:%02d".format(t.durationSeconds / 60, t.durationSeconds % 60), dim, 12.sp, modifier = cellModifier(Col.TIME))
     }
 }
 
@@ -616,10 +619,12 @@ fun describe(tracks: List<TrackItem>, patch: TrackPatch): String {
 private fun PendingBar(model: ManagerModel, ui: UiState) {
     Row(Modifier.fillMaxWidth().background(Pal.Panel).border(1.dp, Pal.Line).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         val n = model.pending.size
-        if (n == 0) Spacer(Modifier.weight(1f))
+        // A tecla escrita ao lado do botão: é assim que os atalhos se aprendem (Grossman et al. 2007).
+        if (n == 0) Label("Espaço toca a faixa escolhida", Pal.Muted, 12.sp, modifier = Modifier.weight(1f))
         else Label("● $n na fila", Pal.Orange, 13.sp, bold = true, modifier = Modifier.weight(1f))
-        Btn("↶ Desfazer", { model.undo() }, enabled = n > 0)
-        if (model.redoStack.isNotEmpty()) Btn("↷ Refazer", { model.redo() })
+        Btn("? Atalhos", { os.deckbridge.manager.studio.StudioKeys.helpOpen = true })
+        Btn("↶ Desfazer  Ctrl+Z", { model.undo() }, enabled = n > 0)
+        if (model.redoStack.isNotEmpty()) Btn("↷ Refazer  Ctrl+Y", { model.redo() })
         Btn("Descartar", { ui.confirm = ConfirmAsk("Descartar ${model.pending.size} mudanças?", "As mudanças da fila somem. O pendrive não foi tocado.", "Descartar", true) { model.discard() } }, danger = true, enabled = n > 0)
         Btn("Gravar…", { ui.review = true }, primary = true, enabled = n > 0)
     }

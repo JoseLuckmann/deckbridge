@@ -94,3 +94,14 @@ val LocalBack = staticCompositionLocalOf<@Composable (onBack: () -> Unit) -> Uni
 
 @Composable
 fun BackHandler(onBack: () -> Unit) = LocalBack.current(onBack)
+
+/**
+ * Quanto do trabalho já foi, a partir do "n/N" que o texto dele mostra ("3/10: Night Signal" → 0,3). Null quando o texto
+ * não diz: aí a barra fica correndo sem fim. Com a fração, a barra enche e mostra a porcentagem (Myers 1985).
+ */
+fun jobFraction(text: String): Float? {
+    val m = Regex("(\\d+)\\s*/\\s*(\\d+)").find(text) ?: return null
+    val total = m.groupValues[2].toInt()
+    if (total <= 0) return null
+    return (m.groupValues[1].toFloat() / total).coerceIn(0f, 1f)
+}
