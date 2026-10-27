@@ -186,22 +186,24 @@ private fun spotlit(app: ManagerApp, t: Tab?): Boolean {
  */
 @Composable
 private fun NavBar(app: ManagerApp) {
-    Row(Modifier.fillMaxWidth().background(Palette.bg).padding(horizontal = 6.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Uma barra só, sem caixas: o ativo em azul com o traço em cima, os outros apagados (como as abas do player).
+    Row(Modifier.fillMaxWidth().background(Palette.surface).border(BorderStroke(0.5.dp, Palette.line)).height(56.dp)) {
         listOf(Tab.LIBRARY, null, Tab.PLAYLISTS, Tab.USB, Tab.MENU).forEach { t ->
             val on = t != null && app.tab == t
             val label = t?.short() ?: "MARCAR"
             val count = pending(app, t)
             Box(
-                Modifier.weight(1f).spotlight(spotlit(app, t)).height(48.dp).clip(RbShape).background(if (on) Palette.blueActiveFill else Palette.surfaceHigh)
-                    .border(BorderStroke(1.dp, if (on) Palette.blue else Palette.line), RbShape)
-                    .clickable { if (t == null) app.startTriage() else app.tab = t },
+                Modifier.weight(1f).fillMaxHeight().clickable { if (t == null) app.startTriage() else app.tab = t },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, color = if (on) Palette.text else Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1)
-                if (count > 0) Text(
-                    if (count > 99) "99+" else "$count", color = Palette.orange, fontSize = 10.sp, fontFamily = Mono, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 4.dp),
-                )
+                Box(Modifier.align(Alignment.TopCenter).fillMaxWidth(0.6f).height(2.dp).background(if (on) Palette.blue else Palette.surface))
+                Row(Modifier.spotlight(spotlit(app, t)).padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, color = if (on) Palette.blue else Palette.mutedBright, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1)
+                    if (count > 0) Text(
+                        if (count > 99) "99+" else "$count", color = Palette.bg, fontSize = 9.sp, fontFamily = Mono, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 3.dp).clip(RbShape).background(Palette.orange).padding(horizontal = 3.dp),
+                    )
+                }
             }
         }
     }
@@ -212,7 +214,7 @@ private fun NavBar(app: ManagerApp) {
 private fun NavRail(app: ManagerApp) {
     Column(Modifier.width(64.dp).fillMaxHeight().background(Palette.bg).border(BorderStroke(1.dp, Palette.line)).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         data class Item(val tab: Tab?, val glyph: String, val label: String)
-        listOf(Item(Tab.LIBRARY, "≡", "MÚS"), Item(null, "★", "MARC"), Item(Tab.PLAYLISTS, "♫", "PLAY"), Item(Tab.USB, "⎘", "USB"), Item(Tab.MENU, "⋯", "MENU")).forEach { it ->
+        listOf(Item(Tab.LIBRARY, "≡", "MÚSICAS"), Item(null, "★", "MARCAR"), Item(Tab.PLAYLISTS, "♫", "LISTAS"), Item(Tab.USB, "⎘", "PENDRIVE"), Item(Tab.MENU, "⋯", "MENU")).forEach { it ->
             val on = it.tab != null && app.tab == it.tab
             val hot = spotlit(app, it.tab)
             Column(
@@ -220,7 +222,7 @@ private fun NavRail(app: ManagerApp) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(it.glyph, color = if (on) Palette.blue else Palette.mutedBright, fontSize = 20.sp)
-                Text(it.label, color = if (on) Palette.blue else Palette.mutedBright, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp)
+                Text(it.label, color = if (on) Palette.blue else Palette.mutedBright, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp, maxLines = 1)
                 Box(Modifier.padding(top = 3.dp).width(26.dp).height(2.dp).background(if (on) Palette.blue else Palette.bg))
             }
         }

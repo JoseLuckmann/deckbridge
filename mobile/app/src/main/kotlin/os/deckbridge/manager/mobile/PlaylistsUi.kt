@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -132,9 +134,12 @@ private fun PlaylistTracks(app: ManagerApp, p: PlaylistItem, onBack: (() -> Unit
     val ids = m.view?.entries?.get(p.id).orEmpty().filter { m.view?.track(it) != null }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line)).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (onBack != null) TextButton(onClick = onBack) { Text("‹ VOLTAR", fontSize = 13.sp) }
-            Text(p.name, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false))
-            Text("${ids.size}", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(start = 8.dp).weight(1f))
+            // O nome fica com o espaço que sobra (com a contagem embaixo): não some atrás dos botões.
+            if (onBack != null) TextButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Voltar" }) { Text("‹", fontSize = 22.sp) }
+            Column(Modifier.padding(start = 4.dp).weight(1f)) {
+                Text(p.name, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${ids.size} músicas", color = Palette.orange, fontSize = 12.sp, fontFamily = Mono)
+            }
             // ＋ põe músicas; SET abre o set (transições, ouvir, ensaiar).
             OutlinedButton(onClick = { addTo(app, p.id) }, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)) { Text("＋", fontSize = 16.sp) }
             if (ids.size >= 2) Button(
@@ -158,9 +163,10 @@ private fun PlaylistTracks(app: ManagerApp, p: PlaylistItem, onBack: (() -> Unit
                             Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(t.artist + if (t.bpm > 0) " · %.0f BPM".format(t.bpm) else "", color = Palette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        MoveButton("▲", enabled = n > 0) { swap(app, p, ids, n, n - 1) }
-                        MoveButton("▼", enabled = n < ids.lastIndex) { swap(app, p, ids, n, n + 1) }
-                        MoveButton("✕", enabled = true, color = Palette.danger) { m.submit(Edit.RemoveFromPlaylist(p.id, listOf(id)), "Tirar \"${t.title}\" de \"${p.name}\"") }
+                        // Discretos: mover e tirar são de vez em quando (tirar dá para desfazer, não precisa gritar em vermelho).
+                        MoveButton("▲", enabled = n > 0, color = Palette.mutedBright) { swap(app, p, ids, n, n - 1) }
+                        MoveButton("▼", enabled = n < ids.lastIndex, color = Palette.mutedBright) { swap(app, p, ids, n, n + 1) }
+                        MoveButton("✕", enabled = true, color = Palette.muted) { m.submit(Edit.RemoveFromPlaylist(p.id, listOf(id)), "Tirar \"${t.title}\" de \"${p.name}\"") }
                     }
                 }
             }

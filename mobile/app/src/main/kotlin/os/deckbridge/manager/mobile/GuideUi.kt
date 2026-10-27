@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,21 +36,22 @@ fun GuideStrip(app: ManagerApp, actions: Actions) {
     if (app.guideHidden) return
     val v = app.model.view ?: return
     val now = app.step() ?: return
+    // Uma linha fina: os quatro passos em marcas pequenas e, ao lado, só o nome do próximo (tocar leva para ele).
     Row(
-        Modifier.fillMaxWidth().height(58.dp).background(Palette.surface).border(BorderStroke(0.5.dp, Palette.line)).padding(start = 10.dp),
+        Modifier.fillMaxWidth().height(40.dp).background(Palette.surface).border(BorderStroke(0.5.dp, Palette.line)).padding(start = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         GuideStep.values().forEachIndexed { n, s ->
             val done = s.done(app, v)
             val current = s == now
-            if (n > 0) Box(Modifier.weight(0.4f).height(2.dp).background(if (done || current) Palette.blue else Palette.line))
-            Column(
-                Modifier.clickable { go(app, actions, s) }.padding(horizontal = 4.dp, vertical = 4.dp).semantics { contentDescription = "Passo ${n + 1}: ${s.label}" },
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
+            Box(Modifier.clickable { go(app, actions, s) }.padding(horizontal = 2.dp, vertical = 4.dp).semantics { contentDescription = "Passo ${n + 1}: ${s.label}" }) {
                 StepMark(n + 1, done, current)
-                Text(s.label, color = if (current) Palette.text else Palette.muted, fontSize = 10.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
             }
+        }
+        Row(Modifier.weight(1f).fillMaxHeight().clickable { go(app, actions, now) }.padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("PRÓXIMO", color = Palette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+            Text("  ${now.label}", color = Palette.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text("  ›", color = Palette.blue, fontSize = 16.sp)
         }
         TextButton(onClick = { app.hideGuide() }, modifier = Modifier.width(44.dp).semantics { contentDescription = "Fechar o guia" }) {
             Text("✕", color = Palette.muted, fontSize = 13.sp)
@@ -71,11 +74,11 @@ fun go(app: ManagerApp, actions: Actions, s: GuideStep) {
 @Composable
 fun StepMark(n: Int, done: Boolean, current: Boolean) {
     Box(
-        Modifier.size(26.dp).clip(RbShape)
+        Modifier.size(20.dp).clip(RbShape)
             .background(if (done) Palette.keyFill else if (current) Palette.blueActiveFill else Palette.surfaceHigh)
             .border(BorderStroke(if (current) 2.dp else 1.dp, if (done) Palette.keyInk else if (current) Palette.blue else Palette.line), RbShape),
         contentAlignment = Alignment.Center,
     ) {
-        Text(if (done) "✓" else "$n", color = if (done) Palette.keyInk else if (current) Palette.text else Palette.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(if (done) "✓" else "$n", color = if (done) Palette.keyInk else if (current) Palette.text else Palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }

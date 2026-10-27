@@ -24,6 +24,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,7 +59,7 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
     val m = app.model
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line)).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (onBack != null) TextButton(onClick = onBack) { Text("‹ VOLTAR", fontSize = 13.sp) }
+            if (onBack != null) TextButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Voltar" }) { Text("‹", fontSize = 22.sp) }
             Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
                 Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text(t.artist.ifEmpty { "sem artista" }, color = Palette.muted, fontSize = 13.sp, maxLines = 1)
@@ -78,11 +80,15 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when (app.detailPage) {
+                // Na ordem de quem marca: o que a faixa é, ouvir, dar nota e cor, pôr nas playlists.
                 DetailPage.MARK -> {
-                    PlayableWave(app, t)
+                    StatsRow(t)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PlayableWave(app, t)
+                        ListenRow(app, t)
+                    }
                     Marking(app, t)
                     PlaylistChips(app, t)
-                    AnalysisSection(app, t)
                 }
                 DetailPage.CUES -> CueSection(app, t)
                 DetailPage.INFO -> Fields(app, t)
@@ -150,15 +156,19 @@ private fun PlaylistChips(app: ManagerApp, t: TrackItem) {
 }
 
 @Composable
-private fun AnalysisSection(app: ManagerApp, t: TrackItem) {
+private fun StatsRow(t: TrackItem) {
+    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        Stat("BPM", if (t.bpm > 0) "%.2f".format(t.bpm) else "—")
+        Stat("Tom", keyLabel(t.key) + if (!KeyStyle.musical && t.key.isNotEmpty()) " · ${t.key}" else "")
+        Stat("Tempo", formatDuration(t.durationSeconds))
+    }
+}
+
+@Composable
+private fun ListenRow(app: ManagerApp, t: TrackItem) {
     val m = app.model
     val has = m.hasAnalysis(t)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            Stat("BPM", if (t.bpm > 0) "%.2f".format(t.bpm) else "—")
-            Stat("Tom", keyLabel(t.key) + if (!KeyStyle.musical && t.key.isNotEmpty()) " · ${t.key}" else "")
-            Stat("Tempo", formatDuration(t.durationSeconds))
-        }
+    run {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.weight(1f).height(48.dp).clip(RbShape).background(if (app.preview.playingId == t.id) Palette.surfaceHigh else Palette.playBg).clickable { app.preview.toggle(t) }, contentAlignment = Alignment.Center) {
                 Text(if (app.preview.playingId == t.id) "■ PARAR" else "▶ OUVIR", color = if (app.preview.playingId == t.id) Palette.blue else Palette.playInk, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)

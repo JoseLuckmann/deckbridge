@@ -66,7 +66,10 @@ fun TextButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Bool
 /** Botão pequeno de filtro. Selecionado = ativo (azul-escuro com contorno azul). */
 @Composable
 fun FilterChip(selected: Boolean, onClick: () -> Unit, label: @Composable () -> Unit, modifier: Modifier = Modifier) =
-    RbBox(onClick, modifier, true, if (selected) Palette.blueActiveFill else Palette.surfaceHigh, if (selected) Palette.blue else Palette.line, if (selected) Palette.text else Palette.blue, PaddingValues(horizontal = 12.dp), 34) { label() }
+    RbBox(onClick, modifier, true, if (selected) Palette.blueActiveFill else Palette.surfaceHigh, if (selected) Palette.blue else Palette.line, if (selected) Palette.text else Palette.blue, PaddingValues(horizontal = 11.dp), 32) {
+        // Menor que o título das faixas: o filtro organiza a lista, não compete com ela.
+        ProvideTextStyle(TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)) { label() }
+    }
 
 @Composable
 fun AssistChip(onClick: () -> Unit, label: @Composable () -> Unit, modifier: Modifier = Modifier) = FilterChip(false, onClick, label, modifier)
@@ -84,13 +87,15 @@ fun Modifier.spotlight(on: Boolean): Modifier =
     if (!on) this else this.drawWithContent {
         drawContent()
         // Desenhado por fora do controle: não muda o tamanho de nada (a fileira de botões fica alinhada).
-        val gap = 3.dp.toPx()
-        val w = 2.dp.toPx()
-        drawRoundRect(
-            Palette.blue, topLeft = androidx.compose.ui.geometry.Offset(-gap, -gap),
-            size = androidx.compose.ui.geometry.Size(size.width + 2 * gap, size.height + 2 * gap),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(w),
-        )
+        // Um halo suave (três contornos que vão sumindo), não um segundo anel duro: chama a atenção sem parecer defeito.
+        for ((k, alpha) in listOf(1 to 0.55f, 3 to 0.25f, 5 to 0.10f)) {
+            val gap = k.dp.toPx()
+            drawRoundRect(
+                Palette.blue.copy(alpha = alpha), topLeft = androidx.compose.ui.geometry.Offset(-gap, -gap),
+                size = androidx.compose.ui.geometry.Size(size.width + 2 * gap, size.height + 2 * gap),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius((3 + k).dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()),
+            )
+        }
     }
 
 /** Como o tom aparece em todo o app: Camelot (8A, padrão, o que DJ usa para mixar) ou a nota musical (Am). */

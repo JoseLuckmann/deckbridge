@@ -142,14 +142,10 @@ private fun EmptyList(app: ManagerApp, actions: Actions) {
     }
 }
 
-/** Disco da faixa como na lista do player: quadrado na cor da faixa com o anel branco e o ponto. */
+/** A cor da faixa como no player: uma tirinha na borda da linha (sem cor, nada), em vez de um bloco que pesa na lista. */
 @Composable
-private fun Disc(color: Color?) {
-    Canvas(Modifier.size(40.dp).background(color ?: Palette.surfaceHigh)) {
-        val c = Offset(size.width / 2, size.height / 2)
-        drawCircle(Palette.text, radius = size.minDimension * 0.36f, center = c, style = Stroke(width = 3f))
-        drawCircle(Palette.text, radius = size.minDimension * 0.07f, center = c)
-    }
+private fun ColorTag(color: Color?) {
+    Box(Modifier.width(4.dp).height(40.dp).clip(RbShape).background(color ?: Palette.bg))
 }
 
 /**
@@ -215,7 +211,7 @@ fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean) {
             }
             Spacer(Modifier.width(8.dp))
         }
-        Disc(Palette.trackColors.getOrNull(t.colorId - 1))
+        ColorTag(Palette.trackColors.getOrNull(t.colorId - 1))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

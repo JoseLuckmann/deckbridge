@@ -1118,3 +1118,9 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Evidência: core `os passos da virada seguem o que a previa faz` (conferido contra os níveis nos compassos 16, 24, 25); mobile `SetFlowTest` (no meio da troca, PASSO diz "Troca o grave aos poucos"); captura `docs/ui/mobile-47`.
 - Não verificado: no aparelho.
 - Celular completo 67 (3 pulados, 0 falhas), computador 8 (2 pulados), núcleo verde. Versão 0.12.0.
+
+## 2026-10-27 — Refino de design (look and feel)
+
+- Pedido: rodada de refino de design, layout e usabilidade.
+- Auditoria nas capturas atuais (celular em pé e deitado): (1) barra de baixo com cinco caixas de borda grossa e o anel duplo do guia parecendo defeito; deitado, rótulos cortados (MÚS, MARC); (2) guia com quatro caixas e linhas longas ocupando uma faixa da tela; (3) filtros com texto maior que o título das faixas; (4) quadrado colorido grande em cada música; (5) ✕ vermelho em cada linha da playlist e nome da playlist cortado pelos botões; (6) na faixa, OUVIR depois dos números, longe da onda.
+- Correções: barra de baixo plana (o ativo em azul com traço em cima, contagem num selo laranja pequeno); barra lateral com os nomes inteiros; guia numa linha fina (quatro marcas pequenas + "PRÓXIMO Pendrive ›"); destaque do guia como halo suave (o mesmo componente vale no celular e no computador); filtros em 13sp e 32dp; cor da faixa como tirinha na borda da linha; playlist com o nome em cima da contagem ("4 músicas") e ▲ ▼ ✕ discretos; aba MARCAR da faixa na ordem de quem marca (números, onda, OUVIR, nota e cor, playlists); "‹ VOLTAR" virou "‹" (com descrição "Voltar" para leitores de tela).
