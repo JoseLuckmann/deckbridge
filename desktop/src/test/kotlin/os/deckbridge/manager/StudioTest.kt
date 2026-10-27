@@ -8,6 +8,8 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.graphics.asSkiaBitmap
 import java.io.File
@@ -123,6 +125,22 @@ class StudioTest {
         assertEquals(opening + c.cards.map { it.trackId } + ending, path.route.ids)
         assertEquals(path.route.ids.size - 1, path.plan.size)
         assertTrue(onAllNodes(hasText("OUVIR C", substring = true)).fetchSemanticsNodes().isNotEmpty(), "o OUVIR diz qual caminho")
+        // Arrastar com o mouse: o primeiro cartão de B desce uma fileira e vira parte de C (um desfazer volta).
+        val bLane = layout.lanes[1]
+        val moving = m.view!!.track(bLane.cards.first().trackId)!!
+        last(onAllNodes(hasText(moving.title))).performMouseInput {
+            moveTo(center)
+            press()
+            moveBy(Offset(0f, 52f))
+            moveBy(Offset(0f, 52f))
+            release()
+        }
+        waitForIdle()
+        assertTrue(moving.id !in m.view!!.entries[bLane.playlistId].orEmpty(), "saiu de B")
+        assertEquals(moving.id, m.view!!.entries[c.playlistId].orEmpty().first(), "entrou em C no mesmo lugar")
+        m.undo()
+        waitForIdle()
+        assertEquals(moving.id, m.view!!.entries[bLane.playlistId].orEmpty().first(), "um desfazer volta")
         // A troca abre o MIX (a mesma tela do celular); Esc volta.
         val first = studio.sets.lanePlan(pid).first()
         studio.sets.focus(pid)

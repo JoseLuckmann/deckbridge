@@ -142,6 +142,7 @@ fun SetScreen(app: StudioHost) {
                 onAdd = { lane -> desk.focus(lane.playlistId); picked = null; addTo = lane.letter },
                 onMix = { l, tr -> desk.focus(l.playlistId); desk.openMix(tr) },
                 onJoin = { lane -> desk.focus(lane.playlistId); picked = null; rejoinOpen = true },
+                onMove = { c, pid, i -> if (desk.moveCard(c.playlistId, c.index, pid, i)) picked = null },
                 modifier = Modifier.weight(1f),
             )
             val rehearsal = desk.rehearsal?.let { at -> plan.getOrNull(at)?.let { at to it } }

@@ -336,6 +336,44 @@ class SetDesk(private val app: StudioHost) {
         if (app.model.submitAll(edits) == edits.size) app.did("− $title")
     }
 
+    /**
+     * Arrastar no quadro: a faixa da posição [fromIndex] da linha [fromPid] vai para a posição [toIndex] da linha [toPid]
+     * (contada sem ela). Na mesma linha só muda a ordem; para outra, sai de uma e entra na outra (um desfazer volta tudo).
+     * Não move uma faixa de onde sai um ramo para outra linha, nem para uma linha que já a tem.
+     */
+    fun moveCard(fromPid: Int, fromIndex: Int, toPid: Int, toIndex: Int): Boolean {
+        val v = app.model.view ?: return false
+        fun line(pid: Int) = v.entries[pid].orEmpty().filter { v.track(it) != null }
+        val src = line(fromPid)
+        val id = src.getOrNull(fromIndex) ?: return false
+        val title = v.track(id)?.title.orEmpty()
+        val rest = src.toMutableList().apply { removeAt(fromIndex) }
+        if (fromPid == toPid) {
+            val order = rest.toMutableList().apply { add(toIndex.coerceIn(0, size), id) }
+            if (order == src) return false
+            if (!app.model.submit(Edit.ReorderPlaylist(fromPid, order), "Mover \"$title\" no set")) return false
+            app.did("Movida: $title")
+            return true
+        }
+        val dst = line(toPid)
+        if (id in dst) {
+            app.notice = os.deckbridge.manager.Banner("\"$title\" já está nessa linha", true)
+            return false
+        }
+        if (SetBranches.alive(v, branches).any { it.mainId == fromPid && it.fromTrackId == id }) {
+            app.notice = os.deckbridge.manager.Banner("Um ramo sai de \"$title\": ela fica na linha dela", true)
+            return false
+        }
+        val order = dst.toMutableList().apply { add(toIndex.coerceIn(0, size), id) }
+        val edits = listOf(Edit.RemoveFromPlaylist(fromPid, listOf(id)) to "Tirar \"$title\" da linha") +
+            (if (id in rest) listOf(Edit.AddToPlaylist(fromPid, listOf(id)) to "Manter \"$title\"", Edit.ReorderPlaylist(fromPid, rest) to "Ordem da linha") else emptyList()) +
+            listOf(Edit.AddToPlaylist(toPid, listOf(id)) to "Pôr \"$title\" na outra linha", Edit.ReorderPlaylist(toPid, order) to "Lugar de \"$title\"")
+        if (app.model.submitAll(edits) != edits.size) return false
+        focus(toPid)
+        app.did("Movida para a outra linha: $title")
+        return true
+    }
+
     /** Anda com a faixa da posição [index] uma casa para trás ([delta] -1) ou para frente (+1). Devolve a nova posição. */
     fun move(index: Int, delta: Int): Int {
         val pid = playlistId ?: return index

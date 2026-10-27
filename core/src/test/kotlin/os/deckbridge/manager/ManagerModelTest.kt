@@ -36,6 +36,26 @@ class ManagerModelTest {
     }
 
     @Test
+    fun whatIsAskedTogetherIsUndoneTogether() {
+        val dir = TestVolumes.synthetic()
+        val m = model()
+        m.open(dir)
+        val (a, b) = m.view!!.tracks
+        m.submit(Edit.SetTracks(listOf(a.id), TrackPatch(rating = 1)), "antes")
+        // Mover entre linhas, pôr uma ponte: várias mudanças pedidas de uma vez.
+        assertEquals(2, m.submitAll(listOf(Edit.SetTracks(listOf(a.id), TrackPatch(rating = 5)) to "um", Edit.SetTracks(listOf(b.id), TrackPatch(rating = 4)) to "dois")))
+        m.undo()
+        assertEquals(listOf("antes"), m.pending.map { it.text }, "um desfazer tira as duas")
+        assertEquals(1, m.view!!.track(a.id)!!.rating)
+        assertTrue(m.redo())
+        assertEquals(listOf("antes", "um", "dois"), m.pending.map { it.text }, "e um refazer põe as duas, na ordem")
+        assertEquals(4, m.view!!.track(b.id)!!.rating)
+        m.undo()
+        m.undo()
+        assertTrue(m.pending.isEmpty(), "o que foi pedido sozinho sai sozinho")
+    }
+
+    @Test
     fun aQuietSaveKeepsTheScreenAndWhatWasDoneMeanwhile() {
         val dir = TestVolumes.synthetic()
         val m = model()

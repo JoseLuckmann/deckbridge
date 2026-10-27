@@ -42,6 +42,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.zIndex
 import os.deckbridge.manager.mix.CanvasCard
 import os.deckbridge.manager.mix.CanvasLane
 import os.deckbridge.manager.mix.CanvasLink
@@ -72,6 +76,13 @@ private class Geo(val vertical: Boolean) {
     fun y(c: CanvasCard) = y(c.row, c.col)
     fun width(l: SetCanvasLayout): Dp = if (vertical) x(l.rows, 0) + 8.dp else x(0, l.cols) + 24.dp
     fun height(l: SetCanvasLayout): Dp = if (vertical) y(0, l.cols) + 8.dp else y(l.rows, 0) + 8.dp
+    /** A linha (fileira do layout) e a posição na linha mais perto do ponto ([x], [y]) do quadro, para soltar um cartão. */
+    fun slotAt(x: Dp, y: Dp): Pair<Int, Int> {
+        val along = if (vertical) (y - top - cardH / 2) / step else (x - left - cardW / 2) / step
+        val across = if (vertical) (x - left - cardW / 2) / lane else (y - top - cardH / 2) / lane
+        return Math.round(across).coerceAtLeast(0) to Math.round(along).coerceAtLeast(0)
+    }
+
     /** O ＋ no fim da linha: centrado no lugar da próxima faixa. */
     fun plusX(lane: CanvasLane) = x(lane.row, lane.endCol) + if (vertical) (cardW - PLUS) / 2 else 0.dp
     fun plusY(lane: CanvasLane) = y(lane.row, lane.endCol) + if (vertical) 0.dp else (cardH - PLUS) / 2
@@ -90,10 +101,10 @@ private fun laneColor(row: Int): Color =
 fun SetBoard(
     app: StudioHost, layout: SetCanvasLayout, plans: Map<Int, List<Transition>>, issues: Set<Pair<Int, Int>>, selected: CanvasCard?,
     rehearsing: Transition?, onSelect: (CanvasCard?) -> Unit, onAdd: (CanvasLane) -> Unit, onMix: (CanvasLink, Transition) -> Unit,
-    onJoin: (CanvasLane) -> Unit, modifier: Modifier = Modifier,
+    onJoin: (CanvasLane) -> Unit, onMove: (CanvasCard, Int, Int) -> Unit = { _, _, _ -> }, modifier: Modifier = Modifier,
 ) {
     androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxSize().background(Palette.bg)) {
-        Board(app, Geo(vertical = maxHeight > maxWidth), layout, plans, issues, selected, rehearsing, onSelect, onAdd, onMix, onJoin)
+        Board(app, Geo(vertical = maxHeight > maxWidth), layout, plans, issues, selected, rehearsing, onSelect, onAdd, onMix, onJoin, onMove)
     }
 }
 
@@ -101,9 +112,21 @@ fun SetBoard(
 private fun Board(
     app: StudioHost, g: Geo, layout: SetCanvasLayout, plans: Map<Int, List<Transition>>, issues: Set<Pair<Int, Int>>, selected: CanvasCard?,
     rehearsing: Transition?, onSelect: (CanvasCard?) -> Unit, onAdd: (CanvasLane) -> Unit, onMix: (CanvasLink, Transition) -> Unit,
-    onJoin: (CanvasLane) -> Unit,
+    onJoin: (CanvasLane) -> Unit, onMove: (CanvasCard, Int, Int) -> Unit,
 ) {
     val v = app.model.view ?: return
+    // Arrastar um cartão: onde ele está agora (o quanto andou) e onde cairia se soltasse.
+    var dragged by remember { mutableStateOf<CanvasCard?>(null) }
+    var moved by remember { mutableStateOf(Offset.Zero) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    fun target(c: CanvasCard): Pair<CanvasLane, Int>? {
+        val x = g.x(c) + g.cardW / 2 + with(density) { moved.x.toDp() }
+        val y = g.y(c) + g.cardH / 2 + with(density) { moved.y.toDp() }
+        val (row, col) = g.slotAt(x, y)
+        val lane = layout.lanes.firstOrNull { it.row == row } ?: return null
+        // A posição na linha de destino, contada sem o próprio cartão.
+        return lane to lane.cards.count { it != c && it.col < col }
+    }
     val desk = app.sets
     val width = g.width(layout)
     val height = g.height(layout)
@@ -177,7 +200,21 @@ private fun Board(
                 }
                 lane.cards.forEach { c ->
                     val t = v.track(c.trackId) ?: return@forEach
-                    BoardCard(g, t, c, selected = selected == c, playing = app.preview.playingId == c.trackId, color = laneColor(lane.row)) { onSelect(if (selected == c) null else c) }
+                    val drag = Modifier.pointerInput(c, app.touch) {
+                        val start = { _: Offset -> dragged = c; moved = Offset.Zero }
+                        val end = {
+                            target(c)?.let { (l, i) -> onMove(c, l.playlistId, i) }
+                            dragged = null
+                            moved = Offset.Zero
+                        }
+                        val cancel = { dragged = null; moved = Offset.Zero }
+                        val step = { change: androidx.compose.ui.input.pointer.PointerInputChange, d: Offset -> change.consume(); moved += d }
+                        if (app.touch) detectDragGesturesAfterLongPress(start, end, cancel, step) else detectDragGestures(start, end, cancel, step)
+                    }
+                    BoardCard(
+                        g, t, c, selected = selected == c, playing = app.preview.playingId == c.trackId, color = laneColor(lane.row),
+                        shift = if (dragged == c) moved else Offset.Zero, gesture = drag,
+                    ) { onSelect(if (selected == c) null else c) }
                 }
                 PlusCard(g, lane, laneColor(lane.row)) { onAdd(lane) }
                 // Num ramo: onde ele junta de volta (ou FIM, se é outro final); tocar muda.
@@ -216,14 +253,25 @@ private fun Board(
                 }
                 LinkPill(tr, issue, on = rehearsing == tr, playing = app.preview.playingKey == desk.keyFor(tr), modifier = Modifier.offset(x, y)) { onMix(l, tr) }
             }
+            // Onde o cartão arrastado cai: uma barra azul antes da posição.
+            dragged?.let { c -> target(c) }?.let { (lane, i) ->
+                val col = lane.cards.filter { it != dragged }.getOrNull(i)?.col ?: lane.endCol
+                val gap = g.step - (if (g.vertical) g.cardH else g.cardW)
+                val m = if (g.vertical) Modifier.offset(g.x(lane.row, col), g.y(lane.row, col) - gap / 2 - 2.dp).size(g.cardW, 4.dp)
+                else Modifier.offset(g.x(lane.row, col) - gap / 2 - 2.dp, g.y(lane.row, col)).size(4.dp, g.cardH)
+                Box(m.background(Palette.blue))
+            }
         }
     }
 }
 
 @Composable
-private fun BoardCard(g: Geo, t: TrackItem, c: CanvasCard, selected: Boolean, playing: Boolean, color: Color, onClick: () -> Unit) {
+private fun BoardCard(
+    g: Geo, t: TrackItem, c: CanvasCard, selected: Boolean, playing: Boolean, color: Color, shift: Offset = Offset.Zero, gesture: Modifier = Modifier, onClick: () -> Unit,
+) {
     Column(
-        Modifier.offset(g.x(c), g.y(c)).size(g.cardW, g.cardH).clip(RbShape)
+        Modifier.offset(g.x(c), g.y(c)).offset { androidx.compose.ui.unit.IntOffset(shift.x.toInt(), shift.y.toInt()) }
+            .then(if (shift != Offset.Zero) Modifier.zIndex(1f) else Modifier).then(gesture).size(g.cardW, g.cardH).clip(RbShape)
             .background(if (playing) Palette.selectedRow else if (c.pool) Palette.bg else Palette.surface)
             .border(BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Palette.blue else if (c.pool) Palette.orange.copy(alpha = 0.5f) else Palette.line), RbShape)
             .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),

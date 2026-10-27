@@ -136,6 +136,9 @@ class DesktopStudio(
 
     override fun onMain(block: () -> Unit) = javax.swing.SwingUtilities.invokeLater(block)
 
+    // Mouse: arrastar um cartão começa direto (a rolagem é pela roda).
+    override val touch: Boolean get() = false
+
     /** Os "voltar" das telas abertas, a última por cima: o Esc chama a do topo. */
     internal val backs = mutableListOf<() -> Unit>()
 

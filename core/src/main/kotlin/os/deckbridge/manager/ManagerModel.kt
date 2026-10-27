@@ -22,7 +22,8 @@ import os.deckbridge.manager.smart.QuickFilter
 import os.deckbridge.manager.smart.Smart
 
 /** Uma mudança na fila: a edição e o texto que a tela e o backup mostram. */
-data class PendingChange(val edit: Edit, val text: String)
+/** Uma mudança na fila. As de um mesmo [group] (diferente de 0) foram pedidas juntas e se desfazem juntas. */
+data class PendingChange(val edit: Edit, val text: String, val group: Long = 0)
 
 enum class Column(val title: String) { ID("#"), TITLE("Título"), ARTIST("Artista"), ALBUM("Álbum"), GENRE("Gênero"), KEY("Tom"), BPM("BPM"), RATING("Nota"), YEAR("Ano"), TIME("Tempo") }
 
@@ -102,11 +103,15 @@ class ManagerModel(val backups: Backups = Backups()) {
     }
 
     /** Valida e enfileira. Em caso de recusa, a fila fica como estava e [banner] diz o motivo. */
-    fun submit(edit: Edit, text: String): Boolean {
+    fun submit(edit: Edit, text: String): Boolean = submit(edit, text, 0)
+
+    private var nextGroup = 1L
+
+    private fun submit(edit: Edit, text: String, group: Long): Boolean {
         val e = editor ?: return false
         return try {
             e.apply(edit)
-            pending = pending + PendingChange(edit, text)
+            pending = pending + PendingChange(edit, text, group)
             redoStack = emptyList()
             view = e.view()
             lastChangeAt = System.currentTimeMillis()
@@ -121,8 +126,11 @@ class ManagerModel(val backups: Backups = Backups()) {
     /** Refaz a última mudança desfeita. Qualquer mudança nova esvazia a pilha de refazer. */
     fun redo(): Boolean {
         val next = redoStack.lastOrNull() ?: return false
-        val keep = redoStack.dropLast(1)
-        if (!submit(next.edit, next.text)) return false
+        // Um grupo volta inteiro (está na pilha do último para o primeiro).
+        val n = if (next.group != 0L) redoStack.takeLastWhile { it.group == next.group }.size else 1
+        val batch = redoStack.takeLast(n).reversed()
+        val keep = redoStack.dropLast(n)
+        for (c in batch) if (!submit(c.edit, c.text, c.group)) return false
         redoStack = keep
         return true
     }
@@ -130,8 +138,11 @@ class ManagerModel(val backups: Backups = Backups()) {
     fun undo() {
         if (pending.isEmpty() || saving) return
         lastChangeAt = System.currentTimeMillis()
-        redoStack = redoStack + pending.last()
-        pending = pending.dropLast(1)
+        // O que foi pedido junto (um grupo de [submitAll]) sai junto.
+        val last = pending.last()
+        val n = if (last.group != 0L) pending.takeLastWhile { it.group == last.group }.size else 1
+        redoStack = redoStack + pending.takeLast(n).reversed()
+        pending = pending.dropLast(n)
         editor = rebuild()
         view = editor!!.view()
         selection = selection.filter { view!!.track(it) != null }.toSet()
@@ -218,10 +229,12 @@ class ManagerModel(val backups: Backups = Backups()) {
     }
 
     /** Várias edições de uma vez (diálogos de importar, renomear e organizar). Para na primeira recusa. */
+    /** Várias mudanças pedidas de uma vez: um desfazer tira todas. */
     fun submitAll(items: List<Pair<Edit, String>>): Int {
+        val group = if (items.size > 1) nextGroup++ else 0L
         var n = 0
         for ((edit, text) in items) {
-            if (!submit(edit, text)) break
+            if (!submit(edit, text, group)) break
             n++
         }
         return n
