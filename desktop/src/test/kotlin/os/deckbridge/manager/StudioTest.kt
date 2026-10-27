@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.graphics.asSkiaBitmap
@@ -418,5 +419,48 @@ class StudioTest {
         assertEquals(m.view!!.entries[pid], m.view!!.entries[copy])
         assertEquals("Sábado (v2)", m.view!!.playlists.first { it.id == copy }.name)
         assertEquals(60, desk.goalMinutes)
+    }
+
+    @Test fun aRequestFromTheFloorGetsABridgeIntoTheSet() = runDesktopComposeUiTest(1360, 820) {
+        val m = library()
+        val pid = m.nextPlaylistId()
+        m.submit(Edit.CreatePlaylist(pid, 0, "Sábado", false), "p")
+        m.submit(Edit.AddToPlaylist(pid, listOf("Night Signal", "Small Hours", "Glass Harbour", "Copper Sky").map { id(m, it) }), "p")
+        check(m.apply(null) != null)
+        val prefs = java.util.prefs.Preferences.userRoot().node("deckbridge-test/${System.nanoTime()}")
+        val ui = UiState().apply { studioPrefs = prefs; studioSetsHome = TestVolumes.tempDir("dbm-sets") }
+        setContent { App(m, ui) }
+        waitForIdle()
+        fun click(text: String) {
+            val all = onAllNodes(hasText(text))
+            all[all.fetchSemanticsNodes().size - 1].performSemanticsAction(SemanticsActions.OnClick)
+            waitForIdle()
+        }
+        fun shot(name: String) {
+            val roots = onAllNodes(androidx.compose.ui.test.isRoot())
+            val img = roots[roots.fetchSemanticsNodes().size - 1].captureToImage()
+            File(out, "$name.png").writeBytes(org.jetbrains.skia.Image.makeFromBitmap(img.asSkiaBitmap()).encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)!!.bytes)
+        }
+        val desk = assertNotNull(ui.studio).sets
+        desk.open(pid)
+        desk.startLive()
+        desk.liveTo(desk.canvas()!!.lanes[0].cards[0])
+        waitForIdle()
+        // Tocando Night Signal (8A, 124); pedem Slow Pulse (6A, 118): Tidal Bloom (7A, 122) faz a ponte.
+        click("PEDIDO")
+        // O campo do diálogo (o último; o da busca da biblioteca fica embaixo).
+        onAllNodes(androidx.compose.ui.test.hasSetTextAction()).let { it[it.fetchSemanticsNodes().size - 1] }.performTextInput("Slow")
+        waitForIdle()
+        click("CAMINHO")
+        val until = System.currentTimeMillis() + 20_000
+        while (onAllNodes(hasText("Procurando a ponte…")).fetchSemanticsNodes().isNotEmpty() && System.currentTimeMillis() < until) {
+            Thread.sleep(20)
+            waitForIdle()
+        }
+        onAllNodes(hasText("1 faixa(s) até lá", substring = true)).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty(), "uma ponte") }
+        shot("desktop-pedido")
+        click("PÔR NO SET")
+        val line = m.view!!.entries[pid]!!
+        assertEquals(listOf("Night Signal", "Tidal Bloom", "Slow Pulse", "Small Hours"), line.take(4).map { t -> m.view!!.track(t)!!.title })
     }
 }

@@ -822,12 +822,43 @@ class SetDesk(private val app: StudioHost) {
         liveNow = null
         liveTrack = null
         livePlayed = emptySet()
+        liveOrder = emptyList()
     }
+
+    /** A ordem em que as faixas tocaram de verdade (cada toque em "esta está tocando"), para guardar no fim. */
+    var liveOrder by mutableStateOf<List<Int>>(emptyList())
+        private set
+
+    /** Ao sair do AO VIVO com duas ou mais tocadas: a ordem esperando o DJ dizer se guarda. */
+    var playedToSave by mutableStateOf<List<Int>?>(null)
 
     fun stopLive() {
         live = false
         liveNow = null
         liveTrack = null
+        if (liveOrder.size >= 2) playedToSave = liveOrder
+        liveOrder = emptyList()
+    }
+
+    /**
+     * Guarda o que tocou como uma playlist "Tocado dd/MM · nome do set", na ordem real, e a marca como set (conta em "em N
+     * sets" e tira das Esquecidas). Captura só o que serve depois, não tudo (Sellen & Whittaker 2010). Devolve o id.
+     */
+    fun savePlayed(): Int? {
+        val order = playedToSave ?: return null
+        playedToSave = null
+        val v = app.model.view ?: return null
+        val setName = rootId()?.let { r -> v.playlists.firstOrNull { it.id == r }?.name }.orEmpty()
+        val name = "Tocado " + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM")) + if (setName.isNotEmpty()) " · $setName" else ""
+        val id = app.model.nextPlaylistId()
+        val n = app.model.submitAll(listOf(
+            Edit.CreatePlaylist(id, 0, name, false) to "Guardar \"$name\"",
+            Edit.AddToPlaylist(id, order) to "O que tocou",
+        ))
+        if (n != 2) return null
+        runCatching { app.setsDir.mkdirs(); File(app.setsDir, "$id.set").createNewFile() }
+        app.did("$name · ${order.size} faixas")
+        return id
     }
 
     /** [c] está tocando agora: a de antes vai para as que já tocaram, e a linha dela passa a ser a escolhida. */
@@ -836,6 +867,7 @@ class SetDesk(private val app: StudioHost) {
         lanePlan(pid).firstOrNull { it.fromId == fromId && it.toId == toId }?.note.orEmpty()
 
     fun liveTo(c: os.deckbridge.manager.mix.CanvasCard) {
+        if (liveOrder.lastOrNull() != c.trackId) liveOrder = liveOrder + c.trackId
         liveTrack?.takeIf { it != c.trackId }?.let { livePlayed = livePlayed + it }
         livePlayed = livePlayed - c.trackId
         liveTrack = c.trackId
@@ -1157,5 +1189,97 @@ class SetDesk(private val app: StudioHost) {
         open(id)
         app.did("$copyName · cópia para testar" + if (hadBranches) " (sem as vertentes)" else "")
         return id
+    }
+
+    // ---- show: pronto pro show, arrumar (análise e cues em lote), pedido da pista ------------------------------------
+
+    /** Todas as faixas do set, na ordem do quadro (a linha e as vertentes; o ponto de virada conta uma vez, na linha dele). */
+    fun setTrackIds(): List<Int> = canvas()?.lanes?.flatMap { lane -> lane.cards.map { it.trackId } } ?: ids()
+
+    private fun audioFile(t: TrackItem) = File(app.root, t.filePath.replace('\\', '/').trimStart('/'))
+
+    /** A lista "Pronto pro show?" do set aberto (ver [os.deckbridge.manager.smart.ShowCheck]). Lê as grades: fora da tela. */
+    fun showItems(): List<os.deckbridge.manager.smart.ShowCheck.Item> {
+        val v = app.model.view ?: return emptyList()
+        val lanes = canvas()?.lanes.orEmpty()
+        val plans = lanes.flatMap { lanePlan(it.playlistId) }.distinctBy { it.fromId to it.toId }
+        return os.deckbridge.manager.smart.ShowCheck.check(
+            v, setTrackIds(), hasAnalysis = { app.model.hasAnalysis(it) }, audioExists = { audioFile(it).isFile },
+            cueNames = { t -> grid(t)?.cues?.map { it.comment }?.toSet().orEmpty() },
+            issues = issuePairs().size, unrehearsed = plans.count { it.mark != Transition.Mark.GOOD },
+        )
+    }
+
+    /**
+     * Arruma o que dá sozinho, em segundo plano e com "n/N": analisa as faixas sem análise (grade, ondas e cues) e põe
+     * cues de memória "Intro", "Drop" e "Outro" onde faltam, pela análise de estrutura do app. Não apaga nem move cue
+     * nenhum do DJ; tudo vai junto para a fila (um desfazer volta). A automação faz e mostra, o DJ confere e desfaz
+     * (Parasuraman, Sheridan & Wickens 2000).
+     */
+    fun prepareForShow(ids: List<Int>) {
+        val v = app.model.view ?: return
+        val todo = ids.distinct().mapNotNull { v.track(it) }.filter { audioFile(it).isFile }
+        if (todo.isEmpty()) return
+        app.background("Preparando para o show") { job ->
+            val edits = ArrayList<Pair<Edit, String>>()
+            var cuesAdded = 0
+            todo.forEachIndexed { n, t ->
+                if (job.cancelled) return@background
+                job.text = "${n + 1}/${todo.size}: ${t.title}"
+                val p = runCatching { os.deckbridge.manager.importer.ImportPrep.prepare(audioFile(t)) }.getOrNull() ?: return@forEachIndexed
+                val structure = p.suggestedCues.filter { c -> os.deckbridge.manager.smart.ShowCheck.STRUCTURE.any { it.equals(c.comment, ignoreCase = true) } }
+                if (!app.model.hasAnalysis(t)) {
+                    edits += Edit.AttachAnalysis(t.id, p, p.suggestedCues, t.bpm <= 0.0, t.key.isBlank()) to "Análise de \"${t.title}\""
+                    cuesAdded += structure.size
+                } else {
+                    val have = grid(t)?.cues ?: runCatching { app.model.trackGrid(t).cues }.getOrDefault(emptyList())
+                    val missing = structure.filter { c -> have.none { it.comment.equals(c.comment, ignoreCase = true) } }
+                        .map { os.deckbridge.manager.anlz.Cue(0, it.timeMs, comment = it.comment) }
+                    if (missing.isNotEmpty()) {
+                        edits += Edit.SetCues(t.id, have + missing) to "Cues de estrutura em \"${t.title}\""
+                        cuesAdded += missing.size
+                    }
+                }
+            }
+            app.onMain {
+                val n = if (edits.isEmpty()) 0 else app.model.submitAll(edits)
+                forgetGrids()
+                app.did(if (n == 0) "Nada a arrumar" else "Arrumado: $n faixa(s), $cuesAdded cue(s) de estrutura · confira no MIX")
+            }
+        }
+    }
+
+    /**
+     * Pedido da pista: de [from] até [target], as faixas da biblioteca que fazem a ponte (até 3), fora das que já
+     * tocaram e das que estão no set. Lista vazia: combina direto; null: não há caminho.
+     */
+    fun requestRoute(from: TrackItem, target: TrackItem): List<TrackItem>? {
+        val v = app.model.view ?: return null
+        val busy = livePlayed + (liveTrack?.let { setOf(it) } ?: emptySet()) + hidden
+        return os.deckbridge.manager.smart.Request.route(v, from, target, busy)
+    }
+
+    /** A faixa que está tocando agora no AO VIVO. */
+    fun liveTrackItem(): TrackItem? = liveTrack?.let { app.model.view?.track(it) }
+
+    /**
+     * Põe [route] e o pedido [target] na linha da que está tocando, logo depois dela (um desfazer volta). O quadro passa a
+     * mostrar o caminho; as trocas novas são automáticas.
+     */
+    fun insertRoute(route: List<TrackItem>, target: TrackItem): Boolean {
+        val (pid, index) = liveNow ?: return false
+        val v = app.model.view ?: return false
+        val line = v.entries[pid].orEmpty().filter { v.track(it) != null }
+        val add = (route + target).map { it.id }.filter { it !in line }
+        if (add.isEmpty()) return false
+        val at = (index + 1).coerceAtMost(line.size)
+        val order = line.take(at) + add + line.drop(at)
+        val n = app.model.submitAll(listOf(
+            Edit.AddToPlaylist(pid, add) to "Pedido: ${target.title}",
+            Edit.ReorderPlaylist(pid, order) to "Caminho até o pedido",
+        ))
+        if (n != 2) return false
+        app.did("Pedido no set: ${add.size} faixa(s) até ${target.title}")
+        return true
     }
 }

@@ -1189,3 +1189,10 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
   - Duração alvo (⋯): "≈1:48 / 2:00 · faltam 12", com ✓ dentro de 5%; guardada por set fora do pendrive.
   - Duplicar set (⋯): cópia "(v2)" com as faixas, as trocas ajustadas, o master, a pool e o alvo, para testar sem mexer no original (as vertentes não vão junto; o aviso diz).
 - Evidência: núcleo `KeepTest` 7; computador `StudioTest.setHelpersReplaceGoalAndDuplicate` (captura `desktop-trocar`); suíte completa no fechamento. Não verificado: aparelho. Versão 0.19.0.
+
+## 2026-10-27 — Recursos de show: pronto pro show, arrumar em lote, pedido e guardar o que tocou
+
+- Pedido: implementar os quatro facilitadores sugeridos do ponto de vista do DJ, com decisões técnicas e de layout embasadas em artigos. Fontes e decisões: `docs/ux-show.md`.
+- Núcleo: `smart/Show.kt` — `ShowCheck.check` (áudio, grade, cues Intro/Drop/Outro, repetidas, trocas com aviso, não ensaiadas) e `Request.route` (menor caminho em camadas, até 3 faixas, só arestas que combinam).
+- Studio (celular e computador): ⋯ → "Pronto pro show?" (`ShowDialog`), ARRUMAR (`prepareForShow`: análise e cues de estrutura onde faltam, sem mexer nos do DJ, em segundo plano com n/N, um desfazer); AO VIVO → PEDIDO (`RequestDialog`, PÔR NO SET logo depois da que toca); ao sair do AO VIVO, "Guardar o que tocou?" (`savePlayed`, playlist "Tocado dd/MM", marcada como set).
+- Evidência: núcleo `ShowTest` 2; celular `ShowFlowTest` 3 (capturas mobile-58, mobile-59); computador `StudioTest.aRequestFromTheFloorGetsABridgeIntoTheSet` (8A → 7A → 6A; captura desktop-pedido); suíte completa no fechamento. Não verificado: aparelho, cabine. Versão 0.20.0.

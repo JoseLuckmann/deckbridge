@@ -412,7 +412,7 @@ enum class LiveMark { NOW, NEXT, PLAYED, OTHER }
 
 /** Ao vivo: a que toca e, em botões, as que podem vir depois (tocar uma diz que ela entrou). */
 @Composable
-fun LiveBar(app: StudioHost, layout: SetCanvasLayout, live: LiveView, onPick: (CanvasCard) -> Unit, onStop: () -> Unit) {
+fun LiveBar(app: StudioHost, layout: SetCanvasLayout, live: LiveView, onPick: (CanvasCard) -> Unit, onStop: () -> Unit, onRequest: () -> Unit = {}) {
     val v = app.model.view ?: return
     fun name(c: CanvasCard) = shortTitle(v.track(c.trackId)?.title.orEmpty())
     val letters = layout.lanes.associate { it.playlistId to it.letter }
@@ -423,6 +423,8 @@ fun LiveBar(app: StudioHost, layout: SetCanvasLayout, live: LiveView, onPick: (C
                 "  " + (live.now?.let { name(it) } ?: "toque na que está tocando"), color = Palette.text, fontSize = 14.sp, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
             )
+            // Pedido da pista: a ponte da que toca até a pedida.
+            if (live.now != null) TextButton(onClick = onRequest) { Text("PEDIDO", color = Palette.orange, fontSize = 12.sp) }
             TextButton(onClick = onStop) { Text("SAIR", fontSize = 12.sp) }
         }
         if (live.now != null) Row(Modifier.fillMaxWidth().padding(top = 6.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

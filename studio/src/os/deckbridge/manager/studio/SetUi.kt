@@ -94,6 +94,8 @@ fun SetScreen(app: StudioHost) {
     var sortOpen by remember { mutableStateOf(false) }
     var bridgeFor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var replaceAt by remember { mutableStateOf<Int?>(null) }
+    var showOpen by remember { mutableStateOf(false) }
+    var requestOpen by remember { mutableStateOf(false) }
     var goalOpen by remember { mutableStateOf(false) }
     var issueFor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // O caminho inteiro da linha escolhida (do começo ao fim do set), para ouvir e comparar vertentes.
@@ -154,7 +156,7 @@ fun SetScreen(app: StudioHost) {
             )
             val rehearsal = desk.rehearsal?.let { at -> plan.getOrNull(at)?.let { at to it } }
             when {
-                liveView != null -> LiveBar(app, layout, liveView, onPick = { desk.liveTo(it) }, onStop = { desk.stopLive() })
+                liveView != null -> LiveBar(app, layout, liveView, onPick = { desk.liveTo(it) }, onStop = { desk.stopLive() }, onRequest = { requestOpen = true })
                 rehearsal != null -> RehearsalBar(app, rehearsal.first, plan, rehearsal.second)
                 card != null -> BoardActions(
                     app, card,
@@ -243,6 +245,8 @@ fun SetScreen(app: StudioHost) {
         // O que se usa pouco fica aqui: ordenar (não numa pool: a ordem é escolhida na hora), master, andamento e a outra vista.
         val canSort = poolAt == null && ids.size >= 3
         val options = buildList {
+            // Antes de sair de casa: a conferência do que dá problema na cabine.
+            add("Pronto pro show?" to { picked = null; showOpen = true })
             if (canSort) add("Ordenar para mixar" to { sortOpen = true })
             add("Transição · " + (app.transitionBars?.let { "$it compassos" } ?: "até o drop") to { app.nextTransitionBars() })
             if (board) {
@@ -261,6 +265,9 @@ fun SetScreen(app: StudioHost) {
     }
     addTo?.let { letter -> AddToLineDialog(app, letter) { addTo = null } }
     replaceAt?.let { index -> ReplaceDialog(app, index) { replaceAt = null; picked = null } }
+    if (showOpen) ShowDialog(app, onRehearse = { if (plan.isNotEmpty()) desk.startRehearsal(plan) }) { showOpen = false }
+    if (requestOpen) RequestDialog(app) { requestOpen = false }
+    SavePlayedDialog(app)
     if (goalOpen) {
         val goals = listOf(30, 45, 60, 90, 120, 180)
         ChoiceDialog("Duração alvo", goals.map { "${it} min" } + "Sem alvo", onPick = { n -> goalOpen = false; desk.setGoal(goals.getOrNull(n)) }, onClose = { goalOpen = false })
