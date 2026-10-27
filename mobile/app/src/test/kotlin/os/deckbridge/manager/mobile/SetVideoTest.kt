@@ -38,7 +38,7 @@ class SetVideoTest : VideoTestBase() {
         frames = File(out, "frames").apply { deleteRecursively(); mkdirs() }
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
 
-        val app = ManagerApp(ctx, File(out, "lib/biblioteca/dados").apply { parentFile!!.parentFile!!.deleteRecursively() })
+        val app = ManagerApp(ctx, File(out, "lib/biblioteca/dados").apply { parentFile!!.parentFile!!.deleteRecursively() }).also { it.setListView(true) }
         app.start()
         val actions = Actions(pickAudio = { app.importAudio(songs.map { Uri.fromFile(it) }) }, pickUsb = {})
         rule.mainClock.autoAdvance = false

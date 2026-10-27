@@ -34,7 +34,7 @@ class SetPoolTest {
 
     private fun app(): ManagerApp {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val a = ManagerApp(ctx, File(ctx.cacheDir, "pool-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 40) }
+        val a = ManagerApp(ctx, File(ctx.cacheDir, "pool-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 40); it.setListView(true) }
         val keys = mapOf(
             "Night Signal" to "Am", "Glass Harbour" to "Em", "Tidal Bloom" to "Dm", "Soft Machines" to "C", "Concrete Garden" to "Em",
             "Afterhours" to "F#m", "Slow Pulse" to "Gm", "Velvet Rail" to "Am", "Copper Sky" to "Bm", "Small Hours" to "Em",
@@ -77,7 +77,11 @@ class SetPoolTest {
         click("Pool depois desta")
         assertEquals(3, a.sets.poolFrom)
         rule.onNodeWithText("POOL").assertExists()
-        assertEquals(0, rule.onAllNodes(hasContentDescription("Mais")).fetchSemanticsNodes().size, "pool não se ordena")
+        rule.onNode(hasContentDescription("Mais")).performClick()
+        rule.waitForIdle()
+        assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("Ordenar para mixar")).fetchSemanticsNodes().size, "pool não se ordena")
+        rule.onNodeWithText("Cancelar").performClick()
+        rule.waitForIdle()
         assertEquals(2, a.sets.plan().size, "transições só nas 3 fixas")
         assertEquals(3, a.sets.poolIds().size)
         // Tocando a Copper Sky: as outras vêm na ordem da melhor troca a partir dela.

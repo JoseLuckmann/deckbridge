@@ -37,7 +37,7 @@ class SetFlowTest {
 
     private fun app(): ManagerApp {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
-        return ManagerApp(ctx, File(ctx.cacheDir, "set-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 60) }
+        return ManagerApp(ctx, File(ctx.cacheDir, "set-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 60); it.setListView(true) }
     }
 
     @Test fun planFromThePlaylistEditARenderAndKeepThePlan() {

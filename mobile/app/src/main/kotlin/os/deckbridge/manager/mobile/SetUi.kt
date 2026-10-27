@@ -70,7 +70,18 @@ fun SetScreen(app: ManagerApp) {
     val branch = desk.branch
     val masters = remember(ids, desk.masterFixed, v, branch) { desk.masters(ids) }
     val branchesHere = desk.branchesHere()
-    fun back() = if (desk.rehearsal != null) desk.stopRehearsal() else if (branch != null) desk.openMain() else desk.close()
+    // O quadro (padrão): o set inteiro numa tela; a lista é a tela antiga, por extenso.
+    val board = !app.setAsList
+    var picked by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var addTo by remember { mutableStateOf<Char?>(null) }
+    var removeAsk by remember { mutableStateOf<Int?>(null) }
+    var menuOpen by remember { mutableStateOf(false) }
+    fun back() = when {
+        desk.rehearsal != null -> desk.stopRehearsal()
+        board && picked != null -> picked = null
+        branch != null && !board -> desk.openMain()
+        else -> desk.close()
+    }
     androidx.activity.compose.BackHandler { back() }
     var masterOpen by remember { mutableStateOf(false) }
     var branchFrom by remember { mutableStateOf<Int?>(null) }
@@ -86,7 +97,11 @@ fun SetScreen(app: ManagerApp) {
     Column(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(52.dp).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { back() }) { Text("‹", fontSize = 22.sp) }
-            if (branch != null) {
+            if (board) {
+                val root = desk.rootId()
+                Text("SET", color = Palette.blue, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                Text(v.playlists.firstOrNull { it.id == root }?.name.orEmpty(), color = Palette.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
+            } else if (branch != null) {
                 // Num ramo: a letra e o set de onde sai.
                 Text("RAMO ${desk.letterOf(branch)}", color = Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
                 Text(v.playlists.firstOrNull { it.id == branch.mainId }?.name.orEmpty(), color = Palette.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
@@ -97,19 +112,52 @@ fun SetScreen(app: ManagerApp) {
             Text("≈" + mmss(SetPlanner.lengthMs(v, ids, plan)), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
             PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playAll(plan) }
             // O que se usa pouco (ordenar) fica no ⋯; numa pool a ordem é escolhida na hora.
-            if (poolAt == null && ids.size >= 3) TextButton(onClick = { sortOpen = true }, modifier = Modifier.semantics { contentDescription = "Mais" }) { Text("⋯", fontSize = 20.sp) }
+            TextButton(onClick = { menuOpen = true }, modifier = Modifier.semantics { contentDescription = "Mais" }) { Text("⋯", fontSize = 20.sp) }
         }
-        if (ids.size >= 2) FlowStrip(
+        val layout = if (board) remember(v, desk.branches, desk.poolFrom, desk.rootId()) { desk.canvas() } else null
+        if (layout != null) {
+            val plans = remember(layout, desk.saved, app.transitionBars) { layout.lanes.associate { it.playlistId to desk.lanePlan(it.playlistId) } }
+            val boardIssues = remember(v, desk.branches, desk.masterFixed, desk.saved, app.transitionBars) { desk.issuePairs() }
+            val card = picked?.let { (pid, i) -> layout.lanes.firstOrNull { it.playlistId == pid }?.cards?.getOrNull(i) }
+            SetBoard(
+                app, layout, plans, boardIssues, card, rehearsing = desk.rehearsal?.let { plan.getOrNull(it) },
+                onSelect = { c ->
+                    if (c != null) desk.focus(c.playlistId)
+                    picked = c?.let { it.playlistId to it.index }
+                },
+                onAdd = { lane -> desk.focus(lane.playlistId); picked = null; addTo = lane.letter },
+                onMix = { l, tr -> desk.focus(l.playlistId); desk.openMix(tr) },
+                modifier = Modifier.weight(1f),
+            )
+            val rehearsal = desk.rehearsal?.let { at -> plan.getOrNull(at)?.let { at to it } }
+            when {
+                rehearsal != null -> RehearsalBar(app, rehearsal.first, plan, rehearsal.second)
+                card != null -> BoardActions(
+                    app, card,
+                    onMove = { d -> picked = card.playlistId to desk.move(card.index, d) },
+                    onSplit = { turnAt = card.index + (if (branch != null) 1 else 0); picked = null },
+                    onRemove = { if (desk.branchesAt(card.index).isNotEmpty()) removeAsk = card.index else { desk.removeAt(card.index); picked = null } },
+                )
+                plan.isNotEmpty() -> ActionsRow(
+                    issues = issues.map { it.fromId to it.toId }.distinct().size,
+                    redo = plan.count { it.mark == Transition.Mark.REDO },
+                    onRehearse = { app.seen("rehearse"); desk.startRehearsal(plan) },
+                    rehearseSpot = app.hint("rehearse"),
+                    letter = layout.lanes.firstOrNull { it.playlistId == desk.playlistId }?.letter?.takeIf { layout.rows > 1 },
+                )
+            }
+        }
+        if (!board && ids.size >= 2) FlowStrip(
             ids.mapNotNull { v.track(it) }, masters, desk.masterFixed, pool = poolAt?.let { it until poolEnd },
             onMaster = { masterOpen = true },
         ) { desk.mapOpen = true }
-        if (ids.size >= 2) ActionsRow(
+        if (!board && ids.size >= 2) ActionsRow(
             issues = issues.map { it.fromId to it.toId }.distinct().size,
             redo = plan.count { it.mark == Transition.Mark.REDO },
             onRehearse = { app.seen("rehearse"); desk.startRehearsal(plan) },
             rehearseSpot = !app.hint("hear") && app.hint("rehearse"),
         )
-        LazyColumn(Modifier.weight(1f)) {
+        if (!board) LazyColumn(Modifier.weight(1f)) {
             if (branch != null) item(key = "volta") { RejoinRow(app, branch.rejoinTrackId) { rejoinOpen = true } }
             ids.forEachIndexed { n, id ->
                 // A pool aparece num bloco só, no lugar da primeira faixa dela (sem ordem e sem transições).
@@ -155,7 +203,29 @@ fun SetScreen(app: ManagerApp) {
                 }
             }
         }
-        desk.rehearsal?.let { at -> plan.getOrNull(at)?.let { tr -> RehearsalBar(app, at, plan, tr) } }
+        if (!board) desk.rehearsal?.let { at -> plan.getOrNull(at)?.let { tr -> RehearsalBar(app, at, plan, tr) } }
+    }
+    if (menuOpen) {
+        // O que se usa pouco fica aqui: ordenar (não numa pool: a ordem é escolhida na hora), master, andamento e a outra vista.
+        val canSort = poolAt == null && ids.size >= 3
+        val options = buildList {
+            if (canSort) add("Ordenar para mixar" to { sortOpen = true })
+            if (board) {
+                add("Master · " + (desk.masterFixed?.let { "%.0f".format(it) } ?: "automático") to { masterOpen = true })
+                add("Andamento do set" to { desk.mapOpen = true })
+            }
+            add((if (board) "Ver em lista" else "Ver em quadro") to { picked = null; app.setListView(board) })
+        }
+        ChoiceDialog("Set", options.map { it.first }, onPick = { n -> menuOpen = false; options[n].second() }, onClose = { menuOpen = false })
+    }
+    addTo?.let { letter -> AddToLineDialog(app, letter) { addTo = null } }
+    removeAsk?.let { index ->
+        val letters = desk.branchesAt(index).joinToString(", ") { "${desk.letterOf(it)}" }
+        ConfirmDialog("Tirar do set", "O ramo $letters sai desta faixa e deixa de aparecer no set.", "TIRAR", danger = true, onConfirm = {
+            removeAsk = null
+            picked = null
+            desk.removeAt(index)
+        }, onClose = { removeAsk = null })
     }
     if (sortOpen) {
         val shapes = os.deckbridge.manager.mix.SetShape.values().toList()
@@ -216,9 +286,10 @@ fun SetScreen(app: ManagerApp) {
 
 /** Ensaiar (o botão principal) e o resumo: quantas a refazer e quantas trocas com aviso. */
 @Composable
-private fun ActionsRow(issues: Int, redo: Int, onRehearse: () -> Unit, rehearseSpot: Boolean = false) {
+private fun ActionsRow(issues: Int, redo: Int, onRehearse: () -> Unit, rehearseSpot: Boolean = false, letter: Char? = null) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Button(onClick = onRehearse, modifier = Modifier.spotlight(rehearseSpot).height(40.dp)) { Text("ENSAIAR", fontSize = 12.sp) }
+        // No quadro com ramos: ensaia a linha escolhida (a letra diz qual).
+        Button(onClick = onRehearse, modifier = Modifier.spotlight(rehearseSpot).height(40.dp)) { Text(if (letter != null) "ENSAIAR $letter" else "ENSAIAR", fontSize = 12.sp) }
         Spacer(Modifier.weight(1f))
         if (redo > 0) Text("✗ $redo", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(end = 10.dp))
         Text(if (issues == 0) "✓" else "⚠ $issues", color = if (issues == 0) Palette.keyInk else Palette.orange, fontSize = 14.sp, fontWeight = FontWeight.Bold)

@@ -236,4 +236,43 @@ class SetTempoAndBranchTest {
         assertEquals(listOf(2, 10, 11, 5), os.deckbridge.manager.mix.SetBranches.line(v, list[0]))
         assertEquals('B', os.deckbridge.manager.mix.SetBranches.letter(0))
     }
+
+    @Test fun quadroDoSetComRamosEmFileirasEVoltas() {
+        val tracks = (1..14).map { t(it, 124.0, "Am") }
+        // Mesmo set do teste acima: B sai da 2 e volta na 4; C sai da 11 (de B) e volta na 5 (da linha principal).
+        val v = view(tracks, mapOf(1 to listOf(1, 2, 3, 4, 5), 20 to listOf(10, 11), 21 to listOf(12, 13)))
+        val b = os.deckbridge.manager.mix.SetBranch(20, 1, 2, 4)
+        val c = os.deckbridge.manager.mix.SetBranch(21, 20, 11, 5)
+        val q = os.deckbridge.manager.mix.SetCanvas.layout(v, 1, listOf(b, c), { if (it == 21) 0 else null })
+        assertEquals(3, q.rows)
+        val (a, lb, lc) = q.lanes
+        // A 4 (onde B volta) fica depois do fim de B, e a 5 (onde C volta) depois do fim de C: linha do tempo.
+        assertEquals(listOf(0, 1, 2, 5, 7), a.cards.map { it.col })
+        assertEquals(8, a.endCol, "o ＋ da linha principal depois da última")
+        // B começa na coluna depois da 2 (coluna 1) e volta na 4 da linha principal.
+        assertEquals(listOf(2, 3), lb.cards.map { it.col })
+        assertEquals(1, lb.row)
+        assertEquals(2, lb.split?.trackId)
+        assertEquals(4, lb.rejoin?.trackId)
+        assertEquals(0, lb.rejoin?.row)
+        assertTrue(lb.rejoin!!.col > lb.endCol, "a volta vem depois do ＋ do ramo")
+        // C sai da 11 (coluna 3 de B), começa na 4 e volta na 5, que não está em B: acha na linha principal.
+        assertEquals(listOf(4, 5), lc.cards.map { it.col })
+        assertEquals(5, lc.rejoin?.trackId)
+        assertEquals(0, lc.rejoin?.row)
+        assertTrue(lc.rejoin!!.col > lc.endCol)
+        assertEquals(9, q.cols)
+        // As trocas: 4 na linha, 3 em B (2→10, 10→11, 11→4) e 3 em C; as de C são de pool (toda pool), guardadas em C.
+        assertEquals(4, q.links.count { it.playlistId == 1 })
+        assertEquals(listOf(2 to 10, 10 to 11, 11 to 4), q.links.filter { it.playlistId == 20 }.map { it.from.trackId to it.to.trackId })
+        val inC = q.links.filter { it.playlistId == 21 }
+        assertEquals(listOf(11 to 12, 12 to 13, 13 to 5), inC.map { it.from.trackId to it.to.trackId })
+        assertTrue(inC.all { it.pool })
+        assertTrue(q.links.filter { it.playlistId != 21 }.none { it.pool })
+        // Um ramo vazio (o DJ escolhe as faixas): só o ＋ logo depois do ponto de virada, ligado direto na volta.
+        val empty = os.deckbridge.manager.mix.SetCanvas.layout(view(tracks, mapOf(1 to listOf(1, 2, 3), 30 to emptyList())), 1, listOf(os.deckbridge.manager.mix.SetBranch(30, 1, 1, 3)))
+        assertEquals(1, empty.lanes[1].endCol)
+        assertEquals(2, empty.lanes[0].cards[2].col, "a volta anda uma casa para caber o ＋ do ramo vazio")
+        assertEquals(listOf(1 to 3), empty.links.filter { it.playlistId == 30 }.map { it.from.trackId to it.to.trackId })
+    }
 }

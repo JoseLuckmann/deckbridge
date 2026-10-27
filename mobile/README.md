@@ -81,6 +81,17 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
 - **POOL**: cada faixa mostra com quantas outras liga. Toque **AGORA** na que está tocando: as outras vêm na ordem da
   melhor troca a partir dela, as tocadas vão para o fim. ZERAR recomeça.
 
+## Set em quadro
+
+- O SET abre num quadro: cada faixa é um cartão, na ordem; entre dois cartões, o número da troca (compassos, ⚠ quando
+  tem aviso, ✓/✗ do ensaio) — tocar abre o MIX dela. Em pé o tempo desce e os ramos abrem em colunas à direita; deitado o
+  tempo corre para a direita e os ramos ficam em fileiras embaixo.
+- ＋ no fim de cada linha põe faixas (as que combinam com a última; BUSCAR procura na biblioteca), várias de uma vez.
+- Tocar num cartão o escolhe: ▶ ouvir, ‹ › mover, DIVIDIR (ramo daqui, ou pool depois desta) e TIRAR (desfazível; pergunta
+  antes se um ramo sai dela). A linha do cartão passa a ser a que se ensaia e se ouve ("ENSAIAR B").
+- O quadro é uma linha do tempo: a faixa onde um ramo volta fica depois do fim dele, então o ramo corre ao lado do trecho
+  que troca. A lista de antes continua no ⋯ (Ver em lista), junto com master, andamento e ordenar.
+
 ## Para quem está começando
 
 - O **guia** abaixo do topo mostra os 4 passos (Importar · Marcar · Playlist · Pendrive): feito ✓, o de agora em azul.

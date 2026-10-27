@@ -36,7 +36,7 @@ class SetBuildingTest {
     /** Biblioteca de demonstração com tons escolhidos, para as trocas serem previsíveis. */
     private fun app(): ManagerApp {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val a = ManagerApp(ctx, File(ctx.cacheDir, "sb-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 40) }
+        val a = ManagerApp(ctx, File(ctx.cacheDir, "sb-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 40); it.setListView(true) }
         val keys = mapOf(
             "Night Signal" to "Am", "Glass Harbour" to "Em", "Tidal Bloom" to "Dm", "Soft Machines" to "C", "Concrete Garden" to "Bbm",
             "Afterhours" to "F#m", "Slow Pulse" to "Gm", "Velvet Rail" to "Am", "Copper Sky" to "Bm", "Small Hours" to "Em",
@@ -123,6 +123,8 @@ class SetBuildingTest {
         a.sets.open(pid)
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
         rule.onNode(androidx.compose.ui.test.hasContentDescription("Mais")).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Ordenar para mixar").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Fluido").performClick()
         rule.waitForIdle()

@@ -210,7 +210,7 @@ class SetDesk(private val app: ManagerApp) {
     }
 
     /** Um caminho do mapa, o andamento dele e quantas trocas têm aviso. */
-    class RouteView(val route: SetRoute, val tempo: RouteTempo, val issues: Int)
+    class RouteView(val route: SetRoute, val tempo: RouteTempo, val issues: Int, val issuePairs: Set<Pair<Int, Int>> = emptySet())
 
     /** O mapa do set aberto (a linha principal e os ramos, com o andamento) está na tela. */
     var mapOpen by mutableStateOf(false)
@@ -231,8 +231,8 @@ class SetDesk(private val app: ManagerApp) {
             // Dentro de uma pool não há troca programada (a ordem é escolhida na hora): não conta como aviso.
             val issues = os.deckbridge.manager.mix.SetDoctor.check(v, r.ids, plan, ::grid, masters)
                 .filter { i -> r.ids.indices.none { n -> r.ids[n] == i.fromId && n + 1 < r.ids.size && r.ids[n + 1] == i.toId && (r.pool[n] || r.pool[n + 1]) } }
-                .map { it.fromId to it.toId }.distinct().size
-            RouteView(r, SetRoutes.tempo(v, r.ids, plan, masters), issues)
+                .map { it.fromId to it.toId }.toSet()
+            RouteView(r, SetRoutes.tempo(v, r.ids, plan, masters), issues.size, issues)
         }
     }
 
@@ -244,6 +244,87 @@ class SetDesk(private val app: ManagerApp) {
         app.preview.stop()
         rehearsal = null
         open(target)
+    }
+
+    // ---- o quadro: o set inteiro numa tela, cada linha numa fileira ------------------------------------------------
+
+    /** O quadro do set principal aberto: a linha e os ramos (de ramos também), com onde cada um sai e volta. */
+    fun canvas(): os.deckbridge.manager.mix.SetCanvasLayout? {
+        val v = app.model.view ?: return null
+        val root = rootId() ?: return null
+        return os.deckbridge.manager.mix.SetCanvas.layout(v, root, tree(), ::poolFromOf)
+    }
+
+    /** As transições da linha [pid] do quadro (a principal ou um ramo), com as que foram ajustadas nela. */
+    fun lanePlan(pid: Int): List<Transition> {
+        val v = app.model.view ?: return emptyList()
+        val b = SetBranches.alive(v, branches).firstOrNull { it.playlistId == pid }
+        val line = if (b == null) v.entries[pid].orEmpty().filter { v.track(it) != null } else SetBranches.line(v, b)
+        // Como em [fixedPart]: só a parte com ordem, antes da pool (num ramo, a linha começa no ponto de virada).
+        val end = if (b?.rejoinTrackId != null) line.size - 1 else line.size
+        val k = poolFromOf(pid)?.let { if (b != null) it + 1 else it }?.takeIf { it < end }
+        val keep = if (pid == playlistId) saved else runCatching { SetPlanner.load(file(pid)) }.getOrDefault(emptyList())
+        return SetPlanner.plan(v, if (k != null) line.take(k) else line, ::grid, keep = keep, bars = app.transitionBars)
+    }
+
+    /** As trocas com aviso em algum caminho do set (tom ou andamento longe demais). */
+    fun issuePairs(): Set<Pair<Int, Int>> = routes().flatMap { it.issuePairs }.toSet()
+
+    /** Passa a mexer na linha [pid] do quadro (o que se põe, tira, ensaia e ajusta vai para ela). */
+    fun focus(pid: Int) {
+        if (pid == playlistId) return
+        rehearsal = null
+        branches = SetBranches.load(branchesFile)
+        saved = SetPlanner.load(file(pid))
+        poolFrom = poolFromOf(pid)
+        poolNow = null
+        poolPlayed = emptySet()
+        playlistId = pid
+    }
+
+    /** As faixas que saem da linha aberta a partir da posição [index] (ramos que somem se ela sair). */
+    fun branchesAt(index: Int): List<SetBranch> {
+        val id = entries().getOrNull(index) ?: return emptyList()
+        return branchesHere().filter { it.fromTrackId == id }
+    }
+
+    /** Tira a faixa da posição [index] da linha aberta. Desfazível. */
+    fun removeAt(index: Int) {
+        val pid = playlistId ?: return
+        val ids = entries()
+        val id = ids.getOrNull(index) ?: return
+        val rest = ids.toMutableList().apply { removeAt(index) }
+        val title = app.model.view?.track(id)?.title.orEmpty()
+        // A mesma faixa duas vezes na linha: tira as duas e põe de volta a que fica, no lugar.
+        val edits = listOf(Edit.RemoveFromPlaylist(pid, listOf(id)) to "Tirar \"$title\" do set") +
+            if (id in rest) listOf(Edit.AddToPlaylist(pid, listOf(id)) to "Manter \"$title\"", Edit.ReorderPlaylist(pid, rest) to "Ordem do set") else emptyList()
+        if (app.model.submitAll(edits) == edits.size) app.did("− $title")
+    }
+
+    /** Anda com a faixa da posição [index] uma casa para trás ([delta] -1) ou para frente (+1). Devolve a nova posição. */
+    fun move(index: Int, delta: Int): Int {
+        val pid = playlistId ?: return index
+        val ids = entries()
+        val to = index + delta
+        if (index !in ids.indices || to !in ids.indices) return index
+        val order = ids.toMutableList().apply { add(to, removeAt(index)) }
+        return if (app.model.submit(Edit.ReorderPlaylist(pid, order), "Mover no set")) to else index
+    }
+
+    /**
+     * O que pôr no fim da linha aberta: com [query], as faixas da biblioteca que batem com a busca; sem, as que combinam com
+     * a última (num ramo que volta, também). Nada que já está no set.
+     */
+    fun addChoices(query: String): List<TrackItem> {
+        val v = app.model.view ?: return emptyList()
+        val ids = ids()
+        val busy = ids.toSet() + tree().flatMap { v.entries[it.playlistId].orEmpty() } + (rootId()?.let { v.entries[it].orEmpty() } ?: emptyList())
+        val words = query.lowercase().split(' ').filter { it.isNotBlank() }
+        if (words.isNotEmpty()) return v.tracks.filter { it.id !in busy && words.all { w -> "${it.title} ${it.artist}".lowercase().contains(w) } }.take(30)
+        if (poolStart(ids) != null) return suggestions(ids)
+        val last = (entries().lastOrNull() ?: branch?.fromTrackId)?.let { v.track(it) }
+            ?: return v.tracks.filter { it.id !in busy }.sortedByDescending { it.rating }.take(12)
+        return SetPlanner.suggestNext(v, last, busy, limit = 6)
     }
 
     /** Como o ramo é montado: uma lista automática, uma pool automática ou vazio (o DJ escolhe as faixas). */

@@ -36,7 +36,7 @@ class SetBranchTest {
 
     private fun app(): ManagerApp {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val a = ManagerApp(ctx, File(ctx.cacheDir, "br-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 40) }
+        val a = ManagerApp(ctx, File(ctx.cacheDir, "br-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 40); it.setListView(true) }
         // Concrete Garden em Em: com Bbm não existe ramo de 3 faixas com todas as trocas no tom nesta biblioteca pequena.
         val keys = mapOf(
             "Night Signal" to "Am", "Glass Harbour" to "Em", "Tidal Bloom" to "Dm", "Soft Machines" to "C", "Concrete Garden" to "Em",

@@ -1,0 +1,139 @@
+package os.deckbridge.manager.mobile
+
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.test.core.app.ApplicationProvider
+import com.github.takahirom.roborazzi.captureRoboImage
+import java.io.File
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import os.deckbridge.manager.pdb.Edit
+import os.deckbridge.manager.pdb.TrackPatch
+
+/** O SET em quadro: pôr faixas, dividir a linha, mover, tirar e abrir a troca, tocando na tela (Robolectric, não o aparelho). */
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = "w411dp-h891dp-port-560dpi")
+class SetBoardTest {
+    @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
+
+    private val out = File(System.getProperty("prints.dir") ?: "build/prints").apply { mkdirs() }
+
+    private fun app(): ManagerApp {
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val a = ManagerApp(ctx, File(ctx.cacheDir, "qd-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 40) }
+        // Os mesmos tons do teste de ramos (com eles existe ramo de 3 faixas no tom nesta biblioteca pequena).
+        val keys = mapOf(
+            "Night Signal" to "Am", "Glass Harbour" to "Em", "Tidal Bloom" to "Dm", "Soft Machines" to "C", "Concrete Garden" to "Em",
+            "Afterhours" to "F#m", "Slow Pulse" to "Gm", "Velvet Rail" to "Am", "Copper Sky" to "Bm", "Small Hours" to "Em",
+        )
+        for (t in a.model.view!!.tracks) a.model.submit(Edit.SetTracks(listOf(t.id), TrackPatch(key = keys.getValue(t.title))), "tom")
+        check(a.model.apply(null) != null)
+        a.hideGuide()
+        return a
+    }
+
+    private fun id(a: ManagerApp, title: String) = a.model.view!!.tracks.first { it.title == title }.id
+
+    /** O último que bate: a tela do SET fica por cima da biblioteca, e os diálogos por cima do SET. */
+    private fun click(text: String) {
+        val all = rule.onAllNodes(hasText(text))
+        all[all.fetchSemanticsNodes().size - 1].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        rule.waitForIdle()
+    }
+
+    private fun tap(description: String) {
+        // O quadro rola nos dois sentidos e o controle pode estar fora da tela: aciona o toque dele direto.
+        rule.onAllNodes(hasContentDescription(description))[0].performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        rule.waitForIdle()
+    }
+
+    @Test fun theSetIsABoardWhereLinesSplit() {
+        val a = app()
+        val pid = a.model.nextPlaylistId()
+        a.model.submit(Edit.CreatePlaylist(pid, 0, "Sábado", false), "p")
+        a.model.submit(Edit.AddToPlaylist(pid, listOf("Night Signal", "Small Hours", "Glass Harbour", "Copper Sky").map { id(a, it) }), "p")
+        a.sets.open(pid)
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        rule.waitForIdle()
+        assertTrue(!a.setAsList, "o quadro é o padrão")
+        // Cada faixa é um cartão; o ＋ no fim da linha põe mais (as que combinam com a última primeiro).
+        assertTrue(rule.onAllNodes(hasText("Copper Sky")).fetchSemanticsNodes().size >= 2, "cartão por cima da biblioteca")
+        tap("Pôr faixa na linha A")
+        rule.onNodeWithText("Pôr na linha A").assertExists()
+        rule.onNodeWithText("COMBINAM COM A ÚLTIMA").assertExists()
+        click("＋")
+        click("PRONTO")
+        assertEquals(5, a.sets.entries().size)
+        a.notice = null
+        // Tocar num cartão o escolhe: DIVIDIR abre um ramo dali, numa linha embaixo.
+        click("Small Hours")
+        click("DIVIDIR")
+        click("Criar ramo daqui")
+        click("CRIAR")
+        val branch = assertNotNull(a.sets.branch, "o ramo passa a ser a linha escolhida")
+        assertEquals(id(a, "Small Hours"), branch.fromTrackId)
+        val layout = a.sets.canvas()!!
+        assertEquals(2, layout.rows)
+        assertTrue(layout.lanes[1].cards.isNotEmpty())
+        assertEquals(layout.lanes[0].cards[1].col + 1, layout.lanes[1].cards[0].col, "o ramo começa logo depois de onde sai")
+        rule.onNode(hasContentDescription("Linha B")).assertExists()
+        a.notice = null
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage(File(out, "mobile-41-vertical-set-quadro.png").path)
+        // Escolher um cartão da linha principal volta a mexer nela; › anda com a faixa para frente.
+        click("Night Signal")
+        assertEquals(pid, a.sets.playlistId)
+        tap("Para frente")
+        assertEquals(id(a, "Night Signal"), a.sets.entries()[1])
+        rule.onRoot().captureRoboImage(File(out, "mobile-42-vertical-set-quadro-faixa.png").path)
+        // TIRAR: sem ramo saindo dela, sai direto (desfazível).
+        click("TIRAR")
+        assertTrue(id(a, "Night Signal") !in a.sets.entries())
+        a.notice = null
+        // De onde sai um ramo, pergunta antes.
+        click("Small Hours")
+        click("TIRAR")
+        rule.onNodeWithText("Tirar do set").assertExists()
+        click("Cancelar")
+        assertTrue(id(a, "Small Hours") in a.sets.entries())
+        // O número entre dois cartões é a troca: tocar abre o MIX dela.
+        val first = a.sets.lanePlan(pid).first()
+        tap("Troca ${first.fromId}→${first.toId}")
+        assertEquals(first.fromId, a.sets.mixing?.fromId)
+        a.sets.closeMix()
+        rule.waitForIdle()
+        // A outra vista continua no ⋯.
+        tap("Mais")
+        click("Ver em lista")
+        assertTrue(a.setAsList)
+    }
+
+    @Test @Config(qualifiers = "w891dp-h411dp-land-560dpi")
+    fun lyingDownTheTimeRunsToTheRight() {
+        val a = app()
+        val pid = a.model.nextPlaylistId()
+        a.model.submit(Edit.CreatePlaylist(pid, 0, "Sábado", false), "p")
+        a.model.submit(Edit.AddToPlaylist(pid, listOf("Night Signal", "Small Hours", "Glass Harbour", "Copper Sky").map { id(a, it) }), "p")
+        a.sets.open(pid)
+        assertNotNull(a.sets.createBranch(id(a, "Small Hours"), 3, os.deckbridge.manager.mix.SetShape.RISING, rejoin = true))
+        a.notice = null
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        rule.waitForIdle()
+        rule.onNode(hasContentDescription("Linha B")).assertExists()
+        rule.onRoot().captureRoboImage(File(out, "mobile-43-horizontal-set-quadro.png").path)
+    }
+}

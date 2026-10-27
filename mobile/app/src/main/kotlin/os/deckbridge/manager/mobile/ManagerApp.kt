@@ -147,6 +147,15 @@ class ManagerApp(val context: Context, val root: File = defaultRoot(context)) {
         prefs.edit().putInt("transicao", transitionBars ?: 0).apply()
     }
 
+    /** O SET em lista (a tela antiga, com tudo por extenso) em vez do quadro. */
+    var setAsList by mutableStateOf(prefs.getBoolean("setLista", false))
+        private set
+
+    fun setListView(on: Boolean) {
+        setAsList = on
+        prefs.edit().putBoolean("setLista", on).apply()
+    }
+
     /** Tom em nota musical (Am) em vez de Camelot (8A), em todo o app. */
     fun setMusicalKeys(on: Boolean) {
         KeyStyle.musical = on
