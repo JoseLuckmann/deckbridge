@@ -89,6 +89,9 @@ vizinho na roda), diferença de andamento, estilo, compassos e o ponto de saída
 - ＋ no fim de cada linha põe faixas (as que combinam com a última; BUSCAR procura na biblioteca), várias de uma vez.
 - Tocar num cartão o escolhe: ▶ ouvir, ‹ › mover, DIVIDIR (ramo daqui, ou pool depois desta) e TIRAR (desfazível; pergunta
   antes se um ramo sai dela). A linha do cartão passa a ser a que se ensaia e se ouve ("ENSAIAR B").
+- Vertentes: abertura e fechamento fixos na linha A e o meio em vertentes. Escolha a última da abertura → DIVIDIR → ramo;
+  "↩ junta em" escolhe a faixa do fechamento. A segunda vertente do mesmo ponto já junta no mesmo lugar; o "↩" no fim de
+  cada vertente no quadro muda onde ela junta (ou FIM, outro final).
 - O quadro é uma linha do tempo: a faixa onde um ramo volta fica depois do fim dele, então o ramo corre ao lado do trecho
   que troca. A lista de antes continua no ⋯ (Ver em lista), junto com master, andamento e ordenar.
 

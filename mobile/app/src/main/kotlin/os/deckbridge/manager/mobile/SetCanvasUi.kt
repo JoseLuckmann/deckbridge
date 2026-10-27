@@ -187,8 +187,9 @@ private fun Board(
                         if (back != null) "↩ " + shortTitle(back.title.ifEmpty { back.fileName }) else "FIM ▾",
                         color = if (back != null) Palette.mutedBright else Palette.orange, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.offset(g.x(lane.row, lane.endCol), g.plusY(lane) + PLUS + 4.dp).width(g.cardW).clickable { onJoin(lane) }
-                            .semantics { contentDescription = "Junta ${lane.letter}" }.padding(vertical = 4.dp),
+                        // Por cima do fio da volta (fundo da tela): lê como um rótulo no fio.
+                        modifier = Modifier.offset(g.x(lane.row, lane.endCol), g.plusY(lane) + PLUS + 4.dp).width(g.cardW).background(Palette.bg)
+                            .clickable { onJoin(lane) }.semantics { contentDescription = "Junta ${lane.letter}" }.padding(vertical = 4.dp),
                         textAlign = if (g.vertical) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start,
                     )
                 }

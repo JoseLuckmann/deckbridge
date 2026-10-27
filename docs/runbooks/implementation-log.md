@@ -1073,3 +1073,11 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Achados: o `OutlinedTextField` dentro do diálogo não deixava o Robolectric ficar ocioso (o teste travava); a busca passou a aparecer só ao tocar BUSCAR. `performScrollTo` em quadro com rolagem nos dois sentidos entrou em laço; o teste aciona o toque pela semântica. A primeira versão deixava a volta de um ramo comprido "para trás" (linha cruzando cartões); corrigido empurrando a faixa da volta.
 - Evidência: core `quadroDoSetComRamosEmFileirasEVoltas` (colunas, volta em linha acima, ramo de ramo, pool, ramo vazio); mobile `SetBoardTest` (pôr pelo ＋, DIVIDIR → ramo numa linha nova logo depois de onde sai, escolher outra linha, mover, tirar, pergunta antes de tirar ponto de virada, troca abre o MIX, voltar à lista; deitado). Testes antigos do SET rodam na vista em lista. Capturas `docs/ui/mobile-41` a `mobile-43`.
 - Não verificado: no aparelho (toque, rolagem e tamanho dos cartões numa tela real).
+
+## 2026-10-27 — Vertentes que se juntam no fim
+
+- Pedido: abertura e fechamento bem definidos e o meio em vertentes — montar a sequência inicial, dividir em vertentes e juntá-las no fim.
+- Núcleo: `SetBuilder.branch` e `SetPool.branch` aceitam `joinAt` (a faixa da linha, depois do ponto de virada, onde o ramo junta; a busca mira a troca para ela). `SetDesk.createBranch(joinAt)`: sem escolha, junta onde já juntam os ramos que saem da mesma faixa (`siblingJoin`); `joinChoices` lista as faixas do caminho depois do ponto.
+- Celular: no diálogo do ramo, "↩ junta em …" fica sempre à vista (Onde combinar / uma faixa / Não junta); no quadro, "↩ faixa" (ou FIM) no fim de cada ramo abre "Junta em" para mudar. Ramo "Eu escolho" também junta.
+- Evidência: core 126 (`vertentesJuntamOndeODjEscolhe`: junta na faixa escolhida mesmo podendo antes, logo a seguinte vale, faixa antes do ponto é ignorada, pool também); mobile `SetBoardTest.openingThenStrandsThatJoinForTheEnding` (escolher a junção no diálogo, segunda vertente já abre juntando no mesmo lugar, fechamento depois da vertente mais longa, ↩ muda a junção). Mobile completo da rodada do quadro: 66 testes, 3 vídeos pulados, 0 falhas. Captura `docs/ui/mobile-44`.
+- Não verificado: no aparelho.
