@@ -89,10 +89,11 @@ private fun laneColor(row: Int): Color =
 @Composable
 fun SetBoard(
     app: ManagerApp, layout: SetCanvasLayout, plans: Map<Int, List<Transition>>, issues: Set<Pair<Int, Int>>, selected: CanvasCard?,
-    rehearsing: Transition?, onSelect: (CanvasCard?) -> Unit, onAdd: (CanvasLane) -> Unit, onMix: (CanvasLink, Transition) -> Unit, modifier: Modifier = Modifier,
+    rehearsing: Transition?, onSelect: (CanvasCard?) -> Unit, onAdd: (CanvasLane) -> Unit, onMix: (CanvasLink, Transition) -> Unit,
+    onJoin: (CanvasLane) -> Unit, modifier: Modifier = Modifier,
 ) {
     androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxSize().background(Palette.bg)) {
-        Board(app, Geo(vertical = maxHeight > maxWidth), layout, plans, issues, selected, rehearsing, onSelect, onAdd, onMix)
+        Board(app, Geo(vertical = maxHeight > maxWidth), layout, plans, issues, selected, rehearsing, onSelect, onAdd, onMix, onJoin)
     }
 }
 
@@ -100,6 +101,7 @@ fun SetBoard(
 private fun Board(
     app: ManagerApp, g: Geo, layout: SetCanvasLayout, plans: Map<Int, List<Transition>>, issues: Set<Pair<Int, Int>>, selected: CanvasCard?,
     rehearsing: Transition?, onSelect: (CanvasCard?) -> Unit, onAdd: (CanvasLane) -> Unit, onMix: (CanvasLink, Transition) -> Unit,
+    onJoin: (CanvasLane) -> Unit,
 ) {
     val v = app.model.view ?: return
     val desk = app.sets
@@ -178,6 +180,18 @@ private fun Board(
                     BoardCard(g, t, c, selected = selected == c, playing = app.preview.playingId == c.trackId, color = laneColor(lane.row)) { onSelect(if (selected == c) null else c) }
                 }
                 PlusCard(g, lane, laneColor(lane.row)) { onAdd(lane) }
+                // Num ramo: onde ele junta de volta (ou FIM, se é outro final); tocar muda.
+                if (lane.branch != null) {
+                    val back = lane.rejoin?.let { v.track(it.trackId) }
+                    Text(
+                        if (back != null) "↩ " + shortTitle(back.title.ifEmpty { back.fileName }) else "FIM ▾",
+                        color = if (back != null) Palette.mutedBright else Palette.orange, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.offset(g.x(lane.row, lane.endCol), g.plusY(lane) + PLUS + 4.dp).width(g.cardW).clickable { onJoin(lane) }
+                            .semantics { contentDescription = "Junta ${lane.letter}" }.padding(vertical = 4.dp),
+                        textAlign = if (g.vertical) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start,
+                    )
+                }
             }
             // A troca entre dois cartões: os compassos; tocar abre o MIX dela.
             layout.links.forEach { l ->

@@ -275,4 +275,23 @@ class SetTempoAndBranchTest {
         assertEquals(2, empty.lanes[0].cards[2].col, "a volta anda uma casa para caber o ＋ do ramo vazio")
         assertEquals(listOf(1 to 3), empty.links.filter { it.playlistId == 30 }.map { it.from.trackId to it.to.trackId })
     }
+
+    @Test fun vertentesJuntamOndeODjEscolhe() {
+        val tracks = (1..14).map { t(it, 124.0, "Am") }
+        val v = view(tracks, mapOf(1 to listOf(1, 2, 3, 4, 5)))
+        val line = listOf(1, 2, 3, 4, 5)
+        // Abertura 1-2, vertentes saindo da 2, fechamento a partir da 5: o ramo junta na 5, mesmo podendo voltar antes.
+        val (ids, back) = os.deckbridge.manager.mix.SetBuilder.branch(v, line, 2, 3, os.deckbridge.manager.mix.SetShape.FLOW, joinAt = 5)
+        assertEquals(5, back)
+        assertEquals(3, ids.size)
+        assertTrue(ids.none { it in line })
+        // Logo a seguinte também vale (a vertente é um desvio entre a 2 e a 3).
+        assertEquals(3, os.deckbridge.manager.mix.SetBuilder.branch(v, line, 2, 2, os.deckbridge.manager.mix.SetShape.FLOW, joinAt = 3).second)
+        // Uma faixa antes do ponto de virada não é volta: escolhe sozinho.
+        assertTrue(os.deckbridge.manager.mix.SetBuilder.branch(v, line, 2, 2, os.deckbridge.manager.mix.SetShape.FLOW, joinAt = 1).second != 1)
+        // Em pool também.
+        val (pool, poolBack) = os.deckbridge.manager.mix.SetPool.branch(v, line, 2, 4, joinAt = 5)
+        assertEquals(5, poolBack)
+        assertEquals(4, pool.size)
+    }
 }

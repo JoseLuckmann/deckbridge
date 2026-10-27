@@ -336,18 +336,20 @@ class SetDesk(private val app: ManagerApp) {
      * volta mais adiante no caminho de onde sai. Vira uma playlist "Set - ramo B" (vai para o pendrive). Abre o SET do
      * ramo e devolve o id da playlist, ou null.
      */
-    fun createBranch(fromTrackId: Int, count: Int, shape: SetShape, rejoin: Boolean, kind: BranchKind = BranchKind.LIST): Int? {
+    fun createBranch(fromTrackId: Int, count: Int, shape: SetShape, rejoin: Boolean, kind: BranchKind = BranchKind.LIST, joinAt: Int? = null): Int? {
         val v = app.model.view ?: return null
         val parent = playlistId ?: return null
         val root = rootId() ?: return null
         // A linha onde pode voltar: o caminho inteiro de onde o ramo sai (num ramo, segue depois da volta dele).
-        val line = if (branch == null) entries() else route(parent)?.ids ?: ids()
+        val line = joinLine()
         val tree = tree()
         val taken = tree.flatMap { v.entries[it.playlistId].orEmpty() }.toSet() + v.entries[root].orEmpty()
+        // Sem escolha, junta onde as outras vertentes que saem da mesma faixa já juntam.
+        val join = if (!rejoin) null else joinAt ?: siblingJoin(fromTrackId)
         val (ids, back) = when (kind) {
-            BranchKind.LIST -> SetBuilder.branch(v, line, fromTrackId, count, shape, taken = taken, rejoin = rejoin)
-            BranchKind.POOL -> SetPool.branch(v, line, fromTrackId, count, taken = taken, rejoin = rejoin)
-            BranchKind.MANUAL -> emptyList<Int>() to null
+            BranchKind.LIST -> SetBuilder.branch(v, line, fromTrackId, count, shape, taken = taken, rejoin = rejoin, joinAt = join)
+            BranchKind.POOL -> SetPool.branch(v, line, fromTrackId, count, taken = taken, rejoin = rejoin, joinAt = join)
+            BranchKind.MANUAL -> emptyList<Int>() to join
         }
         if (ids.isEmpty() && kind != BranchKind.MANUAL) {
             app.notice = os.deckbridge.manager.Banner("Nenhuma faixa fora do set combina daqui", true)
@@ -372,6 +374,20 @@ class SetDesk(private val app: ManagerApp) {
         open(id)
         return id
     }
+
+    /** O caminho da linha aberta inteiro (num ramo, com o que vem depois da volta): onde um ramo novo pode juntar. */
+    private fun joinLine(): List<Int> = if (branch == null) entries() else playlistId?.let { route(it)?.ids } ?: ids()
+
+    /** Onde um ramo novo que sai de [fromTrackId] pode juntar: as faixas do caminho depois dela. */
+    fun joinChoices(fromTrackId: Int): List<Int> {
+        val line = joinLine()
+        val at = line.indexOf(fromTrackId).takeIf { it >= 0 } ?: return emptyList()
+        return line.drop(at + 1).distinct()
+    }
+
+    /** Onde já juntam os ramos que saem de [fromTrackId] (as vertentes de um mesmo ponto juntam no mesmo lugar). */
+    fun siblingJoin(fromTrackId: Int): Int? =
+        branchesHere().firstOrNull { it.fromTrackId == fromTrackId && it.rejoinTrackId != null }?.rejoinTrackId?.takeIf { it in joinChoices(fromTrackId) }
 
     /** As grades mudaram (refazer grades): lê de novo na próxima vez. */
     fun forgetGrids() = synchronized(grids) { grids.clear() }

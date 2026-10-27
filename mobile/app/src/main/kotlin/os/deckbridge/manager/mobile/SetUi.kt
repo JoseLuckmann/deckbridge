@@ -127,6 +127,7 @@ fun SetScreen(app: ManagerApp) {
                 },
                 onAdd = { lane -> desk.focus(lane.playlistId); picked = null; addTo = lane.letter },
                 onMix = { l, tr -> desk.focus(l.playlistId); desk.openMix(tr) },
+                onJoin = { lane -> desk.focus(lane.playlistId); picked = null; rejoinOpen = true },
                 modifier = Modifier.weight(1f),
             )
             val rehearsal = desk.rehearsal?.let { at -> plan.getOrNull(at)?.let { at to it } }
@@ -266,7 +267,7 @@ fun SetScreen(app: ManagerApp) {
     }
     if (rejoinOpen) {
         val choices = desk.rejoinChoices()
-        ChoiceDialog("Volta para", listOf("Outro final (não volta)") + choices.map { v.track(it)?.title.orEmpty() }, onPick = { k ->
+        ChoiceDialog("Junta em", listOf("Não junta (outro final)") + choices.map { v.track(it)?.title.orEmpty() }, onPick = { k ->
             rejoinOpen = false
             desk.setRejoin(if (k == 0) null else choices[k - 1])
         }, onClose = { rejoinOpen = false })
@@ -479,16 +480,27 @@ private fun BranchDialog(app: ManagerApp, from: Int, onClose: () -> Unit) {
     var count by remember { mutableStateOf(3) }
     var shape by remember { mutableStateOf(os.deckbridge.manager.mix.SetShape.RISING) }
     var rejoin by remember { mutableStateOf(true) }
-    // Abre com o padrão e um CRIAR; as escolhas ficam em "mais opções".
+    // Abre com o padrão e um CRIAR; as escolhas ficam em "mais opções". Onde junta fica sempre à vista: é o que faz das
+    // vertentes de um mesmo ponto um trecho do set (sai daqui, junta ali).
     var more by remember { mutableStateOf(false) }
-    val title = app.model.view?.track(from)?.title.orEmpty()
+    val v = app.model.view
+    val title = v?.track(from)?.title.orEmpty()
+    val joins = remember(from) { app.sets.joinChoices(from) }
+    var join by remember { mutableStateOf(app.sets.siblingJoin(from)) }
+    var joinOpen by remember { mutableStateOf(false) }
+    val joinText = when {
+        !rejoin -> "não junta (outro final)"
+        join != null -> "junta em " + shortTitle(v?.track(join!!)?.title.orEmpty())
+        else -> "junta onde combinar"
+    }
     val counts = if (kind == SetDesk.BranchKind.POOL) listOf(4, 6, 8, 12) else listOf(2, 3, 4, 6)
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onClose,
         title = { Text("Ramo depois de\n$title", maxLines = 2) },
         text = {
             if (!more) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("$count faixas · mais energia · volta para a linha", color = Palette.mutedBright, fontSize = 14.sp)
+                Text("$count faixas · mais energia", color = Palette.mutedBright, fontSize = 14.sp)
+                if (kind != SetDesk.BranchKind.MANUAL || joins.isNotEmpty()) JoinButton(joinText) { joinOpen = true }
                 TextButton(onClick = { more = true }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("MAIS OPÇÕES", fontSize = 12.sp) }
             } else Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("TIPO", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -517,19 +529,39 @@ private fun BranchDialog(app: ManagerApp, from: Int, onClose: () -> Unit) {
                         ).forEach { (sh, label) -> FilterChip(shape == sh, { shape = sh }, { Text(label, maxLines = 1) }) }
                     }
                 }
-                if (kind != SetDesk.BranchKind.MANUAL) {
-                    Text("VOLTA PARA A LINHA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(rejoin, { rejoin = true }, { Text("Sim") })
-                        FilterChip(!rejoin, { rejoin = false }, { Text("Não (outro final)") })
-                    }
-                }
+                Text("JUNTA", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                JoinButton(joinText) { joinOpen = true }
             }
         },
-        confirmButton = { TextButton(onClick = { onClose(); app.sets.createBranch(from, count, shape, rejoin, kind) }) { Text("CRIAR") } },
+        confirmButton = { TextButton(onClick = { onClose(); app.sets.createBranch(from, count, shape, rejoin, kind, joinAt = join) }) { Text("CRIAR") } },
         dismissButton = { TextButton(onClick = onClose) { Text("Cancelar") } },
         containerColor = Palette.surfaceHigh,
     )
+    if (joinOpen) {
+        val names = joins.map { shortTitle(v?.track(it)?.title.orEmpty()) }
+        ChoiceDialog("Junta em", listOf("Onde combinar") + names + "Não junta (outro final)", onPick = { k ->
+            joinOpen = false
+            when (k) {
+                0 -> { rejoin = true; join = null }
+                names.size + 1 -> rejoin = false
+                else -> { rejoin = true; join = joins[k - 1] }
+            }
+        }, onClose = { joinOpen = false })
+    }
+}
+
+/** Onde o ramo junta de volta, numa linha que se toca para mudar. */
+@Composable
+private fun JoinButton(text: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(40.dp).clip(RbShape).background(Palette.surface).border(BorderStroke(1.dp, Palette.line), RbShape)
+            .clickable(onClick = onClick).padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("↩ ", color = Palette.orange, fontSize = 14.sp)
+        Text(text, color = Palette.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text("▾", color = Palette.blue, fontSize = 14.sp)
+    }
 }
 
 private fun fitText(f: Fit): String = if (f.bpmDiffPct == 0.0) "=" else "%+.1f%%".format(f.bpmDiffPct)

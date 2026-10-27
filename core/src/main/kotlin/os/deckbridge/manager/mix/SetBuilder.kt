@@ -115,11 +115,12 @@ object SetBuilder {
     /**
      * Um ramo do set: a partir de [from] (uma faixa da linha [line]), [count] faixas de [pool] que não estão na linha nem
      * em [taken], no rumo [shape], e — se [rejoin] — a faixa da linha, mais adiante, em que o ramo melhor volta (a troca
-     * do último do ramo para ela é boa). Devolve as faixas do ramo e onde volta (null: não volta, vira outro final).
+     * do último do ramo para ela é boa). Com [joinAt] (uma faixa da linha depois de [from]), volta nela: o DJ escolheu onde
+     * as vertentes se juntam. Devolve as faixas do ramo e onde volta (null: não volta, vira outro final).
      */
     fun branch(
         view: LibraryView, line: List<Int>, from: Int, count: Int, shape: SetShape, pool: List<TrackItem> = view.tracks,
-        taken: Set<Int> = emptySet(), rejoin: Boolean = true,
+        taken: Set<Int> = emptySet(), rejoin: Boolean = true, joinAt: Int? = null,
     ): Pair<List<Int>, Int?> {
         val start = view.track(from) ?: return emptyList<Int>() to null
         val busy = line.toSet() + taken
@@ -152,6 +153,12 @@ object SetBuilder {
             val (picked, _) = walk(null)
             if (picked.isEmpty()) return emptyList<Int>() to null
             return between(start, picked, null, shape).map { it.id } to null
+        }
+        val chosen = joinAt?.takeIf { it in line.drop(line.indexOf(from) + 1) }?.let { view.track(it) }
+        if (chosen != null) {
+            val (picked, _) = walk(chosen)
+            if (picked.isEmpty()) return emptyList<Int>() to chosen.id
+            return between(start, picked, chosen, shape).map { it.id } to chosen.id
         }
         // Volta: depois do ponto de virada (pulando ao menos uma da linha). Tenta cada ponto e fica com o ramo mais barato
         // cuja última troca para a linha seja boa; um ponto mais perto ganha no empate.

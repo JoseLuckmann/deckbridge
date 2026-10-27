@@ -78,9 +78,13 @@ object SetPool {
      */
     fun branch(
         view: LibraryView, line: List<Int>, from: Int, count: Int, pool: List<TrackItem> = view.tracks, taken: Set<Int> = emptySet(), rejoin: Boolean = true,
+        joinAt: Int? = null,
     ): Pair<List<Int>, Int?> {
         val start = view.track(from) ?: return emptyList<Int>() to null
         val busy = line.toSet() + taken
+        // Onde juntar foi escolhido: a pool combina com a entrada e com ela.
+        val chosen = joinAt?.takeIf { it in line.drop(line.indexOf(from) + 1) }?.let { view.track(it) }
+        if (chosen != null) return fill(view, listOf(start, chosen), emptyList(), busy, count, pool) to chosen.id
         if (rejoin) {
             val best = line.drop(line.indexOf(from) + 2).mapNotNull { view.track(it) }.mapIndexedNotNull { i, target ->
                 val ids = fill(view, listOf(start, target), emptyList(), busy, count, pool)

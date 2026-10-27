@@ -136,4 +136,46 @@ class SetBoardTest {
         rule.onNode(hasContentDescription("Linha B")).assertExists()
         rule.onRoot().captureRoboImage(File(out, "mobile-43-horizontal-set-quadro.png").path)
     }
+
+    @Test fun openingThenStrandsThatJoinForTheEnding() {
+        // Abertura (Night Signal, Small Hours), fechamento (Glass Harbour, Copper Sky): as vertentes saem da Small Hours
+        // e juntam na Glass Harbour.
+        val a = app()
+        val pid = a.model.nextPlaylistId()
+        a.model.submit(Edit.CreatePlaylist(pid, 0, "Sábado", false), "p")
+        a.model.submit(Edit.AddToPlaylist(pid, listOf("Night Signal", "Small Hours", "Glass Harbour", "Copper Sky").map { id(a, it) }), "p")
+        a.sets.open(pid)
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        rule.waitForIdle()
+        click("Small Hours")
+        click("DIVIDIR")
+        click("Criar ramo daqui")
+        // Onde junta fica à vista no diálogo: escolher a Glass Harbour.
+        click("junta onde combinar")
+        click("Glass Harbour")
+        rule.onNodeWithText("junta em Glass Harbour").assertExists()
+        click("CRIAR")
+        assertEquals(id(a, "Glass Harbour"), a.sets.branch?.rejoinTrackId)
+        a.notice = null
+        // A segunda vertente do mesmo ponto já abre juntando no mesmo lugar.
+        click("Small Hours")
+        click("DIVIDIR")
+        click("Criar ramo daqui")
+        rule.onNodeWithText("junta em Glass Harbour").assertExists()
+        click("CRIAR")
+        a.notice = null
+        val layout = a.sets.canvas()!!
+        assertEquals(3, layout.rows)
+        assertTrue(layout.lanes.drop(1).all { it.split?.trackId == id(a, "Small Hours") && it.rejoin?.trackId == id(a, "Glass Harbour") })
+        // O fechamento fica depois da vertente mais longa (linha do tempo).
+        val end = layout.lanes[0].cards.first { it.trackId == id(a, "Glass Harbour") }
+        assertTrue(layout.lanes.drop(1).all { end.col > it.endCol })
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage(File(out, "mobile-44-vertical-set-vertentes.png").path)
+        // O ↩ no fim de cada vertente muda onde ela junta.
+        tap("Junta C")
+        rule.onNodeWithText("Junta em").assertExists()
+        click("Copper Sky")
+        assertEquals(id(a, "Copper Sky"), a.sets.branch?.rejoinTrackId)
+    }
 }
