@@ -39,6 +39,8 @@ import os.deckbridge.manager.pdb.TrackPatch
 fun TriageScreen(app: StudioHost) {
     val ids = app.triage ?: return
     val m = app.model
+    // Passou da última: o fim da triagem é um resumo com o próximo passo, não um aviso que some (regra pico-fim).
+    if (app.triageAt >= ids.size) return TriageDone(app, ids)
     val at = app.triageAt.coerceIn(0, ids.lastIndex.coerceAtLeast(0))
     val t = ids.getOrNull(at)?.let { m.view?.track(it) }
     if (t == null) {
@@ -47,10 +49,7 @@ fun TriageScreen(app: StudioHost) {
     }
     fun advance() {
         app.preview.stop()
-        if (at >= ids.lastIndex) {
-            app.endTriage()
-            app.notice = os.deckbridge.manager.Banner("Tudo marcado ✓", false)
-        } else app.triageAt = at + 1
+        app.triageAt = at + 1
     }
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg)) {
         val wide = maxWidth >= WIDE_DP.dp
@@ -58,7 +57,10 @@ fun TriageScreen(app: StudioHost) {
             Row(Modifier.fillMaxWidth().background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { app.endTriage() }) { Text("✕", fontSize = 16.sp) }
                 Text("MARCAR", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-                Text("${at + 1}/${ids.size}", color = Palette.orange, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.padding(start = 10.dp).weight(1f))
+                Text("${at + 1}/${ids.size}", color = Palette.orange, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.padding(start = 10.dp))
+                // Perto do fim, quanto falta (o esforço cresce perto da meta: gradiente de objetivo).
+                val left = ids.size - at - 1
+                Text(if (left in 1..3) "  faltam $left" else "", color = Palette.mutedBright, fontSize = 12.sp, modifier = Modifier.weight(1f))
                 if (m.dirty) TextButton(onClick = { m.undo() }) { Text("↶", fontSize = 20.sp) }
             }
             LinearProgressIndicator(progress = { (at + 1f) / ids.size }, modifier = Modifier.fillMaxWidth(), color = Palette.blue, trackColor = Palette.line)
@@ -134,3 +136,43 @@ private fun Controls(app: StudioHost, t: TrackItem, at: Int, total: Int, compact
         OutlinedButton(onClick = { advance() }, modifier = Modifier.weight(1f).height(mid)) { Text(if (at >= total - 1) "FIM" else "PULAR ›") }
     }
 }
+
+/**
+ * O fim da triagem: quantas foram marcadas, como ficaram (nota alta, com cor, na playlist alvo) e o que fazer em seguida.
+ * O fim de uma tarefa pesa na lembrança dela (Kahneman et al. 1993): termina numa tela de conquista, não num aviso que some.
+ */
+@Composable
+private fun TriageDone(app: StudioHost, ids: List<Int>) {
+    val m = app.model
+    val v = m.view
+    val tracks = ids.mapNotNull { v?.track(it) }
+    val rated = tracks.count { it.rating > 0 }
+    val top = tracks.count { it.rating >= 4 }
+    val colored = tracks.count { it.colorId > 0 }
+    val target = m.target?.let { m.playlist(it) }
+    val inTarget = target?.let { p -> tracks.count { it.id in v?.entries?.get(p.id).orEmpty() } }
+    BackHandler { app.endTriage() }
+    Column(
+        Modifier.fillMaxSize().background(Palette.bg).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("✓", color = Palette.keyInk, fontSize = 48.sp, fontWeight = FontWeight.Bold)
+        Text("${tracks.size} passaram", color = Palette.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Column(Modifier.fillMaxWidth().rbPanel().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DoneLine("com nota", "$rated")
+            DoneLine("★ 4 ou mais", "$top")
+            DoneLine("com cor", "$colored")
+            if (target != null && inTarget != null) DoneLine("em ${target.name}", "$inTarget")
+        }
+        Button(onClick = { app.endTriage() }, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("PRONTO") }
+    }
+}
+
+@Composable
+private fun DoneLine(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Palette.mutedBright, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        Text(value, color = Palette.orange, fontSize = 17.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
+    }
+}
+

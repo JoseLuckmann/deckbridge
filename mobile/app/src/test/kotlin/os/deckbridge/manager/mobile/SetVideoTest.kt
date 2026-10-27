@@ -57,15 +57,17 @@ class SetVideoTest : VideoTestBase() {
         val stars = mapOf("Imagination" to 5, "See You Again" to 5, "Shinjuku" to 4, "How Does It Feel" to 4, "Fuck It" to 3)
         tapText("MARCAR")
         hold(1.0)
-        while (app.triage != null) {
+        while (app.triage != null && app.triageAt < app.triage!!.size) {
             val title = app.model.view!!.track(app.triage!![app.triageAt])!!.title
             val r = stars.entries.firstOrNull { title.contains(it.key, ignoreCase = true) }?.value ?: 3
             hold(0.7)
             tap(rule.onAllNodes(hasText("☆"))[r - 1], before = 0.4)
             idle()
         }
-        app.notice = null
         hold(1.0)
+        app.endTriage()
+        app.notice = null
+        idle()
 
         // 2. Montar o set: das de nota 4 ou mais, na ordem que o app escolhe pelas trocas de tom e andamento.
         step("2 · Montar o set")

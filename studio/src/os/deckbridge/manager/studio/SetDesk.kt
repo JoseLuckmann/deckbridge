@@ -914,6 +914,9 @@ class SetDesk(private val app: StudioHost) {
 
     fun mark(tr: Transition, mark: Transition.Mark?) = update(tr.copy(mark = mark))
 
+    /** O fim do ensaio (boas, a refazer), mostrado num resumo até a pessoa fechar ou ir refazer. */
+    var rehearsalDone by mutableStateOf<Pair<Int, Int>?>(null)
+
     /** Ensaio: índice da transição sendo ouvida no plano, ou null. */
     var rehearsal by mutableStateOf<Int?>(null)
         private set
@@ -939,7 +942,7 @@ class SetDesk(private val app: StudioHost) {
         if (next >= plan.size) {
             stopRehearsal()
             val marks = plan.mapIndexed { i, t -> if (i == at) mark else t.mark }
-            app.did("Ensaio: ${marks.count { it == Transition.Mark.GOOD }} boas · ${marks.count { it == Transition.Mark.REDO }} a refazer")
+            rehearsalDone = marks.count { it == Transition.Mark.GOOD } to marks.count { it == Transition.Mark.REDO }
         } else {
             rehearsal = next
             hear(plan[next])

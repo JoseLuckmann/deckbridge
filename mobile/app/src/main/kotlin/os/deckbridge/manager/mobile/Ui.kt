@@ -124,6 +124,18 @@ private fun TopBar(app: ManagerApp, actions: Actions) {
     Row(Modifier.fillMaxWidth().height(52.dp).background(Palette.bg).border(BorderStroke(1.dp, Palette.line)).padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(app.tab.short(), color = Palette.blue, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
         if (count != null) Text("$count", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(start = 8.dp))
+        // O estado da gravação, discreto (visibilidade do estado do sistema): grava sozinho, mas a pessoa vê que gravou.
+        val m = app.model
+        // Alterado ainda não gravado (grava sozinho em seguida), gravando agora, ou salvo.
+        val state = when {
+            m.saving -> "gravando…"
+            m.dirty -> "• alterado"
+            else -> "✓ salvo"
+        }
+        if (m.view != null) Text(
+            state, color = if (m.saving || m.dirty) Palette.orange else Palette.muted, fontSize = 11.sp,
+            modifier = Modifier.padding(start = 12.dp).semantics { contentDescription = state },
+        )
         Spacer(Modifier.weight(1f))
         UndoButtons(app)
         if (app.tab == Tab.LIBRARY) {

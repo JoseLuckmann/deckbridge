@@ -84,7 +84,7 @@ class JourneyVideoTest : VideoTestBase() {
         val stars = mapOf("Imagination" to 5, "See You Again" to 5, "Shinjuku" to 4, "How Does It Feel" to 4, "Fuck It" to 3)
         tapText("MARCAR")
         hold(1.2)
-        while (app.triage != null) {
+        while (app.triage != null && app.triageAt < app.triage!!.size) {
             val id = app.triage!![app.triageAt]
             val title = app.model.view!!.track(id)!!.title
             val r = stars.entries.firstOrNull { title.contains(it.key, ignoreCase = true) }?.value ?: 3
@@ -92,8 +92,11 @@ class JourneyVideoTest : VideoTestBase() {
             tap(rule.onAllNodes(hasText("☆"))[r - 1], before = 0.5)
             idle()
         }
-        app.notice = null
+        // O fim da triagem: o resumo, e PRONTO.
         hold(1.5)
+        tapText("PRONTO")
+        app.notice = null
+        hold(0.8)
 
         // 3. Montar a playlist: criar, tocar no ＋ dela e pôr as faixas na ordem do set.
         step("3 · Montar a playlist")

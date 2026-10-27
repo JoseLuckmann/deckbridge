@@ -156,7 +156,16 @@ class SetBuildingTest {
         waitJob(a)
         assertEquals(null, a.sets.rehearsal)
         assertTrue(!a.preview.isPlaying, "o ensaio terminou e parou")
-        assertEquals("Ensaio: 1 boas · 1 a refazer", a.notice?.text)
+        // O fim do ensaio é um resumo com o caminho para a que ficou a refazer.
+        assertEquals(1 to 1, a.sets.rehearsalDone)
+        rule.waitForIdle()
+        rule.onNodeWithText("Ensaio terminado").assertExists()
+        val redo = a.sets.plan().first { it.mark == Transition.Mark.REDO }
+        rule.onNodeWithText("REFAZER A PRIMEIRA").performClick()
+        rule.waitForIdle()
+        assertEquals(null, a.sets.rehearsalDone)
+        assertEquals(redo.toId, a.sets.mixing?.toId, "abre o MIX da que ficou a refazer")
+        a.sets.closeMix()
         val marks = a.sets.plan().map { it.mark }
         assertEquals(listOf(Transition.Mark.GOOD, Transition.Mark.REDO), marks)
         // Guardado: reabrir o SET mostra as marcas; mudar a transição apaga a marca dela.

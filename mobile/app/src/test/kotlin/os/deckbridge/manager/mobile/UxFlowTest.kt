@@ -16,6 +16,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import androidx.compose.ui.test.onRoot
+import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -83,8 +85,12 @@ class UxFlowTest {
             rule.onNodeWithText(if (a.triageAt >= total - 1) "FIM" else "PULAR ›").performClick()
             rule.waitForIdle()
         }
+        // O fim é um resumo (quantas passaram, com nota, com cor) com PRONTO, não um aviso que some.
+        rule.onNodeWithText("$total passaram").assertExists()
+        rule.onRoot().captureRoboImage(java.io.File(System.getProperty("prints.dir") ?: "build/prints", "mobile-48-vertical-marcar-fim.png").apply { parentFile.mkdirs() }.path)
+        rule.onNodeWithText("PRONTO").performClick()
+        rule.waitForIdle()
         assertNull(a.triage)
-        assertNotNull(a.notice)
     }
 
     @Test fun quickFilterChipNarrowsTheListAndTheGuideLeadsToTheNextStep() {

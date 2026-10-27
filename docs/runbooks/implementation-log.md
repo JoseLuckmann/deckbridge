@@ -1127,3 +1127,13 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Computador: tela de entrada com o ícone e o nome do app, uma frase do que ele faz e os botões de abrir maiores (antes: dois botões pequenos no meio de uma tela preta).
 - Evidência: celular completo 67 (3 pulados, 0 falhas) com o novo visual, computador 8 (2 pulados). Capturas atualizadas em `docs/ui/` (mobile-01, 03, 04, 05, 06, 10, 14; desktop-boas-vindas). Versão 0.13.0.
 - Não verificado: no aparelho.
+
+## 2026-10-27 — Rodada de UX com referências científicas
+
+- Pedido: buscar referências científicas de conceitos de UX e aplicar. Fontes e o que mudou: `docs/ux-referencias.md`.
+- Fitts / Parhi-Karlson-Bederson 2006 / Material 48 dp: `TouchTargetTest` percorre os controles tocáveis de músicas, playlist, quadro, MIX e marcar e exige área de toque ≥ 48 dp. Achado: o Compose já estende os alvos pequenos; nenhum ficou abaixo (os únicos apontados na primeira versão eram botões cortados pela borda da rolagem, não pequenos — o teste passou a ignorar esses).
+- Hoober 2013: no quadro, OUVIR desceu para a barra de baixo (ao lado de ENSAIAR).
+- Nielsen 1994 (visibilidade do estado): topo do celular mostra "✓ salvo", "• alterado" (grava sozinho em seguida) ou "gravando…".
+- Kivetz et al. 2006 (gradiente de objetivo): "faltam N" nas três últimas da triagem.
+- Kahneman et al. 1993 (pico-fim): triagem termina num resumo com PRONTO; ensaio termina num resumo com "REFAZER A PRIMEIRA".
+- Testes ajustados ao fim novo (triagem e ensaio) e vídeos (laço até o resumo).

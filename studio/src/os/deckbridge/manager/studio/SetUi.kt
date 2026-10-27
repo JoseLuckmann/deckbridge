@@ -95,6 +95,8 @@ fun SetScreen(app: StudioHost) {
     var sortOpen by remember { mutableStateOf(false) }
     var bridgeFor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var issueFor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    // O caminho inteiro da linha escolhida (do começo ao fim do set), para ouvir e comparar vertentes.
+    val boardPath = if (board) remember(v, desk.playlistId, desk.saved, desk.branches, desk.masterFixed, app.transitionBars) { desk.pathPlan() } else null
     Column(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(52.dp).border(BorderStroke(1.dp, Palette.line)).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { back() }) { Text("‹", fontSize = 22.sp) }
@@ -111,14 +113,8 @@ fun SetScreen(app: StudioHost) {
                 Text(p.name, color = Palette.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
             }
             if (board) {
-                // No quadro: o caminho inteiro da linha escolhida (do começo ao fim do set), para comparar vertentes.
-                val path = remember(v, desk.playlistId, desk.saved, desk.branches, desk.masterFixed, app.transitionBars) { desk.pathPlan() }
-                val letter = desk.branch?.let { desk.letterOf(it) } ?: 'A'
-                Text("≈" + mmss((path?.lengthMs ?: 0L).toInt()), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
-                PlayButton(
-                    on = path != null && app.preview.playingKey == desk.setKey(path.plan, path.tempos), enabled = path?.plan?.isNotEmpty() == true,
-                    label = if (desk.tree().isNotEmpty()) "OUVIR $letter" else "OUVIR",
-                ) { path?.let { desk.playPath(it) } }
+                // No quadro, o OUVIR fica embaixo, ao alcance do polegar; em cima só a duração do caminho.
+                Text("≈" + mmss((boardPath?.lengthMs ?: 0L).toInt()), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
             } else {
                 Text("≈" + mmss(SetPlanner.lengthMs(v, ids, plan)), color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(horizontal = 8.dp))
                 PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playAll(plan) }
@@ -171,6 +167,15 @@ fun SetScreen(app: StudioHost) {
                     onRehearse = { app.seen("rehearse"); desk.startRehearsal(plan) },
                     rehearseSpot = app.hint("rehearse"),
                     letter = layout.lanes.firstOrNull { it.playlistId == desk.playlistId }?.letter?.takeIf { layout.rows > 1 },
+                    listen = boardPath?.takeIf { it.plan.isNotEmpty() }?.let { path ->
+                        {
+                            val letter = desk.branch?.let { desk.letterOf(it) } ?: 'A'
+                            PlayButton(
+                                on = app.preview.playingKey == desk.setKey(path.plan, path.tempos), modifier = Modifier.padding(start = 8.dp),
+                                label = if (desk.tree().isNotEmpty()) "OUVIR $letter" else "OUVIR",
+                            ) { desk.playPath(path) }
+                        }
+                    },
                 )
             }
         }
@@ -249,6 +254,16 @@ fun SetScreen(app: StudioHost) {
         ChoiceDialog("Set", options.map { it.first }, onPick = { n -> menuOpen = false; options[n].second() }, onClose = { menuOpen = false })
     }
     addTo?.let { letter -> AddToLineDialog(app, letter) { addTo = null } }
+    // O fim do ensaio: o resultado e, se alguma ficou para refazer, o caminho direto para ela (regra pico-fim).
+    desk.rehearsalDone?.let { (good, redo) ->
+        val first = plan.firstOrNull { it.mark == Transition.Mark.REDO }
+        ConfirmDialog(
+            "Ensaio terminado", "✓ $good boas" + (if (redo > 0) "  ·  ✗ $redo a refazer" else "  ·  nenhuma a refazer"),
+            if (first != null) "REFAZER A PRIMEIRA" else "OK",
+            onConfirm = { desk.rehearsalDone = null; if (first != null) desk.openMix(first) },
+            onClose = { desk.rehearsalDone = null },
+        )
+    }
     removeAsk?.let { index ->
         val letters = desk.branchesAt(index).joinToString(", ") { "${desk.letterOf(it)}" }
         ConfirmDialog("Tirar do set", "O ramo $letters sai desta faixa e deixa de aparecer no set.", "TIRAR", danger = true, onConfirm = {
@@ -316,10 +331,11 @@ fun SetScreen(app: StudioHost) {
 
 /** Ensaiar (o botão principal) e o resumo: quantas a refazer e quantas trocas com aviso. */
 @Composable
-private fun ActionsRow(issues: Int, redo: Int, onRehearse: () -> Unit, rehearseSpot: Boolean = false, letter: Char? = null) {
+private fun ActionsRow(issues: Int, redo: Int, onRehearse: () -> Unit, rehearseSpot: Boolean = false, letter: Char? = null, listen: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         // No quadro com ramos: ensaia a linha escolhida (a letra diz qual).
         Button(onClick = onRehearse, modifier = Modifier.spotlight(rehearseSpot).height(40.dp)) { Text(if (letter != null) "ENSAIAR $letter" else "ENSAIAR", fontSize = 12.sp) }
+        listen?.invoke()
         Spacer(Modifier.weight(1f))
         if (redo > 0) Text("✗ $redo", color = Palette.orange, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.padding(end = 10.dp))
         Text(if (issues == 0) "✓" else "⚠ $issues", color = if (issues == 0) Palette.keyInk else Palette.orange, fontSize = 14.sp, fontWeight = FontWeight.Bold)
