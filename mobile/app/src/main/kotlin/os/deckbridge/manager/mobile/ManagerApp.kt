@@ -116,6 +116,12 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
     override val setsDir get() = File(root.parentFile, "sets")
     override val cacheDir: File get() = context.cacheDir
 
+    override fun share(title: String, text: String) {
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(android.content.Intent.EXTRA_SUBJECT, title).putExtra(android.content.Intent.EXTRA_TEXT, text)
+        context.startActivity(android.content.Intent.createChooser(send, title).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     // A biblioteca é do aparelho: gravar é sempre na hora.
     override fun saveNow(progress: (String) -> Unit): Boolean {
         model.apply(null, progress) ?: throw IllegalStateException(model.banner?.text ?: "Não consegui salvar")

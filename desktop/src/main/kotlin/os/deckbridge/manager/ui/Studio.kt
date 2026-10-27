@@ -136,6 +136,17 @@ class DesktopStudio(
 
     override fun onMain(block: () -> Unit) = javax.swing.SwingUtilities.invokeLater(block)
 
+    /** O último texto entregue (para conferir): no computador vai para a área de transferência. */
+    var shared: String? = null
+        private set
+
+    override fun share(title: String, text: String) {
+        shared = text
+        runCatching { java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(java.awt.datatransfer.StringSelection(text), null) }
+            .onSuccess { did("$title: copiada") }
+            .onFailure { notice = Banner("Não consegui copiar: ${it.message ?: it.javaClass.simpleName}", true) }
+    }
+
     // Mouse: arrastar um cartão começa direto (a rolagem é pela roda).
     override val touch: Boolean get() = false
 

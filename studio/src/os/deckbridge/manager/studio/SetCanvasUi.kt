@@ -47,6 +47,8 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.alpha
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.widthIn
 import os.deckbridge.manager.mix.CanvasCard
 import os.deckbridge.manager.mix.CanvasLane
 import os.deckbridge.manager.mix.CanvasLink
@@ -105,9 +107,33 @@ fun SetBoard(
     onJoin: (CanvasLane) -> Unit, onMove: (CanvasCard, Int, Int) -> Unit = { _, _, _ -> }, live: LiveView? = null, modifier: Modifier = Modifier,
 ) {
     androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxSize().background(Palette.bg)) {
-        Board(app, Geo(vertical = maxHeight > maxWidth), layout, plans, issues, selected, rehearsing, onSelect, onAdd, onMix, onJoin, onMove, live)
+        val g = Geo(vertical = maxHeight > maxWidth)
+        // Afastar e aproximar: o quadro inteiro (cartões, textos e fios) muda de escala junto. TUDO cabe o set na tela.
+        var zoom by remember { mutableStateOf(1f) }
+        val fit = minOf(maxWidth / g.width(layout), maxHeight / g.height(layout)).coerceIn(ZOOMS.first(), 1f)
+        val base = androidx.compose.ui.platform.LocalDensity.current
+        CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(base.density * zoom, base.fontScale)) {
+            Board(app, g, layout, plans, issues, selected, rehearsing, onSelect, onAdd, onMix, onJoin, onMove, live)
+        }
+        Row(Modifier.align(Alignment.BottomEnd).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            ZoomButton("−", "Afastar", enabled = zoom > ZOOMS.first()) { zoom = ZOOMS.lastOrNull { it < zoom - 0.01f } ?: ZOOMS.first() }
+            ZoomButton("TUDO", "Ver tudo", enabled = kotlin.math.abs(zoom - fit) > 0.01f) { zoom = fit }
+            ZoomButton("+", "Aproximar", enabled = zoom < ZOOMS.last()) { zoom = ZOOMS.firstOrNull { it > zoom + 0.01f } ?: ZOOMS.last() }
+        }
     }
 }
+
+private val ZOOMS = listOf(0.4f, 0.55f, 0.75f, 1f, 1.3f)
+
+@Composable
+private fun ZoomButton(text: String, description: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.height(36.dp).widthIn(min = 36.dp).clip(RbShape).background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.line), RbShape)
+            .clickable(enabled = enabled, onClick = onClick).semantics { contentDescription = description }.padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(text, color = if (enabled) Palette.blue else Palette.muted, fontSize = if (text.length > 1) 11.sp else 16.sp, fontWeight = FontWeight.Bold) }
+}
+
 
 @Composable
 private fun Board(

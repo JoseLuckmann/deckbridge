@@ -240,6 +240,7 @@ fun SetScreen(app: StudioHost) {
             add("Transição · " + (app.transitionBars?.let { "$it compassos" } ?: "até o drop") to { app.nextTransitionBars() })
             if (board) {
                 add("Ao vivo" to { picked = null; desk.startLive() })
+                add("Cola do set" to { app.share("Set ${v.playlists.firstOrNull { it.id == desk.rootId() }?.name.orEmpty()}", desk.sheet()) })
                 add("Master · " + (desk.masterFixed?.let { "%.0f".format(it) } ?: "automático") to { masterOpen = true })
                 add("Andamento do set" to { desk.mapOpen = true })
             }

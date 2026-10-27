@@ -671,6 +671,44 @@ class SetDesk(private val app: StudioHost) {
         }
     }
 
+    /**
+     * A cola do set, em texto: cada linha com as faixas na ordem (tom e BPM), as trocas planejadas entre elas (compassos,
+     * estilo, ritmo, grave) e, em cada ramo, de onde sai e onde junta. Para ter na mão (ou no celular) na hora de tocar: o
+     * CDJ recebe as linhas como playlists, mas não sabe onde uma vertente sai e junta.
+     */
+    fun sheet(): String {
+        val v = app.model.view ?: return ""
+        val root = rootId() ?: return ""
+        val layout = canvas() ?: return ""
+        fun name(id: Int) = v.track(id)?.let { it.title.ifEmpty { it.fileName } }.orEmpty()
+        fun tr(t: Transition): String = listOfNotNull(
+            "${t.bars} comp.", t.style.title.lowercase(),
+            t.pace.takeIf { it != Transition.Pace.NORMAL }?.title?.lowercase(),
+            if (t.style == os.deckbridge.manager.mix.MixStyle.BASS_SWAP && t.swapAt >= 0.99) "grave no fim" else null,
+            if (t.style == os.deckbridge.manager.mix.MixStyle.BASS_SWAP && t.swapBars > 0) "grave em ${t.swapBars}" else null,
+            when (t.mark) { Transition.Mark.GOOD -> "✓"; Transition.Mark.REDO -> "✗ refazer"; null -> null },
+        ).joinToString(" · ")
+        val out = StringBuilder()
+        out.append("SET ${v.playlists.firstOrNull { it.id == root }?.name.orEmpty()} · master ${masterFixed?.let { "%.0f".format(it) } ?: "automático"}\n")
+        for (lane in layout.lanes) {
+            val plan = lanePlan(lane.playlistId)
+            out.append("\n")
+            out.append(if (lane.branch == null) "LINHA A\n" else "VERTENTE ${lane.letter} · sai de ${name(lane.split!!.trackId)} · " + (lane.rejoin?.let { "junta em ${name(it.trackId)}" } ?: "outro final") + "\n")
+            val ids = listOfNotNull(lane.split?.trackId) + lane.cards.map { it.trackId } + listOfNotNull(lane.rejoin?.trackId)
+            val poolAt = lane.cards.indexOfFirst { it.pool }
+            lane.cards.forEachIndexed { i, c ->
+                val t = v.track(c.trackId) ?: return@forEachIndexed
+                if (i == poolAt) out.append("  POOL (a ordem é na hora):\n")
+                val before = ids.getOrNull(ids.indexOf(c.trackId) - 1)
+                plan.firstOrNull { it.fromId == before && it.toId == c.trackId }?.let { out.append("     ↓ ${tr(it)}\n") }
+                val forks = layout.lanes.filter { it.split == c }.joinToString(", ") { "${it.letter}" }
+                out.append("  ${i + 1}. ${name(c.trackId)} · ${keyLabel(t.key)} · ${bpmLabel(t.bpm)}" + (if (forks.isNotEmpty()) "  ⑂ vertente $forks" else "") + "\n")
+            }
+            lane.rejoin?.let { r -> plan.firstOrNull { it.toId == r.trackId }?.let { out.append("     ↓ ${tr(it)} → ${name(r.trackId)}\n") } }
+        }
+        return out.toString()
+    }
+
     // ---- ao vivo: no dia do set, o quadro vira o mapa de onde estou ------------------------------------------------
 
     /** O quadro está ao vivo: tocar num cartão diz "esta está tocando", em vez de escolher para editar. */

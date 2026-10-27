@@ -141,6 +141,19 @@ class StudioTest {
         m.undo()
         waitForIdle()
         assertEquals(moving.id, m.view!!.entries[bLane.playlistId].orEmpty().first(), "um desfazer volta")
+        // Ver tudo / afastar: o quadro inteiro muda de escala.
+        tap("Afastar")
+        shot("desktop-set-afastado")
+        tap("Aproximar")
+        // A cola do set: as linhas, onde cada vertente sai e junta, e as trocas.
+        tap("Mais")
+        click("Cola do set")
+        val sheet = assertNotNull(studio.shared)
+        assertTrue("VERTENTE B · sai de Small Hours · junta em Glass Harbour" in sheet, sheet)
+        assertTrue("VERTENTE C · sai de Small Hours · junta em Glass Harbour" in sheet, sheet)
+        assertTrue("⑂ vertente B, C" in sheet, sheet)
+        assertTrue("comp." in sheet)
+        File(out, "desktop-cola-do-set.txt").writeText(sheet)
         // Ao vivo: tocar na que está tocando mostra o que pode vir depois (a linha segue ou entra numa vertente).
         tap("Mais")
         click("Ao vivo")

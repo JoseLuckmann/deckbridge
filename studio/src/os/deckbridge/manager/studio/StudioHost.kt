@@ -55,6 +55,9 @@ interface StudioHost {
     /** Roda [block] fora da thread da tela, com o andamento visível; erros viram aviso. */
     fun background(title: String, block: (StudioJob) -> Unit)
 
+    /** Entrega um texto para fora do app (celular: compartilhar; computador: área de transferência). */
+    fun share(title: String, text: String)
+
     /** Tela de toque (arrastar um cartão começa com um toque longo, para não brigar com a rolagem); no mouse, arrasta direto. */
     val touch: Boolean get() = true
 
