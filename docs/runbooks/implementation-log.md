@@ -1092,3 +1092,4 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Evidência: desktop `StudioTest` (offscreen, cliques): SET ▸, ＋, duas vertentes juntando na Glass Harbour, MIX com a prévia montada do áudio sintético, LENTA + 8 COMP., Esc fecha MIX, mapa e SET, lista, plano gravado na pasta de sets; desktop completo 7 testes (1 pulado: capturas antigas só com SHOTS_DIR). Celular completo depois da mudança: ver abaixo. Capturas `docs/ui/desktop-set-*.png`.
 - Achado: a primeira execução do teste gravou "ver em lista" nas preferências reais do usuário do sistema; o teste passou a usar um nó de preferências e uma pasta de planos próprios, e a sujeira foi apagada.
 - Não verificado: som de verdade no computador (sem placa de som no ambiente de teste) e uso numa janela real.
+- Celular completo depois da mudança: 67 testes, 3 vídeos pulados, 0 falhas. Versão 0.10.0.
