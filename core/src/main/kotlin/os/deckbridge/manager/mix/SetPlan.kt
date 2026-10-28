@@ -37,6 +37,15 @@ data class Transition(
     val swapBars: Int = 0,
     /** Lembrete do DJ para a hora da troca ("quando o vocal entrar, tiro o grave"): aparece no MIX, na cola e ao vivo. */
     val note: String = "",
+    /**
+     * Sync à mão, em ms da prévia, somado ao sync fino: positivo adianta a que entra (como empurrar o prato para a frente),
+     * negativo atrasa. Para quando a marcação errou um pouco e o ouvido acha o encaixe.
+     */
+    val nudgeMs: Int = 0,
+    /** A que entra deslocada em batidas inteiras (+1 adianta uma batida): para a grade que caiu na batida errada. */
+    val beatShift: Int = 0,
+    /** A mixagem do DJ nesta troca (o que ele fez com os controles ao ensaiar); null é o automático. */
+    val take: MixTake? = null,
 ) {
     enum class Mark { GOOD, REDO }
 
@@ -237,12 +246,17 @@ object SetPlanner {
      * Transições automáticas para a ordem [ids] (pela estrutura, ver [auto]; [bars] fixa a duração), mantendo as que já
      * existem para o mesmo par.
      */
-    fun plan(view: LibraryView, ids: List<Int>, grids: (TrackItem) -> TrackGrid?, keep: List<Transition> = emptyList(), bars: Int? = null): List<Transition> =
+    fun plan(
+        view: LibraryView, ids: List<Int>, grids: (TrackItem) -> TrackGrid?, keep: List<Transition> = emptyList(), bars: Int? = null,
+        /** O jeito do DJ aprendido das mixagens dele: as trocas novas começam assim. */
+        habits: MixHabits? = null,
+    ): List<Transition> =
         ids.zipWithNext().mapNotNull { (a, b) ->
             keep.firstOrNull { it.fromId == a && it.toId == b } ?: run {
                 val ta = view.track(a) ?: return@mapNotNull null
                 val tb = view.track(b) ?: return@mapNotNull null
-                auto(ta, grids(ta), tb, grids(tb), bars).first
+                val (t, basis) = auto(ta, grids(ta), tb, grids(tb), bars)
+                habits?.apply(t, basis) ?: t
             }
         }
 
@@ -291,6 +305,9 @@ object SetPlanner {
             p.setProperty("$n.swap", t.swapAt.toString())
             p.setProperty("$n.swapBars", t.swapBars.toString())
             if (t.note.isNotBlank()) p.setProperty("$n.note", t.note)
+            if (t.nudgeMs != 0) p.setProperty("$n.nudge", t.nudgeMs.toString())
+            if (t.beatShift != 0) p.setProperty("$n.beats", t.beatShift.toString())
+            t.take?.takeIf { !it.isEmpty }?.let { p.setProperty("$n.take", it.encode()) }
         }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".novo")
@@ -313,6 +330,9 @@ object SetPlanner {
                     p.getProperty("$i.swap")?.toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.5,
                     p.getProperty("$i.swapBars")?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
                     p.getProperty("$i.note").orEmpty(),
+                    p.getProperty("$i.nudge")?.toIntOrNull() ?: 0,
+                    p.getProperty("$i.beats")?.toIntOrNull() ?: 0,
+                    MixTake.decode(p.getProperty("$i.take")),
                 )
             }.getOrNull()
         }

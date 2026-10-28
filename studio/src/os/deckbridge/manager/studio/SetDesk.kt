@@ -546,7 +546,27 @@ class SetDesk(private val app: StudioHost) {
     /** As transições da linha aberta: só na parte com ordem (numa pool a ordem é escolhida na hora). */
     fun plan(ids: List<Int> = ids()): List<Transition> {
         val v = app.model.view ?: return emptyList()
-        return SetPlanner.plan(v, fixedPart(ids), ::grid, keep = saved, bars = app.transitionBars)
+        return SetPlanner.plan(v, fixedPart(ids), ::grid, keep = saved, bars = app.transitionBars, habits = habits())
+    }
+
+    // ---- o jeito do DJ, aprendido das mixagens guardadas ------------------------------------------------------------
+
+    private val habitsFile get() = File(app.setsDir, "habitos.properties")
+    private var habitsCache: os.deckbridge.manager.mix.MixHabits? = null
+
+    /** O que o DJ costuma fazer nas trocas (das mixagens guardadas em todos os sets); null antes de haver o bastante. */
+    fun habits(): os.deckbridge.manager.mix.MixHabits? {
+        val h = habitsCache ?: (os.deckbridge.manager.mix.MixHabits.load(habitsFile) ?: os.deckbridge.manager.mix.MixHabits(null, null, 0)).also { habitsCache = it }
+        return h.takeIf { it.ready }
+    }
+
+    /** Aprende de novo com todas as mixagens guardadas (depois de guardar uma). */
+    private fun relearn() {
+        val all = app.setsDir.listFiles { f -> f.name.matches(Regex("-?\\d+\\.properties")) }.orEmpty()
+            .flatMap { runCatching { SetPlanner.load(it) }.getOrDefault(emptyList()) }
+        val h = os.deckbridge.manager.mix.MixHabits.learn(all)
+        habitsCache = h
+        runCatching { os.deckbridge.manager.mix.MixHabits.save(habitsFile, h) }
     }
 
     /** O lembrete da troca aberta no MIX (não muda o som: não monta a prévia de novo). */
@@ -635,7 +655,9 @@ class SetDesk(private val app: StudioHost) {
     /** A prévia montada da transição aberta (com ondas); fica a anterior na tela enquanto a nova é montada. */
     var mixPreview by mutableStateOf<MixPreview?>(null)
         private set
-    var mixFile by mutableStateOf<File?>(null)
+
+    /** Quem toca a prévia ao vivo: mixa na hora com a troca de agora e a mão do DJ. */
+    var mixPlayer by mutableStateOf<os.deckbridge.manager.mix.MixPlayer?>(null)
         private set
     var mixBusy by mutableStateOf(false)
         private set
@@ -649,17 +671,38 @@ class SetDesk(private val app: StudioHost) {
     /** Onde a cabeça está na prévia (ms), parada ou tocando. */
     var cursorMs by mutableStateOf(0)
 
+    /**
+     * A mixagem em ensaio: a guardada na troca mais o que a mão fez desde então (ainda não guardado). Null é o automático.
+     */
+    var draftTake by mutableStateOf<os.deckbridge.manager.mix.MixTake?>(null)
+        private set
+
+    /** Os controles que a mão mexeu nesta passada (a tela os pinta de laranja). */
+    var touchedNow by mutableStateOf(setOf<os.deckbridge.manager.mix.Ctl>())
+        private set
+
+    /** Repetir a troca (do pouco antes da saída ao pouco depois do fim), para ensaiar de novo. */
+    var mixLoop by mutableStateOf(false)
+        private set
+
+    /** Há mão do DJ ainda não guardada (ou a volta ao automático ainda não guardada). */
+    val takeChanged get() = draftTake != mixing?.take || touchedNow.isNotEmpty()
+
+    private var seenWraps = 0
+
     private val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "deckbridge-mix").apply { isDaemon = true } }
     @Volatile private var generation = 0
     private val previews = object : LinkedHashMap<String, MixPreview>(4, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MixPreview>?) = size > 3
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MixPreview>?) = size > 2
     }
 
     fun openMix(tr: Transition) {
         app.preview.stop()
         mixing = tr
         mixPreview = null
-        mixFile = null
+        mixPlayer = null
+        draftTake = tr.take
+        touchedNow = emptySet()
         rebuild(tr, startAtOut = true)
     }
 
@@ -668,14 +711,29 @@ class SetDesk(private val app: StudioHost) {
         generation++
         mixing = null
         mixPreview = null
+        mixPlayer = null
+        touchedNow = emptySet()
     }
 
-    /** Ajuste na tela de teste: guarda no plano e monta de novo; a cabeça fica no mesmo lugar relativo ao ponto de saída. */
+    /**
+     * Ajuste na tela de teste: guarda no plano. Estilo, ritmo, grave, sync e lembrete mudam o som na hora (a prévia é
+     * mixada ao vivo); duração, pontos e Master Tempo leem o áudio de novo, com a cabeça no mesmo lugar relativo à saída.
+     */
     fun editMix(changed: Transition) {
         // A transição mudou: o que o DJ marcou no ensaio era sobre a antiga.
         val tr = changed.copy(mark = null)
-        val wasPlaying = app.preview.playingKey?.startsWith("mix|") == true
+        val p = mixPreview
+        val tempo = tempoFor(tr) ?: app.model.view?.track(tr.fromId)?.bpm
+        if (p != null && p.sameStems(tr) && tempo == p.tempo) {
+            mixing = tr
+            update(tr)
+            mixPlayer?.transition = tr
+            return
+        }
+        val wasPlaying = mixPlaying
         val rel = cursorMs - (mixPreview?.leadMs ?: 0)
+        if (wasPlaying) cursorMs = app.preview.positionMs()
+        closePass()
         app.preview.stop()
         mixing = tr
         update(tr)
@@ -687,16 +745,13 @@ class SetDesk(private val app: StudioHost) {
         mixBusy = true
         mixError = null
         val tempo = tempoFor(tr)
-        val key = keyOf(tr, tempo)
+        val key = stemKey(tr, tempo)
         worker.execute {
             val started = System.currentTimeMillis()
             var built = false
             val result = runCatching {
-                val p = synchronized(previews) { previews[key] } ?: render(tr, 12_000, 12_000, waves = true, tempo = tempo)?.also { built = true; synchronized(previews) { previews[key] = it } }
+                synchronized(previews) { previews[key] } ?: render(tr, 12_000, 12_000, waves = true, tempo = tempo)?.also { built = true; synchronized(previews) { previews[key] = it } }
                     ?: throw IllegalStateException("Não consegui ler o áudio das duas faixas")
-                val out = cacheFile(key)
-                if (!out.isFile) publish(out) { it.writeBytes(MixRenderer.wav(p.audio)) }
-                p to out
             }
             val took = System.currentTimeMillis() - started
             onMain {
@@ -704,9 +759,14 @@ class SetDesk(private val app: StudioHost) {
                 if (built) lastBuildMs = took
                 if (gen != generation) return@onMain
                 mixBusy = false
-                result.onSuccess { (p, f) ->
+                result.onSuccess { p ->
                     mixPreview = p
-                    mixFile = f
+                    val now = mixing ?: tr
+                    mixPlayer = os.deckbridge.manager.mix.MixPlayer(p, now).also { pl ->
+                        pl.take = draftTake
+                        pl.loop = if (mixLoop) loopRange(p) else null
+                    }
+                    seenWraps = 0
                     cursorMs = (if (startAtOut) p.leadMs - (2 * p.barMsA).toInt() else p.leadMs + keepRel).coerceIn(0, p.lengthMs)
                     if (play) playMix()
                 }.onFailure { mixError = it.message ?: it.javaClass.simpleName }
@@ -714,25 +774,156 @@ class SetDesk(private val app: StudioHost) {
         }
     }
 
-    fun mixKey() = mixing?.let { "mix|" + keyOf(it) }
+    fun mixKey() = mixing?.let { "mix|" + stemKey(it) }
 
     val mixPlaying get() = app.preview.playingKey != null && app.preview.playingKey == mixKey()
 
     fun playMix() {
-        val f = mixFile ?: return
+        val pl = mixPlayer ?: return
         val key = mixKey() ?: return
         if (mixPlaying) {
             cursorMs = app.preview.positionMs()
             app.preview.stop()
+            closePass()
         } else {
-            app.preview.toggleFile(f, key, "teste de mix", cursorMs)
+            pl.seek(cursorMs)
+            app.preview.playStream(pl, key, "teste de mix")
         }
     }
 
     fun seekMix(ms: Int) {
         val p = mixPreview ?: return
+        closePass()
         cursorMs = ms.coerceIn(0, p.lengthMs)
-        if (mixPlaying) app.preview.seekTo(cursorMs)
+        if (mixPlaying) app.preview.seekTo(cursorMs) else mixPlayer?.seek(cursorMs)
+    }
+
+    /** A cada quadro enquanto toca: a cabeça segue o som e, se o loop voltou ao começo, a passada da mão fecha. */
+    fun tick() {
+        if (!mixPlaying) return
+        cursorMs = app.preview.positionMs()
+        val pl = mixPlayer ?: return
+        if (pl.wraps != seenWraps) {
+            seenWraps = pl.wraps
+            closePass(pl.loop?.let { mixPreview?.relBar(it.last) })
+        }
+    }
+
+    /** Onde se está (compassos desde a saída), para gravar a mão: o que se ouve, não o que já foi mixado. */
+    private fun barNow(): Double? {
+        val p = mixPreview ?: return null
+        return p.relBar(if (mixPlaying) app.preview.positionMs() else cursorMs)
+    }
+
+    /**
+     * A mão do DJ num controle do mixer: vale na hora (tocando ou parado) e é gravada como a mixagem desta troca, para
+     * guardar ou desfazer depois. Parado, marca o valor a partir da cabeça.
+     */
+    fun setControl(c: os.deckbridge.manager.mix.Ctl, value: Float) {
+        val pl = mixPlayer ?: return
+        val bar = barNow() ?: return
+        pl.pass.set(c, bar, value.coerceIn(0f, 1f))
+        touchedNow = touchedNow + c
+        if (!mixPlaying) closePass(bar)
+    }
+
+    /** Junta a passada da mão à mixagem em ensaio, terminando em [end] (compassos; padrão: onde se está). */
+    private fun closePass(end: Double? = barNow()) {
+        val pl = mixPlayer ?: return
+        if (pl.pass.isEmpty) return
+        val pass = pl.pass.close()
+        val merged = (draftTake ?: os.deckbridge.manager.mix.MixTake.EMPTY).merge(pass, end ?: pass.values.maxOf { it.last().bar })
+        draftTake = merged
+        pl.take = merged
+    }
+
+    /** O canal [deck] volta ao automático daqui em diante (a mão sai dos controles dele). */
+    fun releaseDeck(deck: Int) {
+        closePass()
+        val bar = barNow() ?: return
+        val d = draftTake ?: return
+        draftTake = d.release(deck, bar).takeIf { !it.isEmpty }
+        mixPlayer?.take = draftTake
+    }
+
+    /** Guarda a mixagem em ensaio como a desta troca neste set (e aprende com ela o jeito do DJ). */
+    fun keepTake() {
+        closePass()
+        val tr = mixing ?: return
+        val take = draftTake?.takeIf { !it.isEmpty }
+        val kept = tr.copy(take = take, mark = null)
+        mixing = kept
+        update(kept)
+        mixPlayer?.transition = kept
+        draftTake = take
+        touchedNow = emptySet()
+        relearn()
+        app.did(if (take == null) "Troca no automático" else "Mixagem guardada: esta troca toca assim")
+    }
+
+    /** Desfaz o que a mão fez desde a última vez que guardou. */
+    fun discardTake() {
+        mixPlayer?.pass?.close()
+        draftTake = mixing?.take
+        mixPlayer?.take = draftTake
+        touchedNow = emptySet()
+    }
+
+    /** Tira a mão de tudo: a troca volta ao automático (guardar confirma). */
+    fun autoTake() {
+        mixPlayer?.pass?.close()
+        draftTake = null
+        mixPlayer?.take = null
+        touchedNow = emptySet()
+    }
+
+    /** Sync à mão: [ms] positivo adianta a que entra (como empurrar o prato), negativo atrasa. Vale na hora. */
+    fun nudge(ms: Int) {
+        val tr = mixing ?: return
+        editMix(tr.copy(nudgeMs = (tr.nudgeMs + ms).coerceIn(-250, 250)))
+    }
+
+    /** A que entra uma batida inteira para a frente (+1) ou para trás (-1): para a grade que caiu na batida errada. */
+    fun shiftBeat(beats: Int) {
+        val tr = mixing ?: return
+        editMix(tr.copy(beatShift = (tr.beatShift + beats).coerceIn(-4, 4)))
+    }
+
+    /** Volta o sync à mão para zero (fica o sync fino medido, se ligado). */
+    fun resetSync() {
+        val tr = mixing ?: return
+        editMix(tr.copy(nudgeMs = 0, beatShift = 0))
+    }
+
+    /** Liga e desliga a repetição da troca. */
+    fun toggleLoop() {
+        mixLoop = !mixLoop
+        val p = mixPreview ?: return
+        mixPlayer?.loop = if (mixLoop) loopRange(p) else null
+    }
+
+    /** O trecho repetido: dois compassos antes da saída até dois depois do fim da troca. */
+    fun loopRange(p: MixPreview): IntRange =
+        (p.leadMs - (2 * p.barMsA).toInt()).coerceAtLeast(0)..(p.leadMs + p.overlapMs + (2 * p.barMsA).toInt()).coerceAtMost(p.lengthMs)
+
+    /**
+     * O som da prévia aberta como está agora (o automático, a mixagem guardada e a mão em ensaio) num WAV, para gravar
+     * vídeo ou levar para fora. Bloqueante (mixa a prévia inteira).
+     */
+    val mixFile: File?
+        get() {
+            val p = mixPreview ?: return null
+            val tr = mixing ?: return null
+            val out = cacheFile("agora|" + stemKey(tr) + "|" + tr.copy(note = "", take = null) + "|" + draftTake?.encode())
+            if (out.isFile) return out
+            return publish(out) { it.writeBytes(MixRenderer.wav(p.mixdown(tr, draftTake))) }
+        }
+
+    /** O que pede ler o áudio de novo: as faixas, os pontos, a duração, o Master Tempo e o master. */
+    private fun stemKey(tr: Transition, tempo: Double? = tempoFor(tr)): String {
+        val v = app.model.view
+        val sig = listOf(tr.fromId, tr.toId).joinToString { id -> v?.track(id)?.let { "${it.filePath}:${it.bpm}" } ?: "" }
+        return "s|${tr.fromId}|${tr.toId}|${tr.outMs}|${tr.inMs}|${tr.bars}|${tr.masterTempo}|$sig|$tempo"
     }
 
     /**

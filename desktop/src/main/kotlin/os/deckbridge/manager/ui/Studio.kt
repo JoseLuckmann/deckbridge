@@ -212,8 +212,78 @@ class DesktopPreview(private val host: DesktopStudio) : StudioPreview {
     @Volatile private var session: Session? = null
 
     override fun positionMs(): Int {
+        live?.let { return it.heardMs() }
         val s = session ?: return 0
         return s.startMs + ((s.line?.microsecondPosition ?: 0L) / 1000).toInt()
+    }
+
+    /** A prévia do MIX ao vivo: a fonte mixa na hora (com a mão do DJ) e a linha de som toca com buffer curto (~80 ms). */
+    private inner class Live(val source: os.deckbridge.manager.mix.PcmSource) : Thread("deckbridge-mix-ao-vivo") {
+        @Volatile var stopped = false
+        @Volatile var pendingSeek = -1
+        @Volatile var line: SourceDataLine? = null
+
+        fun heardMs(): Int {
+            pendingSeek.let { if (it >= 0) return it }
+            val l = line ?: return source.renderedMs
+            val queued = ((l.bufferSize - l.available()) / 4).coerceAtLeast(0)
+            return (source.renderedMs - queued * 1000L / source.rate).toInt().coerceAtLeast(0)
+        }
+
+        override fun run() {
+            val n = 512
+            val lb = FloatArray(n)
+            val rb = FloatArray(n)
+            val bytes = ByteArray(n * 4)
+            try {
+                val format = AudioFormat(source.rate.toFloat(), 16, 2, true, false)
+                val l = AudioSystem.getSourceDataLine(format)
+                l.open(format, source.rate * 4 * 80 / 1000)
+                line = l
+                l.start()
+                while (!stopped) {
+                    val seek = pendingSeek
+                    if (seek >= 0) {
+                        source.seek(seek)
+                        l.flush()
+                        pendingSeek = -1
+                    }
+                    val got = source.read(lb, rb, n)
+                    if (got <= 0) break
+                    for (i in 0 until got) {
+                        val a = (lb[i].coerceIn(-1f, 1f) * 32767).toInt()
+                        val b = (rb[i].coerceIn(-1f, 1f) * 32767).toInt()
+                        bytes[i * 4] = a.toByte(); bytes[i * 4 + 1] = (a shr 8).toByte()
+                        bytes[i * 4 + 2] = b.toByte(); bytes[i * 4 + 3] = (b shr 8).toByte()
+                    }
+                    l.write(bytes, 0, got * 4)
+                }
+                if (!stopped) l.drain()
+                l.close()
+                host.onMain { if (live === this) stop() }
+            } catch (e: Exception) {
+                host.onMain {
+                    if (live === this) {
+                        stop()
+                        host.notice = Banner("Não consegui tocar a prévia: ${e.message ?: e.javaClass.simpleName}", true)
+                    }
+                }
+            }
+        }
+
+        fun halt() {
+            stopped = true
+            line?.let { runCatching { it.stop() }; runCatching { it.flush() }; runCatching { it.close() } }
+        }
+    }
+
+    @Volatile private var live: Live? = null
+
+    override fun playStream(source: os.deckbridge.manager.mix.PcmSource, key: String, title: String) {
+        if (playingKey == key) return stop()
+        stop()
+        playingKey = key
+        live = Live(source).apply { isDaemon = true; start() }
     }
 
     override fun toggle(t: TrackItem, fromMs: Int) {
@@ -241,6 +311,7 @@ class DesktopPreview(private val host: DesktopStudio) : StudioPreview {
     }
 
     override fun seekTo(ms: Int) {
+        live?.let { it.pendingSeek = ms; return }
         val s = session ?: return
         val id = playingId
         val key = playingKey
@@ -251,6 +322,8 @@ class DesktopPreview(private val host: DesktopStudio) : StudioPreview {
     }
 
     override fun stop() {
+        live?.halt()
+        live = null
         session?.let { halt(it) }
         session = null
         playingId = null

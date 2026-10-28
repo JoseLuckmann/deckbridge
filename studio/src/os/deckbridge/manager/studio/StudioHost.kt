@@ -91,8 +91,16 @@ interface StudioPreview {
     fun toggle(t: TrackItem, fromMs: Int = 0)
     fun toggleFile(file: File, key: String, title: String, fromMs: Int = 0)
     fun stop()
+
+    /** O que se ouve agora (ms): numa fonte ao vivo, o que ela já fez menos o que ainda está no buffer do som. */
     fun positionMs(): Int
     fun seekTo(ms: Int)
+
+    /**
+     * Toca uma fonte ao vivo ([source] mixa na hora: a prévia do MIX com a mão do DJ). Tocar a mesma chave de novo para.
+     * Pula com [seekTo], como um arquivo.
+     */
+    fun playStream(source: os.deckbridge.manager.mix.PcmSource, key: String, title: String)
 }
 
 /** Como cada app trata "voltar" (o botão do Android, ou Esc no computador). */

@@ -38,6 +38,10 @@ object StudioKeys {
     val list = listOf(
         "Espaço" to "Tocar / parar (a faixa escolhida, a da triagem ou a troca no MIX)",
         "← →" to "MIX: um compasso para trás / para frente. MARCAR: anterior / pular",
+        ",  ." to "MIX: atrasa / adianta a que entra 5 ms (encaixe)",
+        "[  ]" to "MIX: a que entra uma batida para trás / para frente",
+        "L" to "MIX: repetir a troca (liga / desliga)",
+        "Enter" to "MIX: guardar a sua mixagem",
         "1 – 5" to "MARCAR: dá a nota e passa para a próxima",
         "0" to "MARCAR: tira a nota",
         "Ctrl+Z" to "Desfazer",
@@ -94,6 +98,12 @@ object StudioKeys {
                 Key.Spacebar -> desk.playMix()
                 Key.DirectionRight -> desk.seekMix(desk.cursorMs + bar)
                 Key.DirectionLeft -> desk.seekMix(desk.cursorMs - bar)
+                Key.Comma -> desk.nudge(-5)
+                Key.Period -> desk.nudge(5)
+                Key.LeftBracket -> desk.shiftBeat(-1)
+                Key.RightBracket -> desk.shiftBeat(1)
+                Key.L -> desk.toggleLoop()
+                Key.Enter -> if (desk.takeChanged) desk.keepTake() else return false
                 else -> return false
             }
             return true

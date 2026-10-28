@@ -116,8 +116,9 @@ class SetFlowTest {
         assertEquals(p.leadMs - (2 * p.barMsA).toInt(), a.sets.cursorMs)
         rule.onNodeWithText("DECK 1").assertExists()
         rule.onNodeWithText("▶ PLAY").assertExists()
-        // Simples por padrão: compassos e estilo à vista; o resto em AJUSTAR.
-        assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("SYNC FINO")).fetchSemanticsNodes().size)
+        // Na VIRADA: a mixagem (automático), o mixer de mexer e o encaixe da que entra à mão.
+        rule.onNodeWithText("AUTOMÁTICO").assertExists()
+        rule.onNodeWithText("ENCAIXE DO CH 2").performScrollTo().assertExists()
         rule.onRoot().captureRoboImage(File(out, "mobile-39-vertical-mix-simples.png").path)
         // No celular os ajustes ficam na aba AJUSTES (a VIRADA mostra o mixer e o passo); o PLAY fica fixo embaixo.
         rule.onNodeWithText("AJUSTES").performClick()
@@ -125,7 +126,6 @@ class SetFlowTest {
         rule.onRoot().captureRoboImage(File(out, "mobile-53-vertical-mix-ajustes.png").path)
         rule.onNodeWithText("AJUSTAR ▾").performScrollTo().performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("SYNC FINO").assertExists()
         assertTrue(a.sets.mixing!!.phaseLock, "sync fino ligado por padrão")
         // Faixas sintéticas com grade certa: nada a corrigir (o botão de grade fica apagado).
         assertTrue(kotlin.math.abs(p.measuredMs ?: 0.0) < 3, "medido ${p.measuredMs}")
@@ -135,7 +135,7 @@ class SetFlowTest {
         rule.onNodeWithText("VIRADA").performClick()
         a.sets.seekMix(p.leadMs + p.overlapMs * 3 / 4)
         rule.waitForIdle()
-        val lv = p.levelsAt(a.sets.cursorMs)
+        val lv = p.levelsAt(a.sets.cursorMs, a.sets.mixing!!)
         assertEquals(0f, lv.aLow)
         assertEquals(1f, lv.bLow)
         rule.onAllNodes(androidx.compose.ui.test.hasText("KILL")).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty(), "grave cortado aparece como KILL") }
@@ -217,8 +217,6 @@ class SetFlowTest {
         a.sets.openMix(a.sets.plan()[0])
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
         waitMix(a)
-        val f = assertNotNull(a.sets.mixFile)
-        org.robolectric.shadows.ShadowMediaPlayer.addMediaInfo(org.robolectric.shadows.util.DataSource.toDataSource(f.absolutePath), org.robolectric.shadows.ShadowMediaPlayer.MediaInfo(60_000, 0))
         rule.mainClock.autoAdvance = false
         a.sets.playMix()
         assertTrue(a.preview.isPlaying, "devia estar tocando")
@@ -289,7 +287,7 @@ class SetFlowTest {
         rule.onRoot().captureRoboImage(File(out, "mobile-47-vertical-mix-mixer.png").path)
         // A prévia segue a troca escolhida: perto do ponto do grave, os dois graves estão se cruzando (aos poucos).
         val p = a.sets.mixPreview!!
-        val lv = p.levelsAt(p.leadMs + (p.overlapMs * 0.75 - p.barMsA * 2).toInt())
+        val lv = p.levelsAt(p.leadMs + (p.overlapMs * 0.75 - p.barMsA * 2).toInt(), a.sets.mixing!!)
         assertTrue(lv.bLow in 0.1f..0.9f, "grave entrando aos poucos: ${lv.bLow}")
         // Guardado no plano e mostrado na linha da troca.
         assertEquals(tr, a.sets.plan().first { it.fromId == tr.fromId && it.toId == tr.toId })

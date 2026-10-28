@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -42,6 +43,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import os.deckbridge.logic.ColorWave
 import os.deckbridge.logic.waveStrip
 import os.deckbridge.manager.anlz.Cue
+import os.deckbridge.manager.mix.Ctl
 import os.deckbridge.manager.mix.Levels
 import os.deckbridge.manager.mix.MixPreview
 import os.deckbridge.manager.mix.MixStyle
@@ -100,17 +107,22 @@ private fun MixContent(app: StudioHost) {
     BackHandler { desk.closeMix() }
     val p = desk.mixPreview
     val playing = desk.mixPlaying
-    // Enquanto toca, a cabeça segue o player a cada quadro.
+    // Enquanto toca, a cabeça segue o som a cada quadro (e a passada da mão fecha quando o loop volta).
     LaunchedEffect(playing) {
         while (playing) {
             withFrameMillis { }
-            desk.cursorMs = app.preview.positionMs()
+            desk.tick()
         }
     }
     val ga = desk.grid(a)
     val gb = desk.grid(b)
     val pos = desk.cursorMs
-    val levels = p?.levelsAt(pos) ?: Levels()
+    // O que o mixer mostra: o automático, a mixagem em ensaio e a mão agora — o mesmo que se ouve.
+    val pass = desk.mixPlayer?.pass
+    @Suppress("UNUSED_EXPRESSION") desk.touchedNow
+    val levels = p?.levelsAt(pos, tr, desk.draftTake, pass) ?: Levels()
+    val bar = p?.relBar(pos) ?: 0.0
+    val hand: (Ctl) -> Boolean = { c -> pass?.at(c, bar) != null || desk.draftTake?.at(c, bar) != null }
     // Simples por padrão: ondas, PLAY, compassos e estilo. "AJUSTAR" abre o resto.
     var advanced by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf(MixPage.TURN) }
@@ -119,21 +131,23 @@ private fun MixContent(app: StudioHost) {
         val decks = @Composable { waveH: Dp ->
             DeckHeader(1, a, tr, p, pos, ga, master = true)
             DeckWave(p, p?.waveA, pos, ga, isA = true, height = waveH, tr = tr) { desk.seekMix(it) }
-            DeckWave(p, p?.waveB, pos, gb, isA = false, height = waveH, tr = tr) { desk.seekMix(it) }
+            DeckWave(p, p?.waveB, pos, gb, isA = false, height = waveH, tr = tr, shiftMs = p?.shiftMs(tr) ?: 0.0) { desk.seekMix(it) }
             DeckHeader(2, b, tr, p, pos, gb, master = false, from = a)
         }
         // O mixer (EQ e faders de cada canal) e o passo a passo da virada, sempre à vista: dá para ver o que a prévia
         // está fazendo e aprender a fazer igual na controladora.
         val mixer = @Composable {
-            MixerPanel(levels)
+            TakeBar(desk, tr, playing)
+            MixerPanel(levels, hand, enabled = p != null, onSet = { c, v -> desk.setControl(c, v) }, onRelease = { desk.releaseDeck(it) })
+            SyncPanel(desk, tr, p)
             StepsPanel(tr, p, pos)
             NotePanel(desk, tr)
         }
         val controls = @Composable {
             if (wide) mixer()
             Overview(p, pos) { desk.seekMix(it) }
-            Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced)
-            KeyHint(app, "Espaço toca / para  ·  ← → um compasso  ·  Esc fecha  ·  ? atalhos")
+            Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced, loop = desk.mixLoop, onLoop = { desk.toggleLoop() })
+            KeyHint(app, "Espaço toca / para  ·  ← → um compasso  ·  , . encaixe  ·  L repete  ·  ? atalhos")
             Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
         }
         Column(Modifier.fillMaxSize()) {
@@ -167,7 +181,7 @@ private fun MixContent(app: StudioHost) {
                     ) { Text("▾", color = Palette.mutedBright, fontSize = 14.sp) }
                 }
                 Box(Modifier.fillMaxWidth().border(BorderStroke(1.dp, Palette.line)).padding(vertical = 2.dp)) {
-                    Column { Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced) }
+                    Column { Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced, loop = desk.mixLoop, onLoop = { desk.toggleLoop() }) }
                 }
             }
         }
@@ -203,7 +217,7 @@ private fun DeckHeader(n: Int, t: TrackItem, tr: Transition, p: MixPreview?, pos
     val trackMs = when {
         p == null -> if (master) tr.outMs else tr.inMs
         master -> p.aAt(pos)
-        else -> p.bAt(pos)
+        else -> p.bAt(pos, tr)
     }
     val dur = g?.durationMs ?: (t.durationSeconds * 1000)
     // As duas tocam no master do set: TEMPO mostra quanto o pitch de cada uma anda até ele.
@@ -254,7 +268,7 @@ private fun DeckHeader(n: Int, t: TrackItem, tr: Transition, p: MixPreview?, pos
  * tocam juntas sombreado em azul e a cabeça branca. Arrastar ou tocar move a cabeça.
  */
 @Composable
-private fun DeckWave(p: MixPreview?, wave: ColorWave?, pos: Int, g: TrackGrid?, isA: Boolean, height: Dp, tr: Transition, onSeek: (Int) -> Unit) {
+private fun DeckWave(p: MixPreview?, wave: ColorWave?, pos: Int, g: TrackGrid?, isA: Boolean, height: Dp, tr: Transition, shiftMs: Double = 0.0, onSeek: (Int) -> Unit) {
     val start = pos - (WINDOW_MS * HEAD_AT).toInt()
     Row(Modifier.fillMaxWidth().height(height).padding(horizontal = 6.dp, vertical = 2.dp)) {
         Canvas(
@@ -285,8 +299,9 @@ private fun DeckWave(p: MixPreview?, wave: ColorWave?, pos: Int, g: TrackGrid?, 
             }
             if (wave != null && wave.columns > 0) {
                 val pixels = (w / 2).toInt().coerceAtLeast(1)
+                // A onda da que entra foi feita sem sync: o sync (fino e à mão) a desloca, como as batidas.
                 val strip = waveStrip(
-                    start / 1000.0, WINDOW_MS / 1000.0, pixels, wave.perSecond, wave.columns,
+                    (start + shiftMs) / 1000.0, WINDOW_MS / 1000.0, pixels, wave.perSecond, wave.columns,
                     { wave.height[it].toInt() and 0xFF }, { wave.rgb[it] },
                 )
                 val peak = (wave.height.maxOfOrNull { it.toInt() and 0xFF } ?: 255).coerceAtLeast(1) / 255f
@@ -305,7 +320,7 @@ private fun DeckWave(p: MixPreview?, wave: ColorWave?, pos: Int, g: TrackGrid?, 
             if (p != null && g != null) {
                 // Batidas da faixa levadas para o tempo da prévia; compassos contados a partir do ponto de saída.
                 for (beat in g.beats) {
-                    val at = if (isA) p.fromA(beat.timeMs) else p.fromB(beat.timeMs)
+                    val at = if (isA) p.fromA(beat.timeMs) else p.fromB(beat.timeMs, tr)
                     if (!isA && beat.timeMs < tr.inMs) continue
                     val bx = x(at)
                     if (bx < -2 || bx > w + 2) continue
@@ -316,7 +331,7 @@ private fun DeckWave(p: MixPreview?, wave: ColorWave?, pos: Int, g: TrackGrid?, 
                     drawLine(color, Offset(bx, h - len), Offset(bx, h), if (bar) 2.5f else 1.2f)
                 }
                 for (c in g.cues) {
-                    val at = if (isA) p.fromA(c.timeMs) else p.fromB(c.timeMs)
+                    val at = if (isA) p.fromA(c.timeMs) else p.fromB(c.timeMs, tr)
                     val cx = x(at)
                     if (cx < -8 || cx > w + 8 || (!isA && c.timeMs < tr.inMs)) continue
                     val color = if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.orange
@@ -384,77 +399,198 @@ private fun Overview(p: MixPreview?, pos: Int, onSeek: (Int) -> Unit) {
 }
 
 /**
- * O mixer da prévia, como o da controladora: em cada canal HI, MID e LOW (meio-dia é o normal; todo para a esquerda é
- * cortado, em vermelho) e o fader do canal; no meio, o crossfader (a prévia usa os faders de canal, ele fica no meio) e o
- * ECHO. Anda junto com a música.
+ * A mixagem desta troca: no automático, a sua (guardada) ou a sua mão ainda não guardada — com GUARDAR e DESFAZER. A mão
+ * é gravada enquanto toca e vira "a mixagem certa desta troca neste set"; depois de algumas, as trocas novas começam do
+ * seu jeito. Ver `docs/ux-mixagem.md`.
  */
 @Composable
-private fun MixerPanel(lv: Levels) {
-    Row(Modifier.fillMaxWidth().height(132.dp).padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        // Na prévia, agudos e médios andam juntos (um filtro só); o grave é separado.
-        MixerChannel("CH 1", lv.aHigh, lv.aLow, lv.aVol, lv.echo, Modifier.weight(1f))
-        Column(Modifier.width(64.dp).fillMaxHeight().rbPanel().padding(6.dp), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("ECHO", color = if (lv.echo) Palette.bg else Palette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(RbShape).background(if (lv.echo) Palette.blue else Palette.bg).padding(horizontal = 5.dp, vertical = 2.dp))
+private fun TakeBar(desk: SetDesk, tr: Transition, playing: Boolean) {
+    val changed = desk.takeChanged
+    val mine = desk.draftTake != null
+    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).rbPanel().padding(horizontal = 10.dp, vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                when {
+                    changed -> "● SUA MÃO"
+                    mine -> "SUA MIXAGEM"
+                    else -> "AUTOMÁTICO"
+                },
+                color = if (changed || mine) Palette.orange else Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp,
+            )
+            Text(
+                when {
+                    changed -> "  não guardada"
+                    mine -> "  esta troca toca assim"
+                    playing -> "  mexa no mixer: grava"
+                    else -> "  toque e mexa no mixer"
+                },
+                color = Palette.mutedBright, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            )
+            if (changed) {
+                TextButton(onClick = { desk.discardTake() }) { Text("DESFAZER", fontSize = 12.sp) }
+                TextButton(onClick = { desk.keepTake() }) { Text("GUARDAR", color = Palette.orange, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            } else if (mine) {
+                TextButton(onClick = { desk.autoTake() }) { Text("AUTOMÁTICO", fontSize = 12.sp) }
+            }
+        }
+        desk.habits()?.let { h ->
+            Text("As trocas novas já começam do seu jeito (${h.takes} mixagens suas)", color = Palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/**
+ * O mixer da prévia, como o da controladora, e de mexer: em cada canal HI, MID, LOW e FILTER (arrastar para cima ou para
+ * baixo), o ECHO e o fader (arrastar). Mexer vale na hora e grava ([SetDesk.setControl]); o que está na sua mão fica
+ * laranja, o automático azul. AUTO devolve o canal ao automático dali em diante.
+ */
+@Composable
+private fun MixerPanel(lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, onSet: (Ctl, Float) -> Unit, onRelease: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth().height(172.dp).padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        MixerChannel(0, lv, hand, enabled, onSet, onRelease, Modifier.weight(1f))
+        Column(Modifier.width(44.dp).fillMaxHeight().rbPanel().padding(4.dp), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("MIX", color = Palette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
-            Text("X-FADER", color = Palette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            Text("X-F", color = Palette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
             Canvas(Modifier.fillMaxWidth().height(16.dp)) {
                 drawRect(Palette.bg, Offset(0f, size.height / 2 - 2f), Size(size.width, 4f))
                 drawRect(Palette.line, Offset(size.width / 2 - 1f, 0f), Size(2f, size.height))
-                drawRect(Palette.text, Offset(size.width / 2 - 6f, 1f), Size(12f, size.height - 2f))
+                drawRect(Palette.text, Offset(size.width / 2 - 5f, 1f), Size(10f, size.height - 2f))
             }
         }
-        MixerChannel("CH 2", lv.bHigh, lv.bLow, lv.bVol, false, Modifier.weight(1f))
+        MixerChannel(1, lv, hand, enabled, onSet, onRelease, Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun MixerChannel(name: String, high: Float, low: Float, vol: Float, echo: Boolean, modifier: Modifier) {
-    Row(modifier.fillMaxHeight().rbPanel().padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+private fun MixerChannel(deck: Int, lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, onSet: (Ctl, Float) -> Unit, onRelease: (Int) -> Unit, modifier: Modifier) {
+    fun c(label: String) = Ctl.of(deck, label)
+    val anyHand = Ctl.entries.any { it.deck == deck && hand(it) }
+    Row(modifier.fillMaxHeight().rbPanel().padding(horizontal = 4.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(name, color = Palette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                if (echo) Text("ECHO", color = Palette.bg, fontSize = 8.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(RbShape).background(Palette.blue).padding(horizontal = 3.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("CH ${deck + 1}", color = Palette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                val echo = c("ECHO")
+                val on = lv[echo] >= 0.5f
+                SmallToggle("ECHO", on, hand(echo), enabled) { onSet(echo, if (on) 0f else 1f) }
+                if (anyHand) SmallToggle("AUTO", false, false, enabled) { onRelease(deck) }
             }
-            Knob("HI", high)
-            Knob("MID", high)
-            Knob("LOW", low)
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Knob(c("HI"), lv[c("HI")], hand(c("HI")), enabled, Modifier.weight(1f), onSet)
+                Knob(c("MID"), lv[c("MID")], hand(c("MID")), enabled, Modifier.weight(1f), onSet)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Knob(c("LOW"), lv[c("LOW")], hand(c("LOW")), enabled, Modifier.weight(1f), onSet)
+                Knob(c("FILTER"), lv[c("FILTER")], hand(c("FILTER")), enabled, Modifier.weight(1f), onSet, bipolar = true)
+            }
         }
-        Fader(vol, Modifier.width(26.dp).fillMaxHeight())
+        Fader(c("FADER"), lv[c("FADER")], hand(c("FADER")), enabled, Modifier.width(30.dp).fillMaxHeight(), onSet)
     }
 }
 
-/** Botão de EQ: o arco vai do corte total (7 horas) ao normal (meio-dia). Cortado, fica vermelho e diz KILL. */
+/** Um botão pequeno de liga e desliga no cabeçalho do canal (a área de toque cresce até 48 dp em volta). */
 @Composable
-private fun Knob(label: String, value: Float) {
+private fun SmallToggle(text: String, on: Boolean, hand: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val ink = when {
+        on -> Palette.bg
+        hand -> Palette.orange
+        else -> Palette.blue
+    }
+    Box(
+        Modifier.height(24.dp).clip(RbShape).background(if (on) (if (hand) Palette.orange else Palette.blue) else Palette.surfaceHigh)
+            .border(BorderStroke(1.dp, if (on) Palette.blue else Palette.line), RbShape).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 5.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(text, color = ink, fontSize = 9.sp, fontWeight = FontWeight.Bold) }
+}
+
+/** Quanto arrastar (dp) leva um botão de ponta a ponta. */
+private const val KNOB_TRAVEL_DP = 140f
+
+/**
+ * Botão de EQ (ou FILTER): o arco vai do corte total (7 horas) ao normal (meio-dia); no FILTER o meio é desligado e o arco
+ * sai do meio para um lado. Arrastar para cima abre, para baixo fecha. Cortado, fica vermelho e diz KILL; na sua mão,
+ * laranja.
+ */
+@Composable
+private fun Knob(c: Ctl, value: Float, hand: Boolean, enabled: Boolean, modifier: Modifier, onSet: (Ctl, Float) -> Unit, bipolar: Boolean = false) {
     val v = value.coerceIn(0f, 1f)
-    val kill = v < 0.02f
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        val ink = if (kill) Palette.danger else Palette.blue
+    val kill = !bipolar && v < 0.02f
+    val current by androidx.compose.runtime.rememberUpdatedState(v)
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    val name = "${c.label} CH ${c.deck + 1}"
+    Row(
+        modifier.height(44.dp)
+            .pointerInput(enabled, c) {
+                if (!enabled) return@pointerInput
+                var acc = 0f
+                detectVerticalDragGestures(onDragStart = { acc = current }) { change, dy ->
+                    change.consume()
+                    acc = (acc - dy / (KNOB_TRAVEL_DP * density)).coerceIn(0f, 1f)
+                    // O FILTER prende no meio (desligado) ao passar por ele.
+                    val out = if (bipolar && kotlin.math.abs(acc - 0.5f) < 0.03f) 0.5f else acc
+                    onSet(c, out)
+                }
+            }
+            .semantics {
+                contentDescription = name
+                progressBarRangeInfo = ProgressBarRangeInfo(v, 0f..1f)
+                if (enabled) setProgress { target -> onSet(c, target.coerceIn(0f, 1f)); true }
+            },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        val ink = when {
+            kill -> Palette.danger
+            hand -> Palette.orange
+            else -> Palette.blue
+        }
         val ring = Palette.line
         val dot = Palette.text
-        Canvas(Modifier.size(24.dp)) {
+        Canvas(Modifier.size(30.dp)) {
             val r = size.minDimension / 2 - 2f
-            val c = Offset(size.width / 2, size.height / 2)
-            val stroke = androidx.compose.ui.graphics.drawscope.Stroke(3f)
-            drawArc(ring, 135f, 270f, false, Offset(c.x - r, c.y - r), Size(2 * r, 2 * r), style = stroke)
-            drawArc(ink, 135f, 135f * v, false, Offset(c.x - r, c.y - r), Size(2 * r, 2 * r), style = stroke)
-            val a = Math.toRadians((135.0 + 135.0 * v))
-            drawLine(dot, c, Offset(c.x + (r - 2f) * kotlin.math.cos(a).toFloat(), c.y + (r - 2f) * kotlin.math.sin(a).toFloat()), 3f)
+            val o = Offset(size.width / 2, size.height / 2)
+            val stroke = androidx.compose.ui.graphics.drawscope.Stroke(3.5f)
+            drawArc(ring, 135f, 270f, false, Offset(o.x - r, o.y - r), Size(2 * r, 2 * r), style = stroke)
+            if (bipolar) {
+                // Do meio-dia para o lado do filtro.
+                drawArc(ink, 270f, 270f * (v - 0.5f), false, Offset(o.x - r, o.y - r), Size(2 * r, 2 * r), style = stroke)
+            } else {
+                drawArc(ink, 135f, 135f * v, false, Offset(o.x - r, o.y - r), Size(2 * r, 2 * r), style = stroke)
+            }
+            val ang = Math.toRadians(if (bipolar) 135.0 + 270.0 * v else 135.0 + 135.0 * v)
+            drawLine(dot, o, Offset(o.x + (r - 2f) * kotlin.math.cos(ang).toFloat(), o.y + (r - 2f) * kotlin.math.sin(ang).toFloat()), 3f)
         }
-        Text(if (kill) "KILL" else label, color = if (kill) Palette.danger else Palette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (kill) "KILL" else if (bipolar) when { v < 0.47f -> "LPF"; v > 0.53f -> "HPF"; else -> c.label } else c.label,
+            color = if (kill) Palette.danger else if (hand) Palette.orange else Palette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+        )
     }
 }
 
-/** Fader do canal, de pé: em cima é o volume cheio. */
+/** Fader do canal, de pé: em cima é o volume cheio. Arrastar ou tocar põe onde o dedo está. */
 @Composable
-private fun Fader(value: Float, modifier: Modifier) {
+private fun Fader(c: Ctl, value: Float, hand: Boolean, enabled: Boolean, modifier: Modifier, onSet: (Ctl, Float) -> Unit) {
     val v = value.coerceIn(0f, 1f)
     val track = Palette.bg
     val line = Palette.line
-    val cap = Palette.text
-    val fill = Palette.blue
-    Canvas(modifier) {
+    val cap = if (hand) Palette.orange else Palette.text
+    val fill = if (hand) Palette.orange else Palette.blue
+    val name = "FADER CH ${c.deck + 1}"
+    Canvas(
+        modifier
+            .pointerInput(enabled, c) {
+                if (!enabled) return@pointerInput
+                fun at(y: Float) = (1 - (y - 6f) / (size.height - 12f)).coerceIn(0f, 1f)
+                detectVerticalDragGestures(onDragStart = { o -> onSet(c, at(o.y)) }) { change, _ ->
+                    change.consume()
+                    onSet(c, at(change.position.y))
+                }
+            }
+            .semantics {
+                contentDescription = name
+                progressBarRangeInfo = ProgressBarRangeInfo(v, 0f..1f)
+                if (enabled) setProgress { target -> onSet(c, target.coerceIn(0f, 1f)); true }
+            },
+    ) {
         val w = size.width
         val h = size.height
         val capH = 12f
@@ -464,6 +600,44 @@ private fun Fader(value: Float, modifier: Modifier) {
         val y = (1 - v) * usable
         drawRect(fill, Offset(w / 2 - 3f, y + capH / 2), Size(6f, h - y - capH / 2))
         drawRect(cap, Offset(2f, y), Size(w - 4f, capH))
+    }
+}
+
+/**
+ * O encaixe da que entra, à mão e na hora: quando a marcação errou um pouco (o bumbo "galopa") ou caiu na batida errada.
+ * ◀ atrasa e ▶ adianta 5 ms (como frear ou empurrar o prato); ±1 BAT desloca uma batida inteira. Diferenças de ~10 ms já
+ * se ouvem como bumbo duplo (Hirsh 1959; Repp 2005): o passo de 5 ms acha o encaixe sem passar dele.
+ */
+@Composable
+private fun SyncPanel(desk: SetDesk, tr: Transition, p: MixPreview?) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).rbPanel().padding(horizontal = 6.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("ENCAIXE DO CH 2", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            val m = p?.measuredMs
+            Text(
+                "medido " + (m?.let { "%+.0f ms".format(it) } ?: "—"),
+                color = if (m != null && kotlin.math.abs(m) >= 8) Palette.orange else Palette.mutedBright, fontSize = 11.sp, fontFamily = Mono,
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            PadButton("-1 BAT", Modifier.weight(1f), enabled = p != null) { desk.shiftBeat(-1) }
+            PadButton("◀ 5 ms", Modifier.weight(1f), enabled = p != null) { desk.nudge(-5) }
+            Column(
+                Modifier.weight(1.3f).height(38.dp).border(BorderStroke(1.dp, if (tr.nudgeMs != 0 || tr.beatShift != 0) Palette.orange else Palette.line), RbShape),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+            ) {
+                Text("%+d ms".format(tr.nudgeMs), color = if (tr.nudgeMs != 0) Palette.orange else Palette.mutedBright, fontSize = 11.sp, lineHeight = 12.sp, fontFamily = Mono, maxLines = 1)
+                Text("%+d bat".format(tr.beatShift), color = if (tr.beatShift != 0) Palette.orange else Palette.muted, fontSize = 9.sp, lineHeight = 10.sp, fontFamily = Mono, maxLines = 1)
+            }
+            PadButton("5 ms ▶", Modifier.weight(1f), enabled = p != null) { desk.nudge(5) }
+            PadButton("+1 BAT", Modifier.weight(1f), enabled = p != null) { desk.shiftBeat(1) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            PadButton("SYNC FINO", Modifier.weight(1.3f), on = tr.phaseLock) { desk.editMix(tr.copy(phaseLock = !tr.phaseLock)) }
+            val m = p?.measuredMs
+            PadButton("GRADE D2", Modifier.weight(1f), enabled = m != null && kotlin.math.abs(m) >= 3) { desk.fixGridOfIncoming() }
+            PadButton("ZERAR", Modifier.weight(1f), enabled = tr.nudgeMs != 0 || tr.beatShift != 0) { desk.resetSync() }
+        }
     }
 }
 
@@ -529,7 +703,7 @@ private fun NotePanel(desk: SetDesk, tr: Transition) {
 
 /** Fileira de transporte: pular compassos e PLAY/PAUSE grande, verde como no player. */
 @Composable
-private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSeek: (Int) -> Unit, pos: Int, jumps: Boolean) {
+private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSeek: (Int) -> Unit, pos: Int, jumps: Boolean, loop: Boolean = false, onLoop: () -> Unit = {}) {
     val bar = p?.barMsA ?: 2000.0
     Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         PadButton("◀◀ 4", Modifier.weight(1f)) { onSeek(pos - (4 * bar).toInt()) }
@@ -543,6 +717,8 @@ private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSe
         ) { Text(if (playing) "❚❚ PAUSE" else "▶ PLAY", color = if (playing) Palette.text else Palette.playInk, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         PadButton("1 ▶", Modifier.weight(1f)) { onSeek(pos + bar.toInt()) }
         PadButton("4 ▶▶", Modifier.weight(1f)) { onSeek(pos + (4 * bar).toInt()) }
+        // Repetir a troca: ensaiar de novo, mexendo, até achar o jeito.
+        PadButton("LOOP", Modifier.weight(0.9f), on = loop, enabled = p != null) { onLoop() }
     }
     if (jumps) Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         PadButton("CUE SAÍDA", Modifier.weight(1f)) { if (p != null) onSeek(p.leadMs - (2 * bar).toInt()) }
@@ -661,17 +837,6 @@ private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition
                 val auto = desk.plan().firstOrNull { it.fromId == tr.fromId && it.toId == tr.toId }
                 if (auto != null) edit(auto.copy(masterTempo = tr.masterTempo))
             }
-        }
-        val p = desk.mixPreview
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            RowLabel("SYNC")
-            PadButton("SYNC FINO", Modifier.weight(1.4f), on = tr.phaseLock) { edit(tr.copy(phaseLock = !tr.phaseLock)) }
-            // Quanto os bumbos estavam fora com as grades alinhadas (o que o sync do player faria).
-            val m = p?.measuredMs
-            Box(Modifier.weight(1f).height(38.dp).border(BorderStroke(1.dp, if (m != null && kotlin.math.abs(m) >= 8) Palette.orange else Palette.line), RbShape), contentAlignment = Alignment.Center) {
-                Text(m?.let { "%+.0f ms".format(it) } ?: "—", color = if (m != null && kotlin.math.abs(m) >= 8) Palette.orange else Palette.mutedBright, fontSize = 13.sp, fontFamily = Mono)
-            }
-            PadButton("GRADE D2", Modifier.weight(1.2f), enabled = m != null && kotlin.math.abs(m) >= 3) { desk.fixGridOfIncoming() }
         }
         Spacer(Modifier.height(12.dp))
     }

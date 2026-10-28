@@ -154,6 +154,10 @@ Fontes e razões: `docs/ux-cognicao.md`.
 - **Duplicar set** (⋯): uma cópia "(v2)" para testar sem mexer no original.
 - Spotify: não integrado. Os termos do Spotify proíbem mixar o conteúdo dele em outro app, e a API nova não dá BPM nem tom.
 
+## Mixagem com a mão do DJ (0.23.0)
+
+No MIX a prévia é mixada ao vivo: o mixer da tela é de mexer (HI, MID, LOW, FILTER, ECHO e fader de cada canal), e o que a mão faz enquanto toca vira a mixagem da troca (GUARDAR / DESFAZER / AUTOMÁTICO). ENCAIXE DO CH 2 ajusta o sync à mão (±5 ms, ±1 batida); LOOP repete a troca. Com três mixagens guardadas as trocas novas começam do jeito do DJ. Detalhes e fontes: `docs/ux-mixagem.md`.
+
 ## Teste de áudio
 
 MENU → APARELHO → **Teste de áudio**: lê 30 s de uma música da biblioteca pelo decodificador do Android e monta uma

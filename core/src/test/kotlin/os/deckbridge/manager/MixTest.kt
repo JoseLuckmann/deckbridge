@@ -179,8 +179,10 @@ class MixTest {
         assertEquals(0.5f, lv.bLow, 0.01f)
         at(16.0, Transition.Pace.NORMAL, swap = 0.25, swapBars = 16)
         assertEquals(1f, lv.bLow)
-        // Rápida: agudos da que entra já cheios num quarto do caminho até a troca; a que sai só some no último oitavo.
+        // Rápida: o fader da que entra já em cima num quarto do caminho até a troca (o HI fica no meio-dia: quem sobe é o
+        // fader); a que sai só some no último oitavo.
         at(4.0, Transition.Pace.FAST)
+        assertEquals(1f, lv.bVol, 0.001f)
         assertEquals(1f, lv.bHigh)
         at(26.0, Transition.Pace.FAST)
         assertEquals(1f, lv.aVol)
@@ -206,7 +208,10 @@ class MixTest {
     @Test fun `niveis do mixer por estilo`() {
         val lv = os.deckbridge.manager.mix.Levels()
         MixRenderer.levels(MixStyle.BASS_SWAP, 1000.0, 8000.0, 2000.0, lv)
-        assertEquals(1f, lv.aLow); assertEquals(0f, lv.bLow); assertEquals(0.25f, lv.bHigh, 0.01f)
+        // A que entra sobe pelo fader (LOW fechado, HI no meio-dia); a que sai já abre espaço tirando agudo.
+        assertEquals(1f, lv.aLow); assertEquals(0f, lv.bLow); assertEquals(1f, lv.bHigh)
+        assertEquals(0.707f, lv.bVol, 0.01f)
+        assertTrue(lv.aHigh < 1f && lv.aHigh > 0.5f, "agudo da que sai ${lv.aHigh}")
         MixRenderer.levels(MixStyle.BASS_SWAP, 5000.0, 8000.0, 2000.0, lv)
         assertEquals(0f, lv.aLow); assertEquals(1f, lv.bLow)
         MixRenderer.levels(MixStyle.CUT, -100.0, 8000.0, 2000.0, lv)
@@ -371,13 +376,15 @@ class MixMoreTest {
 
     @Test fun `os passos da virada seguem o que a previa faz`() {
         val g = os.deckbridge.manager.mix.MixGuide
-        // Troca de grave de 32, grave no meio, de uma vez: entra, abre agudos até o 16, troca no 16, baixa o fader do 24 ao 32.
+        // Troca de grave de 32, grave no meio, de uma vez: entra, sobe o fader até o 8, tira agudo do CH 1 até o 16, troca
+        // no 16, baixa o fader do 24 ao 32.
         val tr = Transition(1, 2, 0, 0, 32, MixStyle.BASS_SWAP)
         val s = g.steps(tr)
-        assertEquals(listOf(0.0, 0.0, 16.0, 24.0), s.map { it.fromBar })
-        assertTrue(s[2].instant && s[2].text.startsWith("Troca o grave"))
+        assertEquals(listOf(0.0, 0.0, 0.0, 16.0, 24.0), s.map { it.fromBar })
+        assertEquals(8.0, s.first { it.text.startsWith("Sobe o fader") }.toBar)
+        assertTrue(s[3].instant && s[3].text.startsWith("Troca o grave"))
         val (now, next) = g.at(s, 16.5)
-        assertEquals(listOf(s[2]), now)
+        assertEquals(listOf(s[3]), now)
         assertEquals(24.0, next?.fromBar)
         // Conferido contra os níveis: no 16 o grave já passou; no 24 o fader do CH 1 começa a descer.
         val lv = os.deckbridge.manager.mix.Levels()
