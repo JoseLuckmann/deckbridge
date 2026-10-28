@@ -75,8 +75,12 @@ class MainActivity : ComponentActivity() {
         val openLocal = intent?.getBooleanExtra(os.deckbridge.manager.mobile.Modes.EXTRA_OPEN_LOCAL, false) ?: false
         // A entrada do app (StartActivity) volta neste modo da próxima vez.
         os.deckbridge.manager.mobile.Modes.remember(this, os.deckbridge.manager.mobile.Modes.Mode.DJ)
+        val toLibrary = { os.deckbridge.manager.mobile.Modes.switchTo(this, os.deckbridge.manager.mobile.Modes.Mode.LIBRARY) }
         setContent {
-            App(screen, play, midi, openLocal)
+            // O MENU do DJ leva ao modo Biblioteca (que roda no processo dele; este é encerrado).
+            androidx.compose.runtime.CompositionLocalProvider(LocalModeSwitch provides ("BIBLIOTECA ›" to toLibrary)) {
+                App(screen, play, midi, openLocal)
+            }
         }
     }
 }
@@ -138,6 +142,7 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean, openLocal: B
     PerformanceHub.tempo = tempo
     val handler = remember { Handler(Looper.getMainLooper()) }
     val oneLibrary = remember { AndroidOneLibrary(context) }
+    val host = remember { AndroidDjHost(context) }
 
     fun describe(bytes: ByteArray, simulated: Boolean) {
         val parsed = assembler.push(bytes)
@@ -203,6 +208,14 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean, openLocal: B
         }.start()
     }
 
+    // Autorizar o pendrive: o seletor do Android, só leitura (permissão persistente).
+    val tree = androidx.activity.compose.rememberLauncherForActivityResult(OpenTreeReadOnly()) { uri ->
+        if (uri != null) {
+            runCatching { keepReadPermission(context, uri) }
+            openVolume(DocumentVolume(context, uri, "pendrive autorizado"))
+        }
+    }
+
     // Biblioteca autorizada antes: abre sozinha ao iniciar, com o pendrive já ligado. Sem pendrive (ou vindo do modo
     // Biblioteca), abre a biblioteca do aparelho, só para ler: o modo DJ não escreve nela (ADR-0012).
     LaunchedEffect(Unit) {
@@ -233,7 +246,9 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean, openLocal: B
                 PerformanceHub.controllerConnected = true
                 // Porta de saída do app: acende os LEDs da controladora.
                 inputs.firstOrNull()?.let { index ->
-                    PerformanceHub.ledPort = runCatching { device.openInputPort(index) }.getOrNull()
+                    PerformanceHub.ledPort = runCatching { device.openInputPort(index) }.getOrNull()?.let { port ->
+                        { bytes: ByteArray -> port.send(bytes, 0, bytes.size) }
+                    }
                     PerformanceHub.ledEpoch += 1
                 }
                 outputs.forEach { index ->
@@ -350,11 +365,8 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean, openLocal: B
                 },
                 usbLabel = usbLabel.ifBlank { if (catalog?.simulated == true) "USB simulado" else "" },
                 browsePulse = browsePulse,
-                onAuthorize = { uri ->
-                    if (uri == null) return@DeckPage
-                    runCatching { keepReadPermission(context, uri) }
-                    openVolume(DocumentVolume(context, uri, "pendrive autorizado"))
-                },
+                onAuthorize = { tree.launch(removableInitialUri(context)) },
+                host = host,
                 onSimulate = {
                     loading = true
                     Thread {

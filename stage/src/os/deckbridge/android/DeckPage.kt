@@ -1,8 +1,5 @@
 package os.deckbridge.android
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -14,7 +11,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -100,10 +96,11 @@ fun DeckPage(
     onPage: (Int) -> Unit = {},
     usbLabel: String = "",
     browsePulse: Int = 0,
-    onAuthorize: (Uri?) -> Unit = {},
+    onAuthorize: () -> Unit = {},
     onSimulate: () -> Unit = {},
+    /** O que a plataforma dá ao modo DJ (Android ou computador; ADR-0012). */
+    host: DjHost,
 ) {
-    val context = LocalContext.current
     val liveCatalog = rememberUpdatedState(catalog)
     // Detalhe de onda refeito na carga quando o cache da pasta só trouxe a prévia (ver lacksDetail).
     val detailWaves = remember { androidx.compose.runtime.mutableStateMapOf<Int, os.deckbridge.logic.RbAnalysis>() }
@@ -158,9 +155,9 @@ fun DeckPage(
     var recClock by remember { mutableStateOf("00:00") }
     var recLevel by remember { mutableFloatStateOf(0f) }
     var recWarn by remember { mutableStateOf<String?>(null) }
-    var aacWriter by remember { mutableStateOf<AacWriter?>(null) }
-    var pendingExport by remember { mutableStateOf<String?>(null) }
-    val historyDb = remember { HistoryDb(context) }
+    // Como parar o AAC que grava ao lado do WAV (só onde a plataforma codifica AAC).
+    var aacWriter by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val historyDb = host.history
     val onAir = remember { OnAirLog() }
     val liveFaces = rememberUpdatedState(faces)
     val liveVols = rememberUpdatedState(volA to volB)
@@ -168,18 +165,7 @@ fun DeckPage(
     val liveRecording = rememberUpdatedState(recording)
     val liveAac = rememberUpdatedState(aacWriter)
     val liveSettings = rememberUpdatedState(settings)
-    val exportDoc = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
-        val text = pendingExport
-        if (uri != null && text != null) {
-            if (exportTouchesLibraryVolume(context, uri)) {
-                // O seletor já criou o arquivo vazio: remove para o pendrive ficar como estava e não grava nada nele.
-                runCatching { android.provider.DocumentsContract.deleteDocument(context.contentResolver, uri) }
-                note = "Exportação recusada: o destino é o pendrive da biblioteca (só leitura). Escolha outro lugar."
-            } else {
-                context.contentResolver.openOutputStream(uri)?.use { stream -> stream.write(text.toByteArray(Charsets.UTF_8)) }
-            }
-        }
-    }
+    val exportText = host.rememberTextExport { note = it }
     var rmx by remember { mutableStateOf(RmxState()) }
     var overlay by remember { mutableStateOf("") }
     var nav by remember { mutableStateOf("") }
@@ -193,7 +179,6 @@ fun DeckPage(
     val scope = rememberCoroutineScope()
     val cueBanks = remember { Array(2) { Array(8) { FloatArray(8) { -1f } } } }
     val liveRmx = rememberUpdatedState(rmx)
-    val tree = rememberLauncherForActivityResult(OpenTreeReadOnly()) { uri -> onAuthorize(uri) }
 
     fun pushMix() {
         NativeEngine.setMix(volA, volB, pitchA, pitchB, cross, pflA, pflB)
@@ -235,12 +220,13 @@ fun DeckPage(
                 }
             }
             val loop = activeLoop(analysis)
+            var detail: os.deckbridge.logic.RbAnalysis? = null
             val loadedPcm = withContext(Dispatchers.Default) {
                 val bytes = source.read(track.filePath)
                 if (bytes == null) {
                     null to "Áudio ausente para ${track.title}."
                 } else {
-                    val decoded = decodeTrackAudio(context, track.fileName.ifBlank { track.filePath }, bytes)
+                    val decoded = host.decodeAudio(track.fileName.ifBlank { track.filePath }, bytes)
                     if (decoded == null) {
                         null to "Não decodifiquei ${track.fileName}. Nesta versão o deck aceita WAV, MP3, FLAC e AAC."
                     } else {
@@ -255,18 +241,20 @@ fun DeckPage(
                                 val left = if (decoded.left.size == decoded.frames) decoded.left else decoded.left.copyOf(decoded.frames)
                                 analysis.withDetail(os.deckbridge.logic.wavesFromPcm(left, decoded.sampleRate))
                             }
-                            withContext(Dispatchers.Main) {
-                                // Só o detalhe das faixas que estão nos decks fica na memória.
-                                val keep = liveLoaded.value.mapNotNull { it?.id }.toSet() + track.id
-                                detailWaves.keys.retainAll(keep)
-                                detailWaves[track.id] = filled
-                            }
+                            detail = filled
                         }
                         // Só o aviso de faixa cortada sai daqui: o PCM em Java (127 MB numa faixa de 6 min) já está no
                         // motor e fica livre para o GC agora, não no fim da carga.
                         decoded.truncated to ""
                     }
                 }
+            }
+            // De volta ao contexto da tela (sem depender do "Main" de cada plataforma): só o detalhe das faixas que
+            // estão nos decks fica na memória.
+            detail?.let { filled ->
+                val keep = liveLoaded.value.mapNotNull { it?.id }.toSet() + track.id
+                detailWaves.keys.retainAll(keep)
+                detailWaves[track.id] = filled
             }
             val truncated = loadedPcm.first
             if (truncated == null) {
@@ -454,7 +442,7 @@ fun DeckPage(
 
     fun toggleRecord() {
         if (recording) {
-            aacWriter?.stop()
+            aacWriter?.invoke()
             aacWriter = null
             NativeEngine.recordStop()
             recording = false
@@ -463,7 +451,7 @@ fun DeckPage(
             val entries = tracklist.entries.toList()
             val stamp = recStamp
             if (entries.isNotEmpty() && stamp.isNotEmpty()) {
-                val dir = java.io.File(context.filesDir, "recordings")
+                val dir = java.io.File(host.filesDir, "recordings")
                 val audioName = if (settings.recordAac) "set-$stamp.m4a" else "set-$stamp.wav"
                 runCatching {
                     java.io.File(dir, "set-$stamp.cue").writeText(cueSheet(audioName, "Set $stamp", entries))
@@ -473,7 +461,7 @@ fun DeckPage(
             }
             return
         }
-        val dir = java.io.File(context.filesDir, "recordings").apply { mkdirs() }
+        val dir = java.io.File(host.filesDir, "recordings").apply { mkdirs() }
         val warn = storageWarning(dir.usableSpace)
         if (warn != null) {
             recWarn = warn
@@ -492,20 +480,18 @@ fun DeckPage(
         recStartMs = System.currentTimeMillis()
         tracklist.reset()
         if (settings.recordAac) {
-            val writer = AacWriter(java.io.File(dir, "set-$stamp.m4a"), 48000) {
+            aacWriter = host.startAac(java.io.File(dir, "set-$stamp.m4a"), 48000) {
                 val buffer = FloatArray(1024)
                 val frames = NativeEngine.recordPull(buffer)
                 if (frames <= 0) FloatArray(0) else buffer.copyOf(frames * 2)
             }
-            aacWriter = writer
-            writer.start()
         }
     }
 
     fun persist(next: PlayerSettings) {
         settings = next
         quantize = next.quantize
-        scope.launch { SettingsStore.save(context, next) }
+        scope.launch { host.saveSettings(next) }
         NativeEngine.setBuffer(next.bufferFrames)
     }
 
@@ -813,7 +799,7 @@ fun DeckPage(
         PerformanceHub.onAction = { action -> onPerformance(action) }
         onDispose {
             PerformanceHub.onAction = null
-            liveAac.value?.stop()
+            liveAac.value?.invoke()
             NativeEngine.recordStop()
             NativeEngine.transport(0, false)
             NativeEngine.transport(1, false)
@@ -851,7 +837,7 @@ fun DeckPage(
     }
 
     LaunchedEffect(Unit) {
-        SettingsStore.flow(context).collect { incoming ->
+        host.settings().collect { incoming ->
             settings = incoming
             quantize = incoming.quantize
             zoom = listOf(zoomFromBars(incoming.zoomBars), zoomFromBars(incoming.zoomBars))
@@ -970,11 +956,10 @@ fun DeckPage(
             delay(4_000)
             val tracks = liveLoaded.value
             if (tracks.any { it != null }) {
-                SessionStore.save(
-                    context,
+                host.saveSession(
                     (0..1).map { deck ->
                         tracks.getOrNull(deck)?.let { track ->
-                            SessionStore.Deck(track.filePath, NativeEngine.position(deck), faces[deck].pitch)
+                            SessionDeck(track.filePath, NativeEngine.position(deck), faces[deck].pitch)
                         }
                     },
                 )
@@ -987,7 +972,7 @@ fun DeckPage(
         val library = catalog ?: return@LaunchedEffect
         if (sessionRestored || loaded.any { it != null }) return@LaunchedEffect
         sessionRestored = true
-        val saved = SessionStore.read(context)
+        val saved = host.readSession()
         var restoredAny = false
         saved.forEachIndexed { deck, item ->
             val track = item?.let { entry -> library.tracks.firstOrNull { it.filePath == entry.path } } ?: return@forEachIndexed
@@ -1204,7 +1189,7 @@ fun DeckPage(
         status = note,
         warnings = buildList {
             if (!controllerUp && jvmBanner.isNullOrBlank()) add("SEM DDJ-400 (MIDI)")
-            if (deviceId <= 0 && jvmBanner.isNullOrBlank()) add("SAÍDA: TABLET, SEM USB")
+            if (deviceId <= 0 && jvmBanner.isNullOrBlank()) add("SAÍDA: ${host.deviceName}, SEM USB")
             audioWarning?.let { add(it) }
         },
         onPage = onPage,
@@ -1223,7 +1208,7 @@ fun DeckPage(
                     val start = fraction.toDouble() * track.durationSeconds.coerceAtLeast(0)
                     val pcm = withContext(Dispatchers.Default) {
                         source.read(track.filePath)?.let { bytes ->
-                            decodeTrackSegment(context, track.fileName.ifBlank { track.filePath }, bytes, start, PREVIEW_SECONDS)
+                            host.decodeSegment(track.fileName.ifBlank { track.filePath }, bytes, start, PREVIEW_SECONDS)
                         }
                     }
                     if (pcm == null) {
@@ -1295,7 +1280,7 @@ fun DeckPage(
             quantize = next
             persist(settings.copy(quantize = next))
         },
-        onAuthorize = { tree.launch(removableInitialUri(context)) },
+        onAuthorize = onAuthorize,
         onSimulate = onSimulate,
         onBrowseMove = { steps ->
             val place = browse
@@ -1382,8 +1367,7 @@ fun DeckPage(
         onRecord = { toggleRecord() },
         historyRows = historyRows,
         onHistoryExport = { text ->
-            pendingExport = text
-            exportDoc.launch(if (text.startsWith("#EXTM3U")) "deckbridge-set.m3u8" else "deckbridge-set.csv")
+            exportText(if (text.startsWith("#EXTM3U")) "deckbridge-set.m3u8" else "deckbridge-set.csv", text)
         },
         onLoad = { track, deck ->
             val source = volume
@@ -1397,7 +1381,7 @@ fun DeckPage(
         },
         artworkOf = { track ->
             val source = volume
-            if (track == null || source == null) null else ArtworkStore.thumb(context.cacheDir, source, track)
+            if (track == null || source == null) null else host.artwork(source, track)
         },
         onDeckAction = ::deckAction,
         onMatchKey = { key ->

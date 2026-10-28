@@ -32,10 +32,33 @@ fun chooseAudioFiles(): List<File> {
     return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFiles.toList() else emptyList()
 }
 
-/** `deckbridge-manager [PASTA_DO_PENDRIVE]`. Sem argumento, a tela de boas-vindas lista os pendrives encontrados. */
-fun main(args: Array<String>) = application {
+/**
+ * `deckbridge-manager [PASTA_DO_PENDRIVE]`. Sem argumento, a tela de boas-vindas lista os pendrives encontrados.
+ * `deckbridge-manager --dj [PASTA]`: o modo DJ (ADR-0012), num processo só dele; sem pasta, a biblioteca do computador.
+ */
+fun main(args: Array<String>) {
+    if (args.firstOrNull() == "--dj") return os.deckbridge.dj.djMain(args.drop(1))
+    libraryMain(args)
+}
+
+/** Reabre o programa no outro modo e sai deste: a memória deste modo volta inteira (como no celular). */
+fun relaunch(args: List<String>) {
+    val self = ProcessHandle.current().info()
+    val command = self.command().orElse(null)
+    val classpath = System.getProperty("java.class.path")
+    val library = System.getProperty("java.library.path")
+    val cmd = if (command != null && command.endsWith("java")) {
+        listOf(command, "-Djava.library.path=$library", "-cp", classpath, "os.deckbridge.manager.MainKt") + args
+    } else {
+        listOfNotNull(command) + args
+    }
+    ProcessBuilder(cmd).inheritIO().start()
+    kotlin.system.exitProcess(0)
+}
+
+fun libraryMain(args: Array<String>) = application {
     val model = remember { ManagerModel() }
-    val ui = remember { UiState().apply { chooser = ::chooseFolder; chooseFiles = ::chooseAudioFiles } }
+    val ui = remember { UiState().apply { chooser = ::chooseFolder; chooseFiles = ::chooseAudioFiles; toDj = { relaunch(listOf("--dj")) } } }
     LaunchedEffect(Unit) { args.firstOrNull()?.let { model.open(File(it)) } }
     Window(
         onCloseRequest = {

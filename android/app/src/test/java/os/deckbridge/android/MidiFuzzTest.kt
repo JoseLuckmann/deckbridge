@@ -74,6 +74,7 @@ class MidiFuzzTest {
                         loaded = tracks,
                         onLoaded = { deck, track -> tracks = tracks.toMutableList().also { it[deck] = track } },
                         jvmBanner = "fuzz",
+                        host = AndroidDjHost(activity),
                     )
                 }
             },

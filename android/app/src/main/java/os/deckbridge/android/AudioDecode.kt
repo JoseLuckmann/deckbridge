@@ -32,8 +32,6 @@ fun decodeTrackAudio(context: Context, name: String, bytes: ByteArray): DecodedP
     return decodeCompressed(context, bytes, suffix)
 }
 
-/** Duração do trecho da pré-escuta: toca daí e para sozinho. */
-const val PREVIEW_SECONDS = 30.0
 
 /** Só um trecho da faixa, para a pré-escuta: WAV pela fatia de bytes; MP3/FLAC/AAC com seek e limite de amostras. */
 fun decodeTrackSegment(context: Context, name: String, bytes: ByteArray, startSec: Double, seconds: Double): DecodedPcm? {
@@ -51,8 +49,6 @@ fun decodeTrackSegment(context: Context, name: String, bytes: ByteArray, startSe
     return decodeCompressed(context, bytes, suffix, (startSec * 1_000_000).toLong().coerceAtLeast(0L), seconds)
 }
 
-/** Limite de uma faixa na memória: 15 minutos (cerca de 330 MB de decodificação estéreo a 48 kHz). */
-const val MAX_TRACK_MINUTES = 15
 
 private fun decodeCompressed(context: Context, bytes: ByteArray, suffix: String, startUs: Long = 0L, seconds: Double = 0.0): DecodedPcm? {
     val file = File.createTempFile("deckbridge-", suffix, context.cacheDir)

@@ -15,6 +15,21 @@ cd desktop
 
 Precisa de JDK 21. O pendrive tem de ter sido exportado pelo rekordbox (`PIONEER/rekordbox/export.pdb`). Pendrive vazio, criado do zero, não é suportado (ADR-0009, item 7).
 
+## Modo DJ (ADR-0012)
+
+O mesmo programa tem o modo DJ: as telas e a lógica dos decks do celular (`stage/src`), o motor C++ do app (`engine.cpp`, com o Oboe trocado pelo ALSA do Pi) e a DDJ-400 pelo `javax.sound.midi`. Um modo por vez: o ⋯ da Biblioteca → **Modo DJ ›** reabre o programa só com o DJ, e o MENU do DJ → **BIBLIOTECA ›** volta (o processo do modo que sai é encerrado).
+
+```sh
+./gradlew run --args=--dj                       # a biblioteca do computador (~/.deckbridge/library), só leitura
+./gradlew run --args="--dj /media/eu/PENDRIVE"  # um pendrive, só leitura
+```
+
+- Só Linux por enquanto (ALSA; precisa de `g++` e `libasound2-dev` para compilar o motor, o Gradle faz isso sozinho). Som pela saída padrão do sistema; `DECKBRIDGE_ALSA_DEVICE=hw:CARD=...` escolhe outra placa (por exemplo a da DDJ-400).
+- Por enquanto pelo `./gradlew run`: o pacote AppImage ainda não leva a biblioteca do motor.
+- MP3, FLAC e AAC pelo `ffmpeg` do sistema; WAV direto.
+- Ajustes, sessão e histórico em `~/.deckbridge/dj`. Gravação do set em WAV (o AAC é só no celular).
+- `BLOCKED_HARDWARE`: nada disso tocou com a DDJ-400 ligada no computador (MIDI, LEDs, saída de 4 canais) nem foi ouvido numa placa de som; os testes usam o PCM `null` do ALSA.
+
 ## O que dá para fazer
 
 | Área | Ações |

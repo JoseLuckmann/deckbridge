@@ -70,6 +70,9 @@ class UiState {
     /** As telas de montar set (as mesmas do celular), ligadas à biblioteca aberta. */
     var studio: DesktopStudio? = null
 
+    /** Vai para o modo DJ (ADR-0012): reabre o programa só com o DJ. Null nos testes. */
+    var toDj: (() -> Unit)? = null
+
     /** Preferências e pasta dos planos de set (os testes usam outras, para não mexer nas do usuário). */
     var studioPrefs: java.util.prefs.Preferences = java.util.prefs.Preferences.userRoot().node("deckbridge/biblioteca")
     var studioSetsHome: File = File(System.getProperty("user.home"), ".deckbridge/sets")
@@ -752,7 +755,14 @@ fun QuickFilter.shortTitle() = when (this) {
 @Composable
 private fun MoreMenu(model: ManagerModel, ui: UiState) {
     Column(Modifier.padding(top = 34.dp).width(200.dp).background(Pal.Raised).border(1.dp, Pal.Line)) {
-        listOf(
+        listOfNotNull(
+            ui.toDj?.let { go ->
+                "Modo DJ ›" to {
+                    if (model.dirty) {
+                        ui.confirm = ConfirmAsk("Ir ao modo DJ com mudanças na fila?", "${model.pending.size} mudanças ainda não foram gravadas e se perdem. Grave antes para tocar a versão nova.", "Ir mesmo assim", true) { go() }
+                    } else go()
+                }
+            },
             "Organizar…" to { refreshSuggestions(model, ui.organizeState); ui.organize = true },
             "Renomear arquivos…" to { ui.rename = true },
             "Trazer de pendrive…" to { ui.transfer = TransferState(export = false) },

@@ -66,11 +66,8 @@ fun MenuScreen(
         Column(Modifier.fillMaxSize().padding(if (wide) 16.dp else 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextInk("MENU", fontSize = 22.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                // O outro modo do app (ADR-0012): sai do DJ e abre a Biblioteca, que roda no processo dela.
-                val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
-                if (activity != null) {
-                    UtilityButton("BIBLIOTECA ›", { os.deckbridge.manager.mobile.Modes.switchTo(activity, os.deckbridge.manager.mobile.Modes.Mode.LIBRARY) }, modifier = Modifier.padding(end = 8.dp))
-                }
+                // O outro modo do app (ADR-0012): sai do DJ e abre a Biblioteca (a plataforma diz como).
+                LocalModeSwitch.current?.let { (label, go) -> UtilityButton(label, go, modifier = Modifier.padding(end = 8.dp)) }
                 UtilityButton("FECHAR", onClose)
             }
             Row(Modifier.fillMaxSize().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

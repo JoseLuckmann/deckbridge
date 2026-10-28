@@ -1220,3 +1220,15 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - `ModesTest` (3): último modo entre processos, mesma pasta para os dois modos, intenção do modo DJ.
 - Evidência: núcleo 139/139; modo DJ (`:app:testMultiDebugUnitTest`) 149, 0 falhas (8 pulados por falta de arquivos locais); Biblioteca (`:biblioteca:testDebugUnitTest`) 76 da suíte completa + `ShowFlowTest` e `ModesTest` refeitos depois da correção do processo; APK `multiDebug` montado.
 - Não verificado (`BLOCKED_HARDWARE`): memória devolvida na troca, tempo de troca, troca com a DDJ-400 ligada; nada rodou em aparelho. O histórico e os ajustes do antigo app de performance (`os.deckbridge.android`) não passam para o novo.
+
+## 2026-10-28 — Modo DJ no computador (ADR-0012, item 7)
+
+- As telas e a lógica dos decks saíram do app Android para `stage/src` (`DeckPage`, `PlayerScreen`, ondas, mixer, browse, RMX, menu, histórico, `NativeEngine`, `PerformanceHub`), compiladas pelo app e pelo programa de computador, como `studio/src` nas telas de set.
+- O que é da plataforma ficou atrás de `DjHost`: decodificar, AAC, ajustes, sessão, histórico, capa, exportar texto, nome do aparelho. Android: `AndroidDjHost` (MediaCodec, DataStore, SQLite, seletor). Computador: `DesktopDjHost` (ffmpeg, arquivos em `~/.deckbridge/dj`, CSV). A capa (`CoverTile`) tem uma versão por plataforma. O botão do outro modo vem por `LocalModeSwitch`. `PerformanceHub.ledPort` virou uma função de envio (no Android, a porta MIDI; no computador, o `Receiver` do javax.sound.midi).
+- Motor: o Gradle do computador compila `engine.cpp` + `controller_jni.cpp` com o Oboe sobre ALSA do Pi (`pi/alsa`) numa `libdeckbridge-engine.so` (só Linux).
+- DDJ-400: `DesktopMidi` abre as portas com "DDJ" no nome e passa as mensagens pelo mesmo montador e regra C++; os LEDs voltam pela saída.
+- Programa: `--dj` abre só o modo DJ; ⋯ → Modo DJ › e MENU → BIBLIOTECA › reabrem o programa no outro modo e encerram o atual.
+- Achado: a carga da faixa guardava a onda de detalhe com `withContext(Dispatchers.Main)`, que não volta numa cena de teste do computador; agora a onda é devolvida e gravada de volta no contexto da tela, sem depender do "Main" de cada plataforma.
+- `DjModeTest` (2): ajustes, sessão e histórico na pasta do app; a tela do DJ abre a biblioteca sintética, o encoder entra em Track, LOAD carrega no deck 1, PLAY anda no motor C++ real (PCM `null` do ALSA) e nenhum arquivo da biblioteca muda (captura `desktop-dj`).
+- Não verificado (`BLOCKED_HARDWARE`): DDJ-400 no computador (MIDI, LEDs, 4 canais), som numa placa real, latência, Windows e macOS (o motor no computador é só ALSA).
+- Evidência: computador `./gradlew test` 15 (2 pulados: capturas só com `SHOTS_DIR`), 0 falhas; modo DJ Android `:app:testMultiDebugUnitTest` 149 (8 pulados por arquivos locais), 0 falhas, já com as telas em `stage/`; APK `multiDebug` montado.

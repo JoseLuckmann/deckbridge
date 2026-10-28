@@ -63,5 +63,6 @@ Compose das telas de set, a fila de mudanças) na memória do processo que roda 
   ele pode ser desinstalado. Mapeamento corrigido (MIDI learn) e preferências do player começam do padrão.
 - O projeto Android é um só (`android/`, módulos `:app` e `:biblioteca`); `mobile/` guarda só o código do módulo, o
   README e as ferramentas. Testes: `./gradlew :app:testMultiDebugUnitTest :biblioteca:testDebugUnitTest`.
+- No computador o motor é só Linux (ALSA). Windows e macOS precisariam de outra troca do Oboe (WASAPI, Core Audio).
 - `BLOCKED_HARDWARE`: quanto de memória a troca realmente devolve, o tempo de troca e o comportamento do Android ao
   encerrar o processo com a DDJ-400 ligada não foram medidos em aparelho.

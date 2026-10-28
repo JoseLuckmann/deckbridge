@@ -2,7 +2,7 @@
 
 Alvo 1, a partir de 21/10/2026: tablet ligado direto na DDJ-400. O Raspberry continua como alvo 2.
 
-Desde a 0.22.0 é um app só com dois modos (ADR-0012): **DJ** (este módulo, `:app`, processo principal) e **Biblioteca** (módulo `:biblioteca`, código em `mobile/app`, processo `:biblioteca`). O id é `os.deckbridge.manager`. O ícone abre o último modo; trocar encerra o processo do modo que sai. Sem pendrive, o modo DJ abre a biblioteca do aparelho só para ler.
+Desde a 0.22.0 é um app só com dois modos (ADR-0012): **DJ** (este módulo, `:app`, processo principal) e **Biblioteca** (módulo `:biblioteca`, código em `mobile/app`, processo `:biblioteca`). O id é `os.deckbridge.manager`. O ícone abre o último modo; trocar encerra o processo do modo que sai. Sem pendrive, o modo DJ abre a biblioteca do aparelho só para ler. As telas e a lógica dos decks ficam em `stage/src`, as mesmas do modo DJ no computador; o que é do Android fica atrás de `DjHost` (`AndroidDjHost`).
 
 - Kotlin e Jetpack Compose na interface.
 - Motor de tons em C++ com Oboe 1.11.0, pelo NDK.
