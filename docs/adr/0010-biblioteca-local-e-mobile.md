@@ -34,7 +34,7 @@ Isso torna possível gerar um export do zero **com a mesma estrutura de um expor
    - Antes de trocar um banco que já existe no pendrive, o banco antigo é copiado para o aparelho (com SHA-256).
    - Se o pendrive já tem uma biblioteca (feita no rekordbox, por exemplo), a tela avisa que exportar a **substitui** e oferece **importá-la antes** para o aparelho. Nada é mesclado às cegas.
    - O áudio nunca é apagado do pendrive.
-4. **O app de celular é um app separado** do de performance (`os.deckbridge.manager`, não `os.deckbridge.android`). O de performance continua somente leitura (OD-23). O de celular escreve no pendrive só quando o usuário pede "Exportar", por um seletor de pasta do Android (SAF).
+4. **O app de celular é um app separado** *(Emendado pelo ADR-0012: desde a 0.22.0 é um app só, com os modos DJ e Biblioteca em processos separados; a regra de escrita continua.)* do de performance (`os.deckbridge.manager`, não `os.deckbridge.android`). O de performance continua somente leitura (OD-23). O de celular escreve no pendrive só quando o usuário pede "Exportar", por um seletor de pasta do Android (SAF).
 5. **Núcleo compartilhado:** um módulo `core/` (Kotlin JVM, sem tela) usado pelo desktop e pelo app Android, como build incluído do Gradle. O que depende da plataforma fica por trás de interfaces: decodificação de áudio (MediaCodec no Android; WAV e ffmpeg no desktop) e acesso ao armazenamento do pendrive (SAF no Android; arquivos no desktop).
 6. **Layout do celular:** retrato (uma coluna, barra de abas embaixo, painéis em folha) e paisagem (duas colunas: lista e detalhe). Referência: S25 Ultra, 6,9", 1440×3120, cerca de 412×892 dp em retrato e 892×412 dp em paisagem, com a câmera em furo e as barras do sistema (tela de ponta a ponta).
 

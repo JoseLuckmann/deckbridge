@@ -1,5 +1,7 @@
+// O modo Biblioteca do app DeckBridge: um módulo do app (android/), não um app à parte (ADR-0012). Roda no processo
+// ":biblioteca"; o modo DJ não carrega nada daqui.
 plugins {
-    id("com.android.application")
+    id("com.android.library")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("io.github.takahirom.roborazzi")
@@ -12,11 +14,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "os.deckbridge.manager"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 22
-        versionName = "0.21.0"
     }
 
     buildTypes {

@@ -190,10 +190,11 @@ private fun BrowseLine(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TextInk((index + 1).toString(), Modifier.width(36.dp), color = muted, fontSize = 12.sp, mono = true, maxLines = 1)
-        if (row.track != null) {
-            CoverTile(artworkOf(row.track), row.title, Modifier.padding(end = 6.dp).size(32.dp))
+        // Local: a linha vem do núcleo (outro módulo), onde o Kotlin não estreita o tipo de uma propriedade.
+        val track = row.track
+        if (track != null) {
+            CoverTile(artworkOf(track), row.title, Modifier.padding(end = 6.dp).size(32.dp))
             // Touch Preview: tocar na onda toca a faixa no fone a partir daquele ponto (a borda laranja marca a que soa).
-            val track = row.track
             val previewing = previewId == track.id
             MiniWave(
                 catalog.analyses[track.id],

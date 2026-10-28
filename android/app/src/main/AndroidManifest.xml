@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- DeckBridge: um app, dois modos (ADR-0012). O modo DJ roda no processo principal e só carrega o que toca (motor,
+     controladora, decks); o modo Biblioteca roda no processo ":biblioteca" (módulo biblioteca) e é encerrado ao entrar
+     no modo DJ. O modo DJ nunca escreve no pendrive. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
@@ -11,18 +14,33 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="DeckBridge"
         android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.DeckBridge">
+        <!-- A entrada do app: abre o último modo usado e some (sem tela própria). -->
         <activity
-            android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:name=".StartActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+        <activity
+            android:name=".MainActivity"
+            android:label="DeckBridge DJ"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="true" />
         <activity
             android:name=".ScreenshotActivity"
             android:exported="false" />
+        <!-- O modo Biblioteca (módulo biblioteca) no processo dele: ao trocar de modo, o processo que sai é encerrado. -->
+        <activity
+            android:name="os.deckbridge.manager.mobile.ManagerActivity"
+            android:process=":biblioteca" />
     </application>
 </manifest>

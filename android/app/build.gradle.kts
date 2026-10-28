@@ -13,11 +13,13 @@ android {
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
-        applicationId = "os.deckbridge.android"
+        // Um app só (ADR-0012): o id é o do antigo app da biblioteca, para quem já tem a biblioteca no aparelho não
+        // perder nada ao atualizar (o armazenamento do app é por id).
+        applicationId = "os.deckbridge.manager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 18
-        versionName = "0.14.1"
+        versionCode = 23
+        versionName = "0.22.0"
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
@@ -80,10 +82,6 @@ android {
         compose = true
         prefab = true
     }
-
-    // A lógica compartilhada (leitores do pendrive, análise, tom, sync, cores) mora no núcleo, `core/`: o app de
-    // performance compila os mesmos fontes que a biblioteca usa, então cada conceito existe uma vez só (ADR-0011).
-    sourceSets["main"].java.srcDir("../../core/src/main/kotlin/os/deckbridge/logic")
 
     externalNativeBuild {
         cmake {
@@ -157,6 +155,9 @@ tasks.withType<Test>().configureEach {
 }
 
 dependencies {
+    // O núcleo (lógica compartilhada) e o modo Biblioteca (módulo, processo ":biblioteca").
+    implementation("os.deckbridge:core")
+    implementation(project(":biblioteca"))
     implementation("com.google.oboe:oboe:1.11.0")
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)

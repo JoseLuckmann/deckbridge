@@ -1,6 +1,8 @@
 # DeckBridge Biblioteca (celular)
 
-App Android (`os.deckbridge.manager`) para organizar a biblioteca no celular e exportá-la para um pendrive, no formato do rekordbox. Referência: Samsung Galaxy S25 Ultra (1440×3120, ≈411×891 dp), em pé e deitado. Decisão e limites: `docs/adr/0010-biblioteca-local-e-mobile.md`.
+O modo Biblioteca do app DeckBridge (ADR-0012): um módulo (`:biblioteca`) do projeto `android/`, no processo `:biblioteca`, separado do modo DJ. O ícone abre o último modo usado; MENU do DJ → BIBLIOTECA › e ⋯ → Modo DJ › trocam (o processo do modo que sai é encerrado). Antes da 0.22.0 era um app à parte.
+
+Modo Biblioteca do app (`os.deckbridge.manager`) para organizar a biblioteca no celular e exportá-la para um pendrive, no formato do rekordbox. Referência: Samsung Galaxy S25 Ultra (1440×3120, ≈411×891 dp), em pé e deitado. Decisão e limites: `docs/adr/0010-biblioteca-local-e-mobile.md`.
 
 ## Design system
 
@@ -164,8 +166,8 @@ transição, e mostra o formato e quanto tempo levou. É a conferência que só 
 ## Build e testes
 
 ```
-cd mobile
-LC_ALL=C.UTF-8 ./gradlew :app:testDebugUnitTest :app:assembleDebug   # APK em app/build/outputs/apk/debug
+cd android
+LC_ALL=C.UTF-8 ./gradlew :biblioteca:testDebugUnitTest :app:assembleMultiDebug   # APK (os dois modos) em app/build/outputs/apk/multi/debug
 ```
 
 Testes (JVM/Robolectric, SDK 33): `DesignSystemTest` (4), `ScreenshotTest` (12 capturas em `docs/ui/mobile-*.png`), `UxFlowTest` (toques de verdade: "+" do alvo com DESFAZER, estrela na linha, triagem até o fim, filtro rápido), `SafStorageTest` (3: gravar/trocar arquivos, recusa de renomeação que devolve o antigo, exportar uma biblioteca inteira e trazê-la de volta por um provedor de documentos de brinquedo).

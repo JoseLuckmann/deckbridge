@@ -33,6 +33,8 @@ class ManagerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A entrada do app abre neste modo da próxima vez.
+        Modes.remember(this, Modes.Mode.LIBRARY)
         enableEdgeToEdge()
         app = ManagerApp.get(this)
         app.pendingIntent = intent
@@ -94,7 +96,8 @@ private fun Content(app: ManagerApp) {
         app.pendingIntent = null
         app.handle(incoming) { pickAudio.launch(arrayOf("audio/*")) }
     }
-    val actions = remember { Actions(pickAudio = { pickAudio.launch(arrayOf("audio/*")) }, pickUsb = { pickUsb.launch(null) }, pickFolder = { pickFolder.launch(null) }) }
+    val activity = androidx.compose.ui.platform.LocalContext.current as android.app.Activity
+    val actions = remember { Actions(pickAudio = { pickAudio.launch(arrayOf("audio/*")) }, pickUsb = { pickUsb.launch(null) }, pickFolder = { pickFolder.launch(null) }, toDj = { app.goDj(activity) }) }
     ManagerRoot(app, actions)
 }
 

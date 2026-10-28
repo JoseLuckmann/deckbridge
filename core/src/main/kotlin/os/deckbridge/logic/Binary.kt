@@ -40,14 +40,14 @@ internal fun ByteArray.putU16le(at: Int, value: Int) {
     putU8(at + 1, value shr 8)
 }
 
-internal fun ByteArray.putU32le(at: Int, value: Int) {
+fun ByteArray.putU32le(at: Int, value: Int) {
     putU8(at, value)
     putU8(at + 1, value shr 8)
     putU8(at + 2, value shr 16)
     putU8(at + 3, value shr 24)
 }
 
-internal class BeWriter {
+class BeWriter {
     private val out = ArrayList<Byte>()
 
     fun u8(value: Int) {

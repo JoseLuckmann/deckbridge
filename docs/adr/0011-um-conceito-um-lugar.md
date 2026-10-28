@@ -19,7 +19,7 @@ compilava de lá. Com o tempo, a biblioteca ganhou versões próprias de conceit
 
 ## Decisão
 
-1. **A lógica compartilhada mora em `core/src/main/kotlin/os/deckbridge/logic/`.** O app de performance compila esses
+1. **A lógica compartilhada mora em `core/src/main/kotlin/os/deckbridge/logic/`.** *(Desde o ADR-0012 o app usa o núcleo como dependência, sem `srcDir`.)* O app de performance compila esses
    fontes (`sourceSets["main"].java.srcDir`), a biblioteca usa o núcleo como build incluído. Um conceito existe uma vez;
    quem precisa dele importa do núcleo.
 2. **Tom:** uma tabela e um parser (`camelotOf`, aceitando sustenido, bemol, ♯/♭, "min"), uma distância

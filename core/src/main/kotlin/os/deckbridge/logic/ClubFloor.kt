@@ -482,7 +482,7 @@ internal fun pssiLabel(mood: Int, kind: Int, k1: Int, k2: Int, k3: Int): String 
     return table.getOrElse(kind - 1) { "Verse" }
 }
 
-internal fun unmaskPssi(body: ByteArray, count: Int) {
+fun unmaskPssi(body: ByteArray, count: Int) {
     val base = intArrayOf(
         0xCB, 0xE1, 0xEE, 0xFA, 0xE5, 0xEE, 0xAD, 0xEE, 0xE9,
         0xD2, 0xE9, 0xEB, 0xE1, 0xE9, 0xF3, 0xE8, 0xE9, 0xF4, 0xE1,

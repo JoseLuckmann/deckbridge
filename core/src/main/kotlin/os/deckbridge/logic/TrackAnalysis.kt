@@ -113,7 +113,7 @@ fun analyzeTrack(samples: FloatArray, rate: Int): TrackRead {
 }
 
 /** Só o BPM (sem tom, grade nem estrutura): o que o corpus de tempo mede. */
-internal fun estimateTempo(samples: FloatArray, rate: Int): Double {
+fun estimateTempo(samples: FloatArray, rate: Int): Double {
     if (samples.size < rate / 2 || rate < 8000) return 0.0
     val kick = kickFlux(samples, rate)
     val peaks = strongPeaks(kick.values, kick.rate)
@@ -273,7 +273,7 @@ private fun refineGridPhase(samples: FloatArray, rate: Int, bpm: Double, phase: 
  * escolhido (assim 128,003 vira 128,000); senão fica o escolhido. Faixas sem bumbo claro ficam como estavam.
  * Devolve as batidas (mesmos números de tempo no compasso) e o BPM, ou null para manter a grade.
  */
-internal fun alignGridToClick(samples: FloatArray, rate: Int, beats: List<AnlzBeat>, bpm: Double, why: (String) -> Unit = {}): Pair<List<AnlzBeat>, Double>? {
+fun alignGridToClick(samples: FloatArray, rate: Int, beats: List<AnlzBeat>, bpm: Double, why: (String) -> Unit = {}): Pair<List<AnlzBeat>, Double>? {
     if (beats.size < 32 || bpm < 40.0 || rate < 16000) return null
     val click = bandpass(samples, rate, 1000.0, 5000.0)
     val low = bandpass(samples, rate, 40.0, 150.0)
@@ -886,7 +886,7 @@ private class CqtBin(val real: FloatArray, val imag: FloatArray, val freq: Doubl
 // Núcleos fixos a 22050 Hz. O custo de os construir fica fora de cada faixa.
 private val cqtBins: List<CqtBin> by lazy { buildCqtBins() }
 
-internal fun detectKey(samples: FloatArray, rate: Int): Pair<String, Double> {
+fun detectKey(samples: FloatArray, rate: Int): Pair<String, Double> {
     if (samples.size < 4096 * 2 || rate < 8000) return "—" to 0.0
     if (rate == 22050) return detectKeyAt22050(samples)
     val outCount = (samples.size.toDouble() * 22050.0 / rate).toInt()

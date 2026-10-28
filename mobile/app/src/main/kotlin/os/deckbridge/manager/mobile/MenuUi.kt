@@ -32,6 +32,8 @@ fun MenuTab(app: ManagerApp, actions: Actions) {
     val counts = m.filterCounts()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Section("Biblioteca")
+        // O outro modo do app: tocar (a biblioteca grava a fila antes e sai da memória).
+        Line("Modo DJ ›", "tocar") { actions.toDj() }
         Line("Importar músicas", "") { actions.pickAudio() }
         Line("Importar pasta", "") { actions.pickFolder() }
         Line("Analisar todas", "${counts[QuickFilter.UNANALYZED] ?: 0}") { app.analyzeAll() }

@@ -2,6 +2,8 @@
 
 Alvo 1, a partir de 21/10/2026: tablet ligado direto na DDJ-400. O Raspberry continua como alvo 2.
 
+Desde a 0.22.0 é um app só com dois modos (ADR-0012): **DJ** (este módulo, `:app`, processo principal) e **Biblioteca** (módulo `:biblioteca`, código em `mobile/app`, processo `:biblioteca`). O id é `os.deckbridge.manager`. O ícone abre o último modo; trocar encerra o processo do modo que sai. Sem pendrive, o modo DJ abre a biblioteca do aparelho só para ler.
+
 - Kotlin e Jetpack Compose na interface.
 - Motor de tons em C++ com Oboe 1.11.0, pelo NDK.
 - minSdk 26 (Android 8). Isso inclui o Galaxy Tab S6 Lite, que está entre Android 10 e 14. targetSdk 34.
@@ -15,7 +17,7 @@ Alvo 1, a partir de 21/10/2026: tablet ligado direto na DDJ-400. O Raspberry con
 
 ```bash
 export ANDROID_HOME="$HOME/android-sdk"
-./gradlew testMultiDebugUnitTest assembleMultiDebug assembleArm64Release
+./gradlew :app:testMultiDebugUnitTest :biblioteca:testDebugUnitTest assembleMultiDebug assembleArm64Release
 ```
 
 O APK do tablet sai em `app/build/outputs/apk/arm64/release/`. O de debug com as três ABIs sai em `app/build/outputs/apk/multi/debug/`. Instalar a prova A0 está em `docs/android/prova-a0.md`. A biblioteca e os decks estão em `docs/android/biblioteca-rekordbox.md`. Enquanto o tablet não devolver o relatório, a escuta fica `BLOCKED_HARDWARE`.

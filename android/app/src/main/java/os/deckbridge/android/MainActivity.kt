@@ -72,14 +72,17 @@ class MainActivity : ComponentActivity() {
         val screen = intent?.getStringExtra("deckbridge.screen").orEmpty()
         val play = intent?.getBooleanExtra("deckbridge.play", false) ?: false
         val midi = intent?.getBooleanExtra("deckbridge.midi", false) ?: false
+        val openLocal = intent?.getBooleanExtra(os.deckbridge.manager.mobile.Modes.EXTRA_OPEN_LOCAL, false) ?: false
+        // A entrada do app (StartActivity) volta neste modo da próxima vez.
+        os.deckbridge.manager.mobile.Modes.remember(this, os.deckbridge.manager.mobile.Modes.Mode.DJ)
         setContent {
-            App(screen, play, midi)
+            App(screen, play, midi, openLocal)
         }
     }
 }
 
 @Composable
-private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
+private fun App(screen: String, play: Boolean, injectMidi: Boolean, openLocal: Boolean = false) {
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -200,10 +203,15 @@ private fun App(screen: String, play: Boolean, injectMidi: Boolean) {
         }.start()
     }
 
-    // Biblioteca autorizada antes: abre sozinha ao iniciar, com o pendrive já ligado.
+    // Biblioteca autorizada antes: abre sozinha ao iniciar, com o pendrive já ligado. Sem pendrive (ou vindo do modo
+    // Biblioteca), abre a biblioteca do aparelho, só para ler: o modo DJ não escreve nela (ADR-0012).
     LaunchedEffect(Unit) {
-        if (catalog == null && removableVolumeLabel(context).isNotBlank()) {
-            persistedRekordboxVolumes(context).firstOrNull()?.let { openVolume(it) }
+        if (catalog != null) return@LaunchedEffect
+        val usb = if (removableVolumeLabel(context).isNotBlank()) persistedRekordboxVolumes(context).firstOrNull() else null
+        val local = os.deckbridge.manager.mobile.Modes.hasLocalLibrary(context)
+        when {
+            usb != null && !(openLocal && local) -> openVolume(usb)
+            local -> openVolume(os.deckbridge.logic.FolderVolume(os.deckbridge.manager.mobile.Modes.libraryRoot(context), "Biblioteca do aparelho"))
         }
     }
 

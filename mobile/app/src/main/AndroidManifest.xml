@@ -1,29 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Modo Biblioteca do app DeckBridge (ADR-0012). O processo ":biblioteca" é dado pelo app (android/app), que decide
+     como os modos se dividem; aqui não, porque o Robolectric, com a atividade noutro processo, não devolvia à tela o
+     resultado de trabalho em segundo plano (ShowFlowTest). A entrada do app (StartActivity) abre este modo ou o de DJ. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Vibração curta ao marcar (nota, playlist). -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <application
-        android:allowBackup="false"
-        android:largeHeap="true"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="@string/app_name"
-        android:supportsRtl="true"
-        android:enableOnBackInvokedCallback="true"
-        android:theme="@style/Theme.DeckBridgeBiblioteca">
+    <application>
         <activity
             android:name=".ManagerActivity"
             android:label="@string/launcher_name"
+            android:theme="@style/Theme.DeckBridgeBiblioteca"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|density|uiMode"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <!-- Compartilhar músicas de outro app (arquivos, WhatsApp, Drive) direto para a biblioteca. -->
             <intent-filter android:label="@string/share_import">
                 <action android:name="android.intent.action.SEND" />
@@ -31,7 +23,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="audio/*" />
             </intent-filter>
-            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
     </application>
 </manifest>

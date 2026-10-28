@@ -1207,3 +1207,16 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - AO VIVO: `Features.liveMode = false`; menu, pedido e "guardar o que tocou" fora da tela; testes ligam a chave só para eles; teste confirma que "Ao vivo" não aparece no app.
 - Pendente (proposto no ADR-0011): prévia do MIX pelo motor C++ (render offline por JNI) para tirar a última duplicação de efeitos.
 - Evidência: núcleo 139 (+`EchoSpecTest`), app de performance 149 (compilando a lógica do núcleo), computador e celular na suíte de fechamento.
+
+## 2026-10-28 — Um app só: modos DJ e Biblioteca (ADR-0012)
+
+- Pedido: "os dois apps deveriam ser um só… o modo de DJ deve só carregar as coisas de DJ… para economizar RAM e CPU; e aí vamos ter um modo de DJ para o PC também".
+- Um APK, um ícone ("DeckBridge", id `os.deckbridge.manager`, o da antiga Biblioteca DJ, para não perder a biblioteca do aparelho). `mobile/app` virou o módulo de biblioteca Android `:biblioteca` do projeto `android/`; os arquivos de raiz do Gradle em `mobile/` saíram.
+- Modo DJ (`MainActivity`) no processo principal; modo Biblioteca (`ManagerActivity`) no processo `:biblioteca`. Trocar (MENU → BIBLIOTECA ›; ⋯ → Modo DJ ›) grava o pendente, abre o outro modo e encerra o processo atual (`Modes.switchTo`). Durante importação a troca espera.
+- Entrada `StartActivity` abre o último modo (arquivo `files/modo.txt`, legível pelos dois processos). Atalho "Modo DJ" no ícone.
+- O modo DJ abre sozinho a biblioteca do aparelho (`FolderVolume`, só leitura) quando não há pendrive autorizado ligado, ou ao vir da Biblioteca. Não escreve nela nem no pendrive.
+- O app usa o núcleo como dependência (`os.deckbridge:core`), sem `srcDir`. Achados: a linha da lista do núcleo não estreita o tipo entre módulos (BrowseScreen, corrigido com variável local); 9 funções `internal` do núcleo usadas pelos testes do app ficaram públicas.
+- Achado: com `android:process` no manifesto do módulo, o Robolectric não devolvia à tela o resultado do trabalho em segundo plano ("Pronto pro show?" ficava em "Conferindo…"; isolado por bisseção contra o commit anterior). O processo `:biblioteca` passou a ser declarado no manifesto do app (o merge junta os atributos; conferido no APK com `aapt2`).
+- `ModesTest` (3): último modo entre processos, mesma pasta para os dois modos, intenção do modo DJ.
+- Evidência: núcleo 139/139; modo DJ (`:app:testMultiDebugUnitTest`) 149, 0 falhas (8 pulados por falta de arquivos locais); Biblioteca (`:biblioteca:testDebugUnitTest`) 76 da suíte completa + `ShowFlowTest` e `ModesTest` refeitos depois da correção do processo; APK `multiDebug` montado.
+- Não verificado (`BLOCKED_HARDWARE`): memória devolvida na troca, tempo de troca, troca com a DDJ-400 ligada; nada rodou em aparelho. O histórico e os ajustes do antigo app de performance (`os.deckbridge.android`) não passam para o novo.

@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Atalhos ao segurar o ícone: o que se faz toda vez. -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="dj" android:enabled="true" android:icon="@drawable/ic_sc_triage" android:shortcutShortLabel="@string/sc_dj">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="os.deckbridge.manager" android:targetClass="os.deckbridge.android.MainActivity" />
+    </shortcut>
     <shortcut android:shortcutId="triagem" android:enabled="true" android:icon="@drawable/ic_sc_triage" android:shortcutShortLabel="@string/sc_triage">
         <intent android:action="os.deckbridge.manager.TRIAGEM" android:targetPackage="os.deckbridge.manager" android:targetClass="os.deckbridge.manager.mobile.ManagerActivity" />
     </shortcut>

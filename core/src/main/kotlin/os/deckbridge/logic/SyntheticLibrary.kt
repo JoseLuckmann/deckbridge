@@ -668,7 +668,7 @@ fun click(bpm: Double, seconds: Int, rate: Int, freq: Double): FloatArray {
     return out
 }
 
-internal fun wavMono16(samples: FloatArray, rate: Int): ByteArray {
+fun wavMono16(samples: FloatArray, rate: Int): ByteArray {
     val dataBytes = samples.size * 2
     val out = ByteArray(44 + dataBytes)
     "RIFF".toByteArray(Charsets.US_ASCII).copyInto(out)

@@ -6,4 +6,5 @@
     <string name="sc_import">Importar</string>
     <string name="sc_export">Exportar</string>
     <string name="share_import">Importar na biblioteca</string>
+    <string name="sc_dj">Modo DJ</string>
 </resources>

@@ -462,6 +462,27 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
         }
     }
 
+    /**
+     * Vai para o modo DJ: grava a fila antes (o processo da biblioteca é encerrado na troca) e abre o DJ já com a
+     * biblioteca do aparelho. Com importação rodando, espera ela acabar (não perde faixa no meio).
+     */
+    fun goDj(activity: android.app.Activity) {
+        if (imports.progress != null) {
+            say("Espere a importação terminar para ir ao modo DJ.")
+            return
+        }
+        preview.stop()
+        if (!model.dirty) {
+            Modes.switchTo(activity, Modes.Mode.DJ)
+            return
+        }
+        background("Gravando antes do modo DJ") { j ->
+            if (model.apply(null) { j.text = it } == null) throw IllegalStateException(model.banner?.text ?: "Não consegui gravar; o modo DJ não abriu.")
+            pruneBackups()
+            android.os.Handler(android.os.Looper.getMainLooper()).post { Modes.switchTo(activity, Modes.Mode.DJ) }
+        }
+    }
+
     internal fun pruneBackups(keep: Int = 15) {
         val list = model.backupList().sortedByDescending { it.created }
         list.drop(keep).forEach { runCatching { it.dir.deleteRecursively() } }
@@ -615,6 +636,6 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
             instance ?: ManagerApp(context.applicationContext).also { instance = it }
         }
 
-        fun defaultRoot(context: Context): File = File(context.getExternalFilesDir(null) ?: context.filesDir, "biblioteca/dados")
+        fun defaultRoot(context: Context): File = Modes.libraryRoot(context)
     }
 }

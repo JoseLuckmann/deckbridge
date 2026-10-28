@@ -285,4 +285,4 @@ private fun NoticeToast(app: ManagerApp) {
 }
 
 /** O que a tela pede à atividade (seletores de arquivo do sistema). */
-class Actions(val pickAudio: () -> Unit, val pickUsb: () -> Unit, val pickFolder: () -> Unit = {})
+class Actions(val pickAudio: () -> Unit, val pickUsb: () -> Unit, val pickFolder: () -> Unit = {}, val toDj: () -> Unit = {})

@@ -17,7 +17,7 @@ import kotlin.math.sqrt
  *    pontas) e o custo é a variação dentro da frase mais uma multa por frase.
  * 3. Rótulos pelo nível de grave e bumbo de cada frase contra o patamar da faixa.
  */
-internal data class BarFeatures(
+data class BarFeatures(
     val originSec: Double,
     val barSec: Double,
     val lowDb: DoubleArray,
@@ -33,7 +33,7 @@ internal data class BarFeatures(
 
 private const val SILENCE_DB = -55.0
 
-internal fun barFeatures(samples: FloatArray, rate: Int, bpm: Double, originSec: Double): BarFeatures? {
+fun barFeatures(samples: FloatArray, rate: Int, bpm: Double, originSec: Double): BarFeatures? {
     if (bpm <= 1.0 || rate <= 0 || samples.isEmpty()) return null
     val barSec = 240.0 / bpm
     // Começa no último compasso inteiro antes da primeira batida 1: a anacruse entra no primeiro compasso.
