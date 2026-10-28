@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,7 +53,9 @@ fun TriageScreen(app: StudioHost) {
         app.preview.stop()
         app.triageAt = at + 1
     }
-    BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg)) {
+    BackHandler { app.endTriage() }
+    // Abaixo da barra de status (hora, bateria) e acima da de gestos: o ✕ e o contador ficam à vista e ao alcance.
+    BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         val wide = maxWidth >= WIDE_DP.dp
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -154,7 +158,7 @@ private fun TriageDone(app: StudioHost, ids: List<Int>) {
     val inTarget = target?.let { p -> tracks.count { it.id in v?.entries?.get(p.id).orEmpty() } }
     BackHandler { app.endTriage() }
     Column(
-        Modifier.fillMaxSize().background(Palette.bg).padding(24.dp),
+        Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("✓", color = Palette.keyInk, fontSize = 48.sp, fontWeight = FontWeight.Bold)

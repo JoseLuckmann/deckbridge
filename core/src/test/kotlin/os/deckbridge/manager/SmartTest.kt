@@ -88,9 +88,13 @@ class SmartTest {
         assertTrue(Smart.preflight(empty, { true }, { true }).any { it.blocking })
     }
 
-    @Test fun `fila de triagem poe as sem nota primeiro`() {
+    @Test fun `fila de triagem so tem as sem nota`() {
         val v = view(listOf(t(1, rating = 5), t(2), t(3, rating = 1), t(4)))
-        assertEquals(listOf(2, 4, 1, 3), Smart.triageQueue(v))
+        assertEquals(listOf(2, 4), Smart.triageQueue(v))
+        // Toda marcada: nada a marcar (a triagem não abre). Rever é outra fila, por escolha.
+        val all = view(listOf(t(1, rating = 5), t(3, rating = 1)))
+        assertEquals(emptyList(), Smart.triageQueue(all))
+        assertEquals(listOf(1, 3), Smart.reviewQueue(all))
     }
 
     @Test fun `duplicata por titulo, artista e duracao`() {

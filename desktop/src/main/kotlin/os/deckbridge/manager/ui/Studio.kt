@@ -151,10 +151,10 @@ class DesktopStudio(
     override var triageAt by mutableStateOf(0)
 
     /** Marcar uma por vez (as que faltam: sem nota, sem cor), como no celular. */
-    fun startTriage() {
+    fun startTriage(review: Boolean = false) {
         val v = model.view ?: return
-        val ids = os.deckbridge.manager.smart.Smart.triageQueue(v)
-        if (ids.isEmpty()) return did(if (v.tracks.isEmpty()) "Importe músicas primeiro" else "Tudo marcado ✓")
+        val ids = if (review) os.deckbridge.manager.smart.Smart.reviewQueue(v) else os.deckbridge.manager.smart.Smart.triageQueue(v)
+        if (ids.isEmpty()) return did(if (v.tracks.isEmpty()) "Importe músicas primeiro" else if (review) "Nenhuma marcada ainda" else "Tudo marcado ✓")
         triage = ids
         triageAt = 0
     }

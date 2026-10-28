@@ -40,6 +40,7 @@ fun MenuTab(app: ManagerApp, actions: Actions) {
         Line("Arrumar nomes", "") { app.openTidy() }
         Line("Refazer grades", "") { app.refreshGrids() }
         Line("Marcar (ouvir e dar nota)", "${counts[QuickFilter.UNRATED] ?: 0}") { app.startTriage() }
+        Line("Rever as marcadas", "${(m.view?.tracks?.size ?: 0) - (counts[QuickFilter.UNRATED] ?: 0)}") { app.startTriage(review = true) }
         Section("Ajuda")
         Line("Guia para começar", if (app.guideHidden) "desligado" else "ligado") { if (app.guideHidden) app.showGuide() else app.hideGuide() }
         Line("Buscar e filtrar", "") { app.tab = Tab.LIBRARY; app.helpRequested = true }

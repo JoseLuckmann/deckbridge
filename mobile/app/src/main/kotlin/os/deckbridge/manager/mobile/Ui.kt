@@ -270,7 +270,8 @@ private fun JobOverlay(app: ManagerApp) {
 @Composable
 private fun NoticeToast(app: ManagerApp) {
     val n = app.notice ?: return
-    Box(Modifier.fillMaxSize().padding(8.dp), contentAlignment = Alignment.BottomCenter) {
+    // Acima da barra de gestos do Android (sem ela, o aviso ficava atrás dos botões do sistema).
+    Box(Modifier.fillMaxSize().navigationBarsPadding().padding(8.dp), contentAlignment = Alignment.BottomCenter) {
         Row(
             Modifier.fillMaxWidth().clip(RbShape).background(if (n.error) Palette.dangerBg else Palette.noteBg).border(BorderStroke(1.dp, if (n.error) Palette.danger else Palette.noteInk.copy(alpha = 0.4f)), RbShape)
                 .padding(start = 12.dp, top = 2.dp, bottom = 2.dp, end = 2.dp),

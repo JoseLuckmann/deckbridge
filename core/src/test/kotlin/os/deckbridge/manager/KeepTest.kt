@@ -28,8 +28,8 @@ class KeepTest {
         // 1: nova. 2: tem nota. 3: está numa playlist. 4: nova. 5: sem nota mas em playlist.
         val v = view(listOf(t(1), t(2, rating = 3), t(3), t(4), t(5)), mapOf(10 to listOf(3, 5)))
         assertEquals(listOf(1, 4), Smart.apply(QuickFilter.NEW, v, { true }, v.tracks).map { it.id })
-        // Primeiro a caixa de entrada; depois as outras sem nota; por último as marcadas.
-        assertEquals(listOf(1, 4, 3, 5, 2), Smart.triageQueue(v))
+        // Primeiro a caixa de entrada; depois as outras sem nota; as marcadas não entram.
+        assertEquals(listOf(1, 4, 3, 5), Smart.triageQueue(v))
     }
 
     @Test fun `esquecidas sao boas antigas fora dos sets`() {

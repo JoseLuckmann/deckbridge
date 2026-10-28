@@ -250,10 +250,11 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
         waves.getOrPut(t.analyzePath + "|" + model.hasAnalysis(t)) { runCatching { model.trackFiles(t).wave }.getOrDefault(ByteArray(0)) }
     }
 
-    fun startTriage() {
+    /** Marcar as que faltam (sem nota). [review]: rever as já marcadas, por escolha. */
+    fun startTriage(review: Boolean = false) {
         val v = model.view ?: return
-        val ids = Smart.triageQueue(v)
-        if (ids.isEmpty()) return did(if (v.tracks.isEmpty()) "Importe músicas primeiro" else "Tudo marcado ✓")
+        val ids = if (review) Smart.reviewQueue(v) else Smart.triageQueue(v)
+        if (ids.isEmpty()) return did(if (v.tracks.isEmpty()) "Importe músicas primeiro" else if (review) "Nenhuma marcada ainda" else "Tudo marcado ✓ · para rever, MENU → Rever as marcadas")
         triage = ids
         triageAt = 0
         detailId = null

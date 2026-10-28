@@ -174,13 +174,18 @@ object Smart {
     }
 
     /**
-     * Fila da triagem: as novas primeiro (a caixa de entrada: sem nota e fora das playlists), depois as outras sem nota,
-     * cada grupo na ordem em que foram importadas; por último as já marcadas.
+     * Fila da triagem: só as que faltam marcar (sem nota) — as novas primeiro (a caixa de entrada: sem nota e fora das
+     * playlists), depois as outras, na ordem em que foram importadas. As já marcadas não entram: com a biblioteca toda
+     * classificada a fila é vazia (antes elas vinham no fim e a triagem obrigava a passar por todas).
      */
     fun triageQueue(view: LibraryView): List<Int> {
         val used = inPlaylists(view)
-        return view.tracks.sortedWith(compareBy({ !Keep.isNew(it, used) }, { it.rating != 0 }, { it.id })).map { it.id }
+        return view.tracks.filter { it.rating == 0 }.sortedWith(compareBy({ !Keep.isNew(it, used) }, { it.id })).map { it.id }
     }
+
+    /** Rever as já marcadas (por escolha, no MENU): as de nota mais alta primeiro. */
+    fun reviewQueue(view: LibraryView): List<Int> =
+        view.tracks.filter { it.rating > 0 }.sortedWith(compareBy({ -it.rating }, { it.id })).map { it.id }
 
     /** O que falta para o fluxo "importar → analisar → marcar → playlist → exportar". */
     data class Step(val title: String, val done: Boolean, val detail: String, val action: StepAction)
