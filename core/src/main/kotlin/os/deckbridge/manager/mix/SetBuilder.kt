@@ -257,7 +257,8 @@ object SetDoctor {
             val tr = plan.firstOrNull { it.fromId == a && it.toId == b }
             if (tr != null && grids(ta) != null) {
                 val dur = grids(ta)!!.durationMs
-                val need = (tr.bars * SetPlanner.barMs(ta.bpm)).toInt()
+                // Com loop na que sai, só o trecho do loop precisa caber: ele se repete até o fim da troca.
+                val need = ((if (tr.aLoopBars > 0) tr.aLoopBars else tr.bars) * SetPlanner.barMs(ta.bpm)).toInt()
                 if (tr.outMs + need > dur) out += SetIssue(a, b, SetIssue.Kind.NO_ROOM, "Saída sem espaço para ${tr.bars} compassos")
             }
         }

@@ -811,13 +811,13 @@ private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition
         // entra (para o drop dela cair na hora, ou para ter mais tempo de batida clara).
         if (tr.style != MixStyle.CUT) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             RowLabel("LOOP D1")
-            listOf(0 to "SEM", 4 to "4 COMP.", 8 to "8 COMP.").forEach { (n, label) ->
+            listOf(0 to "SEM", 4 to "↻ 4", 8 to "↻ 8").forEach { (n, label) ->
                 PadButton(label, Modifier.weight(1f), on = tr.aLoopBars == n, enabled = n < tr.bars) { edit(tr.copy(aLoopBars = n)) }
             }
         }
         if (tr.style != MixStyle.CUT) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             RowLabel("LOOP D2")
-            listOf(Triple(0, 0, "SEM"), Triple(4, 2, "4 × 2"), Triple(8, 2, "8 × 2"), Triple(4, 4, "4 × 4")).forEach { (n, times, label) ->
+            listOf(Triple(0, 0, "SEM"), Triple(4, 2, "↻ 4×2"), Triple(8, 2, "↻ 8×2"), Triple(4, 4, "↻ 4×4")).forEach { (n, times, label) ->
                 PadButton(label, Modifier.weight(1f), on = tr.bLoopBars == n && (n == 0 || tr.bLoopTimes == times), enabled = n * times <= tr.bars) {
                     edit(tr.copy(bLoopBars = n, bLoopTimes = times))
                 }
