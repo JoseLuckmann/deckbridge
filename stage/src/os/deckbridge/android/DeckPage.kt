@@ -707,7 +707,6 @@ fun DeckPage(
                     rmx = rmx.copy(bars = os.deckbridge.logic.SCENE_BARS[(index + 1).coerceAtMost(os.deckbridge.logic.SCENE_BARS.lastIndex)])
                 } else {
                     fx = reduceBeatFx(fx, action)
-                    if (action.hotIndex == 7) rmx = rmx.copy(channel = action.deck.coerceIn(0, 2))
                 }
             }
             PerformanceAction.Kind.FILTER -> {

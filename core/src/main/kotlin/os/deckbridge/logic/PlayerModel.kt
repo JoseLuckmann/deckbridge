@@ -802,7 +802,8 @@ data class RmxState(
     val mid: List<Float> = listOf(1f, 1f),
     val high: List<Float> = listOf(1f, 1f),
     val gate: Boolean = false,
-    val channel: Int = 0,
+    /** O RMX vale sempre no master (2): sem seletor de canal. */
+    val channel: Int = 2,
     val drumBuild: Float = 0f,
     val drumVoice: Int = 3,
     val drumBars: Int = 8,

@@ -287,7 +287,7 @@ fun PlayerScreen(
                 )
             }
             if (rmx.full) {
-                RmxDock(rmx, onRmx, { onRmx(rmx.copy(full = false)) }, compact, Modifier.fillMaxWidth().height(if (tight) 268.dp else if (compact) 292.dp else 400.dp).padding(top = gap))
+                RmxDock(rmx, onRmx, { onRmx(rmx.copy(full = false)) }, compact, Modifier.fillMaxWidth().height(if (tight) 268.dp else if (compact) 292.dp else 400.dp).padding(top = gap), bpm = fxBpm)
             }
             if (!rmx.full) HotCueBand(catalog, tracks, faces, compact, settings.cuePreset, onActive, onHot, onHotUp, Modifier.fillMaxWidth().padding(top = gap), tight)
             if (!rmx.full) Row(

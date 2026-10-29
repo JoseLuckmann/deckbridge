@@ -1462,3 +1462,16 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - Evidência: núcleo `RmxHoldTest` 6 (toque liga/desliga, segurar acelera e solta, HOLD mantém e desligar solta, HOLD na cena, DRUM não acelera, o knob manda e assume). O som do roll acelerando no aparelho: `BLOCKED_HARDWARE`.
 - Esclarecimento do dono: o knob é o **da própria DDJ-400**. O handler do Beat FX já mandava o LEVEL/DEPTH para a intensidade da cena e para a rolagem do DRUM; agora ele também é a **velocidade do roll segurado** (`rmxKnob`), e o botão **BEAT FX ON/OFF** da controladora é o **HOLD**. Os pads ROLL, TRANS, DRUM e HI-PASS (modo SAMPLER) distinguem toque de segurar (`reduceRmxPad` com a hora de apertar). O anel da tela também é knob (mesma regra).
 - Evidência: `RmxHoldTest` 7 (inclui os pads da controladora: toque liga e desliga, segurar acelera e solta, HOLD mantém); suíte do modo DJ. Som no aparelho e a DDJ-400 de verdade: `BLOCKED_HARDWARE`.
+
+## 2026-10-29 — RMX com a cara do RMX-1000, isolador em knobs, sempre no master (0.35.0)
+
+- Pedido do dono: trocar as barras por knobs; o RMX vale sempre no master (sem seletor de canal); revisar a interface para parecer mais com o RMX-1000 original.
+- `RmxPanel.kt` (substitui o dock antigo, que tinha oito pads em fila, quatro fileiras de botões e o CH 1/2/MST):
+  - Disposição da foto: ISOLATOR à esquerda; X-PAD FX no meio; o anel do SCENE FX com o knob no centro; RELEASE FX e SUB PARAMETER à direita; visor de BPM em vermelho e FECHAR no cabeçalho.
+  - **ISOLATOR:** três knobs grandes (LOW, MID, HI; −∞ a +6 dB, 0 dB no meio) em vez das barras; o GATE ficou embaixo.
+  - **X-PAD FX:** os efeitos ROLL, TRANS, DRUM e HI-PASS escolhem o que toca; o **HOLD** é o botão verde redondo; a **faixa de toque** tem os LEDs do TEMPO (1, 1/2, 1/4, 1/8, 1/16, da esquerda lenta à direita rápida): tocar liga já no tempo da célula, segurar acelera, deslizar muda o tempo na hora, soltar solta (com HOLD, mantém). O DRUM mostra as vozes, GAP e TOM.
+  - **SCENE FX:** oito fatias em anel — as cenas de subida em vermelho em cima, as de queda em azul embaixo, na ordem da esquerda para a direita — e o knob no centro, com o anel azul aceso quando algo está tocando; o centro arrasta (intensidade da cena ou velocidade do roll).
+  - **RELEASE FX:** VINYL BRAKE, ECHO e BACK SPIN; **SUB 1** (compassos da cena) e **SUB 2** (compassos do roll de bateria) são knobs de passos.
+- Sem canal: `RmxState.channel` vale 2 (master) e o botão de canal do Beat FX não mexe mais no RMX; o seletor CH 1/2/MST saiu da tela.
+- Compartilhado: `KnobDial` e `knobGestures` foram para `shared/` (o mixer do MIX e o RMX usam o mesmo arco e o mesmo arrastar).
+- Evidência: `RmxRingTest` (a fatia sob o dedo, a ordem esquerda→direita, centro e fora do anel), `RmxHoldTest`, capturas do RMX no S25 e no tablet; suíte do modo DJ. Toque e som no aparelho: `BLOCKED_HARDWARE`.
