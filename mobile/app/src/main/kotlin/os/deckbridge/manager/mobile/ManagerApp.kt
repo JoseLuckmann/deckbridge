@@ -105,6 +105,9 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
     override var triage by mutableStateOf<List<Int>?>(null)
     override var triageAt by mutableStateOf(0)
 
+    /** O ⋯ de MÚSICAS (ferramentas da biblioteca) está aberto. */
+    var libraryTools by mutableStateOf(false)
+
     // "Arrumar tudo": sugestões por regra.
     var tidy by mutableStateOf<List<Suggestion>?>(null)
 
@@ -254,7 +257,7 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
     fun startTriage(review: Boolean = false) {
         val v = model.view ?: return
         val ids = if (review) Smart.reviewQueue(v) else Smart.triageQueue(v)
-        if (ids.isEmpty()) return did(if (v.tracks.isEmpty()) "Importe músicas primeiro" else if (review) "Nenhuma marcada ainda" else "Tudo marcado ✓ · para rever, MENU → Rever as marcadas")
+        if (ids.isEmpty()) return did(if (v.tracks.isEmpty()) "Importe músicas primeiro" else if (review) "Nenhuma marcada ainda" else "Tudo marcado ✓ · para rever, MÚSICAS → ⋯ → Rever as marcadas")
         triage = ids
         triageAt = 0
         detailId = null

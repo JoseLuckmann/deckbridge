@@ -87,6 +87,10 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
             if (app.sets.playlistId != null) SetScreen(app)
             if (app.sets.playlistId != null && app.sets.mapOpen) SetMapScreen(app)
             if (app.sets.mixing != null) MixScreen(app)
+            // Abertos do MENU ou da lista: ficam por cima de qualquer aba (antes só apareciam na aba MÚSICAS).
+            if (app.libraryTools) LibraryTools(app, actions) { app.libraryTools = false }
+            app.tidy?.let { TidyDialog(app, it) }
+            app.duplicates?.let { DuplicatesDialog(app, it) }
             JobOverlay(app)
             NoticeToast(app)
         }
@@ -140,6 +144,8 @@ private fun TopBar(app: ManagerApp, actions: Actions) {
         UndoButtons(app)
         if (app.tab == Tab.LIBRARY) {
             TextButton(onClick = { app.searchOpen = !app.searchOpen }) { Text("⌕", fontSize = 22.sp) }
+            // As ferramentas da biblioteca moram na própria aba (o MENU fica com o que vale para o app todo).
+            TextButton(onClick = { app.libraryTools = true }, modifier = Modifier.semantics { contentDescription = "Ferramentas da biblioteca" }) { Text("⋯", fontSize = 20.sp) }
             OutlinedButton(onClick = actions.pickAudio, modifier = Modifier.height(38.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp)) { Text("＋", fontSize = 18.sp) }
         }
     }

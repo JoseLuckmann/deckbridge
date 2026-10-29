@@ -357,6 +357,5 @@ private fun LibraryDialogs(app: ManagerApp, dialog: Dialog?, close: () -> Unit) 
         )
         null -> {}
     }
-    app.tidy?.let { TidyDialog(app, it) }
-    app.duplicates?.let { DuplicatesDialog(app, it) }
+
 }

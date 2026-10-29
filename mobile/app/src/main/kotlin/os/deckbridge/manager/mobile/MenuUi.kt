@@ -29,24 +29,14 @@ import os.deckbridge.manager.smart.QuickFilter
 @Composable
 fun MenuTab(app: ManagerApp, actions: Actions) {
     val m = app.model
-    val counts = m.filterCounts()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Section("Biblioteca")
+        // Só o que vale para o app todo. O que é da biblioteca fica em MÚSICAS → ⋯; o que é do set, no ⋯ do SET.
+        Section("App")
         // O outro modo do app: tocar (a biblioteca grava a fila antes e sai da memória).
         Line("Modo DJ ›", "tocar") { actions.toDj() }
-        Line("Importar músicas", "") { actions.pickAudio() }
-        Line("Importar pasta", "") { actions.pickFolder() }
-        Line("Analisar todas", "${counts[QuickFilter.UNANALYZED] ?: 0}") { app.analyzeAll() }
-        Line("Arrumar nomes", "") { app.openTidy() }
-        Line("Procurar repetidas", "") { app.findDuplicates() }
-        Line("Refazer grades", "") { app.refreshGrids() }
-        Line("Marcar (ouvir e dar nota)", "${counts[QuickFilter.UNRATED] ?: 0}") { app.startTriage() }
-        Line("Rever as marcadas", "${(m.view?.tracks?.size ?: 0) - (counts[QuickFilter.UNRATED] ?: 0)}") { app.startTriage(review = true) }
         Section("Ajuda")
         Line("Guia para começar", if (app.guideHidden) "desligado" else "ligado") { if (app.guideHidden) app.showGuide() else app.hideGuide() }
         Line("Buscar e filtrar", "") { app.tab = Tab.LIBRARY; app.helpRequested = true }
-        Section("Set")
-        Line("Transição", app.transitionBars?.let { "$it compassos" } ?: "Auto (até o drop)") { app.nextTransitionBars() }
         Section("Tela")
         Line("Tom", if (KeyStyle.musical) "Am (musical)" else "8A (Camelot)") { app.setMusicalKeys(!KeyStyle.musical) }
         Section("Aparelho")
@@ -54,6 +44,25 @@ fun MenuTab(app: ManagerApp, actions: Actions) {
         Section("Segurança")
         Line("Cópias de segurança", "${m.backupList().size}") {}
     }
+}
+
+/**
+ * As ferramentas da biblioteca (o ⋯ do topo de MÚSICAS): importar pasta, analisar, arrumar nomes, repetidas, grades e
+ * rever as marcadas. Importar músicas é o ＋ ao lado.
+ */
+@Composable
+fun LibraryTools(app: ManagerApp, actions: Actions, onClose: () -> Unit) {
+    val counts = app.model.filterCounts()
+    val unrated = counts[QuickFilter.UNRATED] ?: 0
+    val options = listOf<Pair<String, () -> Unit>>(
+        "Importar pasta" to { actions.pickFolder() },
+        "Analisar todas · ${counts[QuickFilter.UNANALYZED] ?: 0}" to { app.analyzeAll() },
+        "Arrumar nomes" to { app.openTidy() },
+        "Procurar repetidas" to { app.findDuplicates() },
+        "Refazer grades" to { app.refreshGrids() },
+        "Rever as marcadas · ${(app.model.view?.tracks?.size ?: 0) - unrated}" to { app.startTriage(review = true) },
+    )
+    ChoiceDialog("Biblioteca", options.map { it.first }, onPick = { n -> onClose(); options[n].second() }, onClose = onClose)
 }
 
 @Composable
