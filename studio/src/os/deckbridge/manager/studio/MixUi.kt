@@ -50,7 +50,7 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
+import os.deckbridge.shared.drawTextFitting
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -484,10 +484,10 @@ private fun DeckWave(
                         if (x1 < 0 || x0 > w) continue
                         val c = phraseColor(ph.kind)
                         drawRect(c, Offset(x0.coerceAtLeast(0f), waveBot - band), Size((x1.coerceAtMost(w) - x0.coerceAtLeast(0f)).coerceAtLeast(0f), band))
-                        if (x1 - x0 > 40f) drawText(
-                            measurer, phraseName(ph.kind), topLeft = Offset(x0.coerceAtLeast(0f) + 4f, waveBot - band - 30f),
-                            style = TextStyle(color = c, fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                        )
+                        if (x1 - x0 > 40f) {
+                            val laid = measurer.measure(phraseName(ph.kind), TextStyle(color = c, fontSize = 9.sp, fontWeight = FontWeight.Bold))
+                            drawTextFitting(laid, Offset(x0.coerceAtLeast(0f) + 4f, waveBot - band - laid.size.height - 2f))
+                        }
                     }
                 }
                 // Onde o grave vira (troca de grave): traço verde na onda.

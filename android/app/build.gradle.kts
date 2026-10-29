@@ -11,6 +11,8 @@ android {
     namespace = "os.deckbridge.android"
     // As telas e a lógica dos decks são as mesmas do modo DJ no computador (stage/, ADR-0012).
     sourceSets["main"].java.srcDir("../../stage/src")
+    // O que as telas do modo DJ e do MIX dividem (shared/) vem pelo módulo :biblioteca, que já o compila: incluir de
+    // novo aqui duplicava as classes.
     compileSdk = 35
     ndkVersion = "27.2.12479018"
 
@@ -20,8 +22,8 @@ android {
         applicationId = "os.deckbridge.manager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 34
-        versionName = "0.29.0"
+        versionCode = 35
+        versionName = "0.29.1"
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"

@@ -10,6 +10,8 @@ plugins {
 android {
     // As telas de montar set são as mesmas do app de computador (studio/).
     sourceSets["main"].java.srcDir("../../studio/src")
+    // O que as telas do modo DJ e do MIX dividem (shared/).
+    sourceSets["main"].java.srcDir("../../shared/src")
     namespace = "os.deckbridge.manager.mobile"
     compileSdk = 35
 

@@ -14,6 +14,7 @@ kotlin {
     // As telas de montar set são as mesmas do app de celular (studio/); as de DJ também (stage/, ADR-0012).
     sourceSets["main"].kotlin.srcDir("../studio/src")
     sourceSets["main"].kotlin.srcDir("../stage/src")
+    sourceSets["main"].kotlin.srcDir("../shared/src")
 }
 
 // O mapa MIDI da DDJ-400 (pinado do Mixxx) é o mesmo do app Android.
