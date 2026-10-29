@@ -1,5 +1,6 @@
 package os.deckbridge.android
 
+import os.deckbridge.shared.MenuButton
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -76,6 +77,10 @@ import os.deckbridge.logic.inkOn
 import os.deckbridge.logic.loopLengthLabel
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+
+/** Os botões grandes da barra do player, como no CDJ. O MENU não é um deles: fica no fim, discreto ([MenuButton]). */
+private val NAV_BUTTONS = listOf("SOURCE", "BROWSE", "TAG LIST", "PLAYLIST", "SEARCH")
 
 @Composable
 fun PlayerScreen(
@@ -391,9 +396,10 @@ private fun TopBar(
     if (tight) {
         // Uma linha só: os botões de navegação à esquerda, REC, relógio e INFO à direita (o aviso de simulação some).
         Row(Modifier.fillMaxWidth().height(34.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            listOf("SOURCE", "BROWSE", "TAG LIST", "PLAYLIST", "SEARCH", "MENU").forEach { label ->
+            NAV_BUTTONS.forEach { label ->
                 NavButton(label, true, nav == label, Modifier.weight(1f)) { onNav(label) }
             }
+            MenuButton(nav == "MENU", { onNav("MENU") }, width = 36.dp)
             warnings.firstOrNull()?.let { warning ->
                 TextInk(warning, color = Color(StagePalette.accentOrange), fontSize = 10.sp, weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.widthIn(max = 120.dp).padding(start = 4.dp))
             }
@@ -444,9 +450,10 @@ private fun TopBar(
             }
         }
         Row(Modifier.fillMaxWidth().height(if (compact) 44.dp else 60.dp).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            listOf("SOURCE", "BROWSE", "TAG LIST", "PLAYLIST", "SEARCH", "MENU").forEach { label ->
+            NAV_BUTTONS.forEach { label ->
                 NavButton(label, compact, nav == label, Modifier.weight(1f)) { onNav(label) }
             }
+            MenuButton(nav == "MENU", { onNav("MENU") })
         }
     }
 }

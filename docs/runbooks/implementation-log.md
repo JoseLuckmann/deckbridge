@@ -1357,3 +1357,10 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - Os cortes de tamanho (`ScreenSize.WIDE_DP` do modo Biblioteca e `ScreenSize.TIGHT_HEIGHT` do modo DJ) moram em `shared/src`, usados por stage/ e studio/.
 - Evidência: modo DJ `:app:testMultiDebugUnitTest` 153 (8 pulados por arquivos locais), 0 falhas, com `PhoneScreenShots` (capturas S25 Ultra e Tab S6 Lite) e `DjModeOrientation`; Biblioteca (DesignSystem, Screenshot, MixFinderUi, SetPlayer, DevMode, Modes) 27, 0 falhas; computador `./gradlew test` 15 (2 pulados), 0 falhas.
 - `BLOCKED_HARDWARE`: não visto num S25 Ultra de verdade (o Robolectric não tem barras do sistema nem recorte de câmera); o tamanho real do recorte e o gesto das barras ficam para o aparelho.
+
+## 2026-10-29 — MENU discreto nos dois modos (0.30.1)
+
+- Pedido do dono: o botão do MENU bem mais discreto no modo Biblioteca e no modo DJ; lá fica só o que não se usa sempre, não precisa ocupar tanto espaço nem poluir.
+- `shared/MenuButton`: só "⋯" em cinza (`StagePalette.mutedInk`), estreito (44 dp; 36 dp na barra baixa do celular deitado), azul quando o MENU está aberto; contentDescription "Menu". O mesmo componente nos dois modos.
+- Modo DJ: MENU saiu dos botões grandes da barra (SOURCE, BROWSE, TAG LIST, PLAYLIST, SEARCH — agora uma lista só, `NAV_BUTTONS`, antes repetida nas duas versões da barra) e virou o "⋯" no fim. Biblioteca: o MENU saiu das abas (MÚSICAS, LISTAS, PENDRIVE, DJ) e é o "⋯" no fim da barra; no trilho do modo deitado, embaixo de tudo.
+- Testes: `NewcomerFlowTest` abre o MENU pelo "⋯".

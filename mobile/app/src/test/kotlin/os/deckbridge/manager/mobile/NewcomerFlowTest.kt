@@ -118,7 +118,9 @@ class NewcomerFlowTest {
         rule.waitForIdle()
         assertTrue(a.guideHidden)
         assertFalse(a.hint("usb"))
-        click("MENU")
+        // O MENU é o "⋯" discreto no fim da barra.
+        rule.onNode(hasContentDescription("Menu")).performClick()
+        rule.waitForIdle()
         click("Guia para começar")
         assertFalse(a.guideHidden)
         assertTrue(a.hint("set"), "ligar o guia mostra os destaques de novo")

@@ -258,7 +258,8 @@ private fun NavBar(app: ManagerApp, actions: Actions) {
     // Uma barra só, sem caixas: o ativo em azul com o traço em cima, os outros apagados (como as abas do player).
     Row(Modifier.fillMaxWidth().background(Palette.surface).border(BorderStroke(0.5.dp, Palette.line)).height(56.dp)) {
         // MARCAR não tem aba: é o primeiro botão da fileira de filtros de MÚSICAS.
-        listOf(Tab.LIBRARY, Tab.PLAYLISTS, Tab.USB, Tab.MENU).forEach { t ->
+        // O MENU não é uma aba como as outras: fica no fim, discreto (o que mora lá não se usa sempre).
+        listOf(Tab.LIBRARY, Tab.PLAYLISTS, Tab.USB).forEach { t ->
             val on = app.tab == t
             Box(Modifier.weight(1f).fillMaxHeight().clickable { app.tab = t }, contentAlignment = Alignment.Center) {
                 Box(Modifier.align(Alignment.TopCenter).fillMaxWidth(0.6f).height(2.dp).background(if (on) Palette.blue else Palette.surface))
@@ -271,6 +272,7 @@ private fun NavBar(app: ManagerApp, actions: Actions) {
         Box(Modifier.weight(1f).fillMaxHeight().clickable { actions.toDj() }.semantics { contentDescription = "Modo DJ" }, contentAlignment = Alignment.Center) {
             Text("DJ ›", color = Palette.orange, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1)
         }
+        os.deckbridge.shared.MenuButton(app.tab == Tab.MENU, { app.tab = Tab.MENU })
     }
 }
 
@@ -279,7 +281,7 @@ private fun NavBar(app: ManagerApp, actions: Actions) {
 private fun NavRail(app: ManagerApp, actions: Actions) {
     Column(Modifier.width(64.dp).fillMaxHeight().background(Palette.bg).border(BorderStroke(1.dp, Palette.line)).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         data class Item(val tab: Tab, val glyph: String, val label: String)
-        listOf(Item(Tab.LIBRARY, "≡", "MÚSICAS"), Item(Tab.PLAYLISTS, "♫", "LISTAS"), Item(Tab.USB, "⎘", "PENDRIVE"), Item(Tab.MENU, "⋯", "MENU")).forEach { it ->
+        listOf(Item(Tab.LIBRARY, "≡", "MÚSICAS"), Item(Tab.PLAYLISTS, "♫", "LISTAS"), Item(Tab.USB, "⎘", "PENDRIVE")).forEach { it ->
             val on = app.tab == it.tab
             val hot = spotlit(app, it.tab)
             Column(
@@ -299,6 +301,9 @@ private fun NavRail(app: ManagerApp, actions: Actions) {
             Text("◉", color = Palette.orange, fontSize = 20.sp)
             Text("DJ", color = Palette.orange, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp, maxLines = 1)
         }
+        // O MENU, discreto, embaixo de tudo.
+        Spacer(Modifier.weight(1f))
+        os.deckbridge.shared.MenuButton(app.tab == Tab.MENU, { app.tab = Tab.MENU }, Modifier.height(48.dp), width = 64.dp)
     }
 }
 
