@@ -106,8 +106,8 @@ class TrackProfile(
 
         /**
          * O pulso da batida por compasso, em duas faixas: o grave (bumbo) e o agudo (chimbal, palmas). O pulso é o pico do
-         * envelope de 5 ms contra a mediana do compasso. O do grave olha o pico mais alto (98%): o bumbo é curto e, num drop
-         * com baixo contínuo, a mediana já é o baixo. Um som contínuo (baixo, acorde) quase não pulsa. Junto, o grave que
+         * envelope de 5 ms (o 98º percentil) contra a mediana do compasso: um ataque curto (bumbo, chimbal de 20 ms) ocupa
+         * só uns 4% do compasso, e num drop com baixo contínuo a mediana já é o baixo. Um som contínuo (baixo, acorde) quase não pulsa. Junto, o grave que
          * fica: a mediana do grave em janelas de 20 ms (mais que um ciclo de 50 Hz), que é o baixo e não o bumbo.
          */
         private fun pulses(samples: FloatArray, rate: Int, originSec: Double, barSec: Double, bars: Int): Pair<FloatArray, FloatArray> {
@@ -139,7 +139,7 @@ class TrackProfile(
                 val from = ((originSec + bar * barSec) * envRate).toInt().coerceIn(0, frames)
                 val to = ((originSec + (bar + 1) * barSec) * envRate).toInt().coerceIn(from, frames)
                 if (to - from < 16) 0f
-                else maxOf((pulse(low, from, to, 98) - 4.0) / 8.0, (pulse(high, from, to, 95) - 4.0) / 8.0).coerceIn(0.0, 1.0).toFloat()
+                else maxOf((pulse(low, from, to, 98) - 4.0) / 8.0, (pulse(high, from, to, 98) - 4.0) / 8.0).coerceIn(0.0, 1.0).toFloat()
             }
             val bass = FloatArray(bars) { bar ->
                 val from = ((originSec + bar * barSec) * envRate).toInt().coerceIn(0, frames)

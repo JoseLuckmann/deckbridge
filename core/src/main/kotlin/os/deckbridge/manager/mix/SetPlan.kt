@@ -267,11 +267,15 @@ object SetPlanner {
         view: LibraryView, ids: List<Int>, grids: (TrackItem) -> TrackGrid?, keep: List<Transition> = emptyList(), bars: Int? = null,
         /** O jeito do DJ aprendido das mixagens dele: as trocas novas começam assim. */
         habits: MixHabits? = null,
+        /** A troca achada ouvindo as duas faixas ([MixFinder]), quando já há; senão, a automática pela estrutura. */
+        found: (TrackItem, TrackItem) -> Transition? = { _, _ -> null },
     ): List<Transition> =
         ids.zipWithNext().mapNotNull { (a, b) ->
             keep.firstOrNull { it.fromId == a && it.toId == b } ?: run {
                 val ta = view.track(a) ?: return@mapNotNull null
                 val tb = view.track(b) ?: return@mapNotNull null
+                // A achada já tem o ponto do grave pela música; do jeito do DJ, só o tempo de saída.
+                found(ta, tb)?.let { f -> return@run habits?.takeIf { it.ready }?.pace?.let { f.copy(pace = it) } ?: f }
                 val (t, basis) = auto(ta, grids(ta), tb, grids(tb), bars)
                 habits?.apply(t, basis) ?: t
             }

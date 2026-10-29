@@ -532,7 +532,10 @@ class SetDesk(private val app: StudioHost) {
         branchesHere().firstOrNull { it.fromTrackId == fromTrackId && it.rejoinTrackId != null }?.rejoinTrackId?.takeIf { it in joinChoices(fromTrackId) }
 
     /** As grades mudaram (refazer grades): lê de novo na próxima vez. */
-    fun forgetGrids() = synchronized(grids) { grids.clear() }
+    fun forgetGrids() {
+        synchronized(grids) { grids.clear() }
+        forgetProfiles()
+    }
 
     fun grid(t: TrackItem): TrackGrid? {
         synchronized(grids) { if (grids.containsKey(t.id)) return grids[t.id] }
@@ -546,7 +549,94 @@ class SetDesk(private val app: StudioHost) {
     /** As transições da linha aberta: só na parte com ordem (numa pool a ordem é escolhida na hora). */
     fun plan(ids: List<Int> = ids()): List<Transition> {
         val v = app.model.view ?: return emptyList()
-        return SetPlanner.plan(v, fixedPart(ids), ::grid, keep = saved, bars = app.transitionBars, habits = habits())
+        return SetPlanner.plan(v, fixedPart(ids), ::grid, keep = saved, bars = app.transitionBars, habits = habits(), found = { a, b -> mixOptions(a, b)?.firstOrNull()?.transition })
+    }
+
+    // ---- achar a troca ouvindo as faixas (perfil por compasso e MixFinder) ------------------------------------------
+
+    private val profilesDir get() = File(app.setsDir, "perfis")
+    private val profiles = HashMap<Int, os.deckbridge.manager.mix.TrackProfile?>()
+    private val options = HashMap<Pair<Int, Int>, List<os.deckbridge.manager.mix.MixPlan>>()
+    private val pending = HashSet<Pair<Int, Int>>()
+    private val profiler = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "deckbridge-perfis").apply { isDaemon = true; priority = Thread.MIN_PRIORITY } }
+
+    /** Muda cada vez que chega um perfil ou uma lista de trocas: a tela recompõe. */
+    var heard by mutableStateOf(0)
+        private set
+
+    /** Quantos pares ainda estão sendo ouvidos. */
+    var hearing by mutableStateOf(0)
+        private set
+
+    /** O perfil guardado é o desta faixa com esta grade: muda o arquivo, o BPM ou a primeira batida 1, mede de novo. */
+    private fun profileFile(t: TrackItem, g: TrackGrid?): File {
+        val first = g?.beats?.firstOrNull { it.inBar == 1 }?.timeMs ?: 0
+        val tag = Integer.toHexString(t.filePath.hashCode())
+        return File(profilesDir, "${t.id}-$tag-${Math.round(t.bpm * 100)}-$first.txt")
+    }
+
+    /** O perfil de [t]: do cache, do disco ou medido agora (lê o áudio inteiro: só fora da thread da tela). */
+    private fun profileNow(t: TrackItem): os.deckbridge.manager.mix.TrackProfile? {
+        synchronized(profiles) { if (profiles.containsKey(t.id)) return profiles[t.id] }
+        val g = grid(t)
+        val f = profileFile(t, g)
+        val p = os.deckbridge.manager.mix.TrackProfile.load(f) ?: runCatching {
+            val audio = AudioIo.mono(audioFile(t))
+            val first = g?.beats?.firstOrNull { it.inBar == 1 }?.timeMs?.toDouble() ?: 0.0
+            os.deckbridge.manager.mix.TrackProfile.of(audio.samples, audio.rate, t.bpm, first)?.also {
+                runCatching { os.deckbridge.manager.mix.TrackProfile.save(f, it) }
+            }
+        }.getOrNull()
+        synchronized(profiles) { profiles[t.id] = p }
+        return p
+    }
+
+    /**
+     * As formas de fazer a troca de [a] para [b], da melhor para a pior, se as duas já foram ouvidas; senão pede para
+     * ouvir (em segundo plano) e devolve null.
+     */
+    fun mixOptions(a: TrackItem, b: TrackItem): List<os.deckbridge.manager.mix.MixPlan>? {
+        heard.let { }
+        val key = a.id to b.id
+        synchronized(options) {
+            options[key]?.let { return it }
+            if (!pending.add(key)) return null
+        }
+        // Pedido durante a composição da tela: o contador muda depois, fora dela.
+        onMain { hearing++ }
+        profiler.execute {
+            val found = runCatching {
+                val pa = profileNow(a)
+                val pb = profileNow(b)
+                if (pa == null || pb == null) emptyList()
+                else os.deckbridge.manager.mix.MixFinder.find(a, pa, b, pb, grid(a), grid(b), limit = 4)
+            }.getOrDefault(emptyList())
+            synchronized(options) { options[key] = found; pending.remove(key) }
+            onMain { hearing = (hearing - 1).coerceAtLeast(0); heard++ }
+        }
+        return null
+    }
+
+    /** As opções da troca aberta no MIX (null enquanto ouve as faixas). */
+    fun mixOptions(): List<os.deckbridge.manager.mix.MixPlan>? {
+        val tr = mixing ?: return null
+        val v = app.model.view ?: return null
+        return mixOptions(v.track(tr.fromId) ?: return null, v.track(tr.toId) ?: return null)
+    }
+
+    /** Usa uma das opções na troca aberta: fica o lembrete e o sync fino à mão; a mixagem gravada era de outra troca. */
+    fun useOption(o: os.deckbridge.manager.mix.MixPlan) {
+        val cur = mixing ?: return
+        draftTake = null
+        touchedNow = emptySet()
+        editMix(o.transition.copy(note = cur.note, nudgeMs = cur.nudgeMs, masterTempo = cur.masterTempo, phaseLock = cur.phaseLock))
+    }
+
+    /** As grades ou o áudio mudaram: ouve de novo. */
+    fun forgetProfiles() {
+        synchronized(profiles) { profiles.clear() }
+        synchronized(options) { options.clear() }
+        heard++
     }
 
     // ---- o jeito do DJ, aprendido das mixagens guardadas ------------------------------------------------------------

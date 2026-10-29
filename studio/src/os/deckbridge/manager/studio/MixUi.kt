@@ -319,21 +319,36 @@ private fun DeckWave(p: MixPreview?, wave: ColorWave?, pos: Int, g: TrackGrid?, 
             }
             if (p != null && g != null) {
                 // Batidas da faixa levadas para o tempo da prévia; compassos contados a partir do ponto de saída.
+                // Num loop a faixa passa várias vezes pelo mesmo trecho: cada batida aparece em cada volta.
                 for (beat in g.beats) {
-                    val at = if (isA) p.fromA(beat.timeMs) else p.fromB(beat.timeMs, tr)
                     if (!isA && beat.timeMs < tr.inMs) continue
-                    val bx = x(at)
-                    if (bx < -2 || bx > w + 2) continue
-                    val bar = beat.inBar == 1
-                    val color = if (bar) Palette.danger else Palette.text.copy(alpha = 0.6f)
-                    val len = if (bar) tickH else tickH * 0.55f
-                    drawLine(color, Offset(bx, 0f), Offset(bx, len), if (bar) 2.5f else 1.2f)
-                    drawLine(color, Offset(bx, h - len), Offset(bx, h), if (bar) 2.5f else 1.2f)
+                    for (at in if (isA) p.timesA(beat.timeMs) else p.timesB(beat.timeMs, tr)) {
+                        val bx = x(at)
+                        if (bx < -2 || bx > w + 2) continue
+                        val bar = beat.inBar == 1
+                        val color = if (bar) Palette.danger else Palette.text.copy(alpha = 0.6f)
+                        val len = if (bar) tickH else tickH * 0.55f
+                        drawLine(color, Offset(bx, 0f), Offset(bx, len), if (bar) 2.5f else 1.2f)
+                        drawLine(color, Offset(bx, h - len), Offset(bx, h), if (bar) 2.5f else 1.2f)
+                    }
+                }
+                // O trecho em loop: uma faixa verde em cima, de cada volta.
+                val loopMs = if (isA) p.aLoopMs else p.bLoopMs
+                if (loopMs > 0) {
+                    val turns = if (isA) ((p.lengthMs - p.leadMs) / loopMs).toInt() + 1 else p.bLoopTimes
+                    val from = if (isA) p.leadMs.toDouble() else p.leadMs - p.shiftMs(tr)
+                    for (k in 0 until turns) {
+                        val l0 = x((from + k * loopMs).toInt())
+                        val l1 = x((from + (k + 1) * loopMs).toInt())
+                        if (l1 < 0 || l0 > w) continue
+                        drawLine(Palette.keyInk, Offset(l0.coerceAtLeast(0f) + 2f, tickH + 1f), Offset(l1.coerceAtMost(w) - 2f, tickH + 1f), 3f)
+                    }
                 }
                 for (c in g.cues) {
-                    val at = if (isA) p.fromA(c.timeMs) else p.fromB(c.timeMs, tr)
+                    if (!isA && c.timeMs < tr.inMs) continue
+                    val at = (if (isA) p.timesA(c.timeMs) else p.timesB(c.timeMs, tr)).firstOrNull() ?: continue
                     val cx = x(at)
-                    if (cx < -8 || cx > w + 8 || (!isA && c.timeMs < tr.inMs)) continue
+                    if (cx < -8 || cx > w + 8) continue
                     val color = if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.orange
                     drawLine(color, Offset(cx, waveTop), Offset(cx, waveBot), 2f)
                     val tri = androidx.compose.ui.graphics.Path().apply { moveTo(cx - 7f, waveTop); lineTo(cx + 7f, waveTop); lineTo(cx, waveTop + 9f); close() }
@@ -762,6 +777,7 @@ private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition
     Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       // Os ajustes em grupos dentro de molduras: o que está na mesma moldura se lê como uma coisa só (região comum,
       // Palmer 1992). A troca; o grave; corrigir a análise.
+      FinderPanel(desk, tr)
       Group("A TROCA") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             RowLabel("COMP.")
@@ -780,7 +796,7 @@ private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             RowLabel("ESTILO")
-            listOf(MixStyle.BASS_SWAP to "GRAVE", MixStyle.BLEND to "MISTURA", MixStyle.ECHO to "ECHO", MixStyle.CUT to "CORTE").forEach { (s, label) ->
+            listOf(MixStyle.BASS_SWAP to "GRAVE", MixStyle.BLEND to "MISTURA", MixStyle.FILTER to "FILTRO", MixStyle.ECHO to "ECHO", MixStyle.CUT to "CORTE").forEach { (s, label) ->
                 PadButton(label, Modifier.weight(1f), on = tr.style == s) { edit(tr.copy(style = s)) }
             }
         }
@@ -789,6 +805,22 @@ private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition
             RowLabel("RITMO")
             listOf(Transition.Pace.FAST to "RÁPIDA", Transition.Pace.NORMAL to "MÉDIA", Transition.Pace.SLOW to "LENTA").forEach { (p, label) ->
                 PadButton(label, Modifier.weight(1f), on = tr.pace == p) { edit(tr.copy(pace = p)) }
+            }
+        }
+        // Loops, como no player: segurar o fim da que sai (quando ele é curto para a troca) ou repetir o começo da que
+        // entra (para o drop dela cair na hora, ou para ter mais tempo de batida clara).
+        if (tr.style != MixStyle.CUT) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            RowLabel("LOOP D1")
+            listOf(0 to "SEM", 4 to "4 COMP.", 8 to "8 COMP.").forEach { (n, label) ->
+                PadButton(label, Modifier.weight(1f), on = tr.aLoopBars == n, enabled = n < tr.bars) { edit(tr.copy(aLoopBars = n)) }
+            }
+        }
+        if (tr.style != MixStyle.CUT) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            RowLabel("LOOP D2")
+            listOf(Triple(0, 0, "SEM"), Triple(4, 2, "4 × 2"), Triple(8, 2, "8 × 2"), Triple(4, 4, "4 × 4")).forEach { (n, times, label) ->
+                PadButton(label, Modifier.weight(1f), on = tr.bLoopBars == n && (n == 0 || tr.bLoopTimes == times), enabled = n * times <= tr.bars) {
+                    edit(tr.copy(bLoopBars = n, bLoopTimes = times))
+                }
             }
         }
       }
@@ -875,5 +907,47 @@ private fun CueRow(cues: List<Cue>, current: Int, onPick: (Int) -> Unit) {
             }
         }
         repeat((6 - cues.size).coerceAtLeast(0)) { Spacer(Modifier.weight(1f)) }
+    }
+}
+
+/**
+ * Achar a troca: as formas que o app achou ouvindo as duas faixas (onde cada uma tem grave, bateria e melodia, e as
+ * frases), da melhor para a pior, com a nota e o porquê. Tocar uma usa ela na troca; o porquê da troca aberta fica embaixo.
+ */
+@Composable
+private fun FinderPanel(desk: SetDesk, tr: Transition) {
+    val options = desk.mixOptions()
+    Group("ACHAR A TROCA") {
+        when {
+            options == null -> Text("Ouvindo as duas faixas: grave, bateria, melodia e frases…", color = Palette.mutedBright, fontSize = 12.sp, modifier = Modifier.padding(start = 2.dp))
+            options.isEmpty() -> Text("Nada melhor achado (faixas curtas ou sem grade).", color = Palette.mutedBright, fontSize = 12.sp, modifier = Modifier.padding(start = 2.dp))
+            else -> options.forEach { o -> OptionRow(o, current = sameMix(o.transition, tr)) { desk.useOption(o) } }
+        }
+        if (tr.why.isNotEmpty()) {
+            Text("POR QUE ESTA TROCA", color = Palette.text, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 2.dp, top = 2.dp))
+            tr.why.forEach { Text("· $it", color = Palette.keyInk, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp)) }
+        }
+    }
+}
+
+/** A opção é a troca aberta? (mesmos pontos, duração, estilo e loops; o resto se ajusta por cima.) */
+private fun sameMix(a: Transition, b: Transition) = a.outMs == b.outMs && a.inMs == b.inMs && a.bars == b.bars && a.style == b.style &&
+    a.aLoopBars == b.aLoopBars && a.bLoopBars == b.bLoopBars && a.bLoopTimes == b.bLoopTimes
+
+@Composable
+private fun OptionRow(o: os.deckbridge.manager.mix.MixPlan, current: Boolean, onUse: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RbShape).background(if (current) Palette.blueActiveFill else Palette.surfaceHigh)
+            .border(BorderStroke(1.dp, if (current) Palette.blue else Palette.line), RbShape).clickable(onClick = onUse).padding(horizontal = 6.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(34.dp).height(28.dp).border(BorderStroke(1.dp, if (o.score >= 70) Palette.keyInk else Palette.line), RbShape), contentAlignment = Alignment.Center) {
+            Text("${o.score}", color = if (o.score >= 70) Palette.keyInk else Palette.mutedBright, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = Mono)
+        }
+        Column(Modifier.weight(1f).padding(start = 8.dp)) {
+            Text(o.title, color = if (current) Palette.blue else Palette.text, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            o.reasons.firstOrNull()?.let { Text(it, color = Palette.mutedBright, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+        }
+        Text(if (current) "EM USO" else "USAR", color = if (current) Palette.blue else Palette.orange, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
     }
 }

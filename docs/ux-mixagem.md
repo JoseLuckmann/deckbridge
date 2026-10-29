@@ -47,6 +47,53 @@ grave cortado, subir pelo fader em vez de subir médio e agudo no botão.
 - "Aprender" é só ponto do grave e tempo de saída da troca de grave; o resto da mão vale só para a troca em que foi
   gravada.
 
+## Achar a troca (0.24.0)
+
+Pedido do dono (2026-10-29): o app analisar as faixas e achar uma mixagem boa como um DJ — olhando os breaks onde dá
+para virar o grave, encaixando as duas, usando loop quando precisa — inclusive com músicas difíceis de encaixar.
+
+**O que o app ouve (`TrackProfile`).** Uma vez por faixa, em segundo plano, preso à grade (primeira batida 1), compasso a
+compasso: baixo (o grave que fica entre os bumbos: mediana do grave em janelas de 20 ms, para o ataque do bumbo não contar
+como baixo), bateria (pulso do envelope de 5 ms no grave ou no agudo), melodia (médio perto do patamar e agudo presente)
+e as frases (as mesmas da análise de frases). Fica em `perfis/` na pasta dos sets (fora do pendrive); muda o arquivo,
+o BPM ou a primeira batida, mede de novo.
+
+**Como acha (`MixFinder`).** Testa saídas (começos de frase e blocos de 8 na segunda metade da que sai), entradas
+(começos de frase e blocos de 8 na primeira metade da que entra), durações de 8 a 64 compassos, o compasso em que o
+grave vira (de 4 em 4) e loops, e pontua cada combinação pelo que um DJ procura e evita:
+
+| Regra | Como pesa |
+|---|---|
+| Nunca dois baixos juntos, nem buraco sem baixo | cada compasso com baixo só de quem não devia ter tira ponto |
+| Virar o grave onde a música pede | +3 onde o baixo da que entra começa (o drop) ou onde o da que sai some (break, outro) |
+| Quem tem o grave segura a batida | perde ponto o compasso sem bateria de quem está com o grave |
+| Duas melodias juntas só com tons perto | o peso do choque é 0,1 no mesmo tom, 0,25 vizinho, 1,2 longe |
+| Sair e entrar em frase | +3 saída em começo de frase, +2 no Outro, +1,5 no break; +2 entrada em começo de frase |
+| O drop da que entra cai quando a outra acaba | +5; −2 se o drop for queimado no meio da troca |
+| Não sair cedo nem arrastar | perde ponto sair antes de 60% da faixa e acompanhar mais de 16 compassos depois do grave virar |
+| Longo só quando dá para ouvir as duas batidas | bônus por duração × compassos com as duas baterias; andamentos longe pedem curto |
+| Loop na que sai | só quando o fim dela é curto para a troca, só em trecho com bateria; custa um pouco por volta |
+| Loop na que entra (4×2, 8×2, 4×4) | só quando faz o drop dela cair na hora certa |
+| Quando nada casa longo | eco no começo da frase, corte seco no drop da que entra, ou filtro passa-alta em 16 compassos |
+
+As quatro melhores (variadas: uma por estilo e duração parecida) aparecem no MIX em **ACHAR A TROCA**, com nota e o
+porquê; tocar uma usa ela. A melhor já vira a troca automática do set quando as duas faixas foram ouvidas (as trocas que
+o DJ ajustou ficam como estão). LOOP D1 / LOOP D2 e o estilo FILTRO também estão nos ajustes, e a onda marca as voltas
+do loop com as batidas de cada volta.
+
+**Por que assim.** As regras de saída e entrada em começo de frase, a troca do grave em limite de frase e o drop da que
+entra no fim vêm de como DJs descrevem e fazem as trocas: Zehren, Alunno e Bientinesi (2020; *Computer Music Journal*
+2022) acham pontos de entrada e saída pelos limites de estrutura e pelo que DJs dizem nas entrevistas; Vande Veire e De
+Bie (2018) trocam o grave em limites de frase; Kim et al. (ISMIR 2020) mostram, em transições reais, trocas em pontos de
+estrutura e longas. Casar trechos pela harmonia e pelo equilíbrio de espectro (não juntar dois trechos cheios no mesmo
+lugar do espectro) é a ideia da "mashability" do AutoMashUpper (Davies et al. 2014). Os pesos são deste app, não dessas
+fontes, e foram conferidos só com faixas sintéticas de estrutura conhecida (`MixFinderTest`).
+
+**Limites.** O perfil não separa voz de synth nem sabe o tom de cada trecho (usa o tom da faixa); "melodia" é energia de
+médio e agudo, não harmonia de verdade. Bateria com baixo contínuo mais alto que o bumbo pode ler como "sem bateria".
+Ouvir uma faixa lê o áudio inteiro (uns 30 MB por faixa de 6 min, na thread de fundo, uma de cada vez); não foi medido
+em aparelho (`BLOCKED_HARDWARE`). Nada disso foi testado com músicas reais do dono.
+
 ## Fontes
 
 - Chen, B.-Y., Hsu, W.-H., Liao, W.-H., Martínez Ramírez, M. A., Mitsufuji, Y., Yang, Y.-H. (2022). *Automatic DJ
@@ -64,3 +111,7 @@ grave cortado, subir pelo fader em vez de subir médio e agudo no botão.
 - Fiebrink, R., Cook, P. R., Trueman, D. (2011). *Human model evaluation in interactive supervised learning.* CHI 2011.
 - Hirsh, I. J. (1959). *Auditory perception of temporal order.* JASA 31(6).
 - Repp, B. H. (2005). *Sensorimotor synchronization: A review of the tapping literature.* Psychonomic Bulletin & Review 12(6).
+- Zehren, M., Alunno, M., Bientinesi, P. (2020). *Automatic Detection of Cue Points for DJ Mixing.* arXiv:2007.08411.
+  https://arxiv.org/abs/2007.08411 ; e (2022) *Computer Music Journal* 46(3).
+- Davies, M. E. P., Hamel, P., Yoshii, K., Goto, M. (2014). *AutoMashUpper: Automatic Creation of Multi-Song Music
+  Mashups.* IEEE/ACM Trans. Audio, Speech, and Language Processing 22(12), 1726–1737.
