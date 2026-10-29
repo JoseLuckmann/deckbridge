@@ -300,3 +300,13 @@ internal fun phraseSections(samples: FloatArray, rate: Int, bpm: Double, originS
     val outroSec = spans.firstOrNull { it.kind == Section.OUTRO }?.startMs?.div(1000.0) ?: duration
     return SectionRead(StructurePoints(0.0, buildSec, dropSec, breakSec, outroSec), spans)
 }
+
+/**
+ * As frases de uma faixa em compassos (do mesmo jeito que [phraseSections], mas sem ir para ms): onde cada uma começa,
+ * onde acaba e o rótulo (Intro, Up, Chorus, Down, Outro). Para a montagem de transições ler a estrutura compasso a compasso.
+ */
+fun phraseBars(f: BarFeatures): List<Triple<Int, Int, String>> {
+    if (f.bars < 8) return listOf(Triple(0, f.bars, Section.INTRO))
+    val plan = labelPhrases(f, refineCuts(f, phraseCuts(f)))
+    return plan.kinds.indices.map { i -> Triple(plan.cuts[i], plan.cuts[i + 1], plan.kinds[i]) }.filter { it.second > it.first }
+}

@@ -119,13 +119,49 @@ class MixPreview(
     /** Compassos desde o ponto de saída no instante [ms] da prévia (negativo: antes). */
     fun relBar(ms: Int) = (ms - leadMs) / barMsA
 
-    /** Onde está a faixa que sai (ms dela) no instante [ms] da prévia. */
-    fun aAt(ms: Int) = aStartMs + (ms * speedA).toInt()
+    /** O loop da que sai na base de tempo da prévia (ms; 0 sem loop). */
+    val aLoopMs get() = transition.aLoopBars * barMsA
+    /** O loop da que entra na base de tempo da prévia (ms; 0 sem loop) e quantas vezes toca. */
+    val bLoopMs get() = if (transition.bLoopTimes > 0) transition.bLoopBars * barMsA else 0.0
+    val bLoopTimes get() = transition.bLoopTimes
+
+    /** Onde está a faixa que sai (ms dela) no instante [ms] da prévia (no loop, volta ao começo dele). */
+    fun aAt(ms: Int): Int {
+        if (aLoopMs > 0 && ms >= leadMs) return transition.outMs + (((ms - leadMs) % aLoopMs) * speedA).toInt()
+        return aStartMs + (ms * speedA).toInt()
+    }
+
     /** Onde está a que entra (ms dela) no instante [ms] da prévia (antes do ponto de entrada: ainda não começou). */
-    fun bAt(ms: Int, tr: Transition = transition) = transition.inMs + ((ms - leadMs + shiftMs(tr)) * speed).toInt()
-    /** Instante da prévia em que a faixa que sai passa por [trackMs]. */
+    fun bAt(ms: Int, tr: Transition = transition): Int {
+        val t = ms - leadMs + shiftMs(tr)
+        if (bLoopMs > 0 && t >= 0) {
+            val loops = bLoopMs * bLoopTimes
+            return if (t < loops) transition.inMs + ((t % bLoopMs) * speed).toInt() else transition.inMs + ((t - bLoopMs * (bLoopTimes - 1)) * speed).toInt()
+        }
+        return transition.inMs + (t * speed).toInt()
+    }
+
+    /** Instante da prévia em que a faixa que sai passa por [trackMs] (a primeira vez, se estiver no loop). */
     fun fromA(trackMs: Int) = ((trackMs - aStartMs) / speedA).toInt()
-    fun fromB(trackMs: Int, tr: Transition = transition) = leadMs + ((trackMs - transition.inMs) / speed - shiftMs(tr)).toInt()
+    fun fromB(trackMs: Int, tr: Transition = transition): Int {
+        var t = (trackMs - transition.inMs) / speed
+        if (bLoopMs > 0 && t >= bLoopMs) t += bLoopMs * (bLoopTimes - 1)
+        return leadMs + (t - shiftMs(tr)).toInt()
+    }
+
+    /** Todos os instantes da prévia em que a que sai passa por [trackMs] (no loop ela passa várias vezes). */
+    fun timesA(trackMs: Int): List<Int> {
+        if (aLoopMs <= 0 || trackMs < transition.outMs) return if (aLoopMs > 0 && trackMs >= transition.outMs) emptyList() else listOf(fromA(trackMs))
+        val off = (trackMs - transition.outMs) / speedA
+        if (off >= aLoopMs) return emptyList()
+        return generateSequence(0) { it + 1 }.map { (leadMs + off + it * aLoopMs).toInt() }.takeWhile { it <= lengthMs }.toList()
+    }
+
+    fun timesB(trackMs: Int, tr: Transition = transition): List<Int> {
+        val off = (trackMs - transition.inMs) / speed
+        if (bLoopMs <= 0 || off < 0 || off >= bLoopMs) return listOf(fromB(trackMs, tr))
+        return (0 until bLoopTimes).map { (leadMs + off + it * bLoopMs - shiftMs(tr)).toInt() }
+    }
 
     /** Os níveis em [ms]: o automático de [tr], por cima a mixagem guardada ([take]) e, por cima, a mão agora ([pass]). */
     fun levelsAt(ms: Int, tr: Transition = transition, take: MixTake? = tr.take, pass: TakeRecorder? = null, into: Levels = Levels()): Levels =
@@ -133,7 +169,8 @@ class MixPreview(
 
     /** Muda só o que não exige ler e esticar o áudio de novo? (estilo, ritmo, grave, sync, lembrete e a mixagem do DJ) */
     fun sameStems(tr: Transition) = tr.fromId == transition.fromId && tr.toId == transition.toId && tr.outMs == transition.outMs &&
-        tr.inMs == transition.inMs && tr.bars == transition.bars && tr.masterTempo == transition.masterTempo
+        tr.inMs == transition.inMs && tr.bars == transition.bars && tr.masterTempo == transition.masterTempo &&
+        tr.aLoopBars == transition.aLoopBars && tr.bLoopBars == transition.bLoopBars && tr.bLoopTimes == transition.bLoopTimes
 
     /** Mixa a prévia inteira com [tr] e [take] (offline): o mesmo som do ensaio ao vivo. */
     fun mixdown(tr: Transition = transition, take: MixTake? = tr.take): Stereo {
@@ -422,8 +459,24 @@ object MixGuide {
                 ).sortedBy { it.fromBar }
             }
             MixStyle.CUT -> listOf(MixStep(0.0, 0.0, "Corte seco: troca de canal no início do compasso"))
-        }
+            MixStyle.FILTER -> {
+                val shape = MixRenderer.swapShape(n, tr.pace, tr.swapAt)
+                listOf(
+                    MixStep(0.0, 0.0, "Entra o CH 2: LOW fechado, fader embaixo"),
+                    MixStep(0.0, shape.rise * n, "Sobe o fader do CH 2"),
+                    MixStep(0.0, n, "Gira o FILTER do CH 1 para a direita (passa-alta) até o fim"),
+                    MixStep(shape.swap * n, shape.swap * n, "Troca o grave: corta o LOW do CH 1 e abre o do CH 2"),
+                    MixStep(shape.fadeFrom * n, n, "Baixa o fader do CH 1 até fechar"),
+                ).sortedBy { it.fromBar }
+            }
+        }.let { base -> (loopSteps(tr) + base).sortedBy { it.fromBar } }
     }
+
+    /** Os loops da troca, como gestos: ligar no ponto e soltar depois das voltas. */
+    private fun loopSteps(tr: Transition): List<MixStep> = listOfNotNull(
+        if (tr.aLoopBars > 0) MixStep(0.0, 0.0, "LOOP de ${tr.aLoopBars} compassos no CH 1 no ponto de saída (segura até o fim)") else null,
+        if (tr.bLoopBars > 0 && tr.bLoopTimes > 1) MixStep(0.0, (tr.bLoopBars * tr.bLoopTimes).toDouble(), "LOOP de ${tr.bLoopBars} no CH 2: ${tr.bLoopTimes} voltas e solta") else null,
+    )
 
     /** Os passos acontecendo em [bar] (os gestos de uma vez valem por um compasso) e o próximo que ainda vem. */
     fun at(steps: List<MixStep>, bar: Double): Pair<List<MixStep>, MixStep?> {
@@ -488,7 +541,7 @@ object MixRenderer {
         }
         if (relMs < 0) {
             out.aVol = 1f; out.bVol = 0f
-            if (style == MixStyle.BASS_SWAP) out.bLow = 0f
+            if (style == MixStyle.BASS_SWAP || style == MixStyle.FILTER) out.bLow = 0f
             return out
         }
         /** 0 antes de [from], 1 depois de [to], subindo em linha reta entre os dois. */
@@ -528,6 +581,18 @@ object MixRenderer {
                 val after = ramp(s, 1.0)
                 out.aHigh = ((1 - 0.5 * before) * (1 - 0.5 * after)).toFloat()
                 out.aMid = ((1 - 0.25 * before) * (1 - 0.3 * after)).toFloat()
+                out.aVol = if (relMs >= overlapMs) 0f else cos(ramp(sh.fadeFrom, 1.0) * PI / 2).toFloat()
+            }
+            MixStyle.FILTER -> {
+                // Como a troca de grave, mas a que sai some num passa-alta que abre a troca inteira (do grave para cima): a
+                // melodia dela afina e sai do caminho da outra.
+                val bars = if (overlapMs > 0) overlapMs / barMs else 1.0
+                val sh = swapShape(bars, pace, swapAt)
+                out.bVol = sin(ramp(0.0, sh.rise) * PI / 2).toFloat()
+                val swap = if (x >= sh.swap) 1.0 else 0.0
+                out.aLow = (1 - swap).toFloat()
+                out.bLow = swap.toFloat()
+                out.aFilter = (0.5 + 0.45 * ramp(0.0, 1.0)).toFloat()
                 out.aVol = if (relMs >= overlapMs) 0f else cos(ramp(sh.fadeFrom, 1.0) * PI / 2).toFloat()
             }
             MixStyle.CUT -> {
@@ -571,7 +636,10 @@ object MixRenderer {
         val lead = min(leadMs, (t.outMs / speedA).toInt())
         val aStart = t.outMs - (lead * speedA).toInt()
         // Dois compassos a mais da que sai: o eco e a mão do DJ podem segurá-la depois da troca.
-        val aLen = ((lead + overlapMs + (barMs * 2).toInt()) * speedA).toInt() + 300
+        // Com loop, só o trecho do loop (e um pouco depois, para emendar sem estalo).
+        val aLoopTrack = if (t.aLoopBars > 0) (t.aLoopBars * SetPlanner.barMs(if (bpmA > 0) bpmA else master)).toInt() else 0
+        val aLen = if (aLoopTrack > 0) (lead * speedA).toInt() + aLoopTrack + 600
+        else ((lead + overlapMs + (barMs * 2).toInt()) * speedA).toInt() + 300
         val pa = a.read(aStart, aLen) ?: return null
         val speed = if (master > 0 && bpmB > 0) master / bpmB else 1.0
         val bOutMs = overlapMs + tailMs
@@ -580,11 +648,15 @@ object MixRenderer {
         val barB = SetPlanner.barMs(if (bpmB > 0) bpmB else master)
         val pre = min(barB.toInt(), t.inMs)
         val pb = b.read(t.inMs - pre, ((bOutMs + barMs) * speed).toInt() + pre + 300) ?: return null
-        val sa = if (t.masterTempo) Stretch.tempo(resample(pa, 1.0), speedA) else resample(pa, speedA)
-        val sb = if (t.masterTempo) Stretch.tempo(resample(pb, 1.0), speed) else resample(pb, speed)
+        val sa0 = if (t.masterTempo) Stretch.tempo(resample(pa, 1.0), speedA) else resample(pa, speedA)
+        val sb0 = if (t.masterTempo) Stretch.tempo(resample(pb, 1.0), speed) else resample(pb, speed)
         val bEntry = ms((pre / speed).toInt())
         val leadFrames = ms(lead)
         val total = leadFrames + ms(bOutMs)
+        // Os loops já entram nas faixas prontas (como um player em loop): a que sai repete o trecho depois do ponto de
+        // saída até o fim; a que entra repete o começo dela as vezes pedidas e segue.
+        val sa = if (t.aLoopBars > 0) loop(sa0, leadFrames, ms((t.aLoopBars * barMs).toInt()), 0, total + ms((2 * barMs).toInt())) else sa0
+        val sb = if (t.bLoopBars > 0 && t.bLoopTimes > 1) loop(sb0, bEntry, ms((t.bLoopBars * barMs).toInt()), t.bLoopTimes, 0) else sb0
         // Sync fino: as grades alinham a batida, mas cada análise põe a grade a uma distância um pouco diferente do
         // ataque do bumbo; o que sobra (10–30 ms) embola o grave. Mede pelos ataques graves; a mixagem corrige, como no jog.
         val measured = phaseLag(sa, sb, leadFrames, ms(overlapMs), ms((2 * barMs).toInt()), bFrom = bEntry)
@@ -720,6 +792,45 @@ object MixRenderer {
     }
 
     private fun ms(v: Int) = (v.toLong() * RATE / 1000).toInt()
+
+    /**
+     * [s] com o trecho de [len] quadros a partir de [at] repetido: [times] vezes e depois o resto da faixa, ou (com
+     * [times] 0) até completar [total] quadros. Cada emenda cruza em ~3 ms com o que viria depois do trecho, para não estalar.
+     */
+    fun loop(s: Stereo, at: Int, len: Int, times: Int, total: Int): Stereo {
+        if (len <= 0 || at < 0 || at + len > s.frames) return s
+        val n = if (times > 0) s.frames + len * (times - 1) else maxOf(total, at + len)
+        val l = FloatArray(n)
+        val r = FloatArray(n)
+        val fade = minOf(128, len / 4)
+        var o = 0
+        fun copy(from: Int, count: Int) {
+            val c = minOf(count, n - o, s.frames - from).coerceAtLeast(0)
+            System.arraycopy(s.left, from, l, o, c)
+            System.arraycopy(s.right, from, r, o, c)
+            o += c
+        }
+        copy(0, at)
+        var turn = 0
+        while (o < n && (times == 0 || turn < times)) {
+            val start = o
+            copy(at, len)
+            // A emenda: o começo desta volta cruza com o que viria depois do fim da volta anterior.
+            if (turn > 0) for (k in 0 until fade) {
+                val i = start + k
+                if (i >= n) break
+                val tail = at + len + k
+                val w = k.toFloat() / fade
+                val tl = if (tail < s.frames) s.left[tail] else 0f
+                val tr = if (tail < s.frames) s.right[tail] else 0f
+                l[i] = l[i] * w + tl * (1 - w)
+                r[i] = r[i] * w + tr * (1 - w)
+            }
+            turn++
+        }
+        if (times > 0 && o < n) copy(at + len, n - o)
+        return Stereo(l, r, RATE)
+    }
 
     /** Leva a [RATE] e aplica a velocidade [speed] (interpolação linear). */
     fun resample(p: DecodedPcm, speed: Double): Stereo {

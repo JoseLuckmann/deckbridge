@@ -15,6 +15,8 @@ enum class MixStyle(val title: String) {
     BLEND("Mistura"),
     ECHO("Eco"),
     CUT("Corte"),
+    /** A que sai vai sumindo num filtro passa-alta (do grave para cima) enquanto a outra sobe: para o que não casa longo. */
+    FILTER("Filtro"),
 }
 
 /**
@@ -46,7 +48,22 @@ data class Transition(
     val beatShift: Int = 0,
     /** A mixagem do DJ nesta troca (o que ele fez com os controles ao ensaiar); null é o automático. */
     val take: MixTake? = null,
+    /**
+     * Loop na que sai: a partir do ponto de saída, os primeiros [aLoopBars] compassos se repetem até a troca acabar (o
+     * outro dela é curto, ou só esse trecho é limpo). 0: sem loop.
+     */
+    val aLoopBars: Int = 0,
+    /**
+     * Loop na que entra: os primeiros [bLoopBars] compassos depois do ponto de entrada tocam [bLoopTimes] vezes antes de
+     * ela seguir (segurar a intro até o drop cair na hora certa, ou firmar uma batida). 0: sem loop.
+     */
+    val bLoopBars: Int = 0,
+    val bLoopTimes: Int = 0,
+    /** Por que a troca é assim (quando quem montou foi a busca de trocas): frases curtas, para a tela. */
+    val why: List<String> = emptyList(),
 ) {
+    /** Quantos compassos a que entra anda além do que toca (as repetições do loop dela). */
+    val bLoopExtra get() = if (bLoopBars > 0 && bLoopTimes > 1) bLoopBars * (bLoopTimes - 1) else 0
     enum class Mark { GOOD, REDO }
 
     enum class Pace(val title: String) { FAST("Rápida"), NORMAL("Média"), SLOW("Lenta") }
@@ -308,6 +325,9 @@ object SetPlanner {
             if (t.nudgeMs != 0) p.setProperty("$n.nudge", t.nudgeMs.toString())
             if (t.beatShift != 0) p.setProperty("$n.beats", t.beatShift.toString())
             t.take?.takeIf { !it.isEmpty }?.let { p.setProperty("$n.take", it.encode()) }
+            if (t.aLoopBars > 0) p.setProperty("$n.aLoop", t.aLoopBars.toString())
+            if (t.bLoopBars > 0) p.setProperty("$n.bLoop", "${t.bLoopBars}x${t.bLoopTimes}")
+            if (t.why.isNotEmpty()) p.setProperty("$n.why", t.why.joinToString("|"))
         }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".novo")
@@ -333,6 +353,10 @@ object SetPlanner {
                     p.getProperty("$i.nudge")?.toIntOrNull() ?: 0,
                     p.getProperty("$i.beats")?.toIntOrNull() ?: 0,
                     MixTake.decode(p.getProperty("$i.take")),
+                    p.getProperty("$i.aLoop")?.toIntOrNull() ?: 0,
+                    p.getProperty("$i.bLoop")?.substringBefore('x')?.toIntOrNull() ?: 0,
+                    p.getProperty("$i.bLoop")?.substringAfter('x', "")?.toIntOrNull() ?: 0,
+                    p.getProperty("$i.why")?.split('|')?.filter { it.isNotBlank() }.orEmpty(),
                 )
             }.getOrNull()
         }
