@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -148,7 +149,7 @@ private fun MixContent(app: StudioHost) {
         val pageContent = @Composable {
             when (page) {
                 MixPage.MIXER -> {
-                    FxPicker(desk, tr)
+                    FxPanel(desk, tr)
                     MixerNow(desk, tr, p)
                     TakeActions(desk)
                 }
@@ -189,8 +190,8 @@ private fun MixContent(app: StudioHost) {
                 val scroll = rememberScrollState()
                 // No celular o mixer ocupa a altura que sobra (faders mais altos, mais fáceis de mexer); as outras abas rolam.
                 if (page == MixPage.MIXER) Column(Modifier.weight(1f).fillMaxWidth()) {
-                    FxPicker(desk, tr)
-                    MixerNow(desk, tr, p, Modifier.weight(1f))
+                    FxPanel(desk, tr)
+                    MixerNow(desk, tr, p, Modifier.weight(1f), tall = true)
                     TakeActions(desk)
                 } else Box(Modifier.weight(1f).fillMaxWidth()) {
                     Column(Modifier.fillMaxSize().verticalScroll(scroll)) { pageContent() }
@@ -567,15 +568,28 @@ private fun TakeActions(desk: SetDesk) {
 }
 
 /**
- * O efeito do botão FX dos dois canais nesta troca: ECHO, REVERB, FLANGER ou ROLL (os Beat FX da DDJ-400). Trocar vale na
- * hora (a prévia é mixada ao vivo) e fica na troca.
+ * O FX, como a unidade de Beat FX da DDJ-400: o efeito escolhido em quatro botões (ECHO, REVERB, FLANGER, ROLL) e o knob
+ * LEVEL (quanto do efeito entra). Trocar o efeito ou o nível vale na hora (a prévia é mixada ao vivo) e fica na troca; o
+ * botão FX de cada canal liga o efeito naquele canal.
  */
 @Composable
-private fun FxPicker(desk: SetDesk, tr: Transition) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("FX", color = Palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
-        os.deckbridge.manager.mix.MixFx.entries.forEach { fx ->
-            PadButton(fx.label, Modifier.weight(1f), on = tr.fx == fx) { if (tr.fx != fx) desk.editMix(tr.copy(fx = fx)) }
+private fun FxPanel(desk: SetDesk, tr: Transition) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp).rbPanel().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            os.deckbridge.manager.mix.MixFx.entries.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    row.forEach { fx -> PadButton(fx.label, Modifier.weight(1f), on = tr.fx == fx) { if (tr.fx != fx) desk.editMix(tr.copy(fx = fx)) } }
+                }
+            }
+        }
+        val density = androidx.compose.ui.platform.LocalDensity.current.density
+        val level by androidx.compose.runtime.rememberUpdatedState(tr.fxLevel)
+        Column(
+            Modifier.width(84.dp).height(84.dp).knobGestures(true, "fx-level", level, density, false, "LEVEL do FX", tr.fxLevel, onEnd = { desk.setFxLevel(level, save = true) }) { desk.setFxLevel(it, save = false) },
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+        ) {
+            KnobDial(tr.fxLevel, false, Palette.blue, 7f, Modifier.weight(1f).aspectRatio(1f, matchHeightConstraintsFirst = true))
+            Text("LEVEL", color = Palette.muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -586,7 +600,7 @@ private fun FxPicker(desk: SetDesk, tr: Transition) {
  * laranja, o automático azul. AUTO devolve o canal ao automático dali em diante.
  */
 @Composable
-private fun MixerNow(desk: SetDesk, tr: Transition, p: MixPreview?, modifier: Modifier = Modifier.height(172.dp)) {
+private fun MixerNow(desk: SetDesk, tr: Transition, p: MixPreview?, modifier: Modifier = Modifier.height(172.dp), tall: Boolean = false) {
     // O que o mixer mostra: o automático, a mixagem em ensaio e a mão agora — o mesmo que se ouve. Lê a posição aqui
     // dentro: a cada quadro só o mixer recompõe.
     val pos = desk.cursorMs
@@ -595,14 +609,15 @@ private fun MixerNow(desk: SetDesk, tr: Transition, p: MixPreview?, modifier: Mo
     val levels = p?.levelsAt(pos, tr, desk.draftTake, pass) ?: Levels()
     val bar = p?.relBar(pos) ?: 0.0
     val hand: (Ctl) -> Boolean = { c -> pass?.at(c, bar) != null || desk.draftTake?.at(c, bar) != null }
-    MixerPanel(levels, hand, enabled = p != null, fxLabel = tr.fx.label, modifier = modifier, onSet = { c, v -> desk.setControl(c, v) }, onRelease = { desk.releaseDeck(it) })
+    MixerPanel(levels, hand, enabled = p != null, modifier = modifier, tall = tall, onSet = { c, v -> desk.setControl(c, v) }, onRelease = { desk.releaseDeck(it) })
 }
 
 @Composable
-private fun MixerPanel(lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, fxLabel: String, modifier: Modifier, onSet: (Ctl, Float) -> Unit, onRelease: (Int) -> Unit) {
+private fun MixerPanel(lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, modifier: Modifier, tall: Boolean, onSet: (Ctl, Float) -> Unit, onRelease: (Int) -> Unit) {
     Row(modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        MixerChannel(0, lv, hand, enabled, fxLabel, onSet, onRelease, Modifier.weight(1f))
-        Column(Modifier.width(44.dp).fillMaxHeight().rbPanel().padding(4.dp), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.CenterHorizontally) {
+        MixerChannel(0, lv, hand, enabled, tall, onSet, onRelease, Modifier.weight(1f))
+        // No celular (alto) não há a coluna do meio: era só um desenho do crossfader, sem função.
+        if (!tall) Column(Modifier.width(44.dp).fillMaxHeight().rbPanel().padding(4.dp), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.CenterHorizontally) {
             Text("MIX", color = Palette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
             Text("X-F", color = Palette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
@@ -612,21 +627,40 @@ private fun MixerPanel(lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, fxL
                 drawRect(Palette.text, Offset(size.width / 2 - 5f, 1f), Size(10f, size.height - 2f))
             }
         }
-        MixerChannel(1, lv, hand, enabled, fxLabel, onSet, onRelease, Modifier.weight(1f))
+        MixerChannel(1, lv, hand, enabled, tall, onSet, onRelease, Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun MixerChannel(deck: Int, lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, fxLabel: String, onSet: (Ctl, Float) -> Unit, onRelease: (Int) -> Unit, modifier: Modifier) {
+private fun MixerChannel(deck: Int, lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, tall: Boolean, onSet: (Ctl, Float) -> Unit, onRelease: (Int) -> Unit, modifier: Modifier) {
     fun c(label: String) = Ctl.of(deck, label)
     val anyHand = Ctl.entries.any { it.deck == deck && hand(it) }
+    if (tall) {
+        // No celular: o canal é uma coluna — nome, o botão do efeito grande, quatro botões grandes empilhados e o fader ao lado.
+        Row(modifier.fillMaxHeight().rbPanel().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("CH ${deck + 1}", color = Palette.text, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    if (anyHand) SmallToggle("AUTO", false, false, enabled) { onRelease(deck) }
+                }
+                val echo = c("ECHO")
+                val on = lv[echo] >= 0.5f
+                SmallToggle("FX", on, hand(echo), enabled, Modifier.fillMaxWidth(), 44.dp, 14.sp) { onSet(echo, if (on) 0f else 1f) }
+                for ((label, bip) in listOf("HI" to false, "MID" to false, "LOW" to false, "FILTER" to true)) {
+                    Knob(c(label), lv[c(label)], hand(c(label)), enabled, Modifier.weight(1f).fillMaxWidth(), onSet, bipolar = bip, big = true)
+                }
+            }
+            Fader(c("FADER"), lv[c("FADER")], hand(c("FADER")), enabled, Modifier.width(44.dp).fillMaxHeight(), onSet)
+        }
+        return
+    }
     Row(modifier.fillMaxHeight().rbPanel().padding(horizontal = 4.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("CH ${deck + 1}", color = Palette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 val echo = c("ECHO")
                 val on = lv[echo] >= 0.5f
-                SmallToggle(fxLabel, on, hand(echo), enabled) { onSet(echo, if (on) 0f else 1f) }
+                SmallToggle("FX", on, hand(echo), enabled) { onSet(echo, if (on) 0f else 1f) }
                 if (anyHand) SmallToggle("AUTO", false, false, enabled) { onRelease(deck) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -644,17 +678,17 @@ private fun MixerChannel(deck: Int, lv: Levels, hand: (Ctl) -> Boolean, enabled:
 
 /** Um botão pequeno de liga e desliga no cabeçalho do canal (a área de toque cresce até 48 dp em volta). */
 @Composable
-private fun SmallToggle(text: String, on: Boolean, hand: Boolean, enabled: Boolean, onClick: () -> Unit) {
+private fun SmallToggle(text: String, on: Boolean, hand: Boolean, enabled: Boolean, modifier: Modifier = Modifier, height: Dp = 24.dp, fontSize: androidx.compose.ui.unit.TextUnit = 9.sp, onClick: () -> Unit) {
     val ink = when {
         on -> Palette.bg
         hand -> Palette.orange
         else -> Palette.blue
     }
     Box(
-        Modifier.height(24.dp).clip(RbShape).background(if (on) (if (hand) Palette.orange else Palette.blue) else Palette.surfaceHigh)
+        modifier.height(height).clip(RbShape).background(if (on) (if (hand) Palette.orange else Palette.blue) else Palette.surfaceHigh)
             .border(BorderStroke(1.dp, if (on) Palette.blue else Palette.line), RbShape).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 5.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, color = ink, fontSize = 9.sp, fontWeight = FontWeight.Bold) }
+    ) { Text(text, color = ink, fontSize = fontSize, fontWeight = FontWeight.Bold) }
 }
 
 /** Quanto arrastar (dp) leva um botão de ponta a ponta. */
@@ -666,59 +700,74 @@ private const val KNOB_TRAVEL_DP = 140f
  * laranja.
  */
 @Composable
-private fun Knob(c: Ctl, value: Float, hand: Boolean, enabled: Boolean, modifier: Modifier, onSet: (Ctl, Float) -> Unit, bipolar: Boolean = false) {
+private fun Knob(c: Ctl, value: Float, hand: Boolean, enabled: Boolean, modifier: Modifier, onSet: (Ctl, Float) -> Unit, bipolar: Boolean = false, big: Boolean = false) {
     val v = value.coerceIn(0f, 1f)
     val kill = !bipolar && v < 0.02f
     val current by androidx.compose.runtime.rememberUpdatedState(v)
     val density = androidx.compose.ui.platform.LocalDensity.current.density
     val name = "${c.label} CH ${c.deck + 1}"
-    Row(
-        modifier.height(44.dp)
-            .pointerInput(enabled, c) {
-                if (!enabled) return@pointerInput
-                var acc = 0f
-                detectVerticalDragGestures(onDragStart = { acc = current }) { change, dy ->
-                    change.consume()
-                    acc = (acc - dy / (KNOB_TRAVEL_DP * density)).coerceIn(0f, 1f)
-                    // O FILTER prende no meio (desligado) ao passar por ele.
-                    val out = if (bipolar && kotlin.math.abs(acc - 0.5f) < 0.03f) 0.5f else acc
-                    onSet(c, out)
-                }
-            }
-            .semantics {
-                contentDescription = name
-                progressBarRangeInfo = ProgressBarRangeInfo(v, 0f..1f)
-                if (enabled) setProgress { target -> onSet(c, target.coerceIn(0f, 1f)); true }
-            },
+    // [big]: o botão cresce até a altura que recebe, com o nome embaixo (o mixer do celular); senão, 30 dp com o nome ao lado.
+    val ink = when {
+        kill -> Palette.danger
+        hand -> Palette.orange
+        else -> Palette.blue
+    }
+    val label = if (kill) "KILL" else if (bipolar) when { v < 0.47f -> "LPF"; v > 0.53f -> "HPF"; else -> c.label } else c.label
+    val labelColor = if (kill) Palette.danger else if (hand) Palette.orange else Palette.muted
+    if (big) Column(
+        modifier.knobGestures(enabled, c, current, density, bipolar, name, v) { onSet(c, it) },
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    ) {
+        KnobDial(v, bipolar, ink, 7f, Modifier.weight(1f).aspectRatio(1f, matchHeightConstraintsFirst = true))
+        Text(label, color = labelColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    } else Row(
+        modifier.height(44.dp).knobGestures(enabled, c, current, density, bipolar, name, v) { onSet(c, it) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        val ink = when {
-            kill -> Palette.danger
-            hand -> Palette.orange
-            else -> Palette.blue
-        }
-        val ring = Palette.line
-        val dot = Palette.text
-        Canvas(Modifier.size(30.dp)) {
-            val r = size.minDimension / 2 - 2f
-            val o = Offset(size.width / 2, size.height / 2)
-            val stroke = androidx.compose.ui.graphics.drawscope.Stroke(3.5f)
-            drawArc(ring, 135f, 270f, false, Offset(o.x - r, o.y - r), Size(2 * r, 2 * r), style = stroke)
-            if (bipolar) {
-                // Do meio-dia para o lado do filtro.
-                drawArc(ink, 270f, 270f * (v - 0.5f), false, Offset(o.x - r, o.y - r), Size(2 * r, 2 * r), style = stroke)
-            } else {
-                drawArc(ink, 135f, 135f * v, false, Offset(o.x - r, o.y - r), Size(2 * r, 2 * r), style = stroke)
-            }
-            val ang = Math.toRadians(if (bipolar) 135.0 + 270.0 * v else 135.0 + 135.0 * v)
-            drawLine(dot, o, Offset(o.x + (r - 2f) * kotlin.math.cos(ang).toFloat(), o.y + (r - 2f) * kotlin.math.sin(ang).toFloat()), 3f)
-        }
-        Text(
-            if (kill) "KILL" else if (bipolar) when { v < 0.47f -> "LPF"; v > 0.53f -> "HPF"; else -> c.label } else c.label,
-            color = if (kill) Palette.danger else if (hand) Palette.orange else Palette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-        )
+        KnobDial(v, bipolar, ink, 3.5f, Modifier.size(30.dp))
+        Text(label, color = labelColor, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
+
+/** O arco do botão: o fundo (7 horas a 5 horas), o valor na cor [ink] e o ponteiro. No bipolar o arco sai do meio-dia. */
+@Composable
+private fun KnobDial(v: Float, bipolar: Boolean, ink: Color, strokeWidth: Float, modifier: Modifier) {
+    val ring = Palette.line
+    val dot = Palette.text
+    Canvas(modifier) {
+        val r = size.minDimension / 2 - 2f
+        val o = Offset(size.width / 2, size.height / 2)
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(strokeWidth)
+        drawArc(ring, 135f, 270f, false, Offset(o.x - r, o.y - r), Size(2 * r, 2 * r), style = stroke)
+        if (bipolar) drawArc(ink, 270f, 270f * (v - 0.5f), false, Offset(o.x - r, o.y - r), Size(2 * r, 2 * r), style = stroke)
+        else drawArc(ink, 135f, 135f * v, false, Offset(o.x - r, o.y - r), Size(2 * r, 2 * r), style = stroke)
+        val ang = Math.toRadians(if (bipolar) 135.0 + 270.0 * v else 135.0 + 135.0 * v)
+        drawLine(dot, o, Offset(o.x + (r - 2f) * kotlin.math.cos(ang).toFloat(), o.y + (r - 2f) * kotlin.math.sin(ang).toFloat()), strokeWidth * 0.9f)
+    }
+}
+
+/**
+ * Arrastar o botão para cima abre, para baixo fecha; e a acessibilidade (valor e ajuste direto). Um só jeito de mexer
+ * para todos os botões da tela (EQ, FILTER e o LEVEL do FX): [onValue] recebe o valor novo; [onEnd] quando o dedo solta.
+ */
+private fun Modifier.knobGestures(
+    enabled: Boolean, key: Any, current: Float, density: Float, bipolar: Boolean, name: String, v: Float,
+    onEnd: () -> Unit = {}, onValue: (Float) -> Unit,
+): Modifier =
+    this.pointerInput(enabled, key) {
+        if (!enabled) return@pointerInput
+        var acc = 0f
+        detectVerticalDragGestures(onDragStart = { acc = current }, onDragEnd = onEnd, onDragCancel = onEnd) { change, dy ->
+            change.consume()
+            acc = (acc - dy / (KNOB_TRAVEL_DP * density)).coerceIn(0f, 1f)
+            // O FILTER prende no meio (desligado) ao passar por ele.
+            onValue(if (bipolar && kotlin.math.abs(acc - 0.5f) < 0.03f) 0.5f else acc)
+        }
+    }.semantics {
+        contentDescription = name
+        progressBarRangeInfo = ProgressBarRangeInfo(v, 0f..1f)
+        if (enabled) setProgress { target -> onValue(target.coerceIn(0f, 1f)); onEnd(); true }
+    }
 
 /** Fader do canal, de pé: em cima é o volume cheio. Arrastar ou tocar põe onde o dedo está. */
 @Composable

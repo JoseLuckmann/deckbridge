@@ -247,8 +247,10 @@ class MixDsp(private val p: MixPreview) {
         val leadFrames = (p.leadMs.toLong() * rate / 1000).toInt()
         val shift = (p.shiftMs(tr) * rate / 1000).toInt()
         val st = p.stems
-        val echoFb = EchoSpec.feedback(EchoSpec.PREVIEW_AMOUNT)
-        val echoWet = EchoSpec.wet(EchoSpec.PREVIEW_AMOUNT)
+        // O LEVEL do efeito: no eco, o tanto de repetição; no reverb, o retorno; no flanger e no roll, quanto do efeito entra.
+        val echoFb = EchoSpec.feedback(tr.fxLevel)
+        val echoWet = EchoSpec.wet(tr.fxLevel)
+        val level = (tr.fxLevel / EchoSpec.PREVIEW_AMOUNT).coerceIn(0f, 1.25f)
         fun levelsAt(frame: Int, into: Levels) =
             MixControls.levels(tr, (frame - leadFrames) * 1000.0 / rate, p.overlapMs.toDouble(), p.barMsA, take, pass, into)
         var i = 0
@@ -287,18 +289,18 @@ class MixDsp(private val p: MixPreview) {
                         ybL += echo(b, 0, ybL, echoFb, echoWet); ybR += echo(b, 1, ybR, echoFb, echoWet)
                     }
                     MixFx.REVERB -> {
-                        yaL += a.verbL.step(yaL * a.echo) * VERB_WET; yaR += a.verbR.step(yaR * a.echo) * VERB_WET
-                        ybL += b.verbL.step(ybL * b.echo) * VERB_WET; ybR += b.verbR.step(ybR * b.echo) * VERB_WET
+                        yaL += a.verbL.step(yaL * a.echo) * VERB_WET * level; yaR += a.verbR.step(yaR * a.echo) * VERB_WET * level
+                        ybL += b.verbL.step(ybL * b.echo) * VERB_WET * level; ybR += b.verbR.step(ybR * b.echo) * VERB_WET * level
                     }
                     MixFx.FLANGER -> {
                         val lfo = (0.5 + 0.5 * sin(2 * PI * fr / (p.barMsA * rate / 1000))).toFloat()
-                        yaL = flange(a, a.flangeL, yaL, lfo); yaR = flange(a, a.flangeR, yaR, 1f - lfo)
-                        ybL = flange(b, b.flangeL, ybL, lfo); ybR = flange(b, b.flangeR, ybR, 1f - lfo)
+                        yaL = flange(a, a.flangeL, yaL, lfo, level); yaR = flange(a, a.flangeR, yaR, 1f - lfo, level)
+                        ybL = flange(b, b.flangeL, ybL, lfo, level); ybR = flange(b, b.flangeR, ybR, 1f - lfo, level)
                         a.flangeAt = (a.flangeAt + 1) % FLANGE_MAX; b.flangeAt = (b.flangeAt + 1) % FLANGE_MAX
                     }
                     MixFx.ROLL -> {
-                        roll(a, yaL, yaR); yaL = lr[0]; yaR = lr[1]
-                        roll(b, ybL, ybR); ybL = lr[0]; ybR = lr[1]
+                        roll(a, yaL, yaR, level); yaL = lr[0]; yaR = lr[1]
+                        roll(b, ybL, ybR, level); ybL = lr[0]; ybR = lr[1]
                     }
                 }
                 a.echoAt = (a.echoAt + 1) % a.echoL.size
@@ -331,28 +333,29 @@ class MixDsp(private val p: MixPreview) {
      * FLANGER: atraso curto (1 a 7 ms) que vai e volta uma vez por compasso, com realimentação; [lfo] 0..1 (lados opostos
      * no estéreo). O botão FX mistura do seco ao efeito.
      */
-    private fun flange(c: Chan, buf: FloatArray, dry: Float, lfo: Float): Float {
+    private fun flange(c: Chan, buf: FloatArray, dry: Float, lfo: Float, level: Float): Float {
         val delay = (MixRenderer.RATE * (0.001f + 0.006f * lfo)).coerceIn(1f, FLANGE_MAX - 2f)
         val pos = c.flangeAt - delay + FLANGE_MAX
         val i = pos.toInt()
         val f = pos - i
         val d = buf[i % FLANGE_MAX] * (1 - f) + buf[(i + 1) % FLANGE_MAX] * f
         buf[c.flangeAt] = dry + d * 0.55f
-        return mix(dry, 0.6f * dry + 0.7f * d, c.echo)
+        return mix(dry, 0.6f * dry + 0.7f * d, (c.echo * level).coerceIn(0f, 1f))
     }
 
     /**
      * ROLL: ao ligar, grava meia batida e repete essa meia batida enquanto ligado (o roll do CDJ); desligou, volta ao som.
      * Um quadro: [Chan.rollRec] conta o que já gravou; cheio, [Chan.rollAt] anda no laço. O resultado fica em [lr].
      */
-    private fun roll(c: Chan, l: Float, r: Float) {
+    private fun roll(c: Chan, l: Float, r: Float, level: Float) {
         lr[0] = l; lr[1] = r
         if (c.echo < 0.5f) { c.rollRec = -1; return }
         if (c.rollRec < 0) { c.rollRec = 0; c.rollAt = 0 }
         if (c.rollRec < c.rollL.size) {
             c.rollL[c.rollRec] = l; c.rollR[c.rollRec] = r; c.rollRec++
         } else {
-            lr[0] = mix(l, c.rollL[c.rollAt], c.echo); lr[1] = mix(r, c.rollR[c.rollAt], c.echo)
+            val m = (c.echo * level).coerceIn(0f, 1f)
+            lr[0] = mix(l, c.rollL[c.rollAt], m); lr[1] = mix(r, c.rollR[c.rollAt], m)
             c.rollAt = (c.rollAt + 1) % c.rollL.size
         }
     }

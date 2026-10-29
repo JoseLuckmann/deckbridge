@@ -160,3 +160,17 @@ efeitos além do eco"; e, sobre o resumo em cima, "polui muito a tela".
   enquanto ligados. REVERB: Schroeder/Moorer (4 pentes amortecidos + 2 passa-tudo, medidas do Freeverb); FLANGER: atraso
   de 1–7 ms que vai e volta uma vez por compasso, com realimentação; ROLL: grava meia batida ao ligar e repete. Ficam no
   `MixDsp` do núcleo, o mesmo da prévia no celular e no computador (o motor C++ do modo DJ não roda na Biblioteca).
+
+### Mixer do celular refeito e o FX como o da DDJ-400 (0.31.1)
+
+Retorno do dono: a primeira versão do mixer ficou ruim (botões pequenos soltos em painéis vazios), e o FX deveria ter um
+knob de nível, "igual no modelo da DDJ-400 que a gente fez".
+
+- **Mixer do celular:** cada canal é uma coluna que ocupa a altura — nome, botão FX grande (44 dp), HI, MID, LOW e FILTER
+  como botões grandes empilhados (o arco cresce até a altura que recebe, nome embaixo) e o fader ao lado. Sumiu a coluna do
+  meio (era só um desenho do crossfader, sem função). No computador o mixer segue na altura fixa de antes.
+- **Painel FX:** os quatro efeitos em grade 2×2 e o knob **LEVEL** ao lado, como a unidade de Beat FX da controladora.
+  LEVEL vale na hora na prévia e grava na troca ao soltar o dedo (`Transition.fxLevel`; 0,8 é o ponto de antes). Em cada
+  efeito: ECHO, o tanto de repetição e de retorno (`EchoSpec`); REVERB, o retorno; FLANGER e ROLL, quanto do efeito entra.
+  O botão de cada canal agora só diz "FX" (o efeito está no painel).
+- **Um jeito de mexer em botões:** `knobGestures` é o mesmo arrasto e a mesma acessibilidade para EQ, FILTER e LEVEL.

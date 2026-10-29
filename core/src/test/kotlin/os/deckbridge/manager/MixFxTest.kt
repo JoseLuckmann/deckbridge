@@ -59,11 +59,30 @@ class MixFxTest {
         for (ms in listOf(1300, 1420, 1610)) assertEquals(roll.left[ms * 441 / 10], roll.left[(ms + 250) * 441 / 10], 0.02f, "roll em $ms ms")
     }
 
+    @Test fun `o LEVEL do efeito muda quanto dele entra`() {
+        val tr0 = Transition(1, 2, 30_000, 0, bars = 4, style = MixStyle.BLEND)
+        val p = assertNotNull(MixRenderer.transition(tone, 120.0, silence, 120.0, tr0, leadMs = 2000, tailMs = 2000))
+        val take = MixTake(mapOf(Ctl.A_ECHO to Lane(listOf(Pt(-0.5, 1f), Pt(-0.01, 1f), Pt(0.0, 0f))), Ctl.A_VOL to Lane(listOf(Pt(-1.0, 1f), Pt(-0.01, 1f), Pt(0.0, 0f)))))
+        val dry = p.mixdown(tr0, MixTake(mapOf(Ctl.A_VOL to Lane(listOf(Pt(-1.0, 1f), Pt(-0.01, 1f), Pt(0.0, 0f))))))
+        fun diff(fx: MixFx, level: Float): Double {
+            val wet = p.mixdown(tr0.copy(fx = fx, fxLevel = level), take)
+            return sqrt((44100 * 3 / 2 until 44100 * 19 / 10).sumOf { ((wet.left[it] - dry.left[it]) * (wet.left[it] - dry.left[it])).toDouble() } / (44100 * 0.4))
+        }
+        for (fx in listOf(MixFx.REVERB, MixFx.FLANGER, MixFx.ECHO)) {
+            val low = diff(fx, 0.1f)
+            val high = diff(fx, 1f)
+            assertTrue(high > low * 1.5, "$fx: com o LEVEL em cima entra mais efeito que embaixo ($low x $high)")
+        }
+        // Sem LEVEL, o flanger e o reverb não mudam o som.
+        assertTrue(diff(MixFx.FLANGER, 0f) < 0.005 && diff(MixFx.REVERB, 0f) < 0.005)
+    }
+
     @Test fun `o efeito escolhido fica na troca guardada`() {
-        val tr = Transition(1, 2, 60_000, 960, 16, fx = MixFx.FLANGER)
+        val tr = Transition(1, 2, 60_000, 960, 16, fx = MixFx.FLANGER, fxLevel = 0.35f)
         val file = Files.createTempDirectory("set").resolve("x.properties").toFile()
         SetPlanner.save(file, listOf(tr))
         assertEquals(MixFx.FLANGER, SetPlanner.load(file).single().fx)
+        assertEquals(0.35f, SetPlanner.load(file).single().fxLevel)
         // E o passo a passo diz o efeito.
         val steps = os.deckbridge.manager.mix.MixGuide.steps(tr.copy(style = MixStyle.ECHO, fx = MixFx.REVERB))
         assertTrue(steps.any { "REVERB" in it.text }, steps.toString())

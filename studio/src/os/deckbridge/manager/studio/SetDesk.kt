@@ -675,6 +675,18 @@ class SetDesk(private val app: StudioHost) {
         mixPlayer?.transition = changed
     }
 
+    /**
+     * O LEVEL do efeito da troca aberta (o knob do FX): vale na hora na prévia que toca; só grava no plano quando o dedo
+     * solta ([save]), para não gravar o arquivo a cada quadro do arrasto.
+     */
+    fun setFxLevel(level: Float, save: Boolean) {
+        val tr = mixing ?: return
+        val changed = tr.copy(fxLevel = level.coerceIn(0f, 1f))
+        mixing = changed
+        mixPlayer?.transition = changed
+        if (save) update(changed)
+    }
+
     /** Onde a troca aberta está na linha (índice e total), para "VIRADA 2/5"; null se não está nela. */
     fun mixIndex(): Pair<Int, Int>? {
         val tr = mixing ?: return null

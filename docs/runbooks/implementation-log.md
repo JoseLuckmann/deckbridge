@@ -1371,3 +1371,9 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - Núcleo: `MixFx` (ECHO, REVERB, FLANGER, ROLL) e `Transition.fx` (guardado no plano); `MixDsp` com REVERB (Schroeder/Moorer), FLANGER e ROLL, sem alocar enquanto toca; passo a passo da saída com efeito diz o efeito.
 - Tela MIX: topo de uma linha com o veredito em ícones; fatos da troca na aba TROCA; sem as linhas DECK; abas MIXER (padrão) · TROCA · AJUSTAR; fileira FX; GUARDAR/DESFAZER só quando há o que guardar; encaixe em AJUSTAR; transporte ◀ 1 · PLAY · 1 ▶ · LOOP.
 - Evidência: núcleo `MixFxTest` (cada efeito muda o som; só eco e reverb deixam rastro; roll repete meia batida; efeito guardado e no passo a passo); celular `SetFlowTest`, `MixHandTest` ajustados (capturas mobile-39, mobile-47, mobile-72). O som dos efeitos em fone/caixa só no aparelho (`BLOCKED_HARDWARE`).
+
+## 2026-10-29 — Mixer do celular refeito e LEVEL do FX (0.31.1)
+
+- Retorno do dono: a tela do mixer da 0.31.0 ficou ruim; e o FX deveria ter um knob de nível como o da DDJ-400.
+- Mixer em colunas por canal com botões grandes (`KnobDial` desenhado uma vez para pequeno e grande; `knobGestures` único para EQ, FILTER e LEVEL); painel FX em grade 2×2 com o knob LEVEL; `Transition.fxLevel` guardado, `SetDesk.setFxLevel` (vale ao vivo, grava ao soltar); `MixDsp` usa o nível no eco, reverb, flanger e roll.
+- Evidência: núcleo `MixFxTest` (+1: o LEVEL muda quanto efeito entra; sem LEVEL o flanger e o reverb não mudam o som; nível guardado e relido); celular `SetFlowTest` (LEVEL na tela e guardado no plano), `MixHandTest`; captura mobile-39. O som no fone/caixa só no aparelho (`BLOCKED_HARDWARE`).

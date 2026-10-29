@@ -124,6 +124,11 @@ class SetFlowTest {
         rule.onNodeWithText("FLANGER").performClick()
         rule.waitForIdle()
         assertEquals(os.deckbridge.manager.mix.MixFx.FLANGER, a.sets.mixing!!.fx)
+        // O LEVEL do efeito (o knob do FX): vale na hora e grava ao soltar.
+        rule.onNodeWithText("LEVEL").assertExists()
+        a.sets.setFxLevel(0.3f, save = true)
+        assertEquals(0.3f, a.sets.mixing!!.fxLevel)
+        assertEquals(0.3f, a.sets.plan().first { it.fromId == a.sets.mixing!!.fromId && it.toId == a.sets.mixing!!.toId }.fxLevel)
         rule.onRoot().captureRoboImage(File(out, "mobile-47-vertical-mix-mixer.png").path)
         // A aba TROCA tem os fatos da troca e o passo de agora.
         rule.onNodeWithText("TROCA").performClick()

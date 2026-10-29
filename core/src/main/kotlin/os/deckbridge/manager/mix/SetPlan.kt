@@ -74,6 +74,8 @@ data class Transition(
     val why: List<String> = emptyList(),
     /** O efeito do botão FX dos canais nesta troca (e o da saída com efeito, [MixStyle.ECHO]). */
     val fx: MixFx = MixFx.ECHO,
+    /** O LEVEL do efeito (o knob do Beat FX da DDJ-400): 0 sem efeito, 1 o máximo; 0,8 é o ponto de antes. */
+    val fxLevel: Float = 0.8f,
 ) {
     /** Quantos compassos a que entra anda além do que toca (as repetições do loop dela). */
     val bLoopExtra get() = if (bLoopBars > 0 && bLoopTimes > 1) bLoopBars * (bLoopTimes - 1) else 0
@@ -349,6 +351,7 @@ object SetPlanner {
             if (t.bLoopBars > 0) p.setProperty("$n.bLoop", "${t.bLoopBars}x${t.bLoopTimes}")
             if (t.why.isNotEmpty()) p.setProperty("$n.why", t.why.joinToString("|"))
             if (t.fx != MixFx.ECHO) p.setProperty("$n.fx", t.fx.name)
+            if (t.fxLevel != 0.8f) p.setProperty("$n.fxLevel", t.fxLevel.toString())
         }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".novo")
@@ -379,6 +382,7 @@ object SetPlanner {
                     p.getProperty("$i.bLoop")?.substringAfter('x', "")?.toIntOrNull() ?: 0,
                     p.getProperty("$i.why")?.split('|')?.filter { it.isNotBlank() }.orEmpty(),
                     p.getProperty("$i.fx")?.let { f -> runCatching { MixFx.valueOf(f) }.getOrNull() } ?: MixFx.ECHO,
+                    p.getProperty("$i.fxLevel")?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 0.8f,
                 )
             }.getOrNull()
         }
