@@ -1435,3 +1435,9 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - Pedido do dono no meio da rodada: o FX como o Beat FX da DDJ-400 — seletor do efeito, seletor de canal (CH 1, CH 2, AMBOS) e o knob LEVEL, que em zero desliga; saem os botões FX de cada canal. E no encaixe saem SYNC FINO, GRADE D2 e ZERAR: o sync fino fica sempre ligado e um toque no centro (o jog) zera.
   - Núcleo: `Transition.fxLevel` (padrão 0 = desligado) e `fxChannel` (1, 2 ou 0), guardados. O eco automático da saída e a mão gravada não dependem do knob.
   - Evidência: `MixFxTest` (em zero o som é o mesmo; LEVEL em cima entra mais; só no CH 2 não mexe no CH 1; canal guardado), `SetFlowTest` (DESLIG., AMBOS), `MixHandTest` (toque no jog zera), `MixLayoutTest`.
+
+## 2026-10-29 — Abas do MIX diferentes dos botões do FX (0.32.3)
+
+- Pedido do dono: os botões do FX (efeito e canal) ficaram parecidos com o seletor das abas; trocar o seletor das abas.
+- MIXER, TROCA e AJUSTAR viraram abas de texto com sublinhado (o mesmo jeito da barra de baixo do app), sem caixa de botão; o FX e o encaixe seguem com os botões.
+- Evidência: `SetFlowTest`, `MixHandTest`, `MixLayoutTest`; captura mobile-76.
