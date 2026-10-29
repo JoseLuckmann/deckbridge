@@ -157,7 +157,23 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
 
     init {
         KeyStyle.musical = prefs.getBoolean("tomMusical", false)
+        CrashLog.install(context)
     }
+
+    /** O modo desenvolvedor (13 toques na logo do MENU): mostra a memória e o registro da última queda. */
+    var devMode by mutableStateOf(prefs.getBoolean("desenvolvedor", false))
+        private set
+
+    fun changeDevMode(on: Boolean) {
+        devMode = on
+        prefs.edit().putBoolean("desenvolvedor", on).apply()
+    }
+
+    /** A versão do app instalado ("0.28.3"), para o fim do MENU. */
+    val version: String by lazy { CrashLog.version(context) }
+
+    /** Um aviso curto no rodapé (para quem está fora deste arquivo). */
+    fun tell(text: String) = say(text)
 
     /** Duração das transições automáticas: null é pela estrutura (até o drop da que entra; 32 sem dados), ou fixa. */
     override var transitionBars by mutableStateOf(prefs.getInt("transicao", 0).takeIf { it > 0 })
@@ -508,6 +524,9 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
                 say(e.message ?: e.code, error = true)
             } catch (e: Exception) {
                 say(friendlyError(e), error = true)
+            } catch (e: OutOfMemoryError) {
+                // Uma faixa enorme (ou muitas de uma vez) não fecha o app: a tarefa para e avisa.
+                say("Faltou memória em \"$title\". Feche outros apps e tente de novo.", error = true)
             } finally {
                 job = null
             }
@@ -530,7 +549,7 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
         if (job != null) return
         val queued = model.beginQuiet() ?: return
         Thread({
-            val done = model.writeQuiet(queued)
+            val done = runCatching { model.writeQuiet(queued) }.getOrNull()
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 model.finishQuiet(done)
                 if (done != null) pruneBackups() else say(model.banner?.text ?: "Não consegui gravar.", error = true)

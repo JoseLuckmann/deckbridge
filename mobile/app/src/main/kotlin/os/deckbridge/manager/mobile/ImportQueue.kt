@@ -219,8 +219,11 @@ class ImportQueue(private val app: ManagerApp) {
     }
 
     private companion object {
-        /** Análises ao mesmo tempo (decodificar e analisar é o que pesa; duas cabem com folga na memória do celular). */
-        const val WORKERS = 2
+        /**
+         * Análises ao mesmo tempo (decodificar e analisar é o que pesa: ~150 MB por faixa longa). Duas só quando a memória
+         * que o Android dá ao app tem folga para elas e para o resto (a prévia do MIX tocando junto); senão, uma.
+         */
+        val WORKERS = if (Runtime.getRuntime().maxMemory() >= 400L * 1024 * 1024) 2 else 1
 
         /** Grava a cada tantas músicas ou tanto tempo (gravar a biblioteca inteira a cada uma seria lento). */
         const val SAVE_EVERY = 4

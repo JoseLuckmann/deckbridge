@@ -130,7 +130,8 @@ class TakeRecorder {
         if (last != null && bar < last.bar) pts.removeAll { it.bar >= bar }
         if (last != null && abs(last.v - v) < 0.004f && bar - last.bar < Lane.GESTURE_GAP_BARS) return
         pts += Pt(bar, v)
-        snapshot = pass.mapValues { Lane(it.value.toList()) }
+        // Só a fileira que mudou é copiada (antes, todas a cada movimento do dedo: lixo a cada quadro arrastando).
+        snapshot = snapshot + (c to Lane(pts.toList()))
     }
 
     /** O valor da passada em [bar] (null: a mão não tocou neste controle até aqui). */

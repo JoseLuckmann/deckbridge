@@ -20,8 +20,8 @@ android {
         applicationId = "os.deckbridge.manager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 32
-        versionName = "0.28.2"
+        versionCode = 34
+        versionName = "0.29.0"
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"

@@ -130,15 +130,21 @@ class Preview(private val app: ManagerApp) : StudioPreview {
             } catch (e: Throwable) {
                 // Throwable, não só Exception: um erro nesta thread (falta de memória, estado do AudioTrack solto por
                 // halt() no meio de um write) derrubava o app inteiro; aqui só para a prévia e avisa.
-                if (stopped) return
-                app.onMain { if (stream === this) { this@Preview.stop(); app.notice = os.deckbridge.manager.Banner("A prévia parou: ${e.message ?: e.javaClass.simpleName}", true) } }
+                if (!stopped) app.onMain { if (stream === this) { this@Preview.stop(); app.notice = os.deckbridge.manager.Banner("A prévia parou: ${e.message ?: e.javaClass.simpleName}", true) } }
+            } finally {
+                // Quem solta o AudioTrack é esta thread, ao sair: soltar da thread da tela no meio de um write() deixava o
+                // write() com o objeto nativo morto (queda no aparelho em algumas versões do Android).
+                runCatching { track.release() }
+                runCatching { source.close() }
             }
         }
 
+        /** Pede para parar: o write() bloqueado volta (pause + flush) e a thread sai e solta tudo. */
         fun halt() {
             stopped = true
+            paused = false
             runCatching { track.pause(); track.flush() }
-            runCatching { track.release() }
+            // A fonte do set inteiro tem uma thread que lê adiante: para já, sem esperar a thread do áudio sair.
             runCatching { source.close() }
         }
     }

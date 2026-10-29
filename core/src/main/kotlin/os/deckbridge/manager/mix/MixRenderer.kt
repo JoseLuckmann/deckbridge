@@ -389,7 +389,8 @@ class MixPlayer(val preview: MixPreview, @Volatile var transition: Transition = 
         pending.let { if (it >= 0) { frame = (it.toLong() * MixRenderer.RATE / 1000).toInt(); pending = -1 } }
         var done = 0
         while (done < frames) {
-            val lp = loop
+            // Um loop vazio (fim antes do começo) seria uma volta sem fim na thread do áudio: vale como sem loop.
+            val lp = loop?.takeIf { minOf(total.toLong(), it.last.toLong() * MixRenderer.RATE / 1000) > it.first.toLong() * MixRenderer.RATE / 1000 }
             val end = if (lp != null) minOf(total, (lp.last.toLong() * MixRenderer.RATE / 1000).toInt()) else total
             if (frame >= end) {
                 if (lp == null) break
@@ -643,23 +644,23 @@ object MixRenderer {
         val aLoopTrack = if (t.aLoopBars > 0) (t.aLoopBars * SetPlanner.barMs(if (bpmA > 0) bpmA else master)).toInt() else 0
         val aLen = if (aLoopTrack > 0) (lead * speedA).toInt() + aLoopTrack + 600
         else ((lead + overlapMs + (barMs * 2).toInt()) * speedA).toInt() + 300
-        val pa = a.read(aStart, aLen) ?: return null
+        // Cada passo em função própria e `var` reaproveitada: o trecho lido, o esticado e o com loop não ficam vivos
+        // juntos (no app de depuração as variáveis locais seguram a memória até o fim da função).
+        var sa = prepared(a, aStart, aLen, speedA, t.masterTempo) ?: return null
         val speed = if (master > 0 && bpmB > 0) master / bpmB else 1.0
         val bOutMs = overlapMs + tailMs
         // Um compasso da que entra antes do ponto de entrada e um depois do fim: folga para o sync à mão (até uma batida
         // a mais ou a menos e uns ms) sem ler de novo.
         val barB = SetPlanner.barMs(if (bpmB > 0) bpmB else master)
         val pre = min(barB.toInt(), t.inMs)
-        val pb = b.read(t.inMs - pre, ((bOutMs + barMs) * speed).toInt() + pre + 300) ?: return null
-        val sa0 = if (t.masterTempo) Stretch.tempo(resample(pa, 1.0), speedA) else resample(pa, speedA)
-        val sb0 = if (t.masterTempo) Stretch.tempo(resample(pb, 1.0), speed) else resample(pb, speed)
+        var sb = prepared(b, t.inMs - pre, ((bOutMs + barMs) * speed).toInt() + pre + 300, speed, t.masterTempo) ?: return null
         val bEntry = ms((pre / speed).toInt())
         val leadFrames = ms(lead)
         val total = leadFrames + ms(bOutMs)
         // Os loops já entram nas faixas prontas (como um player em loop): a que sai repete o trecho depois do ponto de
         // saída até o fim; a que entra repete o começo dela as vezes pedidas e segue.
-        val sa = if (t.aLoopBars > 0) loop(sa0, leadFrames, ms((t.aLoopBars * barMs).toInt()), 0, total + ms((2 * barMs).toInt())) else sa0
-        val sb = if (t.bLoopBars > 0 && t.bLoopTimes > 1) loop(sb0, bEntry, ms((t.bLoopBars * barMs).toInt()), t.bLoopTimes, 0) else sb0
+        if (t.aLoopBars > 0) sa = loop(sa, leadFrames, ms((t.aLoopBars * barMs).toInt()), 0, total + ms((2 * barMs).toInt()))
+        if (t.bLoopBars > 0 && t.bLoopTimes > 1) sb = loop(sb, bEntry, ms((t.bLoopBars * barMs).toInt()), t.bLoopTimes, 0)
         // Sync fino: as grades alinham a batida, mas cada análise põe a grade a uma distância um pouco diferente do
         // ataque do bumbo; o que sobra (10–30 ms) embola o grave. Mede pelos ataques graves; a mixagem corrige, como no jog.
         val measured = phaseLag(sa, sb, leadFrames, ms(overlapMs), ms((2 * barMs).toInt()), bFrom = bEntry)
@@ -667,13 +668,23 @@ object MixRenderer {
         var waveB: os.deckbridge.logic.ColorWave? = null
         if (waves) {
             // Cada deck com a própria onda, inteira (independente do fader), na base de tempo da prévia; a que entra sem sync.
-            val monoA = FloatArray(total) { if (it < sa.frames) 0.5f * (sa.left[it] + sa.right[it]) else 0f }
-            val monoB = FloatArray(total) { val k = it - leadFrames + bEntry; if (it >= leadFrames && k >= 0 && k < sb.frames) 0.5f * (sb.left[k] + sb.right[k]) else 0f }
-            waveA = os.deckbridge.logic.wavesFromPcm(monoA, RATE).rgbDetail
-            waveB = os.deckbridge.logic.wavesFromPcm(monoB, RATE).rgbDetail
+            waveA = deckWave(sa, total, 0, 0)
+            waveB = deckWave(sb, total, leadFrames, bEntry)
         }
         val stems = Stems(Stems.pack(sa.left, sa.frames), Stems.pack(sa.right, sa.frames), Stems.pack(sb.left, sb.frames), Stems.pack(sb.right, sb.frames), bEntry)
         return MixPreview(stems, t, lead, overlapMs, aStart, speed, barMs, master, speedA, measured, waveA, waveB, (total.toLong() * 1000 / RATE).toInt())
+    }
+
+    /** Lê um trecho e põe no andamento da prévia (esticando com Master Tempo, ou como toca-discos). */
+    private fun prepared(r: SegmentReader, startMs: Int, lengthMs: Int, speed: Double, masterTempo: Boolean): Stereo? {
+        val pcm = r.read(startMs, lengthMs) ?: return null
+        return if (masterTempo) Stretch.tempo(resample(pcm, 1.0), speed) else resample(pcm, speed)
+    }
+
+    /** A onda de um deck na base de tempo da prévia: [s] começa no quadro [at] da prévia, a partir do quadro [from] dele. */
+    private fun deckWave(s: Stereo, total: Int, at: Int, from: Int): os.deckbridge.logic.ColorWave {
+        val mono = FloatArray(total) { val k = it - at + from; if (it >= at && k >= 0 && k < s.frames) 0.5f * (s.left[k] + s.right[k]) else 0f }
+        return os.deckbridge.logic.wavesFromPcm(mono, RATE).rgbDetail
     }
 
     private const val HOP = 49 // 1,111 ms exatos a 44,1 kHz

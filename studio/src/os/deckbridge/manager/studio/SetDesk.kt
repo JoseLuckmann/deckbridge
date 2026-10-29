@@ -608,7 +608,11 @@ class SetDesk(private val app: StudioHost) {
         onMain { hearing++ }
         profiler.execute {
             val found = runCatching {
+                // Uma leitura pesada de cada vez: espera a prévia do MIX acabar de montar (as duas juntas eram o pico
+                // de memória que derrubava o app em aparelho).
+                awaitRender()
                 val pa = profileNow(a)
+                awaitRender()
                 val pb = profileNow(b)
                 if (pa == null || pb == null) emptyList()
                 else os.deckbridge.manager.mix.MixFinder.find(a, pa, b, pb, grid(a), grid(b), limit = 4)
@@ -812,6 +816,14 @@ class SetDesk(private val app: StudioHost) {
 
     private val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "deckbridge-mix").apply { isDaemon = true } }
     @Volatile private var generation = 0
+
+    /** A prévia do MIX está sendo montada (lê e estica as duas faixas): a análise das faixas espera. */
+    @Volatile private var rendering = false
+
+    private fun awaitRender() {
+        val until = System.currentTimeMillis() + 30_000
+        while (rendering && System.currentTimeMillis() < until) Thread.sleep(40)
+    }
     private val previews = object : LinkedHashMap<String, MixPreview>(4, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MixPreview>?) = size > 2
     }
@@ -867,12 +879,14 @@ class SetDesk(private val app: StudioHost) {
         val tempo = tempoFor(tr)
         val key = stemKey(tr, tempo)
         worker.execute {
+            rendering = true
             val started = System.currentTimeMillis()
             var built = false
             val result = runCatching {
                 synchronized(previews) { previews[key] } ?: render(tr, 12_000, 12_000, waves = true, tempo = tempo)?.also { built = true; synchronized(previews) { previews[key] = it } }
                     ?: throw IllegalStateException("Não consegui ler o áudio das duas faixas")
             }
+            rendering = false
             val took = System.currentTimeMillis() - started
             onMain {
                 // Quanto a última montagem levou: a próxima espera mostra uma previsão.
