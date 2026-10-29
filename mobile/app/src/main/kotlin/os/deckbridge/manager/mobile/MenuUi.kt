@@ -127,6 +127,7 @@ fun LibraryTools(app: ManagerApp, actions: Actions, onClose: () -> Unit) {
         "Importar pasta" to { actions.pickFolder() },
         "Analisar todas · ${counts[QuickFilter.UNANALYZED] ?: 0}" to { app.analyzeAll() },
         "Marcar pontos (cues)" to { app.markPoints() },
+        "Classificar (gênero, energia, tags)" to { app.classifyAll() },
         "Arrumar nomes" to { app.openTidy() },
         "Procurar repetidas" to { app.findDuplicates() },
         "Refazer grades" to { app.refreshGrids() },

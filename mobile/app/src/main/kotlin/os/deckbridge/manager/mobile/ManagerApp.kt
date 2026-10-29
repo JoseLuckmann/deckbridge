@@ -385,12 +385,56 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
      * para as letras vagas e as memórias novas só onde não há outra perto. Grava em lotes, como "Analisar todas".
      */
     fun markPoints() {
+        var added = 0
+        eachTrackAnalyzed("Marcando pontos", { changed, failed ->
+            if (changed == 0) "Pontos já marcados ✓" else "$added pontos em $changed faixa(s)" + (if (failed > 0) " · $failed falharam" else "")
+        }) { t, p ->
+            if (!model.hasAnalysis(t)) {
+                added += p.suggestedCues.size
+                listOf(Edit.AttachAnalysis(t.id, p, p.suggestedCues, t.bpm <= 0.0, t.key.isBlank()) to "Análise e pontos de \"${t.title}\"")
+            } else {
+                val have = runCatching { model.trackGrid(t).cues }.getOrDefault(emptyList())
+                val merged = os.deckbridge.manager.anlz.CuePlanner.merge(have, p.suggestedCues)
+                if (merged.size > have.size) {
+                    added += merged.size - have.size
+                    listOf(Edit.SetCues(t.id, merged) to "Pontos de \"${t.title}\"")
+                } else emptyList()
+            }
+        }
+    }
+
+    /**
+     * Classifica as músicas que já estão na biblioteca nos campos do rekordbox: gênero no Genre (só onde está vazio),
+     * energia no Comment ("Energy 7") e as My Tags padrão (Genre, Components, Situation) — só acrescenta, nada do DJ sai.
+     */
+    fun classifyAll() {
+        eachTrackAnalyzed("Classificando", { changed, failed ->
+            if (changed == 0) "Músicas já classificadas ✓" else "$changed faixa(s) classificada(s)" + (if (failed > 0) " · $failed falharam" else "")
+        }) { t, p ->
+            val c = p.classification ?: return@eachTrackAnalyzed emptyList()
+            val patch = os.deckbridge.manager.pdb.TrackPatch(
+                genre = c.genre.takeIf { t.genre.isBlank() && it.isNotEmpty() },
+                comment = os.deckbridge.manager.organize.TrackClassifier.comment(t.comment, c.energy).takeIf { it != t.comment },
+            )
+            val have = model.myTags()[t.id].orEmpty()
+            val newTags = c.myTags.filter { it !in have }
+            buildList {
+                if (!patch.isEmpty) add(Edit.SetTracks(listOf(t.id), patch) to "Gênero e energia de \"${t.title}\"")
+                if (newTags.isNotEmpty()) add(Edit.AddMyTags(t.id, newTags) to "My Tags de \"${t.title}\"")
+            }
+        }
+    }
+
+    /**
+     * Passa por todas as faixas com áudio no aparelho, analisa cada uma ([ImportPrep.prepare]) e grava o que [step] pedir,
+     * em lotes de 6 com cópia de segurança (um desfazer volta o lote). [summary] diz o resultado (faixas mudadas, falhas).
+     */
+    private fun eachTrackAnalyzed(title: String, summary: (changed: Int, failed: Int) -> String, step: (TrackItem, os.deckbridge.manager.importer.PreparedTrack) -> List<Pair<Edit, String>>) {
         val v = model.view ?: return
         val todo = v.tracks.filter { File(root, it.filePath.replace('\\', '/').trimStart('/')).isFile }
         if (todo.isEmpty()) return say("Nenhuma faixa com áudio no aparelho")
-        background("Marcando pontos") { j ->
+        background(title) { j ->
             var changed = 0
-            var added = 0
             var failed = 0
             val edits = ArrayList<Pair<Edit, String>>()
             for ((n, t) in todo.withIndex()) {
@@ -398,17 +442,8 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
                 j.text = "${n + 1}/${todo.size}: ${t.title}"
                 val p = runCatching { ImportPrep.prepare(File(root, t.filePath.replace('\\', '/').trimStart('/'))) }.getOrNull()
                 if (p == null) { failed++; continue }
-                if (!model.hasAnalysis(t)) {
-                    edits += Edit.AttachAnalysis(t.id, p, p.suggestedCues, t.bpm <= 0.0, t.key.isBlank()) to "Análise e pontos de \"${t.title}\""
-                    changed++; added += p.suggestedCues.size
-                } else {
-                    val have = runCatching { model.trackGrid(t).cues }.getOrDefault(emptyList())
-                    val merged = os.deckbridge.manager.anlz.CuePlanner.merge(have, p.suggestedCues)
-                    if (merged.size > have.size) {
-                        edits += Edit.SetCues(t.id, merged) to "Pontos de \"${t.title}\""
-                        changed++; added += merged.size - have.size
-                    }
-                }
+                val mine = step(t, p)
+                if (mine.isNotEmpty()) { edits += mine; changed++ }
                 if (edits.size >= 6) {
                     model.submitAll(edits)
                     edits.clear()
@@ -420,7 +455,7 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
                 model.apply(null) { j.text = it }
             }
             pruneBackups()
-            say(if (changed == 0) "Pontos já marcados ✓" else "$added pontos em $changed faixa(s)" + (if (failed > 0) " · $failed falharam" else ""))
+            say(summary(changed, failed))
         }
     }
 

@@ -138,6 +138,12 @@ sealed interface Edit {
     /** A lista completa de cues da faixa (memória, loops e hot cues A–H). Reescreve PCOB no .DAT e PCO2 no .EXT. */
     data class SetCues(val trackId: Int, val cues: List<Cue>) : Edit
 
+    /**
+     * Acrescenta My Tags a uma faixa (`exportExt.pdb`): só as que já existem no arquivo (as colunas padrão do rekordbox ou
+     * as do DJ), sem tirar nenhuma que ela já tenha.
+     */
+    data class AddMyTags(val trackId: Int, val tags: List<os.deckbridge.logic.RbTag>) : Edit
+
     /** [newPath] é relativo à raiz do pendrive (ex.: `Contents/Artista/Álbum/Título.mp3`). */
     data class FileRename(val trackId: Int, val newPath: String)
 
@@ -173,6 +179,10 @@ sealed interface Edit {
         val year: Int,
         val trackNumber: Int,
         val cues: List<Cue>,
+        /** O Comment (a energia vai aqui, "Energy 7"). */
+        val comment: String = "",
+        /** As My Tags da classificação (gênero, componentes, situação). */
+        val myTags: List<os.deckbridge.logic.RbTag> = emptyList(),
     ) : Edit
 }
 
@@ -222,6 +232,7 @@ class PdbEditor(private val raw: RawPdb, root: File? = null) {
             is Edit.RemoveTracks -> removeTracks(edit)
             is Edit.SetGrid -> setGrid(edit)
             is Edit.SetCues -> setCues(edit)
+            is Edit.AddMyTags -> { trackIndex(edit.trackId); addMyTags(edit.trackId, edit.tags) }
             is Edit.RenameFiles -> renameFiles(edit)
             is Edit.ImportTrack -> importTrack(edit)
             is Edit.AdoptTrack -> adoptTrack(edit)
@@ -691,7 +702,37 @@ class PdbEditor(private val raw: RawPdb, root: File? = null) {
         val today = LocalDate.now().toString()
         row.dateAdded = today
         row.analyzeDate = today
+        row.comment = e.comment.trim()
         tracks += row.encode()
+        addMyTags(id, e.myTags)
+    }
+
+    /**
+     * Liga a faixa às My Tags pedidas, na tabela de ligações do `exportExt.pdb` (linha de 16 bytes: 0, faixa, tag, 3 — o
+     * formato que o leitor do app e o rekordbox usam). Só as tags que já existem no arquivo (pela coluna e pelo nome); as
+     * que a faixa já tem ficam. Sem `exportExt.pdb` ou sem a tabela, não faz nada.
+     */
+    private fun addMyTags(trackId: Int, tags: List<os.deckbridge.logic.RbTag>) {
+        if (tags.isEmpty()) return
+        val extRel = "PIONEER/rekordbox/exportExt.pdb"
+        val bytes = files.read(extRel) ?: return
+        val known = os.deckbridge.logic.parseExportExt(bytes) ?: return
+        val columns = known.tags.filter { it.category }.associate { it.id to it.name.lowercase() }
+        val ids = tags.mapNotNull { t ->
+            known.tags.firstOrNull { !it.category && it.name.equals(t.name, ignoreCase = true) && columns[it.categoryId] == t.category.lowercase() }?.id
+        }.distinct()
+        if (ids.isEmpty()) return
+        val ext = try {
+            RawPdb.parse(bytes)
+        } catch (e: PdbFormatException) {
+            throw EditException("O exportExt.pdb não pôde ser lido: ${e.message}")
+        }
+        val links = ext.table(4)?.rows ?: return
+        val have = links.filter { it.u32(4) == trackId }.map { it.u32(8) }.toSet()
+        val added = ids.filter { it !in have }.map { tagId ->
+            ByteArray(16).also { r -> r.putU32(4, trackId); r.putU32(8, tagId); r.putU32(12, 3) }
+        }
+        if (added.isNotEmpty()) files.put(extRel, ext.write(mapOf(4 to links + added)))
     }
 
     private fun adoptTrack(e: Edit.AdoptTrack) {

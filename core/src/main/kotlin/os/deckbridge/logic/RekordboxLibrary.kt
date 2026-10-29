@@ -257,7 +257,8 @@ fun activeLoop(analysis: RbAnalysis?): Pair<Int, Int>? {
     return cue.timeMs to cue.loopEndMs!!
 }
 
-private fun tagsByTrack(ext: PdbExt?): Map<Int, List<RbTag>> {
+/** As My Tags de cada faixa (id da faixa → nome e coluna), do `exportExt.pdb` lido. Também a biblioteca do aparelho usa. */
+fun tagsByTrack(ext: PdbExt?): Map<Int, List<RbTag>> {
     if (ext == null) return emptyMap()
     val categories = ext.tags.filter { it.category }.associate { it.id to it.name }
     val names = ext.tags.filter { !it.category }.associate { it.id to it }

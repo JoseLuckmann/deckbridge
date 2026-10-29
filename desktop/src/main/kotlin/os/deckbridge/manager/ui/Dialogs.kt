@@ -59,7 +59,7 @@ fun startImport(files: List<File>): List<ImportRow> {
                 row.title = p.info.title
                 row.artist = p.info.artist
                 row.album = p.info.album
-                row.genre = p.info.genre
+                row.genre = p.genre
                 // O texto antes do "pronto": quem vê a linha pronta já vê o BPM.
                 row.status = "%.1f BPM · %s · %d:%02d".format(p.read.bpm, p.read.keyName, p.info.durationSec / 60, p.info.durationSec % 60)
                 row.prepared = p
@@ -112,7 +112,7 @@ fun ImportModal(model: ManagerModel, rows: List<ImportRow>, onClose: () -> Unit)
             Btn("Adicionar ${chosen.size} à fila", {
                 for (r in chosen) {
                     val p = r.prepared!!
-                    val edit = Edit.ImportTrack(p, r.title.trim(), r.artist.trim(), r.album.trim(), r.genre.trim(), p.read.keyName.takeIf { it != "—" }.orEmpty(), p.info.year, p.info.trackNumber, p.suggestedCues)
+                    val edit = Edit.ImportTrack(p, r.title.trim(), r.artist.trim(), r.album.trim(), r.genre.trim(), p.read.keyName.takeIf { it != "—" }.orEmpty(), p.info.year, p.info.trackNumber, p.suggestedCues, p.comment, p.myTags)
                     if (!model.submit(edit, "Importar \"${r.title.trim()}\"" + if (r.artist.isNotBlank()) " — ${r.artist.trim()}" else "")) break
                     if (target != null && intoPlaylist) model.view?.tracks?.maxOfOrNull { it.id }?.let { id -> model.submit(Edit.AddToPlaylist(target.id, listOf(id)), "Adicionar \"${r.title.trim()}\" a \"${target.name}\"") }
                 }

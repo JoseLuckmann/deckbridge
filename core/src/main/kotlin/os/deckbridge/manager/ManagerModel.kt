@@ -174,6 +174,20 @@ class ManagerModel(val backups: Backups = Backups()) {
         val colors: IntArray = IntArray(0),
     )
 
+    private var tagsCache: Pair<ByteArray, Map<Int, List<os.deckbridge.logic.RbTag>>>? = null
+
+    /**
+     * As My Tags de cada faixa (do `exportExt.pdb`, com o que está na fila): o mesmo agrupamento que o modo DJ usa
+     * ([os.deckbridge.logic.tagsByTrack]). Relido só quando o arquivo muda.
+     */
+    fun myTags(): Map<Int, List<os.deckbridge.logic.RbTag>> {
+        val bytes = editor?.files?.read("PIONEER/rekordbox/exportExt.pdb") ?: return emptyMap()
+        tagsCache?.let { (b, m) -> if (b === bytes || b.contentEquals(bytes)) return m }
+        val m = os.deckbridge.logic.tagsByTrack(os.deckbridge.logic.parseExportExt(bytes))
+        tagsCache = bytes to m
+        return m
+    }
+
     fun hasAnalysis(t: os.deckbridge.manager.pdb.TrackItem): Boolean {
         val rel = t.analyzePath.replace('\\', '/').trimStart('/')
         return rel.isNotEmpty() && editor?.files?.exists(rel) == true

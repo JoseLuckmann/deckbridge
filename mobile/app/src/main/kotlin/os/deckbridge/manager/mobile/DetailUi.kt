@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -98,6 +99,7 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
                 DetailPage.CUES -> CueSection(app, t)
                 DetailPage.INFO -> {
                     FullName(t)
+                    Classification(app, t)
                     NameSplitter(app, t)
                     Fields(app, t)
                 }
@@ -332,6 +334,42 @@ private fun FullName(t: TrackItem) {
             line("ARTISTA", t.artist)
             if (t.album.isNotEmpty()) line("ÁLBUM", t.album)
             line("ARQUIVO", t.filePath.replace('\\', '/').trimStart('/'))
+        }
+    }
+}
+
+/**
+ * Como a faixa está classificada nos campos do rekordbox: o gênero (Genre), a energia (o "Energy N" do Comment, numa
+ * régua de 10) e as My Tags agrupadas pela coluna (Genre, Components, Situation e as do DJ).
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun Classification(app: ManagerApp, t: TrackItem) {
+    val energy = os.deckbridge.manager.organize.TrackClassifier.energyOf(t.comment)
+    @Suppress("UNUSED_EXPRESSION") app.model.view
+    val tags = app.model.myTags()[t.id].orEmpty()
+    if (energy == null && tags.isEmpty() && t.genre.isEmpty()) return
+    Column(Modifier.fillMaxWidth().rbPanel().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("GÊNERO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.width(76.dp))
+            Text(t.genre.ifEmpty { "—" }, color = if (t.genre.isEmpty()) Palette.muted else Palette.text, fontSize = 14.sp)
+        }
+        if (energy != null) Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("ENERGIA", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.width(76.dp))
+            Row(Modifier.weight(1f).height(12.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                for (i in 1..10) Box(Modifier.weight(1f).fillMaxHeight().background(if (i <= energy) (if (energy >= 8) Palette.orange else Palette.blue) else Palette.surfaceHigh))
+            }
+            Text("  $energy", color = Palette.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+        tags.groupBy { it.category }.forEach { (column, list) ->
+            Text("MY TAG · ${column.uppercase()}", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                list.forEach { tag ->
+                    Box(Modifier.clip(RbShape).background(Palette.surfaceHigh).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line), RbShape).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                        Text(tag.name, color = Palette.text, fontSize = 12.sp)
+                    }
+                }
+            }
         }
     }
 }

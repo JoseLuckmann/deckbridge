@@ -286,7 +286,17 @@ class PreparedTrack(
     val suggestedCues: List<Cue>,
     /** Impressão digital do áudio, para não importar a mesma música com outro nome. */
     val print: os.deckbridge.logic.AudioPrint? = null,
-)
+    /** Gênero, energia e My Tags pela análise ([os.deckbridge.manager.organize.TrackClassifier]). */
+    val classification: os.deckbridge.manager.organize.TrackClass? = null,
+) {
+    /** O gênero para o campo Genre: o das etiquetas do arquivo, ou o palpite da análise. */
+    val genre get() = info.genre.ifBlank { classification?.genre.orEmpty() }
+
+    /** O Comment com a energia ("Energy 7"). */
+    val comment get() = classification?.let { os.deckbridge.manager.organize.TrackClassifier.comment("", it.energy) }.orEmpty()
+
+    val myTags get() = classification?.myTags.orEmpty()
+}
 
 object ImportPrep {
     /** Lê, decodifica e analisa com o analisador do app (BPM, tom, grade, ondas, estrutura). Pesado: rode fora da interface. */
@@ -298,6 +308,13 @@ object ImportPrep {
         val waves = wavesFromPcm(mono.samples, mono.rate)
         // Os pontos de interesse pela análise de frases: memória em cada seção, os oito mais úteis como hot cues.
         val cues = os.deckbridge.manager.anlz.CuePlanner.cues(read.phrases, read.beats, info.durationSec * 1000)
-        return PreparedTrack(file, info, read, waves, cues, os.deckbridge.logic.AudioPrint.of(mono.samples, mono.rate))
+        return PreparedTrack(file, info, read, waves, cues, os.deckbridge.logic.AudioPrint.of(mono.samples, mono.rate), classify(mono, read, info))
+    }
+
+    /** Gênero, energia e My Tags pelo perfil por compasso (o mesmo do MIX), o andamento e o título. */
+    fun classify(mono: MonoAudio, read: TrackRead, info: AudioInfo): os.deckbridge.manager.organize.TrackClass? {
+        val first = read.beats.firstOrNull { it.beatInBar == 1 }?.timeMs?.toDouble() ?: 0.0
+        val profile = os.deckbridge.manager.mix.TrackProfile.of(mono.samples, mono.rate, read.bpm, first) ?: return null
+        return os.deckbridge.manager.organize.TrackClassifier.classify(profile, read.bpm, info.title, info.genre)
     }
 }
