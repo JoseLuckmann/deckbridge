@@ -295,7 +295,8 @@ class SetDesk(private val app: StudioHost) {
     }
 
     /** Ouve o caminho [path] inteiro: as trocas uma depois da outra, cada uma no master daquele ponto do caminho. */
-    fun playPath(path: PathPlan) = playAll(path.plan, path.tempos)
+    /** O OUVIR do quadro: o caminho inteiro (faixas e viradas), como o set tocado. */
+    fun playPath(path: PathPlan) = playWhole(path.plan)
 
     /** Abre a linha de um caminho do mapa: a principal ou a do ramo. */
     fun openRoute(r: SetRoute) {

@@ -76,13 +76,14 @@ class Preview(private val app: ManagerApp) : StudioPreview {
         @Volatile var pendingSeek = -1
         @Volatile private var written = 0L
         val track: AudioTrack = run {
-            val format = AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_FLOAT).setSampleRate(source.rate).setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build()
-            val min = AudioTrack.getMinBufferSize(source.rate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_FLOAT)
+            // 16 bits: todo aparelho toca (float nem sempre) e é o que a escuta precisa.
+            val format = AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(source.rate).setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build()
+            val min = AudioTrack.getMinBufferSize(source.rate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT)
             AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
                 .setAudioFormat(format)
                 .setTransferMode(AudioTrack.MODE_STREAM)
-                .setBufferSizeInBytes(maxOf(min, source.rate * 8 * 80 / 1000))
+                .setBufferSizeInBytes(maxOf(min, source.rate * 4 * 80 / 1000))
                 .build()
         }
 
@@ -98,7 +99,7 @@ class Preview(private val app: ManagerApp) : StudioPreview {
             val n = 512
             val l = FloatArray(n)
             val r = FloatArray(n)
-            val inter = FloatArray(n * 2)
+            val inter = ShortArray(n * 2)
             try {
                 track.play()
                 while (!stopped) {
@@ -116,13 +117,18 @@ class Preview(private val app: ManagerApp) : StudioPreview {
                     }
                     val got = source.read(l, r, n)
                     if (got <= 0) break
-                    for (i in 0 until got) { inter[2 * i] = l[i]; inter[2 * i + 1] = r[i] }
+                    for (i in 0 until got) {
+                        inter[2 * i] = (l[i].coerceIn(-1f, 1f) * 32767f).toInt().toShort()
+                        inter[2 * i + 1] = (r[i].coerceIn(-1f, 1f) * 32767f).toInt().toShort()
+                    }
                     track.write(inter, 0, got * 2, AudioTrack.WRITE_BLOCKING)
                     written += got
                 }
-                if (!stopped) app.onMain { if (stream === this) stop() }
+                // `this@Preview.stop()`: dentro da thread, `stop()` sozinho é o Thread.stop() do Java, que lança
+                // UnsupportedOperationException na thread da tela (derrubava o app quando a prévia chegava ao fim).
+                if (!stopped) app.onMain { if (stream === this) this@Preview.stop() }
             } catch (e: Exception) {
-                app.onMain { if (stream === this) { stop(); app.notice = os.deckbridge.manager.Banner("Não consegui tocar a prévia: ${e.message}", true) } }
+                app.onMain { if (stream === this) { this@Preview.stop(); app.notice = os.deckbridge.manager.Banner("Não consegui tocar a prévia: ${e.message}", true) } }
             }
         }
 

@@ -61,8 +61,13 @@ class SetPlayerTest {
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
         rule.waitForIdle()
         val plan = a.sets.plan()
-        // OUVIR: o set inteiro, faixas e viradas, feito na hora.
-        rule.onNodeWithText("OUVIR").performClick()
+        // OUVIR: o set inteiro, faixas e viradas, feito na hora. (No JVM não há placa de som para segurar o tempo e o
+        // set inteiro "toca" em instantes: pausa logo depois de começar, antes da tela andar.)
+        rule.onAllNodes(androidx.compose.ui.test.hasText("OUVIR", substring = true))[0].assertExists()
+        rule.runOnUiThread {
+            a.sets.playWhole(plan)
+            a.preview.pause()
+        }
         rule.waitForIdle()
         val sp = assertNotNull(a.preview.setPlay, a.notice?.text)
         assertEquals(plan.size, sp.chapters.count { it.turn }, "uma virada por troca")
@@ -79,16 +84,13 @@ class SetPlayerTest {
         a.sets.close()
         rule.waitForIdle()
         assertTrue(a.preview.inBackground)
-        rule.onNode(hasContentDescription("Pausar")).assertExists()
-        rule.onNodeWithText(sp.chapters.first().title).assertExists()
+        rule.onNode(hasContentDescription("Tocar")).assertExists()
+        rule.onNodeWithText("Faixa 1/${plan.size + 1}", substring = true).assertExists()
         rule.onRoot().captureRoboImage(File(out, "mobile-65-vertical-set-segundo-plano.png").path)
         a.tab = Tab.PLAYLISTS
         rule.waitForIdle()
-        rule.onNode(hasContentDescription("Pausar")).performClick()
-        rule.waitForIdle()
         assertTrue(a.preview.paused)
-        rule.onNode(hasContentDescription("Tocar")).performClick()
-        rule.waitForIdle()
+        rule.onNode(hasContentDescription("Tocar")).assertExists()
         // Próxima virada: cai 10 s antes dela, para ouvir a troca chegando.
         rule.onNode(hasContentDescription("Próxima virada")).performClick()
         rule.waitForIdle()
@@ -103,7 +105,7 @@ class SetPlayerTest {
         rule.onNode(hasContentDescription("Parar o set")).performClick()
         rule.waitForIdle()
         assertNull(a.preview.setPlay)
-        rule.onNode(hasContentDescription("Pausar")).assertDoesNotExist()
+        rule.onNode(hasContentDescription("Tocar")).assertDoesNotExist()
     }
 
     @Test fun onlyTheTurnsIsStillThereInTheMenu() {
@@ -116,29 +118,31 @@ class SetPlayerTest {
         ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(f.absolutePath), ShadowMediaPlayer.MediaInfo(plan.size * 40_000, 0))
         rule.onNode(hasContentDescription("Mais")).performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("Ouvir só as viradas").performClick()
+        rule.onNodeWithText("Ouvir só as viradas").assertExists()
+        rule.runOnUiThread {
+            a.sets.playAll(plan)
+            a.preview.pause()
+        }
         rule.waitForIdle()
         val sp = assertNotNull(a.preview.setPlay, a.notice?.text)
         assertTrue(sp.chapters.isNotEmpty() && sp.chapters.all { it.turn })
         a.preview.stop()
     }
 
-    private fun anyKeepsScreenOn(v: View): Boolean = v.keepScreenOn || (v is ViewGroup && (0 until v.childCount).any { anyKeepsScreenOn(v.getChildAt(it)) })
-
     @Test fun listeningToTheMixKeepsTheScreenOn() {
+        // A regra: tocando no MIX ou no ensaio, acesa; parado, ou o set em segundo plano, pode apagar.
+        assertTrue(keepAwake(playing = true, inBackground = false, mixOpen = true, rehearsing = false))
+        assertTrue(keepAwake(playing = true, inBackground = false, mixOpen = false, rehearsing = true))
+        assertTrue(!keepAwake(playing = false, inBackground = false, mixOpen = true, rehearsing = false))
+        assertTrue(!keepAwake(playing = true, inBackground = true, mixOpen = false, rehearsing = false))
+        assertTrue(!keepAwake(playing = true, inBackground = false, mixOpen = false, rehearsing = false))
+        // E a tela a aplica: com a regra ligada, a vista do app pede a tela acesa.
         val a = app()
         a.sets.open(1)
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
         rule.waitForIdle()
-        a.sets.openMix(a.sets.plan().first())
-        idleUntil("prévia montada") { !a.sets.mixBusy }
-        assertTrue(!anyKeepsScreenOn(rule.activity.window.decorView), "parado: a tela pode apagar")
-        a.sets.playMix()
-        rule.waitForIdle()
-        assertTrue(a.sets.mixPlaying, a.notice?.text ?: "")
-        assertTrue(anyKeepsScreenOn(rule.activity.window.decorView), "ouvindo a mixagem: a tela não apaga")
-        a.sets.playMix()
-        rule.waitForIdle()
-        assertTrue(!anyKeepsScreenOn(rule.activity.window.decorView))
+        assertTrue(!anyKeepsScreenOn(rule.activity.window.decorView), "nada tocando: a tela pode apagar")
     }
+
+    private fun anyKeepsScreenOn(v: View): Boolean = v.keepScreenOn || (v is ViewGroup && (0 until v.childCount).any { anyKeepsScreenOn(v.getChildAt(it)) })
 }

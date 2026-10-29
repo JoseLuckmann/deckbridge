@@ -60,7 +60,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
             val detailTab = app.tab == Tab.LIBRARY || app.tab == Tab.PLAYLISTS
             // Ouvindo a mixagem (MIX ou ensaio): a tela não apaga. O set em segundo plano deixa (é um player de música).
             val view = androidx.compose.ui.platform.LocalView.current
-            val awake = app.preview.playingKey != null && !app.preview.inBackground && (app.sets.mixing != null || app.sets.rehearsal != null)
+            val awake = keepAwake(app.preview.playingKey != null, app.preview.inBackground, app.sets.mixing != null, app.sets.rehearsal != null)
             androidx.compose.runtime.DisposableEffect(awake) {
                 view.keepScreenOn = awake
                 onDispose { view.keepScreenOn = false }
@@ -157,6 +157,13 @@ private fun SetPlayerBar(app: ManagerApp) {
 }
 
 private fun mmss(ms: Int) = "%d:%02d".format(ms.coerceAtLeast(0) / 60000, ms.coerceAtLeast(0) / 1000 % 60)
+
+/**
+ * A tela fica acesa enquanto se ouve a mixagem (a prévia do MIX ou o ensaio, que se acompanham olhando); o set tocando em
+ * segundo plano é um player de música e deixa a tela apagar.
+ */
+internal fun keepAwake(playing: Boolean, inBackground: Boolean, mixOpen: Boolean, rehearsing: Boolean) =
+    playing && !inBackground && (mixOpen || rehearsing)
 
 /** Rótulo curto de cada área, em caixa alta, como a fileira de botões do player. */
 private fun Tab.short() = when (this) {

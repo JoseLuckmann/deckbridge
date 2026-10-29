@@ -175,7 +175,7 @@ fun SetScreen(app: StudioHost) {
                         {
                             val letter = desk.branch?.let { desk.letterOf(it) } ?: 'A'
                             PlayButton(
-                                on = app.preview.playingKey == desk.setKey(path.plan, path.tempos), modifier = Modifier.padding(start = 8.dp),
+                                on = app.preview.playingKey == desk.wholeKey(path.plan), modifier = Modifier.padding(start = 8.dp),
                                 label = if (desk.tree().isNotEmpty()) "OUVIR $letter" else "OUVIR",
                             ) { desk.playPath(path) }
                         }
