@@ -85,7 +85,7 @@ private fun AboutLogo(app: ManagerApp) {
                 val left = DEV_TAPS - taps
                 when {
                     left <= 0 -> { app.changeDevMode(true); app.tell("Modo desenvolvedor ligado"); taps = 0 }
-                    left <= 5 -> app.tell("Faltam $left toque${if (left == 1) "" else "s"} para o modo desenvolvedor")
+                    left <= 5 -> app.tell(if (left == 1) "Falta 1 toque para o modo desenvolvedor" else "Faltam $left toques para o modo desenvolvedor")
                 }
             },
         )
