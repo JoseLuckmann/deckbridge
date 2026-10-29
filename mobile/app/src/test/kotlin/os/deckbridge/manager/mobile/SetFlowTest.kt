@@ -116,15 +116,21 @@ class SetFlowTest {
         assertEquals(p.leadMs - (2 * p.barMsA).toInt(), a.sets.cursorMs)
         rule.onNodeWithText("DECK 1").assertExists()
         rule.onNodeWithText("▶ PLAY").assertExists()
-        // Na VIRADA: a mixagem (automático), o mixer de mexer e o encaixe da que entra à mão.
+        // Em cima, o resumo para julgar e o veredito; a aba TROCA abre com o passo de agora.
+        rule.onNodeWithText("✓ BOA").assertExists()
+        rule.onNodeWithText("PASSO").assertExists()
+        rule.onRoot().captureRoboImage(File(out, "mobile-39-vertical-mix-simples.png").path)
+        // No MIXER: a mixagem (automático), o mixer de mexer e o encaixe da que entra à mão.
+        rule.onNodeWithText("MIXER").performClick()
+        rule.waitForIdle()
         rule.onNodeWithText("AUTOMÁTICO").assertExists()
         rule.onNodeWithText("ENCAIXE DO CH 2").performScrollTo().assertExists()
-        rule.onRoot().captureRoboImage(File(out, "mobile-39-vertical-mix-simples.png").path)
-        // No celular os ajustes ficam na aba AJUSTES (a VIRADA mostra o mixer e o passo); o PLAY fica fixo embaixo.
-        rule.onNodeWithText("AJUSTES").performClick()
+        rule.onRoot().captureRoboImage(File(out, "mobile-47-vertical-mix-mixer.png").path)
+        // Os ajustes ficam na aba AJUSTAR; o PLAY fica fixo embaixo.
+        rule.onNodeWithText("AJUSTAR").performClick()
         rule.waitForIdle()
         rule.onRoot().captureRoboImage(File(out, "mobile-53-vertical-mix-ajustes.png").path)
-        rule.onNodeWithText("AJUSTAR ▾").performScrollTo().performClick()
+        rule.onNodeWithText("MAIS ▾").performScrollTo().performClick()
         rule.waitForIdle()
         assertTrue(a.sets.mixing!!.phaseLock, "sync fino ligado por padrão")
         // Faixas sintéticas com grade certa: nada a corrigir (o botão de grade fica apagado).
@@ -132,7 +138,7 @@ class SetFlowTest {
         rule.onRoot().captureRoboImage(File(out, "mobile-16-vertical-teste-de-mix.png").path)
 
         // Leva a cabeça para o meio da troca e confere os níveis do mixer (troca de grave: grave da 2 entrou).
-        rule.onNodeWithText("VIRADA").performClick()
+        rule.onNodeWithText("MIXER").performClick()
         a.sets.seekMix(p.leadMs + p.overlapMs * 3 / 4)
         rule.waitForIdle()
         val lv = p.levelsAt(a.sets.cursorMs, a.sets.mixing!!)
@@ -145,7 +151,7 @@ class SetFlowTest {
         // Os botões ficam abaixo da dobra com o AJUSTAR aberto: rola até cada um antes de tocar. O aviso de baixo some
         // sozinho no aparelho (aqui o relógio não anda) e ficaria por cima deles.
         a.notice = null
-        rule.onNodeWithText("AJUSTES").performClick()
+        rule.onNodeWithText("AJUSTAR").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("CORTE").performScrollTo().performClick()
         waitMix(a)
@@ -263,8 +269,8 @@ class SetFlowTest {
         waitMix(a)
         a.notice = null
         rule.waitForIdle()
-        // Na aba AJUSTES: ritmo e o ponto do grave, sem abrir AJUSTAR.
-        rule.onNodeWithText("AJUSTES").performClick()
+        // Na aba AJUSTAR: ritmo e o ponto do grave, sem abrir o MAIS.
+        rule.onNodeWithText("AJUSTAR").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("LENTA").performScrollTo().performClick()
         waitMix(a)
@@ -279,7 +285,7 @@ class SetFlowTest {
         rule.onRoot().captureRoboImage(File(out, "mobile-40-vertical-mix-ritmo.png").path)
         // O mixer e o passo a passo andam com a cabeça: no meio da troca, o grave do CH 2 já está entrando e o PASSO diz o que fazer.
         val mid = a.sets.mixPreview!!
-        rule.onNodeWithText("VIRADA").performClick()
+        rule.onNodeWithText("TROCA").performClick()
         a.sets.seekMix(mid.leadMs + (mid.overlapMs * 0.75 - mid.barMsA * 2).toInt())
         rule.waitForIdle()
         rule.onNodeWithText("PASSO").assertExists()

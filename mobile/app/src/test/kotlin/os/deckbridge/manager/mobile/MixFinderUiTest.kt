@@ -53,7 +53,7 @@ class MixFinderUiTest {
         val tr = a.sets.plan().first()
         a.sets.openMix(tr)
         idleUntil("prévia montada") { !a.sets.mixBusy }
-        rule.onNodeWithText("AJUSTES").performClick()
+        rule.onNodeWithText("AJUSTAR").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("ACHAR A TROCA").assertExists()
         idleUntil("ouviu as duas faixas") { a.sets.mixOptions() != null }
@@ -73,7 +73,10 @@ class MixFinderUiTest {
         assertEquals(pick.transition.why, now.why)
         val kept = a.sets.plan().first { it.fromId == tr.fromId && it.toId == tr.toId }
         assertEquals(pick.transition.bars, kept.bars)
-        rule.onNodeWithText("POR QUE ESTA TROCA").performScrollTo().assertExists()
         rule.onNodeWithText("EM USO").assertExists()
+        // O porquê fica na aba TROCA, junto do passo a passo.
+        rule.onNodeWithText("TROCA").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("POR QUE ESTA TROCA").performScrollTo().assertExists()
     }
 }

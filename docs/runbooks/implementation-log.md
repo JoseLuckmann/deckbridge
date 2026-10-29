@@ -1280,3 +1280,10 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Achado e corrigido: `Preview.StreamRun` chamava `Thread.stop()` (não o do Preview) quando a prévia ao vivo acabava → `UnsupportedOperationException` na thread da tela.
 - Evidência: núcleo `SetStreamTest` 2 (ordem e tempo faixa/virada/faixa; pular perto de uma virada); celular `SetPlayerTest` 3 (OUVIR toca o set inteiro com trechos de faixa e de virada, serviço de mídia ligado, barra em outras abas, pausar, próxima virada 10 s antes, parar; "só as viradas" no ⋯; regra da tela acesa; capturas mobile-65/66/67).
 - Não verificado: som real, notificação e tela bloqueada no aparelho, Bluetooth, consumo (`BLOCKED_HARDWARE`).
+
+## 2026-10-29 — Tela MIX reorganizada para validar viradas (0.27.0)
+
+- Pedido do dono: a tela MIX "precisa ser fácil e prática e trazer todas as informações que o DJ precisa ao validar uma transição; hoje está caótica". Decisões: `docs/ux-mixagem.md`, "A tela MIX para validar uma virada".
+- Topo novo (VIRADA n/N, sai → entra, ◀ ▶ entre viradas: `SetDesk.mixIndex`/`stepMix`); resumo (estilo, tom, BPM, nota, onde a troca acontece pelas frases, grave, drop, loops, aviso) com ✓ BOA / ↻ REFAZER (`SetDesk.setMark`); decks em linha fina (`DeckLine`) no lugar dos cartões grandes; frases e ponto do grave desenhados nas ondas (`SetDesk.cachedProfile`); abas TROCA / MIXER / AJUSTAR (o porquê saiu de ACHAR A TROCA e foi para TROCA; "AJUSTAR ▾" virou "MAIS ▾").
+- Testes ajustados às abas novas: `SetFlowTest`, `MixHandTest`, `MixFinderUiTest`, `LargeTextTest`; capturas mobile-39 (TROCA), mobile-47 (MIXER), mobile-53 (AJUSTAR), mobile-18 (deitado).
+- Não verificado em aparelho (tamanho real de toque e leitura sob luz de pista).

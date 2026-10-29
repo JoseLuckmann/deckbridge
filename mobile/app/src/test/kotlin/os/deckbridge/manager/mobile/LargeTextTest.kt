@@ -44,7 +44,7 @@ class LargeTextTest {
         rule.waitForIdle()
         rule.onNodeWithText("▶ PLAY").assertExists()
         rule.onRoot().captureRoboImage(File(out, "mobile-56-texto-200-mix.png").path)
-        rule.onNodeWithText("AJUSTES").performClickSafe()
+        rule.onNodeWithText("AJUSTAR").performClickSafe()
         rule.waitForIdle()
         rule.onRoot().captureRoboImage(File(out, "mobile-57-texto-200-mix-ajustes.png").path)
     }

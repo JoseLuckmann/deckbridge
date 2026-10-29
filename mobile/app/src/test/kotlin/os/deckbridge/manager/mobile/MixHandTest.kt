@@ -69,6 +69,9 @@ class MixHandTest {
         a.sets.openMix(tr)
         waitMix(a)
         val p = assertNotNull(a.sets.mixPreview, a.sets.mixError)
+        // A mão do DJ fica na aba MIXER.
+        rule.onNodeWithText("MIXER").performClick()
+        rule.waitForIdle()
         rule.onNodeWithText("AUTOMÁTICO").assertExists()
         // Na saída, o DJ abre o grave da que entra (o automático o deixa fechado até a troca).
         a.sets.seekMix(p.leadMs)

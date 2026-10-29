@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LinearProgressIndicator
@@ -49,6 +50,7 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -117,148 +119,251 @@ private fun MixContent(app: StudioHost) {
     val ga = desk.grid(a)
     val gb = desk.grid(b)
     val pos = desk.cursorMs
+    // As frases das duas (quando já foram ouvidas): chegam em segundo plano e a tela recompõe.
+    @Suppress("UNUSED_EXPRESSION") desk.heard
+    val pa = desk.cachedProfile(a)
+    val pb = desk.cachedProfile(b)
     // O que o mixer mostra: o automático, a mixagem em ensaio e a mão agora — o mesmo que se ouve.
     val pass = desk.mixPlayer?.pass
     @Suppress("UNUSED_EXPRESSION") desk.touchedNow
     val levels = p?.levelsAt(pos, tr, desk.draftTake, pass) ?: Levels()
     val bar = p?.relBar(pos) ?: 0.0
     val hand: (Ctl) -> Boolean = { c -> pass?.at(c, bar) != null || desk.draftTake?.at(c, bar) != null }
-    // Simples por padrão: ondas, PLAY, compassos e estilo. "AJUSTAR" abre o resto.
     var advanced by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf(MixPage.TURN) }
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         val wide = maxWidth >= WIDE_DP.dp
+        // Validar uma troca é ouvir, julgar e ir para a próxima (Nielsen, heurística 8: só o que importa à vista).
+        // Em cima, o que é a troca e o veredito; no meio, as duas ondas com as frases; embaixo, uma aba por tarefa.
         val decks = @Composable { waveH: Dp ->
-            DeckHeader(1, a, tr, p, pos, ga, master = true)
-            DeckWave(p, p?.waveA, pos, ga, isA = true, height = waveH, tr = tr) { desk.seekMix(it) }
-            DeckWave(p, p?.waveB, pos, gb, isA = false, height = waveH, tr = tr, shiftMs = p?.shiftMs(tr) ?: 0.0) { desk.seekMix(it) }
-            DeckHeader(2, b, tr, p, pos, gb, master = false, from = a)
+            DeckLine(1, a, tr, p, pos, ga, master = true)
+            DeckWave(p, p?.waveA, pos, ga, isA = true, height = waveH, tr = tr, phrases = pa) { desk.seekMix(it) }
+            DeckWave(p, p?.waveB, pos, gb, isA = false, height = waveH, tr = tr, shiftMs = p?.shiftMs(tr) ?: 0.0, phrases = pb) { desk.seekMix(it) }
+            DeckLine(2, b, tr, p, pos, gb, master = false, from = a)
         }
-        // O mixer (EQ e faders de cada canal) e o passo a passo da virada, sempre à vista: dá para ver o que a prévia
-        // está fazendo e aprender a fazer igual na controladora.
-        val mixer = @Composable {
-            TakeBar(desk, tr, playing)
-            MixerPanel(levels, hand, enabled = p != null, onSet = { c, v -> desk.setControl(c, v) }, onRelease = { desk.releaseDeck(it) })
-            SyncPanel(desk, tr, p)
-            StepsPanel(tr, p, pos)
-            NotePanel(desk, tr)
+        val tabs = @Composable {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                PadButton("TROCA", Modifier.weight(1f), on = page == MixPage.TURN) { page = MixPage.TURN }
+                PadButton("MIXER", Modifier.weight(1f), on = page == MixPage.MIXER) { page = MixPage.MIXER }
+                PadButton("AJUSTAR", Modifier.weight(1f), on = page == MixPage.SETTINGS) { page = MixPage.SETTINGS }
+            }
         }
-        val controls = @Composable {
-            if (wide) mixer()
-            Overview(p, pos) { desk.seekMix(it) }
-            Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced, loop = desk.mixLoop, onLoop = { desk.toggleLoop() })
-            KeyHint(app, "Espaço toca / para  ·  ← → um compasso  ·  , . encaixe  ·  L repete  ·  ? atalhos")
-            Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
+        val pageContent = @Composable {
+            when (page) {
+                MixPage.TURN -> {
+                    StepsPanel(tr, p, pos)
+                    WhyPanel(tr, a, b, pa, pb)
+                    NotePanel(desk, tr)
+                }
+                MixPage.MIXER -> {
+                    TakeBar(desk, tr, playing)
+                    MixerPanel(levels, hand, enabled = p != null, onSet = { c, v -> desk.setControl(c, v) }, onRelease = { desk.releaseDeck(it) })
+                    SyncPanel(desk, tr, p)
+                }
+                MixPage.SETTINGS -> Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
+            }
         }
+        val transport = @Composable { Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced, loop = desk.mixLoop, onLoop = { desk.toggleLoop() }) }
         Column(Modifier.fillMaxSize()) {
-            StatusStrip(a, b, p, pos, busy = desk.mixBusy, estimateMs = desk.lastBuildMs) { desk.closeMix() }
+            MixTopBar(desk, a, b, busy = desk.mixBusy, estimateMs = desk.lastBuildMs)
             if (desk.mixBusy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = Palette.blue, trackColor = Palette.bg)
             desk.mixError?.let { Text(it, color = Palette.danger, fontSize = 12.sp, modifier = Modifier.padding(8.dp)) }
             if (wide) {
                 Row(Modifier.weight(1f)) {
-                    Column(Modifier.weight(1.4f).fillMaxHeight()) { decks(118.dp) }
-                    Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 6.dp)) { controls() }
+                    Column(Modifier.weight(1.4f).fillMaxHeight()) {
+                        decks(118.dp)
+                        Overview(p, pos, tr) { desk.seekMix(it) }
+                        KeyHint(app, "Espaço toca / para  ·  ← → um compasso  ·  , . encaixe  ·  L repete  ·  ? atalhos")
+                    }
+                    Column(Modifier.weight(1f).fillMaxHeight().padding(start = 6.dp)) {
+                        Summary(desk, a, b, tr, ga, gb, pa, pb)
+                        tabs()
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { pageContent() }
+                        transport()
+                    }
                 }
             } else {
-                // No celular: os decks em cima, o PLAY fixo embaixo (sempre ao alcance do polegar) e, no meio, uma aba de
-                // cada vez: VIRADA (mixer, passo e lembrete) ou AJUSTES (compassos, estilo…). Cada aba cabe na tela; se
-                // ainda sobrar, a borda de baixo escurece com "▾" para mostrar que rola.
-                decks(76.dp)
-                Overview(p, pos) { desk.seekMix(it) }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    PadButton("VIRADA", Modifier.weight(1f), on = page == MixPage.TURN) { page = MixPage.TURN }
-                    PadButton("AJUSTES", Modifier.weight(1f), on = page == MixPage.SETTINGS) { page = MixPage.SETTINGS }
-                }
+                Summary(desk, a, b, tr, ga, gb, pa, pb)
+                decks(72.dp)
+                Overview(p, pos, tr) { desk.seekMix(it) }
+                tabs()
                 val scroll = rememberScrollState()
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-                        if (page == MixPage.TURN) mixer() else Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
-                    }
+                    Column(Modifier.fillMaxSize().verticalScroll(scroll)) { pageContent() }
                     if (scroll.canScrollForward) Box(
                         Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(28.dp)
                             .background(Brush.verticalGradient(listOf(Palette.bg.copy(alpha = 0f), Palette.bg))),
                         contentAlignment = Alignment.BottomCenter,
                     ) { Text("▾", color = Palette.mutedBright, fontSize = 14.sp) }
                 }
-                Box(Modifier.fillMaxWidth().border(BorderStroke(1.dp, Palette.line)).padding(vertical = 2.dp)) {
-                    Column { Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced, loop = desk.mixLoop, onLoop = { desk.toggleLoop() }) }
-                }
+                Box(Modifier.fillMaxWidth().border(BorderStroke(1.dp, Palette.line)).padding(vertical = 2.dp)) { Column { transport() } }
             }
         }
     }
 }
 
-/** As abas do MIX no celular: ver a virada acontecer ou ajustar como ela é. */
-enum class MixPage { TURN, SETTINGS }
+/** As abas do MIX: o que acontece na troca (e por quê), o mixer para mexer, e ajustar como ela é. */
+enum class MixPage { TURN, MIXER, SETTINGS }
 
-/** Faixa de cima, como a do player: o que está aberto, o tempo da prévia e fechar. */
+/**
+ * Topo do MIX: fechar, qual virada do set é ("VIRADA 2/5") e quem sai e quem entra, e ◀ ▶ para ir à anterior e à
+ * seguinte sem sair da tela — validar o set inteiro de uma vez.
+ */
 @Composable
-private fun StatusStrip(a: TrackItem, b: TrackItem, p: MixPreview?, pos: Int, busy: Boolean, estimateMs: Long?, onClose: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(44.dp).border(BorderStroke(1.dp, Palette.line)).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("MIX", color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-        // A espera diz o que está acontecendo e quanto deve levar (pela última montagem): espera explicada e com fim
-        // conhecido parece mais curta (Maister 1985). Os ajustes continuam mexíveis enquanto isso.
-        Text(
-            if (busy) "  MONTANDO A PRÉVIA" + (estimateMs?.let { " · ≈${((it + 999) / 1000).coerceAtLeast(1)} s" } ?: "…") else "",
-            color = Palette.noteInk, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        if (p != null) {
-            Text("REMAIN", color = Palette.muted, fontSize = 9.sp, modifier = Modifier.padding(end = 4.dp))
-            Text(clock(p.lengthMs - pos), color = Palette.text, fontSize = 14.sp, fontFamily = Mono)
+private fun MixTopBar(desk: SetDesk, a: TrackItem, b: TrackItem, busy: Boolean, estimateMs: Long?) {
+    val idx = desk.mixIndex()
+    Row(Modifier.fillMaxWidth().height(48.dp).border(BorderStroke(1.dp, Palette.line)).padding(start = 2.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = { desk.closeMix() }, modifier = Modifier.semantics { contentDescription = "Fechar o MIX" }) { Text("✕", fontSize = 16.sp) }
+        Column(Modifier.weight(1f)) {
+            Text(
+                (if (idx != null) "VIRADA ${idx.first + 1}/${idx.second}" else "VIRADA") +
+                    (if (busy) "  · montando" + (estimateMs?.let { " ≈${((it + 999) / 1000).coerceAtLeast(1)} s" } ?: "…") else ""),
+                color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, maxLines = 1,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(a.title, color = Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text("  →  ", color = Palette.mutedBright, fontSize = 13.sp)
+                Text(b.title, color = Palette.blue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            }
         }
-        TextButton(onClick = onClose) { Text("✕", fontSize = 16.sp) }
+        TextButton(onClick = { desk.stepMix(-1) }, enabled = idx != null && idx.first > 0, modifier = Modifier.semantics { contentDescription = "Virada anterior" }) { Text("◀", fontSize = 16.sp) }
+        TextButton(onClick = { desk.stepMix(1) }, enabled = idx != null && idx.first < idx.second - 1, modifier = Modifier.semantics { contentDescription = "Próxima virada" }) { Text("▶", fontSize = 16.sp) }
     }
 }
 
-/** Cartão de deck, como os de baixo do player: número, título, tempo restante, TEMPO, BPM em caixa, tom e MASTER/MT. */
+/** Uma etiqueta do resumo: o fato em poucas letras, verde quando está bom, laranja quando pede atenção. */
 @Composable
-private fun DeckHeader(n: Int, t: TrackItem, tr: Transition, p: MixPreview?, pos: Int, g: TrackGrid?, master: Boolean, from: TrackItem? = null) {
+private fun Fact(text: String, good: Boolean? = null, modifier: Modifier = Modifier) {
+    val color = when (good) { true -> Palette.keyInk; false -> Palette.orange; null -> Palette.text }
+    Box(modifier.clip(RbShape).background(when (good) { true -> Palette.keyFill; false -> Palette.dangerBg; null -> Palette.surfaceHigh }).padding(horizontal = 6.dp, vertical = 3.dp)) {
+        Text(text, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Nome da frase como o DJ fala. */
+private fun phraseName(kind: String) = when (kind) {
+    "Chorus" -> "DROP"
+    "Down" -> "BREAK"
+    "Up" -> "SOBE"
+    os.deckbridge.logic.Section.OUTRO -> "OUTRO"
+    else -> "INTRO"
+}
+
+/** A cor da frase na onda e no resumo: drop laranja, break azul, sobe amarelo-claro, intro e outro cinza. */
+private fun phraseColor(kind: String): Color = when (kind) {
+    "Chorus" -> Palette.orange
+    "Down" -> Palette.blue
+    "Up" -> Palette.noteInk
+    else -> Palette.mutedBright
+}
+
+/**
+ * O resumo da troca, para julgar de relance: estilo e duração, se os tons combinam, quanto a que entra estica, onde o
+ * grave vira, em que parte de cada faixa a troca acontece e onde cai o drop, a nota (quando a troca foi achada ouvindo
+ * as faixas) e os avisos. E o veredito: ✓ BOA ou ↻ REFAZER (fica no plano; o ensaio e o "Pronto pro show?" usam).
+ */
+@Composable
+private fun Summary(
+    desk: SetDesk, a: TrackItem, b: TrackItem, tr: Transition, ga: TrackGrid?, gb: TrackGrid?,
+    pa: os.deckbridge.manager.mix.TrackProfile?, pb: os.deckbridge.manager.mix.TrackProfile?,
+) {
+    val fit = SetPlanner.fit(a, b)
+    val ka = keyText(camelotOf(a), a)
+    val kb = keyText(camelotOf(b), b)
+    val toDrop = SetPlanner.barsToDrop(b, gb, tr.inMs)
+    val score = desk.mixOptions()?.firstOrNull { sameMix(it.transition, tr) }?.score
+    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp).rbPanel().padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        // Curtas, para caberem numa linha do celular (e rolam de lado se não couberem).
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            val style = when (tr.style) {
+                MixStyle.BASS_SWAP -> "GRAVE"
+                MixStyle.BLEND -> "MISTURA"
+                MixStyle.FILTER -> "FILTRO"
+                MixStyle.ECHO -> "ECHO"
+                MixStyle.CUT -> "CORTE"
+            }
+            Fact("$style · ${tr.bars} COMP.")
+            Fact("$ka→$kb", good = fit.keyDistance?.let { it <= 1 })
+            Fact("%+.1f%% BPM".format(fit.bpmDiffPct), good = fit.bpmOk)
+            if (score != null) Fact("NOTA $score", good = score >= 60)
+        }
+        // Onde a troca acontece em cada faixa (pelas frases ouvidas) e onde fica o grave e o drop.
+        val outKind = pa?.phraseAt(pa.barAt(tr.outMs + 5))?.kind
+        val inKind = pb?.phraseAt(pb.barAt(tr.inMs + 5))?.kind
+        val parts = buildList {
+            if (outKind != null) add("sai no ${phraseName(outKind)}")
+            if (inKind != null) add("entra no ${phraseName(inKind)}")
+            if (tr.style == MixStyle.BASS_SWAP) add("grave no comp. ${(tr.swapAt * tr.bars).toInt().coerceIn(1, tr.bars)}")
+            if (toDrop != null) add(if (toDrop == tr.bars) "drop no fim ✓" else "drop em $toDrop comp.")
+            if (tr.aLoopBars > 0) add("loop ${tr.aLoopBars} no D1")
+            if (tr.bLoopBars > 0 && tr.bLoopTimes > 1) add("loop ${tr.bLoopBars}×${tr.bLoopTimes} no D2")
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(parts.joinToString(" · ").ifEmpty { "ouvindo as faixas…" }, color = Palette.mutedBright, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            // O veredito, sempre à vista: a pergunta da tela é "esta troca está boa?".
+            VerdictButton("✓ BOA", on = tr.mark == Transition.Mark.GOOD, good = true) { desk.setMark(Transition.Mark.GOOD) }
+            Spacer(Modifier.width(4.dp))
+            VerdictButton("↻ REFAZER", on = tr.mark == Transition.Mark.REDO, good = false) { desk.setMark(Transition.Mark.REDO) }
+        }
+        val warn = desk.issues(listOf(a.id, b.id), listOf(tr)).firstOrNull { it.fromId == a.id && it.toId == b.id }
+        if (warn != null) Text("⚠ ${warn.text}", color = Palette.orange, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun VerdictButton(text: String, on: Boolean, good: Boolean, onClick: () -> Unit) {
+    val ink = if (good) Palette.keyInk else Palette.orange
+    Box(
+        Modifier.height(32.dp).clip(RbShape).background(if (on) (if (good) Palette.keyFill else Palette.dangerBg) else Palette.surfaceHigh)
+            .border(BorderStroke(1.dp, if (on) ink else Palette.line), RbShape).clickable(onClick = onClick).padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(text, color = if (on) ink else Palette.mutedBright, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
+}
+
+/** Por que esta troca: o porquê guardado (quando foi achada ouvindo as faixas) ou o que se sabe dela. */
+@Composable
+private fun WhyPanel(tr: Transition, a: TrackItem, b: TrackItem, pa: os.deckbridge.manager.mix.TrackProfile?, pb: os.deckbridge.manager.mix.TrackProfile?) {
+    val lines = tr.why.ifEmpty {
+        buildList {
+            val fit = SetPlanner.fit(a, b)
+            add(if (fit.keyOk) "os tons combinam (${keyText(camelotOf(a), a)} → ${keyText(camelotOf(b), b)})" else "tons longe: melhor juntar pouco as duas melodias")
+            if (!fit.bpmOk) add("andamentos longe: troca curta soa melhor")
+            if (pa == null || pb == null) add("ouvindo as faixas para achar onde virar o grave…")
+        }
+    }
+    if (lines.isEmpty()) return
+    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).rbPanel().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text("POR QUE ESTA TROCA", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+        lines.forEach { Text("· $it", color = Palette.keyInk, fontSize = 12.sp) }
+    }
+}
+
+/**
+ * A linha de um deck, fina (os cartões grandes repetiam o que as ondas mostram): DECK n, título, BPM no master (com o
+ * quanto estica), tom e quanto falta da faixa.
+ */
+@Composable
+private fun DeckLine(n: Int, t: TrackItem, tr: Transition, p: MixPreview?, pos: Int, g: TrackGrid?, master: Boolean, from: TrackItem? = null) {
     val trackMs = when {
         p == null -> if (master) tr.outMs else tr.inMs
         master -> p.aAt(pos)
         else -> p.bAt(pos, tr)
     }
     val dur = g?.durationMs ?: (t.durationSeconds * 1000)
-    // As duas tocam no master do set: TEMPO mostra quanto o pitch de cada uma anda até ele.
     val tempo = p?.tempo ?: if (from != null) from.bpm else t.bpm
     val speed = if (t.bpm > 0 && tempo > 0) tempo / t.bpm else 1.0
-    val shown = t.bpm * speed
     val key = camelotOf(t)
     val semi = Math.round(SetPlanner.semitones(speed)).toInt()
     val shifted = if (!master && !tr.masterTempo && key != null && semi != 0) SetPlanner.shiftKey(key, semi) else null
     val ok = master || from == null || SetPlanner.fit(from, t).keyOk && shifted == null
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).clip(RbShape).background(Palette.surface).border(BorderStroke(1.dp, Palette.line), RbShape)
-            .padding(horizontal = 8.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.clip(RbShape).background(if (master) Palette.blue else Palette.surfaceHigh).padding(horizontal = 6.dp, vertical = 2.dp)) {
-            Text("DECK $n", color = if (master) Palette.bg else Palette.text, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        }
-        Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-            Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("REMAIN ", color = Palette.muted, fontSize = 9.sp)
-                Text(clock(dur - trackMs), color = Palette.mutedBright, fontSize = 12.sp, fontFamily = Mono)
-            }
-        }
-        Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 6.dp)) {
-            Text("TEMPO", color = Palette.muted, fontSize = 9.sp)
-            Text("%+.2f%%".format((speed - 1) * 100), color = Palette.text, fontSize = 12.sp, fontFamily = Mono)
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.border(BorderStroke(1.dp, if (master) Palette.orange else Palette.text), RbShape).padding(horizontal = 6.dp, vertical = 1.dp)) {
-                Text("%.1f".format(shown), color = Palette.text, fontSize = 16.sp, fontFamily = Mono)
-            }
-            Text(
-                if (master) "MASTER" else if (tr.masterTempo) "MT" else "SEM MT",
-                color = if (master) Palette.orange else if (tr.masterTempo) Palette.blue else Palette.noteInk, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-            )
-        }
-        Box(Modifier.padding(start = 6.dp).clip(RbShape).background(if (ok) Palette.keyFill else Palette.dangerBg).padding(horizontal = 6.dp, vertical = 3.dp)) {
-            Text((if (ok) "" else "! ") + keyText(shifted ?: key, t), color = if (ok) Palette.keyInk else Palette.orange, fontSize = 13.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
-        }
+    val accent = if (master) Palette.orange else Palette.blue
+    Row(Modifier.fillMaxWidth().height(26.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("DECK $n", color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text("  " + t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text("%.1f".format(t.bpm * speed), color = Palette.text, fontSize = 12.sp, fontFamily = Mono)
+        if (!master && kotlin.math.abs(speed - 1) > 0.0005) Text(" %+.1f%%".format((speed - 1) * 100), color = Palette.mutedBright, fontSize = 10.sp, fontFamily = Mono)
+        Text("  " + keyText(shifted ?: key, t), color = if (ok) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
+        Text("  −" + mmss(dur - trackMs), color = Palette.mutedBright, fontSize = 11.sp, fontFamily = Mono)
     }
 }
 
@@ -267,9 +372,16 @@ private fun DeckHeader(n: Int, t: TrackItem, tr: Transition, p: MixPreview?, pos
  * vermelho, com o número do compasso contado a partir do ponto de saída), cues da faixa, o trecho em que as duas
  * tocam juntas sombreado em azul e a cabeça branca. Arrastar ou tocar move a cabeça.
  */
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
 @Composable
-private fun DeckWave(p: MixPreview?, wave: ColorWave?, pos: Int, g: TrackGrid?, isA: Boolean, height: Dp, tr: Transition, shiftMs: Double = 0.0, onSeek: (Int) -> Unit) {
+private fun DeckWave(
+    p: MixPreview?, wave: ColorWave?, pos: Int, g: TrackGrid?, isA: Boolean, height: Dp, tr: Transition, shiftMs: Double = 0.0,
+    /** As frases da faixa (quando já ouvida): uma faixa colorida embaixo da onda com INTRO, DROP, BREAK, OUTRO. */
+    phrases: os.deckbridge.manager.mix.TrackProfile? = null,
+    onSeek: (Int) -> Unit,
+) {
     val start = pos - (WINDOW_MS * HEAD_AT).toInt()
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     Row(Modifier.fillMaxWidth().height(height).padding(horizontal = 6.dp, vertical = 2.dp)) {
         Canvas(
             Modifier.weight(1f).fillMaxHeight().clip(RbShape).background(Palette.waveBg).border(BorderStroke(1.dp, Palette.line), RbShape)
@@ -357,11 +469,34 @@ private fun DeckWave(p: MixPreview?, wave: ColorWave?, pos: Int, g: TrackGrid?, 
                 // Ponto de saída (deck 1) / entrada (deck 2): linha laranja cheia.
                 val px = x(p.leadMs)
                 if (px in 0f..w) drawLine(Palette.orange, Offset(px, waveTop), Offset(px, waveBot), 2.5f)
+                // As frases da faixa: o DJ julga o encaixe por elas (sai no outro, entra na intro, o drop cai no fim).
+                if (phrases != null) {
+                    val band = 5f
+                    for (ph in phrases.phrases) {
+                        val s0 = phrases.msOf(ph.start)
+                        val s1 = phrases.msOf(ph.end)
+                        if (!isA && s1 < tr.inMs) continue
+                        val x0 = x(if (isA) p.fromA(s0) else p.fromB(maxOf(s0, tr.inMs), tr))
+                        val x1 = x(if (isA) p.fromA(s1) else p.fromB(s1, tr))
+                        if (x1 < 0 || x0 > w) continue
+                        val c = phraseColor(ph.kind)
+                        drawRect(c, Offset(x0.coerceAtLeast(0f), waveBot - band), Size((x1.coerceAtMost(w) - x0.coerceAtLeast(0f)).coerceAtLeast(0f), band))
+                        if (x1 - x0 > 40f) drawText(
+                            measurer, phraseName(ph.kind), topLeft = Offset(x0.coerceAtLeast(0f) + 4f, waveBot - band - 30f),
+                            style = TextStyle(color = c, fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                        )
+                    }
+                }
+                // Onde o grave vira (troca de grave): traço verde na onda.
+                if (tr.style == MixStyle.BASS_SWAP) {
+                    val sx = x(p.leadMs + (tr.swapAt * p.overlapMs).toInt())
+                    if (sx in 0f..w) drawLine(Palette.keyInk, Offset(sx, waveTop), Offset(sx, waveBot), 2f)
+                }
             }
             val head = w * HEAD_AT
             drawLine(Palette.text, Offset(head, 0f), Offset(head, h), 2.5f)
         }
-        BarsBox(p, pos, isA, Modifier.width(64.dp).fillMaxHeight())
+        BarsBox(p, pos, isA, Modifier.width(56.dp).fillMaxHeight())
     }
 }
 
@@ -384,7 +519,7 @@ private fun BarsBox(p: MixPreview?, pos: Int, isA: Boolean, modifier: Modifier) 
 
 /** A prévia inteira em miniatura: deck 1 em cima, deck 2 embaixo, o trecho junto e a cabeça. Tocar pula. */
 @Composable
-private fun Overview(p: MixPreview?, pos: Int, onSeek: (Int) -> Unit) {
+private fun Overview(p: MixPreview?, pos: Int, tr: Transition, onSeek: (Int) -> Unit) {
     Canvas(
         Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 6.dp, vertical = 3.dp).background(Palette.waveBg).border(BorderStroke(1.dp, Palette.line))
             .pointerInput(p) { detectTapGestures { o -> if (p != null) onSeek((o.x / size.width * p.lengthMs).toInt()) } },
@@ -409,6 +544,11 @@ private fun Overview(p: MixPreview?, pos: Int, onSeek: (Int) -> Unit) {
         }
         lane(p.waveA, 2f, h / 2 - 1f)
         lane(p.waveB, h / 2 + 1f, h - 2f)
+        // Onde o grave vira.
+        if (tr.style == MixStyle.BASS_SWAP) {
+            val sx = x(p.leadMs + (tr.swapAt * p.overlapMs).toInt())
+            drawLine(Palette.keyInk, Offset(sx, 0f), Offset(sx, h), 2f)
+        }
         drawLine(Palette.text, Offset(x(pos), 0f), Offset(x(pos), h), 2f)
     }
 }
@@ -851,7 +991,7 @@ private fun Controls(app: StudioHost, a: TrackItem, b: TrackItem, tr: Transition
             }
         }
       }
-        PadButton(if (advanced) "MENOS ▴" else "AJUSTAR ▾", Modifier.fillMaxWidth()) { onToggle() }
+        PadButton(if (advanced) "MENOS ▴" else "MAIS ▾", Modifier.fillMaxWidth()) { onToggle() }
         if (ga == null || gb == null) Text("Sem grade: analise as faixas para cair na batida.", color = Palette.noteInk, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         if (!advanced) {
             Spacer(Modifier.height(12.dp))
@@ -922,10 +1062,6 @@ private fun FinderPanel(desk: SetDesk, tr: Transition) {
             options == null -> Text("Ouvindo as duas faixas: grave, bateria, melodia e frases…", color = Palette.mutedBright, fontSize = 12.sp, modifier = Modifier.padding(start = 2.dp))
             options.isEmpty() -> Text("Nada melhor achado (faixas curtas ou sem grade).", color = Palette.mutedBright, fontSize = 12.sp, modifier = Modifier.padding(start = 2.dp))
             else -> options.forEach { o -> OptionRow(o, current = sameMix(o.transition, tr)) { desk.useOption(o) } }
-        }
-        if (tr.why.isNotEmpty()) {
-            Text("POR QUE ESTA TROCA", color = Palette.text, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 2.dp, top = 2.dp))
-            tr.why.forEach { Text("· $it", color = Palette.keyInk, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp)) }
         }
     }
 }

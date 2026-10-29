@@ -662,6 +662,34 @@ class SetDesk(private val app: StudioHost) {
     }
 
     /** O lembrete da troca aberta no MIX (não muda o som: não monta a prévia de novo). */
+    /** Marca a troca aberta no MIX como boa ou para refazer (ou tira a marca). Não monta nada de novo. */
+    fun setMark(mark: Transition.Mark?) {
+        val tr = mixing ?: return
+        val changed = tr.copy(mark = if (tr.mark == mark) null else mark)
+        mixing = changed
+        update(changed)
+        mixPlayer?.transition = changed
+    }
+
+    /** Onde a troca aberta está na linha (índice e total), para "VIRADA 2/5"; null se não está nela. */
+    fun mixIndex(): Pair<Int, Int>? {
+        val tr = mixing ?: return null
+        val plan = plan()
+        val i = plan.indexOfFirst { it.fromId == tr.fromId && it.toId == tr.toId }
+        return if (i < 0) null else i to plan.size
+    }
+
+    /** Vai para a troca anterior (−1) ou a seguinte (+1) da linha sem fechar o MIX: validar o set de uma vez. */
+    fun stepMix(delta: Int) {
+        val (i, _) = mixIndex() ?: return
+        val next = plan().getOrNull(i + delta) ?: return
+        closePass()
+        openMix(next)
+    }
+
+    /** O perfil da faixa se já foi ouvido (sem ler áudio): as frases para desenhar na onda. */
+    fun cachedProfile(t: TrackItem): os.deckbridge.manager.mix.TrackProfile? = synchronized(profiles) { profiles[t.id] }
+
     fun setNote(text: String) {
         val tr = mixing ?: return
         val changed = tr.copy(note = text.trim().take(140))

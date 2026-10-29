@@ -115,3 +115,27 @@ em aparelho (`BLOCKED_HARDWARE`). Nada disso foi testado com músicas reais do d
   https://arxiv.org/abs/2007.08411 ; e (2022) *Computer Music Journal* 46(3).
 - Davies, M. E. P., Hamel, P., Yoshii, K., Goto, M. (2014). *AutoMashUpper: Automatic Creation of Multi-Song Music
   Mashups.* IEEE/ACM Trans. Audio, Speech, and Language Processing 22(12), 1726–1737.
+
+## A tela MIX para validar uma virada (0.27.0)
+
+Pedido do dono (2026-10-29): "essa tela tem um desafio grande de UX: precisa ser fácil e prática e trazer todas as
+informações que o DJ precisa ao validar uma transição; hoje está caótica".
+
+O que estava caótico: dois cartões grandes de deck repetiam o que as ondas mostram (REMAIN, TEMPO, MT, tom) e tomavam um
+quarto da tela; não havia resumo para julgar a troca; a aba VIRADA juntava mixer, encaixe, passo e lembrete numa rolagem
+só; e para validar o set era preciso fechar e abrir cada troca.
+
+Como ficou (uma pergunta por região — "esta troca está boa?" — e o resto sob demanda):
+
+| Região | O que mostra |
+|---|---|
+| Topo | VIRADA n/N, quem sai → quem entra (cor do deck 1 e do deck 2), ◀ ▶ para a anterior e a seguinte sem fechar o MIX. |
+| Resumo | Estilo e duração; tom (verde combina, laranja não); quanto a que entra estica; a nota da troca achada ouvindo as faixas; onde a troca acontece em cada faixa (sai no OUTRO, entra na INTRO), onde o grave vira, onde cai o drop, os loops; o aviso do set, se houver; e o veredito ✓ BOA / ↻ REFAZER (fica no plano; o ensaio e o "Pronto pro show?" usam). |
+| Decks | Uma linha fina por deck (BPM no master e quanto estica, tom, quanto falta) e as ondas com as frases embaixo (INTRO, SOBE, DROP, BREAK, OUTRO, em cores) e o traço verde onde o grave vira. |
+| Abas | TROCA (o passo de agora e o próximo, por que esta troca, o lembrete) · MIXER (sua mão, o mixer, o encaixe) · AJUSTAR (as opções achadas, estilo, compassos, grave, loops, corrigir a análise; MAIS ▾ abre pontos e cues). |
+| Embaixo | PLAY e os saltos de compasso, sempre ao alcance do polegar. |
+
+Por quê: mostrar o essencial e esconder o resto até ser pedido (Nielsen, heurística 8, design minimalista; divulgação
+progressiva, Nielsen 2006); o estado e o veredito sempre à vista (heurística 1); agrupar por tarefa, cada moldura uma
+coisa (região comum, Palmer 1992); e o fluxo de validar em sequência sem sair da tela (custo de troca de contexto,
+Monsell 2003, *Task switching*, Trends in Cognitive Sciences 7(3)).
