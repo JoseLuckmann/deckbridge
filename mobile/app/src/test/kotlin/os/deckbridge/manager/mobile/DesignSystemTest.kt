@@ -15,7 +15,7 @@ import os.deckbridge.logic.StagePalette
  */
 class DesignSystemTest {
     // O app e as telas de set compartilhadas com o computador (studio/).
-    private val sources = listOf("src/main/kotlin/os/deckbridge/manager/mobile", "../../studio/src/os/deckbridge/manager/studio")
+    private val sources = listOf("src/main/kotlin/os/deckbridge/manager/mobile", "../../studio/src/os/deckbridge/manager/studio", "../../shared/src/os/deckbridge/shared")
         .flatMap { File(it).listFiles { f -> f.extension == "kt" }!!.toList() }
 
     @Test fun `nenhuma cor escrita a mao fora do tema`() {
@@ -36,6 +36,16 @@ class DesignSystemTest {
     @Test fun `sem botoes ou paineis arredondados do Material`() {
         val offenders = sources.filter { it.name != "Components.kt" && it.name != "Theme.kt" }.flatMap { f ->
             f.readLines().mapIndexedNotNull { n, l -> if (Regex("RoundedCornerShape\\(|CircleShape|material3\\.(Button|OutlinedButton|TextButton|FilterChip|AssistChip|Card|ElevatedButton)\\b").containsMatchIn(l)) "${f.name}:${n + 1}: ${l.trim()}" else null }
+        }
+        assertTrue(offenders.isEmpty(), offenders.joinToString("\n"))
+    }
+
+    @Test fun `texto no Canvas so pela funcao compartilhada`() {
+        // drawTextFitting (shared/) confere que o texto cabe; um drawText solto derrubou o app no S25 Ultra (0.29.0). Vale
+        // também para as telas do modo DJ (stage/).
+        val all = sources + File("../../stage/src").walkTopDown().filter { it.extension == "kt" }.toList()
+        val offenders = all.filter { it.name != "CanvasText.kt" }.flatMap { f ->
+            f.readLines().mapIndexedNotNull { n, l -> if (Regex("""(?<![\w.])drawText\(|import androidx\.compose\.ui\.text\.drawText""").containsMatchIn(l)) "${f.name}:${n + 1}: ${l.trim()}" else null }
         }
         assertTrue(offenders.isEmpty(), offenders.joinToString("\n"))
     }

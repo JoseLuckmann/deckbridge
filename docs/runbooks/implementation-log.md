@@ -1342,3 +1342,9 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - Registro mandado pelo dono (S25 Ultra, Android 17, 0.29.0): `IllegalArgumentException: maxWidth(-4) must be >= than minWidth(0)` em `drawText` de `DeckWave` (MixUi.kt:487). O nome da frase (INTRO/DROP…) era desenhado a 4 px do começo dela; com a frase começando nos últimos pixels da onda, a largura que sobrava para o texto ficava negativa e o Compose derrubava o app — acontecia tocando a mixagem, quando uma frase passava pela borda direita. Era esta a queda "ouvindo uma mixagem entre duas músicas" (memória no registro: 52 de 512 MB, então não era falta de memória).
 - Correção: o texto é medido e só é desenhado se cabe inteiro na onda (como as ondas do modo DJ já faziam). Os outros `drawText` do projeto (WaveCanvas do modo DJ) já conferiam.
 - Evidência: testes do MIX no celular passando; a queda em si só no aparelho (`BLOCKED_HARDWARE` até o dono confirmar na 0.29.1).
+
+## 2026-10-29 — Texto no Canvas por uma função só (shared/)
+
+- Pedido do dono: não duplicar este tipo de recurso; usar as mesmas funções.
+- Nova pasta `shared/src` (pacote `os.deckbridge.shared`), incluída pelos três builds (app DJ, Biblioteca, computador), para o que as telas do modo DJ (`stage/`) e do MIX (`studio/`) dividem. Primeira função: `drawTextFitting` (desenha o texto só se cabe inteiro, com fundo opcional). As cinco cópias da conferência (MIX e as ondas do modo DJ) passaram a chamar ela.
+- `DesignSystemTest` ganhou a regra: nenhum `drawText` solto fora de `shared/` (também varre `stage/`).

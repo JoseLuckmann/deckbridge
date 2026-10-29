@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
+import os.deckbridge.shared.drawTextFitting
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
@@ -160,9 +160,7 @@ internal fun ZoomedWave(
                             val laid = measurer.measure(text, numberStyle)
                             val textX = x - laid.size.width / 2f
                             val textY = size.height - laid.size.height - 1f
-                            if (textX >= 0f && textX + laid.size.width <= size.width && textY >= waveBot) {
-                                drawText(measurer, text, Offset(textX, textY), numberStyle)
-                            }
+                            if (textY >= waveBot) drawTextFitting(laid, Offset(textX, textY))
                         }
                     }
                 }
@@ -220,10 +218,7 @@ internal fun ZoomedWave(
                 val laid = measurer.measure(phrase.kind.uppercase(), style)
                 val textX = x + 4f
                 val textY = waveBot - laid.size.height - 3f
-                if (textX + laid.size.width <= size.width && textY > waveTop) {
-                    drawRect(Color(StagePalette.bg).copy(alpha = 0.72f), Offset(textX - 2f, textY - 1f), Size(laid.size.width + 4f, laid.size.height + 2f))
-                    drawText(measurer, phrase.kind.uppercase(), Offset(textX, textY), style)
-                }
+                if (textY > waveTop) drawTextFitting(laid, Offset(textX, textY), background = Color(StagePalette.bg).copy(alpha = 0.72f))
             }
             drawLine(Color(StagePalette.ink), Offset(playX, waveTop), Offset(playX, waveBot), strokeWidth = 1.6f)
             val nextAt = nextCueSeconds(analysis, position)
@@ -234,10 +229,7 @@ internal fun ZoomedWave(
                 val laid = measurer.measure(label, style)
                 val x = (playX + 8f).coerceIn(0f, (size.width - laid.size.width).coerceAtLeast(0f))
                 val y = waveTop + 6f
-                if (x + laid.size.width <= size.width && y + laid.size.height <= size.height) {
-                    drawRect(Color(StagePalette.bg).copy(alpha = 0.72f), Offset(x - 3f, y - 1f), Size(laid.size.width + 6f, laid.size.height + 2f))
-                    drawText(measurer, label, Offset(x, y), style)
-                }
+                drawTextFitting(laid, Offset(x, y), background = Color(StagePalette.bg).copy(alpha = 0.72f), pad = Offset(3f, 1f))
             }
         }
     }
@@ -278,9 +270,7 @@ internal fun OverviewWave(
                 val letter = ('A' + cue.index.coerceIn(0, 7)).toString()
                 val laid = measurer.measure(letter, style)
                 val textX = (x - laid.size.width / 2f).coerceIn(0f, (size.width - laid.size.width).coerceAtLeast(0f))
-                if (laid.size.width <= size.width && laid.size.height <= size.height) {
-                    drawText(measurer, letter, Offset(textX, 0f), style)
-                }
+                drawTextFitting(laid, Offset(textX, 0f))
             }
             analysis?.memoryCues?.forEach { cue ->
                 val x = (cue.timeMs / 1000.0 / duration).coerceIn(0.0, 1.0).toFloat() * size.width
