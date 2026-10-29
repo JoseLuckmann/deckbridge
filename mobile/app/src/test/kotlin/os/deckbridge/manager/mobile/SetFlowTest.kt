@@ -125,7 +125,11 @@ class SetFlowTest {
         rule.waitForIdle()
         assertEquals(os.deckbridge.manager.mix.MixFx.FLANGER, a.sets.mixing!!.fx)
         // O LEVEL do efeito (o knob do FX): vale na hora e grava ao soltar.
-        rule.onNodeWithText("LEVEL").assertExists()
+        // O FX como o da DDJ-400: efeito, canal e o LEVEL; em zero, desligado.
+        rule.onNodeWithText("DESLIG.").assertExists()
+        rule.onNodeWithText("AMBOS").performClick()
+        rule.waitForIdle()
+        assertEquals(0, a.sets.mixing!!.fxChannel)
         a.sets.setFxLevel(0.3f, save = true)
         assertEquals(0.3f, a.sets.mixing!!.fxLevel)
         assertEquals(0.3f, a.sets.plan().first { it.fromId == a.sets.mixing!!.fromId && it.toId == a.sets.mixing!!.toId }.fxLevel)
@@ -213,7 +217,7 @@ class SetFlowTest {
         check(a.model.apply(null) != null)
         a.refreshGrids()
         val until = System.currentTimeMillis() + 120_000
-        while (a.job != null && System.currentTimeMillis() < until) {
+        while (a.work != null && System.currentTimeMillis() < until) {
             Thread.sleep(20)
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
         }

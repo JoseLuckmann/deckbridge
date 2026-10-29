@@ -247,10 +247,16 @@ class MixDsp(private val p: MixPreview) {
         val leadFrames = (p.leadMs.toLong() * rate / 1000).toInt()
         val shift = (p.shiftMs(tr) * rate / 1000).toInt()
         val st = p.stems
-        // O LEVEL do efeito: no eco, o tanto de repetição; no reverb, o retorno; no flanger e no roll, quanto do efeito entra.
-        val echoFb = EchoSpec.feedback(tr.fxLevel)
-        val echoWet = EchoSpec.wet(tr.fxLevel)
-        val level = (tr.fxLevel / EchoSpec.PREVIEW_AMOUNT).coerceIn(0f, 1.25f)
+        // O knob LEVEL: em zero o FX está desligado; acima, liga no canal escolhido com esse tanto (no eco, a repetição e o
+        // retorno; no reverb, o retorno; no flanger e no roll, quanto entra). O eco automático da saída e a mão gravada
+        // usam o ponto de sempre quando o knob está desligado.
+        val manual = tr.fxLevel > 0.01f
+        val amount = if (manual) tr.fxLevel else EchoSpec.PREVIEW_AMOUNT
+        val echoFb = EchoSpec.feedback(amount)
+        val echoWet = EchoSpec.wet(amount)
+        val level = (amount / EchoSpec.PREVIEW_AMOUNT).coerceIn(0f, 1.25f)
+        val fxA = manual && tr.fxChannel != 2
+        val fxB = manual && tr.fxChannel != 1
         fun levelsAt(frame: Int, into: Levels) =
             MixControls.levels(tr, (frame - leadFrames) * 1000.0 / rate, p.overlapMs.toDouble(), p.barMsA, take, pass, into)
         var i = 0
@@ -268,9 +274,9 @@ class MixDsp(private val p: MixPreview) {
                 val fr = f0 + q
                 val w = (fr - start).toFloat() / BLOCK
                 a.vol = mix(head.aVol, tail.aVol, w); a.low = mix(head.aLow, tail.aLow, w); a.mid = mix(head.aMid, tail.aMid, w)
-                a.high = mix(head.aHigh, tail.aHigh, w); a.echo = mix(head.aEcho, tail.aEcho, w)
+                a.high = mix(head.aHigh, tail.aHigh, w); a.echo = if (fxA) 1f else mix(head.aEcho, tail.aEcho, w)
                 b.vol = mix(head.bVol, tail.bVol, w); b.low = mix(head.bLow, tail.bLow, w); b.mid = mix(head.bMid, tail.bMid, w)
-                b.high = mix(head.bHigh, tail.bHigh, w); b.echo = mix(head.bEcho, tail.bEcho, w)
+                b.high = mix(head.bHigh, tail.bHigh, w); b.echo = if (fxB) 1f else mix(head.bEcho, tail.bEcho, w)
                 val al = if (fr in 0 until st.aFrames) st.aL[fr] / 32768f else 0f
                 val ar = if (fr in 0 until st.aFrames) st.aR[fr] / 32768f else 0f
                 // A que entra: o ponto de entrada (com o sync) cai no ponto de saída. Antes dele há um compasso de folga, que

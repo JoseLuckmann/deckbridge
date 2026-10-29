@@ -577,6 +577,15 @@ class SetDesk(private val app: StudioHost) {
         return File(profilesDir, "${t.id}-$tag-${Math.round(t.bpm * 100)}-$first.txt")
     }
 
+    /**
+     * O perfil por compasso de [t] (o mesmo do MIX), para quem mais precisar — a classificação da biblioteca: do cache, do
+     * disco ou medido agora e guardado. Bloqueante (pode ler o áudio): só fora da thread da tela.
+     */
+    fun profileOf(t: TrackItem): os.deckbridge.manager.mix.TrackProfile? {
+        awaitRender()
+        return profileNow(t)
+    }
+
     /** O perfil de [t]: do cache, do disco ou medido agora (lê o áudio inteiro: só fora da thread da tela). */
     private fun profileNow(t: TrackItem): os.deckbridge.manager.mix.TrackProfile? {
         synchronized(profiles) { if (profiles.containsKey(t.id)) return profiles[t.id] }

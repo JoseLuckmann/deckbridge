@@ -115,7 +115,8 @@ class MixHandTest {
         assertTrue(a.sets.mixing!!.nudgeMs > 5, "o jog adiantou: ${a.sets.mixing!!.nudgeMs}")
         assertEquals(a.sets.mixing!!.nudgeMs, a.sets.plan().first { it.fromId == tr.fromId && it.toId == tr.toId }.nudgeMs, "gravou ao soltar")
         assertSame(p, a.sets.mixPreview, "o jog não monta de novo")
-        rule.onNodeWithText("ZERAR").performClick()
+        // Um toque no centro (o jog) zera o encaixe.
+        rule.onNode(hasContentDescription("Jog do encaixe")).performClick()
         rule.waitForIdle()
         assertEquals(0, a.sets.mixing!!.nudgeMs)
         // Repetir a troca para ensaiar de novo. (O aviso de baixo some sozinho no aparelho; aqui o relógio não anda e ele

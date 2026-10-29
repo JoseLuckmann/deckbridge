@@ -95,8 +95,10 @@ class CuePointsTest {
         rule.onNode(androidx.compose.ui.test.hasContentDescription("Ferramentas da biblioteca")).performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Marcar pontos (cues)").performClick()
+        // Roda em segundo plano, sem janela de espera: a faixa de progresso fica no topo e a tela segue livre.
+        assertTrue(a.job == null && a.work != null, "em segundo plano")
         val until = System.currentTimeMillis() + 180_000
-        while (a.job != null && System.currentTimeMillis() < until) {
+        while (a.work != null && System.currentTimeMillis() < until) {
             Thread.sleep(50)
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
         }

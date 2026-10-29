@@ -376,36 +376,10 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
     fun analyzeAll() {
         val v = model.view ?: return
         val todo = v.tracks.filter { !model.hasAnalysis(it) }
-        if (todo.isEmpty()) {
-            say("Tudo analisado")
-            return
-        }
-        background("Analisando ${todo.size} faixa(s)") { j ->
-            var done = 0
-            var failed = 0
-            val edits = ArrayList<Pair<Edit, String>>()
-            for ((n, t) in todo.withIndex()) {
-                if (j.cancelled) break
-                j.text = "${n + 1}/${todo.size}: ${t.title}"
-                val out = OnDemand.analyze(root, t)
-                val sug = OnDemand.suggestion(out, hasAnalysis = false, force = false)
-                if (sug?.edit != null) {
-                    edits += sug.edit!! to "Analisar \"${t.title}\""
-                    done++
-                } else failed++
-                // Em lotes: segura poucas análises na memória e já guarda no aparelho.
-                if (edits.size >= 6) {
-                    model.submitAll(edits)
-                    edits.clear()
-                    model.apply(null) { j.text = it }
-                }
-            }
-            if (edits.isNotEmpty()) {
-                model.submitAll(edits)
-                model.apply(null) { j.text = it }
-            }
-            pruneBackups()
-            say("$done analisadas" + (if (failed > 0) " · $failed falharam" else ""), error = done == 0 && failed > 0)
+        if (todo.isEmpty()) return say("Tudo analisado")
+        libraryWork("Analisando", todo, { done, failed -> "$done analisadas" + (if (failed > 0) " · $failed falharam" else "") }) { t ->
+            val sug = OnDemand.suggestion(OnDemand.analyze(root, t), hasAnalysis = false, force = false)
+            sug?.edit?.let { listOf(it to "Analisar \"${t.title}\"") }
         }
     }
 
@@ -415,10 +389,12 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
      * para as letras vagas e as memórias novas só onde não há outra perto. Grava em lotes, como "Analisar todas".
      */
     fun markPoints() {
+        val v = model.view ?: return
         var added = 0
-        eachTrackAnalyzed("Marcando pontos", { changed, failed ->
+        libraryWork("Marcando pontos", v.tracks.filter { audioOf(it).isFile }, { changed, failed ->
             if (changed == 0) "Pontos já marcados ✓" else "$added pontos em $changed faixa(s)" + (if (failed > 0) " · $failed falharam" else "")
-        }) { t, p ->
+        }) { t ->
+            val p = ImportPrep.prepare(audioOf(t))
             if (!model.hasAnalysis(t)) {
                 added += p.suggestedCues.size
                 listOf(Edit.AttachAnalysis(t.id, p, p.suggestedCues, t.bpm <= 0.0, t.key.isBlank()) to "Análise e pontos de \"${t.title}\"")
@@ -435,13 +411,17 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
 
     /**
      * Classifica as músicas que já estão na biblioteca nos campos do rekordbox: gênero no Genre (só onde está vazio),
-     * energia no Comment ("Energy 7") e as My Tags padrão (Genre, Components, Situation) — só acrescenta, nada do DJ sai.
+     * energia no Comment ("Energy 7"), as My Tags padrão (Genre, Components, Situation) e a cor automática (só em faixa
+     * sem cor) — só acrescenta, nada do DJ sai. Leve: usa o BPM e a grade que a biblioteca já tem e o perfil por compasso
+     * do MIX ([SetDesk.profileOf], guardado em disco), sem refazer a análise inteira; só faixa sem BPM é analisada.
      */
     fun classifyAll() {
-        eachTrackAnalyzed("Classificando", { changed, failed ->
+        val v = model.view ?: return
+        libraryWork("Classificando", v.tracks.filter { audioOf(it).isFile }, { changed, failed ->
             if (changed == 0) "Músicas já classificadas ✓" else "$changed faixa(s) classificada(s)" + (if (failed > 0) " · $failed falharam" else "")
-        }) { t, p ->
-            val c = p.classification ?: return@eachTrackAnalyzed emptyList()
+        }) { t ->
+            val c = sets.profileOf(t)?.takeIf { t.bpm > 0 }?.let { os.deckbridge.manager.organize.TrackClassifier.classify(it, t.bpm, t.title, t.genre) }
+                ?: ImportPrep.prepare(audioOf(t)).classification ?: return@libraryWork null
             val genre = t.genre.ifBlank { c.genre }
             val patch = os.deckbridge.manager.pdb.TrackPatch(
                 genre = c.genre.takeIf { t.genre.isBlank() && it.isNotEmpty() },
@@ -458,38 +438,84 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
         }
     }
 
+    private fun audioOf(t: TrackItem) = File(root, t.filePath.replace('\\', '/').trimStart('/'))
+
+    /** Uma tarefa sobre a biblioteca em segundo plano: o título, quantas foram e qual faixa agora. Null: nenhuma. */
+    data class Work(val title: String, val done: Int, val total: Int, val current: String)
+
+    var work by mutableStateOf<Work?>(null)
+        private set
+    @Volatile private var workCancelled = false
+
+    fun cancelWork() { workCancelled = true }
+
     /**
-     * Passa por todas as faixas com áudio no aparelho, analisa cada uma ([ImportPrep.prepare]) e grava o que [step] pedir,
-     * em lotes de 6 com cópia de segurança (um desfazer volta o lote). [summary] diz o resultado (faixas mudadas, falhas).
+     * Roda uma tarefa sobre a biblioteca (analisar, marcar pontos, classificar, refazer grades) sem travar a tela: uma
+     * faixa por vez numa thread de prioridade de fundo (a tela e o áudio vêm antes), com uma faixa fina de progresso e ✕
+     * em vez da janela de espera. [step] roda fora da tela e devolve as edições da faixa (vazio: nada a mudar; null:
+     * falhou); elas entram na fila pela thread da tela e a gravação silenciosa grava a cada 6 faixas (com cópia de
+     * segurança), como a importação. Só uma tarefa dessas por vez; uma faixa que falha (até por falta de memória) não
+     * para as outras.
      */
-    private fun eachTrackAnalyzed(title: String, summary: (changed: Int, failed: Int) -> String, step: (TrackItem, os.deckbridge.manager.importer.PreparedTrack) -> List<Pair<Edit, String>>) {
-        val v = model.view ?: return
-        val todo = v.tracks.filter { File(root, it.filePath.replace('\\', '/').trimStart('/')).isFile }
+    private fun libraryWork(title: String, todo: List<TrackItem>, summary: (changed: Int, failed: Int) -> String, step: (TrackItem) -> List<Pair<Edit, String>>?) {
+        work?.let { return say("Espere \"${it.title}\" acabar") }
         if (todo.isEmpty()) return say("Nenhuma faixa com áudio no aparelho")
-        background(title) { j ->
+        workCancelled = false
+        work = Work(title, 0, todo.size, "")
+        Thread({
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
             var changed = 0
             var failed = 0
-            val edits = ArrayList<Pair<Edit, String>>()
-            for ((n, t) in todo.withIndex()) {
-                if (j.cancelled) break
-                j.text = "${n + 1}/${todo.size}: ${t.title}"
-                val p = runCatching { ImportPrep.prepare(File(root, t.filePath.replace('\\', '/').trimStart('/'))) }.getOrNull()
-                if (p == null) { failed++; continue }
-                val mine = step(t, p)
-                if (mine.isNotEmpty()) { edits += mine; changed++ }
-                if (edits.size >= 6) {
-                    model.submitAll(edits)
-                    edits.clear()
-                    model.apply(null) { j.text = it }
+            var unsaved = 0
+            try {
+                for ((n, t) in todo.withIndex()) {
+                    if (workCancelled) break
+                    mainHandler.post { work = Work(title, n, todo.size, t.title) }
+                    val edits = try { step(t) } catch (_: Exception) { null } catch (_: OutOfMemoryError) { null }
+                    if (edits == null) { failed++; continue }
+                    if (edits.isNotEmpty()) {
+                        onMainSync { model.submitAll(edits) }
+                        changed++
+                        unsaved++
+                    }
+                    if (unsaved >= 6) { saveQuietly(); unsaved = 0 }
+                }
+                saveQuietly(waitForOther = true)
+            } finally {
+                mainHandler.post {
+                    work = null
+                    say(summary(changed, failed) + if (workCancelled) " · parou" else "")
                 }
             }
-            if (edits.isNotEmpty()) {
-                model.submitAll(edits)
-                model.apply(null) { j.text = it }
-            }
-            pruneBackups()
-            say(summary(changed, failed))
+        }, "deckbridge-biblioteca").apply { isDaemon = true }.start()
+    }
+
+    /** Roda [block] na thread da tela e espera o resultado (quem roda em segundo plano nunca mexe no modelo direto). */
+    fun <T> onMainSync(block: () -> T): T {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) return block()
+        var out: Result<T>? = null
+        val done = java.util.concurrent.CountDownLatch(1)
+        mainHandler.post {
+            out = runCatching(block)
+            done.countDown()
         }
+        done.await()
+        return out!!.getOrThrow()
+    }
+
+    /**
+     * Grava a fila em silêncio, de uma thread de fundo (a tela continua livre): a mesma gravação da [autosave]. Com
+     * [waitForOther], espera uma gravação que já esteja em andamento e grava o que sobrou. Devolve se gravou.
+     */
+    fun saveQuietly(waitForOther: Boolean = false): Boolean {
+        if (waitForOther) while (onMainSync { model.saving }) Thread.sleep(100)
+        val queued = onMainSync { model.beginQuiet() } ?: return false
+        val done = model.writeQuiet(queued)
+        onMainSync {
+            model.finishQuiet(done)
+            if (done != null) pruneBackups()
+        }
+        return done != null
     }
 
     /**
@@ -500,41 +526,15 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
     fun refreshGrids() {
         val v = model.view ?: return
         val todo = v.tracks.filter { model.hasAnalysis(it) }
-        if (todo.isEmpty()) {
-            say("Nenhuma faixa analisada")
-            return
-        }
-        background("Refazendo ${todo.size} grade(s)") { j ->
-            var changed = 0
-            var same = 0
-            var failed = 0
-            val edits = ArrayList<Pair<Edit, String>>()
-            fun flush() {
-                if (edits.isEmpty()) return
-                model.submitAll(edits)
-                edits.clear()
-                model.apply(null) { j.text = it }
-            }
-            for ((n, t) in todo.withIndex()) {
-                if (j.cancelled) break
-                j.text = "${n + 1}/${todo.size}: ${t.title}"
-                val fresh = os.deckbridge.manager.organize.GridRefresh.analyze(root, t)
-                if (fresh == null) {
-                    failed++
-                    continue
-                }
-                val c = os.deckbridge.manager.organize.GridRefresh.change(t, model.trackFiles(t).beats, fresh.first, fresh.second)
-                val e = c.edit
-                if (e == null) same++ else {
-                    edits += e to "Refazer grade de \"${t.title}\""
-                    changed++
-                }
-                if (edits.size >= 20) flush()
-            }
-            flush()
-            pruneBackups()
+        if (todo.isEmpty()) return say("Nenhuma faixa analisada")
+        var same = 0
+        libraryWork("Refazendo grades", todo, { changed, failed ->
             sets.forgetGrids()
-            say(listOfNotNull("$changed refeitas", "$same já certas".takeIf { same > 0 }, "$failed sem áudio".takeIf { failed > 0 }).joinToString(" · "))
+            listOfNotNull("$changed refeitas", "$same já certas".takeIf { same > 0 }, "$failed sem áudio".takeIf { failed > 0 }).joinToString(" · ")
+        }) { t ->
+            val fresh = os.deckbridge.manager.organize.GridRefresh.analyze(root, t) ?: return@libraryWork null
+            val e = os.deckbridge.manager.organize.GridRefresh.change(t, model.trackFiles(t).beats, fresh.first, fresh.second).edit
+            if (e == null) { same++; emptyList() } else listOf(e to "Refazer grade de \"${t.title}\"")
         }
     }
 

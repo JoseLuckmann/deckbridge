@@ -1406,3 +1406,32 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
   - Núcleo `ClassifierTest` 5 (+1: momentos novos criados uma vez, padrão intactas, as duas faixas ligadas): energia e situação em três estilos sintéticos; Deep House; vocal pelo título; comentário; a importação grava Genre, Comment e My Tags, relidos pelo leitor do modo DJ, sem duplicar; cores por energia e gênero, guardadas e relidas.
   - Celular `ClassifyTest`: classificar a biblioteca, cores por energia, faixa com energia e My Tags; capturas mobile-73 e mobile-74.
   - My Tags lidas num CDJ/rekordbox real: `BLOCKED_HARDWARE`.
+
+## 2026-10-29 — Trabalhos da biblioteca em segundo plano e Classificar 25× mais rápido (0.32.1)
+
+- Pedido do dono: os trabalhos de classificação em segundo plano, otimizados em memória, CPU e velocidade; "o classificador está bem lento".
+- `ManagerApp.libraryWork`: um executor só para Analisar todas, Marcar pontos, Classificar e Refazer grades.
+  - Thread em `THREAD_PRIORITY_BACKGROUND`, uma faixa por vez.
+  - Sem janela de espera: uma faixa fina de progresso com ✕ (`WorkStrip`, a mesma da importação), e a tela fica livre.
+  - As edições entram pela thread da tela (`onMainSync`) e a gravação silenciosa grava a cada 6 faixas (`saveQuietly`, a mesma que a importação passou a usar).
+  - Uma faixa que falha, até por falta de memória, não para as outras.
+  - Os quatro loops repetidos viraram um.
+- A importação também roda as análises em prioridade de fundo.
+- Classificar não refaz a análise inteira.
+  - Usa o BPM e a grade da biblioteca e o perfil por compasso do MIX (`SetDesk.profileOf`, o mesmo cache em disco): o que um calcula, o outro aproveita.
+  - Medido numa faixa de 7 min (JVM, 2ª passada): análise completa ~7 s; decodificar 0,15 s + perfil 0,16 s ≈ 0,3 s; com o perfil já guardado, quase zero.
+- Evidência: celular `ClassifyTest` (em segundo plano: sem janela, faixa CLASSIFICANDO no topo; captura mobile-75), `CuePointsTest`, `SetFlowTest` (refazer grades), `KeepFlowTest`, `NewcomerFlowTest`, `PlatformTest`, `DesignSystemTest`. Tempos no aparelho: `BLOCKED_HARDWARE`.
+
+## 2026-10-29 — Mixer do MIX inteiro em qualquer altura (0.32.2)
+
+- Relato do dono (prints do S25 Ultra): "muito quebradas essas telas". Os botões do mixer ficavam minúsculos ou, quando apareciam DESFAZER/GUARDAR, estouravam por cima do FX e dos vizinhos.
+  - Causa: o arco era medido como "o quadrado que cabe na altura" (`aspectRatio` com peso). A altura que sobra no aparelho, com as barras do sistema, dava os dois resultados.
+- Correções:
+  - O arco tem tamanho calculado pela célula (o menor lado menos o nome, entre 28 e 72 dp, recortado na célula).
+  - O orçamento de altura foi enxugado: FX numa linha (quatro efeitos e o LEVEL), o botão FX do canal na linha do nome, o encaixe mais baixo, ondas de 64 dp em tela baixa (menos de 820 dp) e "Bars" escondido na onda baixa.
+- Evidência: celular `MixLayoutTest` (novo).
+  - Em 411×891 e em 384×760 dp (o que sobra no S25 com as barras), normal e com GUARDAR: os oito botões têm pelo menos 44×40 dp, nenhum invade outro nem o FX.
+  - Capturas mobile-76.
+- Pedido do dono no meio da rodada: o FX como o Beat FX da DDJ-400 — seletor do efeito, seletor de canal (CH 1, CH 2, AMBOS) e o knob LEVEL, que em zero desliga; saem os botões FX de cada canal. E no encaixe saem SYNC FINO, GRADE D2 e ZERAR: o sync fino fica sempre ligado e um toque no centro (o jog) zera.
+  - Núcleo: `Transition.fxLevel` (padrão 0 = desligado) e `fxChannel` (1, 2 ou 0), guardados. O eco automático da saída e a mão gravada não dependem do knob.
+  - Evidência: `MixFxTest` (em zero o som é o mesmo; LEVEL em cima entra mais; só no CH 2 não mexe no CH 1; canal guardado), `SetFlowTest` (DESLIG., AMBOS), `MixHandTest` (toque no jog zera), `MixLayoutTest`.

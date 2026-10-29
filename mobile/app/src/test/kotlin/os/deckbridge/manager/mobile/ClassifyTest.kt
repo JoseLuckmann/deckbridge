@@ -59,8 +59,13 @@ class ClassifyTest {
         rule.onNode(hasContentDescription("Ferramentas da biblioteca")).performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Classificar (gênero, energia, tags)").performClick()
+        // Em segundo plano: a faixa de progresso no topo, sem janela por cima (a tela segue livre).
+        rule.waitForIdle()
+        rule.onNodeWithText("CLASSIFICANDO").assertExists()
+        assertTrue(a.job == null, "sem janela de espera")
+        rule.onRoot().captureRoboImage(File(out, "mobile-75-vertical-classificando-em-segundo-plano.png").path)
         // O lote grava sozinho (em lotes, com cópia de segurança).
-        idleUntil("classificou") { a.job == null && a.model.view!!.tracks.all { os.deckbridge.manager.organize.TrackClassifier.energyOf(it.comment) != null } }
+        idleUntil("classificou") { a.work == null && a.model.view!!.tracks.all { os.deckbridge.manager.organize.TrackClassifier.energyOf(it.comment) != null } }
         val v = a.model.view!!
         assertTrue(a.model.myTags().values.any { it.isNotEmpty() }, "My Tags gravadas")
         // Cores por energia, escolhidas na janela; pintar as sem cor.

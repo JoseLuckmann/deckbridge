@@ -7,7 +7,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.io.File
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.Semaphore
@@ -56,17 +55,8 @@ class ImportQueue(private val app: ManagerApp) {
 
     private fun onMain(block: () -> Unit) = main.post(block)
 
-    /** Roda [block] na thread da tela e espera o resultado (a thread de fundo nunca mexe no modelo direto). */
-    private fun <T> onMainSync(block: () -> T): T {
-        var out: Result<T>? = null
-        val done = CountDownLatch(1)
-        main.post {
-            out = runCatching(block)
-            done.countDown()
-        }
-        done.await()
-        return out!!.getOrThrow()
-    }
+    /** Roda [block] na thread da tela e espera o resultado (o mesmo de [ManagerApp.onMainSync]). */
+    private fun <T> onMainSync(block: () -> T): T = app.onMainSync(block)
 
     private fun run() {
         val total = AtomicInteger()
@@ -81,7 +71,10 @@ class ImportQueue(private val app: ManagerApp) {
             onMain { progress = p }
         }
         val cache = File(app.context.cacheDir, "importar").apply { deleteRecursively(); mkdirs() }
-        val pool = Executors.newFixedThreadPool(WORKERS)
+        // As análises numa prioridade de fundo: a tela e o áudio vêm antes.
+        val pool = Executors.newFixedThreadPool(WORKERS) { r ->
+            Thread({ android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND); r.run() }, "deckbridge-analise").apply { isDaemon = true }
+        }
         // No máximo uma cópia esperando por análise além das que estão sendo analisadas (o cache não cresce à toa).
         val slots = Semaphore(WORKERS + 1)
         // O que foi para a fila do modelo e de qual arquivo do cache veio: depois de gravado, o arquivo some.
@@ -94,11 +87,8 @@ class ImportQueue(private val app: ManagerApp) {
 
         /** Grava o que está na fila (silenciosa) e apaga do cache o que já foi para a biblioteca. */
         fun save() {
-            val queued = onMainSync { app.model.beginQuiet() } ?: return
-            val done = app.model.writeQuiet(queued)
+            if (!app.saveQuietly()) return
             onMainSync {
-                app.model.finishQuiet(done)
-                if (done != null) app.pruneBackups()
                 val pending = app.model.pending.map { it.edit }
                 synchronized(submitted) {
                     val gone = submitted.filter { (e, _) -> pending.none { it === e } }

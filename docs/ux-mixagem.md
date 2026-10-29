@@ -181,3 +181,11 @@ Pedido do dono: o encaixe fica na tela do mixer, "simulando o jogger", com a int
 (−1 BAT, ◀ 5 ms, valor, 5 ms ▶, +1 BAT, SYNC FINO, GRADE D2, ZERAR) saiu de AJUSTAR e fica embaixo do mixer. O centro, onde
 aparece o valor, é o jog: arrastar para a direita adianta a que entra e para a esquerda freia (1 ms a cada 3 dp, até ±250
 ms); vale na hora na prévia que toca e só grava no plano quando o dedo solta (`SetDesk.jog`).
+
+### FX como o Beat FX da DDJ-400 e encaixe mais simples (0.32.2)
+
+- FX: o efeito (ECHO, REVERB, FLANGER, ROLL), o canal (CH 1, CH 2, AMBOS) e o knob LEVEL — em zero, desligado ("DESLIG."), como
+  na controladora. Sem botão FX em cada canal. O eco automático da saída com eco e a mão gravada continuam como eram.
+- Encaixe: só −1 BAT, ◀ 5 ms, o jog no centro (arrastar empurra ou freia; um toque zera), 5 ms ▶, +1 BAT. O sync fino medido fica
+  sempre ligado (sem botão); a correção da grade pelo medido saiu da tela.
+- Mixer do celular com tamanho calculado dos botões (não estoura nem some com as barras do sistema; `MixLayoutTest`).

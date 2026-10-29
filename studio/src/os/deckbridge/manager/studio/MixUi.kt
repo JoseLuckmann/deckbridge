@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,6 +39,7 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -132,6 +132,7 @@ private fun MixContent(app: StudioHost) {
     var page by remember { mutableStateOf(MixPage.MIXER) }
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         val wide = maxWidth >= WIDE_DP.dp
+        val shortScreen = maxHeight < 820.dp
         // Validar uma troca é ouvir, mexer e julgar (Nielsen, heurística 8: só o que importa à vista). Em cima uma linha só
         // (qual troca, veredito, anterior e próxima); no meio as duas ondas com as frases; embaixo, uma aba por tarefa —
         // o mixer primeiro. Os fatos da troca (estilo, tom, BPM, onde vira) ficam na aba TROCA, com o passo a passo.
@@ -182,7 +183,8 @@ private fun MixContent(app: StudioHost) {
                     }
                 }
             } else {
-                decks(84.dp)
+                // Tela baixa (celular com as barras do sistema): ondas um pouco mais baixas, para o mixer caber.
+                decks(if (shortScreen) 64.dp else 84.dp)
                 Overview(p, pos, tr) { desk.seekMix(it) }
                 tabs()
                 val scroll = rememberScrollState()
@@ -480,13 +482,13 @@ private fun DeckWave(
             val head = w * HEAD_AT
             drawLine(Palette.text, Offset(head, 0f), Offset(head, h), 2.5f)
         }
-        BarsBox(p, posNow, isA, Modifier.width(56.dp).fillMaxHeight())
+        BarsBox(p, posNow, isA, Modifier.width(56.dp).fillMaxHeight(), compact = height < 80.dp)
     }
 }
 
 /** Ao lado da onda, como no player: quantos compassos faltam para o ponto (ou desde ele). */
 @Composable
-private fun BarsBox(p: MixPreview?, posNow: () -> Int, isA: Boolean, modifier: Modifier) {
+private fun BarsBox(p: MixPreview?, posNow: () -> Int, isA: Boolean, modifier: Modifier, compact: Boolean = false) {
     Column(modifier.padding(start = 4.dp), verticalArrangement = Arrangement.Center) {
         if (p == null) return@Column
         val bars = (posNow() - p.leadMs) / p.barMsA
@@ -496,8 +498,9 @@ private fun BarsBox(p: MixPreview?, posNow: () -> Int, isA: Boolean, modifier: M
             else -> if (isA) "SAIU" else "SOZINHA"
         }
         Text(label, color = Palette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-        Text("%.1f".format(kotlin.math.abs(bars)), color = Palette.orange, fontSize = 16.sp, fontFamily = Mono)
-        Text("Bars", color = Palette.orange, fontSize = 10.sp)
+        Text("%.1f".format(kotlin.math.abs(bars)), color = Palette.orange, fontSize = if (compact) 14.sp else 16.sp, fontFamily = Mono)
+        // Na onda baixa (tela baixa) o "Bars" não cabe: o número e o rótulo de cima já dizem.
+        if (!compact) Text("Bars", color = Palette.orange, fontSize = 10.sp)
     }
 }
 
@@ -573,22 +576,29 @@ private fun TakeActions(desk: SetDesk) {
  */
 @Composable
 private fun FxPanel(desk: SetDesk, tr: Transition) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp).rbPanel().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Como o Beat FX da DDJ-400: o efeito, o canal e o LEVEL. Em zero, desligado.
+    Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            os.deckbridge.manager.mix.MixFx.entries.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    row.forEach { fx -> PadButton(fx.label, Modifier.weight(1f), on = tr.fx == fx) { if (tr.fx != fx) desk.editMix(tr.copy(fx = fx)) } }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                os.deckbridge.manager.mix.MixFx.entries.forEach { fx ->
+                    PadButton(fx.label, Modifier.weight(1f), on = tr.fx == fx) { if (tr.fx != fx) desk.editMix(tr.copy(fx = fx)) }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                listOf(1 to "CH 1", 2 to "CH 2", 0 to "AMBOS").forEach { (ch, label) ->
+                    PadButton(label, Modifier.weight(1f), on = tr.fxChannel == ch) { if (tr.fxChannel != ch) desk.editMix(tr.copy(fxChannel = ch)) }
                 }
             }
         }
         val density = androidx.compose.ui.platform.LocalDensity.current.density
         val level by androidx.compose.runtime.rememberUpdatedState(tr.fxLevel)
+        val off = tr.fxLevel <= 0.01f
         Column(
-            Modifier.width(84.dp).height(84.dp).knobGestures(true, "fx-level", level, density, false, "LEVEL do FX", tr.fxLevel, onEnd = { desk.setFxLevel(level, save = true) }) { desk.setFxLevel(it, save = false) },
+            Modifier.width(64.dp).height(80.dp).knobGestures(true, "fx-level", level, density, false, "LEVEL do FX", tr.fxLevel, onEnd = { desk.setFxLevel(level, save = true) }) { desk.setFxLevel(it, save = false) },
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
         ) {
-            KnobDial(tr.fxLevel, false, Palette.blue, 7f, Modifier.weight(1f).aspectRatio(1f, matchHeightConstraintsFirst = true))
-            Text("LEVEL", color = Palette.muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            KnobDial(tr.fxLevel, false, if (off) Palette.muted else Palette.orange, 6f, Modifier.size(50.dp))
+            Text(if (off) "DESLIG." else "LEVEL", color = if (off) Palette.muted else Palette.orange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -638,13 +648,11 @@ private fun MixerChannel(deck: Int, lv: Levels, hand: (Ctl) -> Boolean, enabled:
         // No celular: o canal é uma coluna — nome, o botão do efeito grande, quatro botões grandes em grade 2×2 e o fader ao lado.
         Row(modifier.fillMaxHeight().rbPanel().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // O nome e o AUTO (o FX fica no painel de cima, com o seletor de canal).
+                Row(Modifier.height(34.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("CH ${deck + 1}", color = Palette.text, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    if (anyHand) SmallToggle("AUTO", false, false, enabled) { onRelease(deck) }
+                    if (anyHand) SmallToggle("AUTO", false, false, enabled, height = 30.dp) { onRelease(deck) }
                 }
-                val echo = c("ECHO")
-                val on = lv[echo] >= 0.5f
-                SmallToggle("FX", on, hand(echo), enabled, Modifier.fillMaxWidth(), 44.dp, 14.sp) { onSet(echo, if (on) 0f else 1f) }
                 // Os quatro botões em grade 2×2: cada um com o tamanho que a coluna dá (dá uns 60 dp de arco).
                 for (row in listOf(listOf("HI" to false, "MID" to false), listOf("LOW" to false, "FILTER" to true))) {
                     Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -660,9 +668,6 @@ private fun MixerChannel(deck: Int, lv: Levels, hand: (Ctl) -> Boolean, enabled:
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("CH ${deck + 1}", color = Palette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                val echo = c("ECHO")
-                val on = lv[echo] >= 0.5f
-                SmallToggle("FX", on, hand(echo), enabled) { onSet(echo, if (on) 0f else 1f) }
                 if (anyHand) SmallToggle("AUTO", false, false, enabled) { onRelease(deck) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -716,12 +721,17 @@ private fun Knob(c: Ctl, value: Float, hand: Boolean, enabled: Boolean, modifier
     }
     val label = if (kill) "KILL" else if (bipolar) when { v < 0.47f -> "LPF"; v > 0.53f -> "HPF"; else -> c.label } else c.label
     val labelColor = if (kill) Palette.danger else if (hand) Palette.orange else Palette.muted
-    if (big) Column(
-        modifier.knobGestures(enabled, c, current, density, bipolar, name, v) { onSet(c, it) },
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    if (big) BoxWithConstraints(
+        modifier.clipToBounds().knobGestures(enabled, c, current, density, bipolar, name, v) { onSet(c, it) },
+        contentAlignment = Alignment.Center,
     ) {
-        KnobDial(v, bipolar, ink, 7f, Modifier.weight(1f).aspectRatio(1f, matchHeightConstraintsFirst = true))
-        Text(label, color = labelColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        // O tamanho do arco pela célula que o botão recebe (o menor lado, menos o nome), entre 28 e 72 dp: em qualquer
+        // tela ele cabe sem estourar por cima dos vizinhos e sem sumir (no aparelho, medir só pela altura dava os dois).
+        val dial = minOf(maxWidth - 4.dp, maxHeight - 18.dp).coerceIn(28.dp, 72.dp)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            KnobDial(v, bipolar, ink, if (dial > 48.dp) 7f else 5f, Modifier.size(dial))
+            Text(label, color = labelColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
     } else Row(
         modifier.height(44.dp).knobGestures(enabled, c, current, density, bipolar, name, v) { onSet(c, it) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -815,9 +825,9 @@ private fun Fader(c: Ctl, value: Float, hand: Boolean, enabled: Boolean, modifie
  */
 @Composable
 private fun SyncPanel(desk: SetDesk, tr: Transition, p: MixPreview?) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).rbPanel().padding(horizontal = 6.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp).rbPanel().padding(horizontal = 6.dp, vertical = 3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("ENCAIXE DO CH 2 · arraste o centro como o jog", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            Text("ENCAIXE DO CH 2 · arraste o centro (jog), toque zera", color = Palette.blue, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.weight(1f).padding(start = 4.dp))
             val m = p?.measuredMs
             Text(
                 "medido " + (m?.let { "%+.0f ms".format(it) } ?: "—"),
@@ -841,6 +851,8 @@ private fun SyncPanel(desk: SetDesk, tr: Transition, p: MixPreview?) {
                             if (steps != 0) { acc -= steps; desk.jog(steps, save = false) }
                         }
                     }
+                    // Um toque no centro zera o encaixe à mão (o sync fino medido fica sempre ligado).
+                    .pointerInput(p != null) { if (p != null) detectTapGestures { desk.resetSync() } }
                     .semantics { contentDescription = "Jog do encaixe" },
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
             ) {
@@ -849,12 +861,6 @@ private fun SyncPanel(desk: SetDesk, tr: Transition, p: MixPreview?) {
             }
             PadButton("5 ms ▶", Modifier.weight(1f), enabled = p != null) { desk.nudge(5) }
             PadButton("+1 BAT", Modifier.weight(1f), enabled = p != null) { desk.shiftBeat(1) }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            PadButton("SYNC FINO", Modifier.weight(1.3f), on = tr.phaseLock) { desk.editMix(tr.copy(phaseLock = !tr.phaseLock)) }
-            val m = p?.measuredMs
-            PadButton("GRADE D2", Modifier.weight(1f), enabled = m != null && kotlin.math.abs(m) >= 3) { desk.fixGridOfIncoming() }
-            PadButton("ZERAR", Modifier.weight(1f), enabled = tr.nudgeMs != 0 || tr.beatShift != 0) { desk.resetSync() }
         }
     }
 }

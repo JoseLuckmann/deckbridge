@@ -215,21 +215,22 @@ private fun TopBar(app: ManagerApp, actions: Actions) {
  */
 @Composable
 private fun ImportStrip(app: ManagerApp) {
-    val p = app.imports.progress ?: return
+    app.imports.progress?.let { p -> WorkStrip("IMPORTANDO", p.done, p.total, p.current.substringBeforeLast('.'), "Parar a importação") { app.imports.cancel() } }
+    // As tarefas sobre a biblioteca (analisar, marcar pontos, classificar, grades) rodam do mesmo jeito: a tela fica livre.
+    app.work?.let { w -> WorkStrip(w.title.uppercase(), w.done, w.total, w.current, "Parar ${w.title.lowercase()}") { app.cancelWork() } }
+}
+
+/** A faixa fina de um trabalho em segundo plano: o que é, quantas foram, qual agora, a barra e ✕ para parar. */
+@Composable
+private fun WorkStrip(label: String, done: Int, total: Int, current: String, stopLabel: String, onStop: () -> Unit) {
     Column(Modifier.fillMaxWidth().background(Palette.surface)) {
         Row(Modifier.fillMaxWidth().height(36.dp).padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("IMPORTANDO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-            Text("  ${p.done}/${p.total}", color = Palette.orange, fontSize = 12.sp, fontFamily = Mono)
-            Text(
-                "  " + shortTitle(p.current.substringBeforeLast('.')), color = Palette.mutedBright, fontSize = 12.sp, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = { app.imports.cancel() }, modifier = Modifier.semantics { contentDescription = "Parar a importação" }) { Text("✕", fontSize = 14.sp) }
+            Text(label, color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+            Text("  $done/$total", color = Palette.orange, fontSize = 12.sp, fontFamily = Mono)
+            Text("  " + shortTitle(current), color = Palette.mutedBright, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            TextButton(onClick = onStop, modifier = Modifier.semantics { contentDescription = stopLabel }) { Text("✕", fontSize = 14.sp) }
         }
-        LinearProgressIndicator(
-            progress = { if (p.total == 0) 0f else p.done.toFloat() / p.total }, modifier = Modifier.fillMaxWidth().height(2.dp),
-            color = Palette.blue, trackColor = Palette.line,
-        )
+        LinearProgressIndicator(progress = { if (total == 0) 0f else done.toFloat() / total }, modifier = Modifier.fillMaxWidth().height(2.dp), color = Palette.blue, trackColor = Palette.line)
     }
 }
 
