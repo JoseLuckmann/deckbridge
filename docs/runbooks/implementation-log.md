@@ -1449,3 +1449,16 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - Teste: `DesignSystemTest` confere que os quatro lugares usam o `UnderlineTabs`.
 - Evidência: `SetFlowTest`, `MixHandTest`, `MixLayoutTest`, `KeepFlowTest`, `NewcomerFlowTest`, `UxFlowTest`, `TouchTargetTest`, `ScreenshotTest` e o modo DJ.
 - Teste instável achado na suíte inteira da Biblioteca: `SetPlayerTest` (salto para a próxima virada) falhou uma vez com a máquina carregada e passou sozinho duas vezes — no JVM o set toca instantaneamente e a posição andava antes da leitura. A checagem passou a ser "no ponto do salto ou à frente"; a regra do salto (10 s antes da virada) continua conferida.
+
+## 2026-10-29 — RMX: segurar o X-PAD e acelerar, HOLD e o anel como knob (0.33.1)
+
+- Pedido do dono: no RMX faltava "aquele recurso de hold": segurar e ir aumentando, gerando os sons no ritmo; e depois, "como usa, não tem knob, dá para reaproveitar o do filtro?".
+- Modelo (`PlayerModel.kt`, regras puras e testadas):
+  - `rmxXPadDown/Up`: toque rápido liga e desliga como antes; **segurar** toca só enquanto o dedo está (e o TEMPO volta ao de antes).
+  - `rmxToggleHold`: **HOLD** — soltar não solta o efeito; vale também para a cena (a subida segue até o máximo). Desligar o HOLD solta o que ele segurava.
+  - `rmxRiseStep`: com o roll segurado ou mantido, a cada compasso o TEMPO desce um passo (1/2 → 1/4 → 1/8 → 1/16), com os golpes no ritmo. O DRUM não, porque a bateria dele já sobe sozinha por compassos.
+  - `rmxKnob`: **o anel grande das cenas virou knob** — arrastar muda a velocidade do roll (com o X-PAD segurado) ou a intensidade da cena segura; mexer assume o controle e para a subida e a aceleração automáticas.
+- Tela (`RmxDock`): o pad do X-PAD distingue toque de segurar (`HoldChoice`); botão HOLD ao lado; o anel é o knob (o mesmo arrasto vertical dos knobs do mixer).
+- Evidência: núcleo `RmxHoldTest` 6 (toque liga/desliga, segurar acelera e solta, HOLD mantém e desligar solta, HOLD na cena, DRUM não acelera, o knob manda e assume). O som do roll acelerando no aparelho: `BLOCKED_HARDWARE`.
+- Esclarecimento do dono: o knob é o **da própria DDJ-400**. O handler do Beat FX já mandava o LEVEL/DEPTH para a intensidade da cena e para a rolagem do DRUM; agora ele também é a **velocidade do roll segurado** (`rmxKnob`), e o botão **BEAT FX ON/OFF** da controladora é o **HOLD**. Os pads ROLL, TRANS, DRUM e HI-PASS (modo SAMPLER) distinguem toque de segurar (`reduceRmxPad` com a hora de apertar). O anel da tela também é knob (mesma regra).
+- Evidência: `RmxHoldTest` 7 (inclui os pads da controladora: toque liga e desliga, segurar acelera e solta, HOLD mantém); suíte do modo DJ. Som no aparelho e a DDJ-400 de verdade: `BLOCKED_HARDWARE`.

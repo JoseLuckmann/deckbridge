@@ -40,6 +40,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import os.deckbridge.logic.RbTrack
 import os.deckbridge.logic.RmxState
+import os.deckbridge.logic.rmxKnob
+import os.deckbridge.logic.rmxKnobLabel
+import os.deckbridge.logic.rmxKnobValue
+import os.deckbridge.logic.rmxRolling
+import os.deckbridge.logic.rmxScenePress
+import os.deckbridge.logic.rmxToggleHold
+import os.deckbridge.logic.rmxXPadDown
+import os.deckbridge.logic.rmxXPadUp
 import os.deckbridge.logic.SCENE_BARS
 import os.deckbridge.logic.SCENE_NAMES
 import os.deckbridge.logic.DRUM_VOICES
@@ -188,6 +196,9 @@ fun RmxDock(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit, compa
     val build = rmx.scene < 4
     val accent = Color(if (build) StagePalette.accentOrange else StagePalette.accentBlue)
     val drumArmed = rmx.xOn && rmx.xMode == 2
+    // O estado de agora, para quem decide ao soltar o dedo (o gesto começou com o de antes).
+    val latest = androidx.compose.runtime.rememberUpdatedState(rmx)
+    val latestOnRmx = androidx.compose.runtime.rememberUpdatedState(onRmx)
     androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
     // Estreito (celular deitado, tablet de 7"): a última linha (RELEASE, ROLL, CH) vira duas, senão os nomes eram
     // cortados ("ECH…", "BAC…"), e o isolador encolhe.
@@ -198,7 +209,9 @@ fun RmxDock(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit, compa
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextInk("REMIX FX", color = accent, fontSize = if (compact) 13.sp else 16.sp, weight = FontWeight.Bold)
                 TextInk(
-                    "${rmx.sceneName()}  ·  ${(rmx.intensity * 100).toInt()}%  ·  ${if (drumArmed) "DRUM ${drumPatternLabel(rmx)}" else "${rmx.bars} compassos"}",
+                    // Rolando (X-PAD segurado ou mantido pelo HOLD) o cabeçalho diz a velocidade; o anel é o knob dela.
+                    if (rmxRolling(rmx)) "${XPAD_NAMES[rmx.xMode.coerceIn(0, XPAD_NAMES.lastIndex)].uppercase()} ${rmxKnobLabel(rmx)}${if (rmx.latch) "  ·  HOLD" else "  ·  segurando"}  ·  gire o anel"
+                    else "${rmx.sceneName()}  ·  ${(rmx.intensity * 100).toInt()}%  ·  ${if (drumArmed) "DRUM ${drumPatternLabel(rmx)}" else "${rmx.bars} compassos"}${if (rmx.latch) "  ·  HOLD" else ""}",
                     fontSize = if (compact) 11.sp else 13.sp,
                     color = Color(StagePalette.inkMuted),
                     maxLines = 1,
@@ -208,13 +221,15 @@ fun RmxDock(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit, compa
             }
             // SCENE FX: os oito pads seguram a cena enquanto estão apertados; o anel mostra a intensidade.
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                SceneDial(rmx.intensity, rmx.sceneName(), accent, Modifier.width(if (compact) 64.dp else 90.dp).fillMaxHeight(), showName = false)
+                // O anel é o knob do RMX: arrastar para cima ou para baixo muda a velocidade do roll (com o X-PAD segurado) ou a
+                // intensidade da cena segura; mexer assume o controle da subida automática.
+                SceneDial(rmxKnobValue(rmx), rmxKnobLabel(rmx), if (rmxRolling(rmx)) Color(StagePalette.accentBlue) else accent, Modifier.width(if (compact) 64.dp else 90.dp).fillMaxHeight(), showName = false) { v ->
+                    onRmx(rmxKnob(latest.value, v))
+                }
                 SCENE_NAMES.forEachIndexed { index, name ->
                     val hot = rmx.scene == index && rmx.holding
                     val tone = Color(if (index < 4) StagePalette.accentOrange else StagePalette.accentBlue)
-                    ScenePad(name, index, hot, tone, Modifier.weight(1f).fillMaxHeight()) { down ->
-                        onRmx(if (down) rmx.copy(scene = index, holding = true, panel = true) else rmx.copy(holding = false))
-                    }
+                    ScenePad(name, index, hot, tone, Modifier.weight(1f).fillMaxHeight()) { down -> onRmx(rmxScenePress(latest.value, index, down)) }
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -223,11 +238,17 @@ fun RmxDock(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit, compa
                     MiniChoice("$bars", rmx.bars == bars, Modifier.weight(0.6f).height(row), big = true) { onRmx(rmx.copy(bars = bars)) }
                 }
                 TextInk("X-PAD", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 6.dp).width(if (compact) 36.dp else 46.dp))
+                // Toque liga e desliga; segurar toca enquanto o dedo está (o roll acelera), e com HOLD o roll segue ao soltar.
                 XPAD_NAMES.forEachIndexed { index, name ->
-                    MiniChoice(if (index == 2 && drumArmed) "DRUM ▶" else name, rmx.xOn && rmx.xMode == index, Modifier.weight(1f).height(row), big = true) {
-                        onRmx(rmx.copy(xMode = index, xOn = !(rmx.xOn && rmx.xMode == index), panel = true, drumBuild = if (index == 2 && rmx.drumBuild < 0.2f) 1f else rmx.drumBuild))
-                    }
+                    HoldChoice(
+                        if (index == 2 && drumArmed) "DRUM ▶" else name, rmx.xOn && rmx.xMode == index, Modifier.weight(1f).height(row),
+                        onDown = { latestOnRmx.value(rmxXPadDown(latest.value, index)) },
+                        onUp = { ms, wasOn -> latestOnRmx.value(rmxXPadUp(latest.value, index, ms, wasOn)) },
+                        wasOn = { latest.value.xOn && latest.value.xMode == index },
+                    )
                 }
+                // HOLD, como o do RMX-1000: soltar o pad não solta o efeito. Acende; desligar solta o que ele segurava.
+                MiniChoice(if (rmx.latch) "HOLD ●" else "HOLD", rmx.latch, Modifier.weight(0.9f).height(row), big = true) { onRmx(rmxToggleHold(rmx)) }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextInk("TEMPO", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.width(if (compact) 62.dp else 78.dp))
@@ -329,8 +350,22 @@ private fun IsoBar(label: String, gain: Float, modifier: Modifier, onChange: (Fl
 }
 
 @Composable
-private fun SceneDial(intensity: Float, name: String, accent: Color, modifier: Modifier, showName: Boolean = true) {
-    Box(modifier, contentAlignment = Alignment.Center) {
+private fun SceneDial(intensity: Float, name: String, accent: Color, modifier: Modifier, showName: Boolean = true, onChange: (Float) -> Unit = {}) {
+    val current = androidx.compose.runtime.rememberUpdatedState(intensity)
+    val change = androidx.compose.runtime.rememberUpdatedState(onChange)
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    Box(
+        modifier.pointerInput(Unit) {
+            // Arrastar para cima sobe, para baixo desce (140 dp de ponta a ponta, como os knobs do mixer).
+            var acc = 0f
+            detectVerticalDragGestures(onDragStart = { acc = current.value }) { pointer, dy ->
+                pointer.consume()
+                acc = (acc - dy / (140f * density)).coerceIn(0f, 1f)
+                change.value(acc)
+            }
+        },
+        contentAlignment = Alignment.Center,
+    ) {
         // Sempre quadrado: numa coluna estreita e alta o anel virava um oval.
         Canvas(Modifier.fillMaxWidth().aspectRatio(1f)) {
             val stroke = size.minDimension * 0.08f
@@ -340,20 +375,47 @@ private fun SceneDial(intensity: Float, name: String, accent: Color, modifier: M
             drawCircle(Color(StagePalette.panel), radius = size.minDimension * 0.34f)
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            TextInk("${(intensity * 100).toInt()}", fontSize = if (showName) 28.sp else 20.sp, weight = FontWeight.Bold, mono = true)
+            TextInk(if (showName) "${(intensity * 100).toInt()}" else name, fontSize = if (showName) 28.sp else 20.sp, weight = FontWeight.Bold, mono = true)
             if (showName) TextInk(name, fontSize = 13.sp, color = Color(StagePalette.inkMuted), maxLines = 2)
         }
     }
 }
 
+/**
+ * Um botão que distingue o toque de segurar: [onDown] na hora em que o dedo pousa, [onUp] ao soltar com o tempo que ficou
+ * (e se já estava ligado antes). Quem decide o que isso quer dizer é o modelo ([rmxXPadDown], [rmxXPadUp]).
+ */
+@Composable
+private fun HoldChoice(label: String, selected: Boolean, modifier: Modifier, onDown: () -> Unit, onUp: (Long, Boolean) -> Unit, wasOn: () -> Boolean) {
+    val down = androidx.compose.runtime.rememberUpdatedState(onDown)
+    val up = androidx.compose.runtime.rememberUpdatedState(onUp)
+    val was = androidx.compose.runtime.rememberUpdatedState(wasOn)
+    val fill = if (selected) Color(0xFF1A3A68) else Color(StagePalette.panelRaised)
+    Box(
+        modifier.heightIn(min = 40.dp).background(fill).border(1.dp, Color(if (selected) StagePalette.accentBlue else StagePalette.line)).pointerInput(label.take(4)) {
+            detectTapGestures(onPress = {
+                val before = was.value()
+                val at = System.currentTimeMillis()
+                down.value()
+                tryAwaitRelease()
+                up.value(System.currentTimeMillis() - at, before)
+            })
+        }.padding(horizontal = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        TextInk(label, color = if (selected) Color.White else Color(StagePalette.ink), fontSize = 14.sp, weight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
 @Composable
 private fun ScenePad(name: String, index: Int, active: Boolean, accent: Color, modifier: Modifier, onHold: (Boolean) -> Unit) {
+    val hold = androidx.compose.runtime.rememberUpdatedState(onHold)
     Column(
         modifier.background(if (active) Color(0xFF1A3A68) else Color(StagePalette.panel)).border(1.dp, if (active) accent else Color(StagePalette.line)).pointerInput(name) {
             detectTapGestures(onPress = {
-                onHold(true)
+                hold.value(true)
                 tryAwaitRelease()
-                onHold(false)
+                hold.value(false)
             })
         }.padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

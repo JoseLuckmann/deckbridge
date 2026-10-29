@@ -45,7 +45,11 @@ private val Red = Color(0xFFFF4D4D)
 private const val W = 894f
 private const val H = 505f
 
-/** O que os pads do SAMPLER fazem no RMX (reduceRmxPad): deck 1 cenas e X-PAD, deck 2 a bateria do X-PAD. */
+/**
+ * O que os pads do SAMPLER fazem no RMX (reduceRmxPad): deck 1 cenas e X-PAD, deck 2 a bateria do X-PAD. Os pads ROLL,
+ * TRANS, DRUM e HI-PASS: tocar liga e desliga; segurar toca enquanto aperta e o roll acelera. O BEAT FX ON/OFF é o HOLD (soltar
+ * o pad mantém) e o LEVEL/DEPTH é o knob: velocidade do roll segurado ou intensidade da cena.
+ */
 private val SAMPLER_LABELS = listOf(
     listOf("ECHO UP", "NOISE UP", "SPIRAL UP", "REVERB UP", "ROLL", "TRANS", "DRUM", "HI-PASS"),
     listOf("KICK", "CLAP", "SNARE", "KICK+CLAP", "4 COMP", "8 COMP", "16 COMP", "GAP"),

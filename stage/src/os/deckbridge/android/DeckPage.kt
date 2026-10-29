@@ -60,7 +60,11 @@ import os.deckbridge.logic.jumpSeconds
 import os.deckbridge.logic.storageWarning
 import os.deckbridge.logic.mergedTagNames
 import os.deckbridge.logic.reduceRmxPad
+import os.deckbridge.logic.rmxKnob
 import os.deckbridge.logic.rmxPayload
+import os.deckbridge.logic.rmxToggleHold
+import os.deckbridge.logic.rmxRiseLeft
+import os.deckbridge.logic.rmxRiseStep
 import os.deckbridge.logic.scaleLoop
 import os.deckbridge.logic.stepJumpScale
 import os.deckbridge.logic.toggleBeatLoop
@@ -688,7 +692,13 @@ fun DeckPage(
                 if (rmx.panel && action.hotIndex == 8 && rmx.xOn && rmx.xMode == 2) {
                     rmx = rmx.copy(drumBuild = ((action.slider ?: 0.0) / 127.0).toFloat().coerceIn(0f, 1f))
                 } else if (rmx.panel && action.hotIndex == 8) {
-                    rmx = rmx.copy(intensity = ((action.slider ?: 0.0) / 127.0).toFloat().coerceIn(0f, 1f))
+                    // O LEVEL/DEPTH da DDJ-400 é o knob do RMX: a velocidade do roll segurado ou a intensidade da cena.
+                    val v = ((action.slider ?: 0.0) / 127.0).toFloat().coerceIn(0f, 1f)
+                    val turned = rmxKnob(rmx, v)
+                    rmx = if (turned == rmx) rmx.copy(intensity = v) else turned
+                } else if (rmx.panel && action.hotIndex == 5) {
+                    // O botão BEAT FX ON/OFF é o HOLD do RMX (como o do RMX-1000).
+                    rmx = rmxToggleHold(rmx)
                 } else if (rmx.panel && action.hotIndex == 3) {
                     val index = os.deckbridge.logic.SCENE_BARS.indexOf(rmx.bars).coerceAtLeast(0)
                     rmx = rmx.copy(bars = os.deckbridge.logic.SCENE_BARS[(index - 1).coerceAtLeast(0)])
@@ -808,13 +818,24 @@ fun DeckPage(
 
     LaunchedEffect(pitchA, pitchB, volA, volB, cross, pflA, pflB) { pushMix() }
 
+    // O roll do X-PAD acelera enquanto o dedo segura (ou o HOLD mantém): a cada compasso o TEMPO desce um passo, com os
+    // golpes saindo no ritmo da música (1/2 → 1/4 → 1/8 → 1/16).
+    LaunchedEffect(rmx.xOn, rmx.xHeld, rmx.xLatched, rmx.xMode) {
+        while (rmxRiseLeft(liveRmx.value) > 0) {
+            val bpm = (loaded.getOrNull(0)?.bpm ?: 120.0).coerceAtLeast(1.0)
+            delay((4.0 * 60000.0 / bpm).toLong().coerceAtLeast(400L))
+            val now = liveRmx.value
+            if (rmxRiseLeft(now) > 0) rmx = rmxRiseStep(now)
+        }
+    }
+
     LaunchedEffect(rmx.holding) {
         if (rmx.holding) {
             val from = liveRmx.value.intensity
             val bpm = (loaded.getOrNull(0)?.bpm ?: 120.0).coerceAtLeast(1.0)
             val rampMs = (liveRmx.value.bars * 4.0 * 60000.0 / bpm).toLong().coerceAtLeast(300L)
             val startedAt = System.currentTimeMillis()
-            while (liveRmx.value.holding) {
+            while (liveRmx.value.holding && !liveRmx.value.manual) {
                 val t = ((System.currentTimeMillis() - startedAt).toFloat() / rampMs.toFloat()).coerceIn(0f, 1f)
                 rmx = liveRmx.value.copy(intensity = from + (1f - from) * t)
                 if (t >= 1f) break

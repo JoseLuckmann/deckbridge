@@ -808,27 +808,114 @@ data class RmxState(
     val drumBars: Int = 8,
     val drumGap: Boolean = true,
     val drumPitch: Boolean = true,
+    /** HOLD (como o do RMX-1000): soltar o pad não solta o efeito; a subida e a rolagem seguem até desligar o HOLD. */
+    val latch: Boolean = false,
+    /** O dedo está no X-PAD (segurando): o roll acelera enquanto estiver. */
+    val xHeld: Boolean = false,
+    /** O X-PAD ficou ligado pelo HOLD depois de soltar o dedo (desligar o HOLD desliga o X-PAD). */
+    val xLatched: Boolean = false,
+    /** O TEMPO do X-PAD antes de acelerar (volta a ele ao soltar). */
+    val xBase: Int = 2,
+    /** O DJ pegou o knob: a subida e a aceleração automáticas param e vale o que o knob diz. */
+    val manual: Boolean = false,
+    /** Quando o pad do X-PAD foi apertado (pad da controladora: quem decide se foi toque ou segurar é a hora de soltar). */
+    val xPressAt: Long = 0L,
+    /** O pad apertado já estava ligado antes do toque. */
+    val xWasOn: Boolean = false,
 ) {
     fun sceneName(): String = SCENE_NAMES[scene.coerceIn(0, SCENE_NAMES.lastIndex)]
 }
 
-fun reduceRmxPad(state: RmxState, action: PerformanceAction): RmxState {
+/** Quanto o dedo precisa ficar no X-PAD para valer como "segurar" (e não um toque que liga e desliga). */
+const val RMX_HOLD_MS = 300L
+
+/**
+ * Pad de cena apertado ou solto. Com HOLD ligado, soltar não solta a cena: a subida segue até o máximo e fica lá até o
+ * HOLD desligar (ou outra cena ser apertada).
+ */
+fun rmxScenePress(state: RmxState, scene: Int, down: Boolean): RmxState = when {
+    down -> state.copy(scene = scene, holding = true, panel = true, manual = false)
+    state.latch -> state
+    else -> state.copy(holding = false)
+}
+
+/**
+ * Dedo no pad do X-PAD ([mode]: Roll, Trans, Drum, Hi-pass): liga na hora e guarda o TEMPO para o roll acelerar enquanto
+ * segura. No DRUM ligar arma a rolagem de bateria como sempre.
+ */
+fun rmxXPadDown(state: RmxState, mode: Int): RmxState = state.copy(
+    xMode = mode, xOn = true, xHeld = true, xLatched = false, panel = true, manual = false,
+    xBase = if (state.xHeld) state.xBase else state.xBeat,
+    drumBuild = if (mode == 2 && state.drumBuild < 0.2f) 1f else state.drumBuild,
+)
+
+/**
+ * Dedo solto do pad. [heldMs] é quanto ficou apertado e [wasOn] se o pad já estava ligado antes do toque.
+ * - Toque rápido: liga e desliga, como antes (um segundo toque desliga).
+ * - Segurar e soltar: o X-PAD vale só enquanto o dedo está (e o TEMPO volta ao de antes), a não ser com HOLD ligado, que
+ *   mantém a rolagem andando.
+ */
+fun rmxXPadUp(state: RmxState, mode: Int, heldMs: Long, wasOn: Boolean): RmxState {
+    val off = state.copy(xOn = false, xHeld = false, xLatched = false, xBeat = state.xBase, manual = false)
+    return when {
+        heldMs < RMX_HOLD_MS && wasOn && state.xMode == mode -> off
+        heldMs < RMX_HOLD_MS -> state.copy(xHeld = false, xBeat = state.xBase)
+        state.latch -> state.copy(xHeld = false, xLatched = true)
+        else -> off
+    }
+}
+
+/** Liga ou desliga o HOLD; ao desligar, solta o que ele segurava (a cena e o X-PAD que ficaram ligados por ele). */
+fun rmxToggleHold(state: RmxState): RmxState {
+    if (!state.latch) return state.copy(latch = true)
+    var next = state.copy(latch = false, holding = false, manual = false)
+    if (state.xLatched) next = next.copy(xOn = false, xLatched = false, xBeat = state.xBase)
+    return next
+}
+
+/**
+ * O roll acelera enquanto o dedo está no X-PAD (ou o HOLD o mantém): a cada compasso o TEMPO desce um passo
+ * (1/2 → 1/4 → 1/8 → 1/16), com os golpes saindo no ritmo da música. No DRUM não: a bateria já sobe sozinha por compassos.
+ */
+fun rmxRiseStep(state: RmxState): RmxState =
+    if (rmxRiseLeft(state) > 0) state.copy(xBeat = state.xBeat - 1) else state
+
+/** Quanto falta para o roll chegar ao mais rápido (1/16): quantos passos de [rmxRiseStep]. Com o knob na mão, nenhum. */
+fun rmxRiseLeft(state: RmxState): Int = if (state.xOn && state.xMode != 2 && (state.xHeld || state.xLatched) && !state.manual) state.xBeat else 0
+
+/** O roll do X-PAD está tocando (segurado ou mantido pelo HOLD) e não é o DRUM: o knob manda na velocidade dele. */
+fun rmxRolling(state: RmxState): Boolean = state.xOn && state.xMode != 2 && (state.xHeld || state.xLatched)
+
+/**
+ * O knob do RMX (o anel grande, 0 a 1): com o roll tocando, a VELOCIDADE dele (do 1/2 ao 1/16); senão, a INTENSIDADE da
+ * cena que está segura. Mexer assume o controle: a subida e a aceleração automáticas param ([RmxState.manual]).
+ */
+fun rmxKnob(state: RmxState, value: Float): RmxState {
+    val v = value.coerceIn(0f, 1f)
+    return when {
+        rmxRolling(state) -> state.copy(xBeat = 3 - (v * 3.999f).toInt().coerceIn(0, 3), manual = true)
+        state.holding || state.latch -> state.copy(intensity = v, manual = true)
+        else -> state
+    }
+}
+
+/** O que o anel mostra: a velocidade do roll (0 no 1/2, 1 no 1/16) ou a intensidade da cena. */
+fun rmxKnobValue(state: RmxState): Float = if (rmxRolling(state)) (3 - state.xBeat.coerceIn(0, 3)) / 3f else state.intensity
+
+/** O texto no centro do anel: a fração do roll ("1/8") ou a intensidade em %. */
+fun rmxKnobLabel(state: RmxState): String =
+    if (rmxRolling(state)) XBEAT_LABELS[state.xBeat.coerceIn(0, XBEAT_LABELS.lastIndex)] else "${(state.intensity * 100).toInt()}"
+
+fun reduceRmxPad(state: RmxState, action: PerformanceAction, nowMs: Long = System.currentTimeMillis()): RmxState {
     if (action.kind != PerformanceAction.Kind.RMX) return state
     val pad = action.hotIndex
     val down = (action.slider ?: 0.0) > 0.0
     return when {
-        pad in 0..3 && down -> state.copy(scene = pad, holding = true, panel = true)
-        pad in 0..3 && !down -> state.copy(holding = false, intensity = 0f)
-        pad in 4..7 && down -> {
-            val mode = pad - 4
-            val turningOn = !(state.xOn && state.xMode == mode)
-            state.copy(
-                xMode = mode,
-                xOn = turningOn,
-                panel = true,
-                drumBuild = if (mode == 2 && turningOn && state.drumBuild < 0.2f) 1f else state.drumBuild,
-            )
-        }
+        pad in 0..3 && down -> rmxScenePress(state, pad, true)
+        pad in 0..3 && !down -> if (state.latch) state else state.copy(holding = false, intensity = 0f)
+        // Os pads do X-PAD da controladora: tocar liga e desliga; segurar toca enquanto aperta (e acelera); com HOLD, segue.
+        pad in 4..7 && down -> rmxXPadDown(state, pad - 4).copy(xPressAt = nowMs, xWasOn = state.xOn && state.xMode == pad - 4)
+        pad in 4..7 && !down -> if (state.xHeld && state.xMode == pad - 4) rmxXPadUp(state, pad - 4, nowMs - state.xPressAt, state.xWasOn) else state
         pad in 8..11 && down -> state.copy(
             drumVoice = pad - 8,
             xMode = 2,
