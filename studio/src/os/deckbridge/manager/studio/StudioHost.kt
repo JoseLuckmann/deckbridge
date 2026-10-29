@@ -101,6 +101,26 @@ interface StudioPreview {
      * Pula com [seekTo], como um arquivo.
      */
     fun playStream(source: os.deckbridge.manager.mix.PcmSource, key: String, title: String)
+
+    /**
+     * Toca o set montado ([file]) como um player de música: continua tocando fora da tela do set, com o app em segundo
+     * plano e a tela bloqueada (no celular, com notificação e controles). [chapters] diz o que toca em cada trecho.
+     */
+    fun playSet(file: File, key: String, title: String, chapters: List<Chapter>, setId: Int? = null) = toggleFile(file, key, title)
+
+    /** O set está tocando em segundo plano (sair da tela do set não para). */
+    val inBackground: Boolean get() = false
+}
+
+/** Um trecho do set montado: onde começa (ms) e o que toca ("Night Signal → Tidal Bloom"). */
+data class Chapter(val startMs: Int, val title: String) {
+    companion object {
+        fun encode(list: List<Chapter>) = list.joinToString("\n") { "${it.startMs}\t${it.title}" }
+        fun decode(text: String) = text.lines().mapNotNull { l -> l.split('\t', limit = 2).takeIf { it.size == 2 }?.let { Chapter(it[0].toIntOrNull() ?: return@let null, it[1]) } }
+
+        /** O trecho que toca em [ms] (índice), ou -1. */
+        fun at(list: List<Chapter>, ms: Int) = list.indexOfLast { it.startMs <= ms }
+    }
 }
 
 /** Como cada app trata "voltar" (o botão do Android, ou Esc no computador). */

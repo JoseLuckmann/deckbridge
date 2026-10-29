@@ -128,13 +128,14 @@ class SetDesk(private val app: StudioHost) {
 
     fun openMain() {
         val main = branch?.mainId ?: return
-        app.preview.stop()
+        if (!app.preview.inBackground) app.preview.stop()
         rehearsal = null
         open(main)
     }
 
     fun close() {
-        app.preview.stop()
+        // O set tocando em segundo plano continua (é um player de música); o resto (prévias, ensaio) para.
+        if (!app.preview.inBackground) app.preview.stop()
         rehearsal = null
         mapOpen = false
         playlistId = null
@@ -1230,7 +1231,16 @@ class SetDesk(private val app: StudioHost) {
         val out = cacheFile(setKey(plan, tempos))
         if (out.isFile) return out
         var used = 0
-        val file = publish(out) { tmp -> used = MixRenderer.writeSequence(tmp, plan.mapIndexed { i, tr -> { render(tr, 8_000, 8_000, tempo = tempos[i])?.audio } }, cancelled = cancelled, progress = progress) }
+        val chapters = ArrayList<Chapter>()
+        val v = app.model.view
+        fun name(id: Int) = v?.track(id)?.title ?: "?"
+        val file = publish(out) { tmp ->
+            used = MixRenderer.writeSequence(
+                tmp, plan.mapIndexed { i, tr -> { render(tr, 8_000, 8_000, tempo = tempos[i])?.audio } }, cancelled = cancelled, progress = progress,
+                starts = { n, ms -> chapters += Chapter(ms, "${name(plan[n].fromId)} → ${name(plan[n].toId)}") },
+            )
+        }
+        runCatching { chaptersFile(out).writeText(Chapter.encode(chapters)) }
         if (cancelled() || used == 0) {
             file.delete()
             if (used == 0 && !cancelled()) throw IllegalStateException("não consegui ler o áudio")
@@ -1245,6 +1255,15 @@ class SetDesk(private val app: StudioHost) {
         write(tmp)
         if (!tmp.renameTo(out)) { out.delete(); tmp.renameTo(out) }
         return out
+    }
+
+    /** Os capítulos do set montado, ao lado do WAV. */
+    private fun chaptersFile(wav: File) = File(wav.parentFile, wav.name + ".capitulos")
+
+    private fun playSetFile(f: File, key: String) {
+        val name = app.model.view?.playlists?.firstOrNull { it.id == (rootId() ?: playlistId) }?.name ?: "Set"
+        val chapters = runCatching { Chapter.decode(chaptersFile(f).readText()) }.getOrDefault(emptyList())
+        app.preview.playSet(f, key, name, chapters, playlistId)
     }
 
     fun setKey(plan: List<Transition>, tempos: List<Double?> = plan.map { tempoFor(it) }) =
@@ -1274,11 +1293,11 @@ class SetDesk(private val app: StudioHost) {
         val key = setKey(plan, tempos)
         if (app.preview.playingKey == key) return app.preview.stop()
         val ready = cacheFile(key)
-        if (ready.isFile) return app.preview.toggleFile(ready, key, "set")
+        if (ready.isFile) return playSetFile(ready, key)
         val opened = playlistId
         app.background("Montando o set") { j ->
             val f = renderSet(plan, { j.cancelled }, tempos) { j.text = "${it + 1}/${plan.size}" } ?: return@background
-            onMain { if (playlistId == opened && opened != null) app.preview.toggleFile(f, key, "set") }
+            onMain { if (playlistId == opened && opened != null) playSetFile(f, key) }
         }
     }
 

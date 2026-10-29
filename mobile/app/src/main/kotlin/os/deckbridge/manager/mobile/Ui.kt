@@ -6,6 +6,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -53,6 +58,13 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                 if (app.sets.playlistId == null && app.preview.playingId != null && app.preview.playingId != onScreen) app.preview.stop()
             }
             val detailTab = app.tab == Tab.LIBRARY || app.tab == Tab.PLAYLISTS
+            // Ouvindo a mixagem (MIX ou ensaio): a tela não apaga. O set em segundo plano deixa (é um player de música).
+            val view = androidx.compose.ui.platform.LocalView.current
+            val awake = app.preview.playingKey != null && !app.preview.inBackground && (app.sets.mixing != null || app.sets.rehearsal != null)
+            androidx.compose.runtime.DisposableEffect(awake) {
+                view.keepScreenOn = awake
+                onDispose { view.keepScreenOn = false }
+            }
             if (wide) {
                 Row(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                     NavRail(app)
@@ -68,6 +80,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                                 }
                             }
                         }
+                        SetPlayerBar(app)
                     }
                 }
             } else {
@@ -79,6 +92,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                         ImportStrip(app)
                         if (app.tab != Tab.MENU) GuideStrip(app, actions)
                         Box(Modifier.weight(1f)) { TabContent(app, actions) }
+                        SetPlayerBar(app)
                         NavBar(app)
                     }
                 }
@@ -107,6 +121,42 @@ private fun TabContent(app: ManagerApp, actions: Actions) {
         Tab.MENU -> MenuTab(app, actions)
     }
 }
+
+/**
+ * O set tocando em segundo plano, como a barra de um player de música: o trecho que toca, o tempo e os controles; dá
+ * para andar pelo app, sair dele e bloquear a tela (os controles também ficam na notificação). Tocar no nome abre o set.
+ */
+@Composable
+private fun SetPlayerBar(app: ManagerApp) {
+    val p = app.preview
+    val sp = p.setPlay ?: return
+    var pos by remember { mutableStateOf(0) }
+    LaunchedEffect(sp, p.paused) {
+        while (true) {
+            pos = p.positionMs()
+            kotlinx.coroutines.delay(500)
+        }
+    }
+    Row(
+        Modifier.fillMaxWidth().height(56.dp).background(Palette.surfaceHigh).border(BorderStroke(1.dp, Palette.line)).padding(start = 12.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f).clickable(enabled = sp.setId != null) { sp.setId?.let { app.sets.open(it) } }) {
+            Text(p.nowPlaying(), color = Palette.text, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val total = sp.durationMs
+            Text(
+                "SET · ${sp.title} · ${mmss(pos)}" + (if (total > 0) " / ${mmss(total)}" else "") + (if (p.paused) " · pausado" else ""),
+                color = Palette.mutedBright, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        TextButton(onClick = { p.skip(-1) }, modifier = Modifier.semantics { contentDescription = "Trecho anterior" }) { Text("⏮", fontSize = 16.sp) }
+        TextButton(onClick = { p.togglePause() }, modifier = Modifier.semantics { contentDescription = if (p.paused) "Tocar" else "Pausar" }) { Text(if (p.paused) "▶" else "⏸", fontSize = 18.sp) }
+        TextButton(onClick = { p.skip(1) }, modifier = Modifier.semantics { contentDescription = "Próximo trecho" }) { Text("⏭", fontSize = 16.sp) }
+        TextButton(onClick = { p.stop() }, modifier = Modifier.semantics { contentDescription = "Parar o set" }) { Text("✕", fontSize = 14.sp) }
+    }
+}
+
+private fun mmss(ms: Int) = "%d:%02d".format(ms.coerceAtLeast(0) / 60000, ms.coerceAtLeast(0) / 1000 % 60)
 
 /** Rótulo curto de cada área, em caixa alta, como a fileira de botões do player. */
 private fun Tab.short() = when (this) {

@@ -763,7 +763,11 @@ object MixRenderer {
      * Grava em [file] (WAV) as partes uma depois da outra, sem segurar todas na memória: cada transição tem dezenas de
      * MB em ponto flutuante. Partes que não deram para montar (null) são puladas. Devolve quantas entraram.
      */
-    fun writeSequence(file: java.io.File, parts: List<() -> Stereo?>, gapMs: Int = 500, cancelled: () -> Boolean = { false }, progress: (Int) -> Unit = {}): Int {
+    fun writeSequence(
+        file: java.io.File, parts: List<() -> Stereo?>, gapMs: Int = 500, cancelled: () -> Boolean = { false }, progress: (Int) -> Unit = {},
+        /** Onde cada parte começa no arquivo (ms), com o índice dela: os capítulos do player. */
+        starts: (Int, Int) -> Unit = { _, _ -> },
+    ): Int {
         var frames = 0L
         var used = 0
         java.io.RandomAccessFile(file, "rw").use { out ->
@@ -775,6 +779,7 @@ object MixRenderer {
                 progress(n)
                 val s = part() ?: continue
                 if (used > 0) { out.write(gap); frames += gap.size / 4 }
+                starts(n, (frames * 1000 / RATE).toInt())
                 val bytes = wav(s)
                 out.write(bytes, 44, bytes.size - 44)
                 frames += s.frames

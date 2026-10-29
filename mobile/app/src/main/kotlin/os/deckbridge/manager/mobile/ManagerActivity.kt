@@ -27,7 +27,7 @@ class ManagerActivity : ComponentActivity() {
     // Fone desconectado: para na hora, para o som não sair pelo alto-falante.
     private val noisy = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) app.preview.stop()
+            if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) { if (app.preview.inBackground) app.preview.pause() else app.preview.stop() }
         }
     }
 
@@ -63,10 +63,10 @@ class ManagerActivity : ComponentActivity() {
 
     /**
      * Saiu da tela (fechou, trocou de app, apagou a tela): a pré-escuta para. Ela só existe enquanto o app está na frente.
-     * Também grava o que estiver pendente.
+     * O set tocando como player continua (serviço de mídia). Também grava o que estiver pendente.
      */
     override fun onStop() {
-        app.preview.stop()
+        if (!app.preview.inBackground) app.preview.stop()
         runCatching { unregisterReceiver(noisy) }
         super.onStop()
         ticker.removeCallbacks(autosave)
@@ -78,7 +78,7 @@ class ManagerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        app.preview.stop()
+        if (!app.preview.inBackground) app.preview.stop()
         super.onDestroy()
     }
 }
@@ -95,6 +95,14 @@ private fun Content(app: ManagerApp) {
         if (incoming == null || !app.model.isOpen) return@LaunchedEffect
         app.pendingIntent = null
         app.handle(incoming) { pickAudio.launch(arrayOf("audio/*")) }
+    }
+    // O set virou player em segundo plano: no Android 13+, a notificação com os controles pede licença (uma vez).
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val playingSet = app.preview.setPlay != null
+    LaunchedEffect(playingSet) {
+        if (playingSet && android.os.Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(app.context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) runCatching { askNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
     }
     val activity = androidx.compose.ui.platform.LocalContext.current as android.app.Activity
     val actions = remember { Actions(pickAudio = { pickAudio.launch(arrayOf("audio/*")) }, pickUsb = { pickUsb.launch(null) }, pickFolder = { pickFolder.launch(null) }, toDj = { app.goDj(activity) }) }

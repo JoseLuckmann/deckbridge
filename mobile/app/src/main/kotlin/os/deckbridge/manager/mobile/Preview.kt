@@ -28,10 +28,32 @@ class Preview(private val app: ManagerApp) : StudioPreview {
     private var player: MediaPlayer? = null
     private val audio: AudioManager? = app.context.getSystemService(AudioManager::class.java)
 
-    // Outro app (ligação, música, vídeo) pediu o som: a pré-escuta para, como qualquer player bem-comportado.
+    /** O set tocando como player de música (segundo plano): o nome, os trechos e a chave. Null nas prévias. */
+    data class SetPlay(val key: String, val title: String, val chapters: List<Chapter>, val durationMs: Int, val setId: Int? = null)
+
+    var setPlay by mutableStateOf<SetPlay?>(null)
+        private set
+
+    /** O set em segundo plano está pausado (as prévias não pausam: param). */
+    var paused by mutableStateOf(false)
+        private set
+
+    override val inBackground: Boolean get() = setPlay != null
+
+    // Outro app (ligação, música, vídeo) pediu o som: a pré-escuta para, como qualquer player bem-comportado. O set em
+    // segundo plano pausa numa perda curta (ligação, aviso) e para numa perda de vez (outro player).
     private val focus: AudioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
         .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
         .setOnAudioFocusChangeListener { change -> if (change < 0) stop() }
+        .build()
+    private val setFocus: AudioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+        .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+        .setOnAudioFocusChangeListener { change ->
+            when (change) {
+                AudioManager.AUDIOFOCUS_LOSS -> stop()
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> pause()
+            }
+        }
         .build()
 
     val isPlaying: Boolean get() = player != null || stream != null
@@ -183,10 +205,78 @@ class Preview(private val app: ManagerApp) : StudioPreview {
         stream = null
         playingId = null
         playingKey = null
+        val wasSet = setPlay != null
+        setPlay = null
+        paused = false
         if (p != null) {
             runCatching { p.stop() }
             runCatching { p.release() }
         }
         runCatching { audio?.abandonAudioFocusRequest(focus) }
+        runCatching { audio?.abandonAudioFocusRequest(setFocus) }
+        if (wasSet) SetPlaybackService.stop(app.context)
+    }
+
+    // ---- o set como player de música ---------------------------------------------------------------------------
+
+    /**
+     * Toca o set montado como player de música: segue tocando fora da tela do set, com o app em segundo plano e a tela
+     * bloqueada (serviço em primeiro plano com notificação e controles na tela de bloqueio).
+     */
+    override fun playSet(file: File, key: String, title: String, chapters: List<Chapter>, setId: Int?) {
+        if (playingKey == key) {
+            stop()
+            return
+        }
+        stop()
+        if (audio != null && audio.requestAudioFocus(setFocus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            app.notice = os.deckbridge.manager.Banner("Áudio ocupado", true)
+            return
+        }
+        if (!start(file, title, 0)) return
+        playingKey = key
+        setPlay = SetPlay(key, title, chapters, runCatching { player?.duration ?: 0 }.getOrDefault(0), setId)
+        paused = false
+        SetPlaybackService.start(app.context)
+    }
+
+    fun pause() {
+        val p = player ?: return
+        if (setPlay == null) return stop()
+        runCatching { p.pause() }
+        paused = true
+        SetPlaybackService.refresh(app.context)
+    }
+
+    fun resume() {
+        val p = player ?: return
+        if (audio != null && audio.requestAudioFocus(setFocus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return
+        runCatching { p.start() }
+        paused = false
+        SetPlaybackService.refresh(app.context)
+    }
+
+    fun togglePause() = if (paused) resume() else pause()
+
+    /** Pula para o trecho seguinte (+1) ou volta (−1; no meio de um trecho, volta ao começo dele). */
+    fun skip(step: Int) {
+        val sp = setPlay ?: return
+        if (sp.chapters.isEmpty()) return
+        val pos = positionMs()
+        val at = Chapter.at(sp.chapters, pos).coerceAtLeast(0)
+        val target = when {
+            step > 0 -> at + 1
+            pos - sp.chapters[at].startMs > 3_000 -> at
+            else -> at - 1
+        }
+        if (target >= sp.chapters.size) return stop()
+        seekTo(sp.chapters[target.coerceAtLeast(0)].startMs)
+        SetPlaybackService.refresh(app.context)
+    }
+
+    /** O trecho tocando agora ("A → B"), para a notificação e a barra do player. */
+    fun nowPlaying(): String {
+        val sp = setPlay ?: return ""
+        return sp.chapters.getOrNull(Chapter.at(sp.chapters, positionMs()))?.title ?: sp.title
     }
 }

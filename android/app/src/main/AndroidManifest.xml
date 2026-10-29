@@ -42,5 +42,9 @@
         <activity
             android:name="os.deckbridge.manager.mobile.ManagerActivity"
             android:process=":biblioteca" />
+        <!-- O player do set em segundo plano mora com o modo Biblioteca (é o Preview dele que toca). -->
+        <service
+            android:name="os.deckbridge.manager.mobile.SetPlaybackService"
+            android:process=":biblioteca" />
     </application>
 </manifest>
