@@ -67,7 +67,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
             }
             if (wide) {
                 Row(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                    NavRail(app)
+                    NavRail(app, actions)
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         TopBar(app, actions)
                         ImportStrip(app)
@@ -93,7 +93,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
                         if (app.tab != Tab.MENU) GuideStrip(app, actions)
                         Box(Modifier.weight(1f)) { TabContent(app, actions) }
                         SetPlayerBar(app)
-                        NavBar(app)
+                        NavBar(app, actions)
                     }
                 }
             }
@@ -254,7 +254,7 @@ private fun spotlit(app: ManagerApp, t: Tab): Boolean {
  * (onde também se marca), playlists, pendrive. O ativo: azul-escuro, contorno azul.
  */
 @Composable
-private fun NavBar(app: ManagerApp) {
+private fun NavBar(app: ManagerApp, actions: Actions) {
     // Uma barra só, sem caixas: o ativo em azul com o traço em cima, os outros apagados (como as abas do player).
     Row(Modifier.fillMaxWidth().background(Palette.surface).border(BorderStroke(0.5.dp, Palette.line)).height(56.dp)) {
         // MARCAR não tem aba: é o primeiro botão da fileira de filtros de MÚSICAS.
@@ -267,12 +267,16 @@ private fun NavBar(app: ManagerApp) {
                 }
             }
         }
+        // O outro modo do app, à mão na barra principal (também no MENU): tocar.
+        Box(Modifier.weight(1f).fillMaxHeight().clickable { actions.toDj() }.semantics { contentDescription = "Modo DJ" }, contentAlignment = Alignment.Center) {
+            Text("DJ ›", color = Palette.orange, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1)
+        }
     }
 }
 
 /** Coluna de ícones à esquerda, como o menu lateral da lista do player: ícone e três a quatro letras, o ativo em azul com barra. */
 @Composable
-private fun NavRail(app: ManagerApp) {
+private fun NavRail(app: ManagerApp, actions: Actions) {
     Column(Modifier.width(64.dp).fillMaxHeight().background(Palette.bg).border(BorderStroke(1.dp, Palette.line)).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         data class Item(val tab: Tab, val glyph: String, val label: String)
         listOf(Item(Tab.LIBRARY, "≡", "MÚSICAS"), Item(Tab.PLAYLISTS, "♫", "LISTAS"), Item(Tab.USB, "⎘", "PENDRIVE"), Item(Tab.MENU, "⋯", "MENU")).forEach { it ->
@@ -286,6 +290,14 @@ private fun NavRail(app: ManagerApp) {
                 Text(it.label, color = if (on) Palette.blue else Palette.mutedBright, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp, maxLines = 1)
                 Box(Modifier.padding(top = 3.dp).width(26.dp).height(2.dp).background(if (on) Palette.blue else Palette.bg))
             }
+        }
+        // O modo DJ, embaixo dos outros (também no MENU).
+        Column(
+            Modifier.fillMaxWidth().clickable { actions.toDj() }.semantics { contentDescription = "Modo DJ" }.padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("◉", color = Palette.orange, fontSize = 20.sp)
+            Text("DJ", color = Palette.orange, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp, maxLines = 1)
         }
     }
 }

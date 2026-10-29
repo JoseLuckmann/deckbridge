@@ -1328,3 +1328,11 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - **Gravação da mão do DJ**: a cópia para a thread do áudio copiava todas as fileiras a cada movimento do dedo; agora só a que mudou.
 - **Tarefas de fundo** (Analisar todas, Marcar pontos, teste de áudio) e a gravação silenciosa: falta de memória vira aviso, não fecha o app. A importação analisa uma faixa por vez quando o Android dá menos de 400 MB ao app.
 - Evidência: núcleo `MemoryTest` (a prévia de um WAV de 7 min aloca o mesmo que a de um de 70 s; antes lia os 74 MB duas vezes), `AudioIoTest`, `MixTest`, `MixTakeTest`; demais suítes na entrada de commit. Não reproduzido em aparelho (`BLOCKED_HARDWARE`).
+
+## 2026-10-29 — Logo e versão no MENU, modo desenvolvedor, DJ na barra principal (0.29.0)
+
+- Pedido do dono: no fim do MENU a logo e a versão; 13 toques na logo ligam o modo desenvolvedor, cada toque gira o disco; e o modo DJ no menu principal.
+- Celular: fim do MENU com a logo (o disco do ícone) e "versão x.y.z"; cada toque gira uma volta (somando, como um prato); dos 8 toques em diante avisa quantos faltam; o 13º liga o modo desenvolvedor (guardado). No modo desenvolvedor, seção DESENVOLVEDOR: memória em uso/limite, a última queda (copia o registro), apagar o registro, desligar. `CrashLog`: uma queda do app grava pilha, thread, versão, aparelho e memória num arquivo do aparelho (nada é enviado) antes de seguir para o Android — para a próxima queda deixar rastro.
+- Barra principal: "DJ ›" (e "◉ DJ" no trilho do modo deitado) abre o modo DJ, além da linha no MENU.
+- Correções achadas pelos testes do computador: (1) com os cues da importação (0.28.0) a montagem pegava o hot cue "Drop" da análise e ignorava o drop marcado à mão ("DROP AQUI"); agora o cue de memória vale antes; (2) a linha da importação no computador ficava "pronta" antes de mostrar o BPM (corrida exposta pela leitura de WAV mais rápida).
+- Evidência: núcleo suíte completa; computador `./gradlew test` passando; celular `DevModeTest` (13 toques, avisos, seção, queda anotada, DJ na barra; captura mobile-71) e os testes do MIX/player.

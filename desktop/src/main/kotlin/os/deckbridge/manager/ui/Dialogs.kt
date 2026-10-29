@@ -60,8 +60,9 @@ fun startImport(files: List<File>): List<ImportRow> {
                 row.artist = p.info.artist
                 row.album = p.info.album
                 row.genre = p.info.genre
-                row.prepared = p
+                // O texto antes do "pronto": quem vê a linha pronta já vê o BPM.
                 row.status = "%.1f BPM · %s · %d:%02d".format(p.read.bpm, p.read.keyName, p.info.durationSec / 60, p.info.durationSec % 60)
+                row.prepared = p
             } catch (e: ImportException) {
                 row.status = e.message ?: "erro"
                 row.on = false

@@ -164,7 +164,10 @@ object SetPlanner {
     /** Sem outro detectado, a saída começa num início de bloco de 16 compassos (como se fraseia eletrônica). */
     const val BLOCK_BARS = 16
 
-    private fun cue(g: TrackGrid?, name: String): Int? = g?.cues?.firstOrNull { it.comment.equals(name, ignoreCase = true) }?.timeMs
+    // O cue de memória com o nome vale antes do hot cue: "DROP AQUI" grava memória, e a importação (0.28.0) também põe um
+    // hot cue "Drop" pela análise — o do DJ tem de ganhar.
+    private fun cue(g: TrackGrid?, name: String): Int? =
+        g?.cues?.filter { it.comment.equals(name, ignoreCase = true) }?.minByOrNull { if (it.isHot) 1 else 0 }?.timeMs
 
     /** Arredonda [bars] para baixo numa frase (múltiplo de 8). */
     private fun phraseBars(bars: Int): Int = (bars / PHRASE_BARS) * PHRASE_BARS
