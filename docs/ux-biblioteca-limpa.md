@@ -87,6 +87,23 @@ Padrão "Artista1,_Artista2_Título_Extended_Mix.wav" (WAV sem etiquetas): o úl
 - Quando nada disso decide ("Wolfram, Josh Ludlow YoYo Disco…"), o separar da faixa já vem marcado com o palpite de duas
   palavras para o último artista, para o DJ conferir.
 
+### Vírgula no começo é lista de artistas (0.28.1)
+
+Correção do dono (2026-10-29), vendo Arrumar nomes com "Lorenz Rhode, Purple Disco…" no título: "esses são os
+artistas; música muito dificilmente vai ter vírgula no nome". Antes, sem artista conhecido (biblioteca nova, importação),
+a lista ficava no título. Agora a vírgula antes do nome da mix sempre separa (`TrackNames.splitByCommaGuess`), na
+importação, em Arrumar nomes e no palpite do SEPARAR:
+
+- primeiro o que é certo: artista conhecido ou nome repetido depois de "feat" (como antes);
+- senão, o último artista fica com até 3 palavras e acaba antes de uma palavra que abre título (at, the, on, my, you, o,
+  de, el, la…: "Purple Disco Machine | **At** the Disko"); se não há, uma antes dela ("Purple Disco Machine | Something
+  **On** My Mind"); senão 2 palavras, nome e sobrenome ("Josh Ludlow | YoYo Disco");
+- o título fica com ao menos uma palavra antes do nome da mix; vírgula dentro de parênteses ou depois de "feat"/mix não
+  conta.
+
+É palpite: o DJ confere e corrige tocando nas palavras (SEPARAR ARTISTA E TÍTULO), e o artista corrigido passa a ser
+conhecido. Erra em artistas de 1 ou 3+ palavras sem palavra de título por perto.
+
 ## Pontos de interesse como cues já na importação (0.28.0)
 
 Pedido do dono (2026-10-29): "ele deveria rodar na importação já a análise que faz toda a camada de marcação dos pontos

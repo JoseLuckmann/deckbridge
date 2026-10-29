@@ -217,8 +217,46 @@ object TrackNames {
         return Names(after.drop(best).joinToString(" "), "$head, ${after.take(best).joinToString(" ")}")
     }
 
-    /** A melhor divisão sem separador: artista conhecido no começo, ou a lista com vírgula. */
-    fun guessSplit(text: String, known: Set<String>): Names? = splitByKnown(text, known) ?: splitByCommaList(text, known)
+    /** Palavras que costumam abrir um título e quase nunca fazem parte de nome de artista ("At the Disko", "On My Mind"). */
+    private val titleStarters = setOf(
+        "the", "a", "an", "at", "in", "on", "of", "to", "my", "your", "me", "you", "i", "i'm", "im", "we", "it", "it's", "is",
+        "all", "no", "for", "with", "from", "into", "up", "out", "this", "that", "what", "when", "don't", "can't", "let",
+        "o", "os", "as", "de", "do", "da", "meu", "minha", "eu", "você", "na", "em", "um", "uma",
+        "el", "la", "los", "las", "mi", "tu", "yo", "en", "que",
+    )
+
+    /**
+     * "A, B Título" quando nada diz onde B acaba (nem artista conhecido, nem "feat."). Título de música quase nunca tem
+     * vírgula: a vírgula no começo é lista de artistas, então separa sempre, com um palpite para o tamanho de B:
+     * até 3 palavras, acabando antes de uma palavra que abre título ("Purple Disco Machine | At the Disko"); se não há,
+     * acabando uma antes dela ("Purple Disco Machine | Something On My Mind"); senão 2 palavras (nome e sobrenome, o mais
+     * comum). O título fica com pelo menos uma palavra antes do nome da mix. Null se o começo não parece lista.
+     */
+    fun splitByCommaGuess(text: String): Names? {
+        val t = tidy(text)
+        val last = t.lastIndexOf(',', startIndex = minOf(t.length - 1, 120)).takeIf { it > 0 } ?: return null
+        val head = t.substring(0, last)
+        if (head.split(' ').size > 8 || mixWord.containsMatchIn(head) || "feat" in head.lowercase() || '(' in head) return null
+        val after = t.substring(last + 1).trim().split(' ').filter { it.isNotEmpty() }
+        // Onde começa o nome da mix (ou "feat."): o título precisa de ao menos uma palavra antes.
+        val mixAt = after.indices.firstOrNull { i ->
+            after[i].lowercase().startsWith("feat") || after[i].startsWith("(") || after.drop(i).all { w -> mixWord.matches(w) || w.lowercase() in setOf("original", "main", "vocal") }
+        } ?: after.size
+        val max = minOf(3, mixAt - 1)
+        if (max < 1) return null
+        fun starter(i: Int) = i < after.size && after[i].lowercase().trim(',', '.', '!', '?') in titleStarters
+        val k = (1..max).firstOrNull { starter(it) } ?: (1..max).firstOrNull { starter(it + 1) } ?: minOf(2, max)
+        return Names(after.drop(k).joinToString(" "), "$head, ${after.take(k).joinToString(" ")}")
+    }
+
+    /**
+     * A melhor divisão sem separador: artista conhecido no começo, a lista com vírgula que acaba num conhecido (ou no
+     * nome depois de "feat."), ou — vírgula sem nada conhecido — o palpite de [splitByCommaGuess].
+     */
+    fun guessSplit(text: String, known: Set<String>): Names? = sureSplit(text, known) ?: splitByCommaGuess(text)
+
+    /** Só as divisões certas (artista conhecido ou repetido depois de "feat."), sem palpite. */
+    fun sureSplit(text: String, known: Set<String>): Names? = splitByKnown(text, known) ?: splitByCommaList(text, known)
 
     /**
      * O que é da mix no fim do título vai para parênteses: "Título Extended Mix" → "Título (Extended Mix)"; "Título feat.

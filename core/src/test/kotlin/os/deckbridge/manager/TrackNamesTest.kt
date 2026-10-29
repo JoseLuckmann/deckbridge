@@ -80,9 +80,23 @@ class TrackNamesTest {
         // Com separador, como sempre; a cópia "(1)" sai.
         assertEquals(Names("Lola's Theme (VIP)", "The Shapeshifters"), f("The Shapeshifters - Lola's Theme (VIP) (1).wav"))
         assertEquals(Names("Substitution (Extended)", "Purple Disco Machine, Kungs"), f("Purple Disco Machine, Kungs - Substitution (Extended).wav"))
-        // Ambíguo (nenhum dos artistas da lista é conhecido): o remix vai para parênteses, o resto fica para o toque.
+        // Nenhum artista da lista conhecido: vírgula no começo é lista de artistas; o último fica com 2 palavras.
         val w = f("Wolfram,_Josh_Ludlow_YoYo_Disco_Purple_Disco_Machine_Extended_Remix.wav")
-        assertEquals("", w.artist)
-        assertTrue(w.title.endsWith("(Purple Disco Machine Extended Remix)"), w.title)
+        assertEquals("Wolfram, Josh Ludlow", w.artist)
+        assertEquals("YoYo Disco (Purple Disco Machine Extended Remix)", w.title)
+    }
+
+    @Test fun `virgula no comeco e lista de artistas mesmo com a biblioteca vazia`() {
+        // Na importação de uma biblioteca nova ninguém é conhecido; título de música quase nunca tem vírgula.
+        fun f(file: String) = TrackNames.clean(file.substringBeforeLast('.'), "", file)
+        assertEquals(Names("At the Disko (Extended Mix)", "Lorenz Rhode, Purple Disco Machine"), f("Lorenz_Rhode,_Purple_Disco_Machine_At_the_Disko_Extended_Mix.wav"))
+        assertEquals(Names("Something On My Mind (Extended Mix)", "Duke Dumont, Purple Disco Machine"), f("Duke_Dumont,_Purple_Disco_Machine_Something_On_My_Mind_Extended_Mix.wav"))
+        assertEquals("Wolfram, Josh Ludlow", f("Wolfram,_Josh_Ludlow_YoYo_Disco_Extended_Mix.wav").artist)
+        assertEquals(Names("Shined On Me (feat. Andrea Love) (Les Bisous Remix)", "Praise Cats, Andrea Love"), f("Praise_Cats,_Andrea_Love_Shined_On_Me_feat_Andrea_Love_Les_Bisous_Remix.wav"))
+        // Já salvo assim na biblioteca (título com a lista, artista vazio): Arrumar nomes separa.
+        assertEquals(Names("At the Disko (Extended Mix)", "Lorenz Rhode, Purple Disco Machine"), TrackNames.clean("Lorenz Rhode, Purple Disco Machine At the Disko (Extended Mix)", "", "x.wav"))
+        // A vírgula depois do nome da mix não é lista; e o título nunca fica vazio.
+        assertEquals(null, TrackNames.splitByCommaGuess("Night Signal (Extended Mix, Remastered)"))
+        assertEquals(null, TrackNames.splitByCommaGuess("Wolfram, Josh Extended Mix"))
     }
 }

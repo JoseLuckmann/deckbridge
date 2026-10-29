@@ -348,15 +348,12 @@ private fun NameSplitter(app: ManagerApp, t: TrackItem) {
     val words = remember(t.title) { t.title.trim().split(Regex("\\s+")).filter { it.isNotEmpty() } }
     if (words.size < 2) return
     // A divisão mais provável já vem marcada: artista conhecido, nome repetido depois de "feat", ou — numa lista com
-    // vírgula sem nada conhecido — duas palavras para o último artista (o mais comum; o DJ confere).
+    // vírgula sem nada conhecido — o palpite de TrackNames.splitByCommaGuess (o DJ confere).
     val (suggested, sure) = remember(t.id, m.view) {
         val known = os.deckbridge.manager.organize.TrackNames.knownArtists(m.view?.tracks.orEmpty().filter { it.id != t.id }.map { it.artist })
-        val g = os.deckbridge.manager.organize.TrackNames.guessSplit(t.title, known)?.artist?.split(' ')?.size
-        if (g != null) g to true
-        else {
-            val comma = words.indexOfFirst { it.endsWith(",") }
-            if (comma in 0..5 && comma + 3 < words.size) (comma + 3) to false else null to false
-        }
+        val tn = os.deckbridge.manager.organize.TrackNames
+        val g = tn.sureSplit(t.title, known)?.artist?.split(' ')?.size
+        if (g != null) g to true else tn.splitByCommaGuess(t.title)?.artist?.split(' ')?.size to false
     }
     var cut by remember(t.id, suggested) { mutableStateOf(suggested ?: 0) }
     Column(Modifier.fillMaxWidth().rbPanel().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

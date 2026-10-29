@@ -1302,3 +1302,9 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Núcleo: `CuePlanner` (pontos pelas frases: seções unidas, contagem Drop 2…, Fill antes de drop, Fim; hot cues A–H por prioridade em ordem de tempo, cores por tipo; `merge` que nunca tira nem move cues do DJ); `ImportPrep` usa ele.
 - Celular: MÚSICAS → ⋯ → "Marcar pontos (cues)" (lotes de 6 com gravação, como Analisar todas); letras e lista de cues com nome e cor do ponto; Arrumar nomes mostra ARTISTA/TÍTULO inteiros e o antes (o print do dono mostrava a frase cortada em "artista """).
 - Evidência: núcleo `CuePlannerTest` 2 (pontos e hot cues; juntar sem mexer nos do DJ), suíte 169/169; celular `CuePointsTest` (importação marca Intro, Drop, Break, Drop 2, Outro; Marcar pontos mantém o cue do DJ; captura mobile-70), `LibraryCleanupTest` 3 (captura mobile-63 com o antes/depois).
+
+## 2026-10-29 — Vírgula no começo do nome é lista de artistas (0.28.1)
+
+- Correção do dono: em "Lorenz Rhode, Purple Disco Machine At the Disko", os dois primeiros são artistas; título quase nunca tem vírgula. Detalhes: `docs/ux-biblioteca-limpa.md`.
+- Núcleo: `TrackNames.splitByCommaGuess` (último artista até 3 palavras, acabando antes de palavra que abre título, ou 2 palavras), `sureSplit`; `guessSplit` usa o palpite quando nada é conhecido, então `clean` separa já na importação e em Arrumar nomes. Celular: o SEPARAR usa o mesmo palpite.
+- Evidência: núcleo `TrackNamesTest` 10 (+1: biblioteca vazia, nomes de arquivo do dono; caso Wolfram passa a separar), `OrganizerTest` 8.
