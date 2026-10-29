@@ -127,7 +127,8 @@ class LibraryCleanupTest {
         assertEquals(two.id, g.keep.id)
         rule.onRoot().captureRoboImage(File(out, "mobile-64-vertical-repetidas.png").path)
         // O DJ prefere a de nome certo: toca nela e junta.
-        rule.onNodeWithText("Night Bus").performClick()
+        // Na janela de repetidas (a lista atrás também tem "Night Bus"): a última que aparece.
+        rule.onAllNodesWithText("Night Bus").let { it[it.fetchSemanticsNodes().size - 1] }.performClick()
         rule.onNodeWithText("JUNTAR").performClick()
         rule.waitForIdle()
         val after = a.model.view!!
