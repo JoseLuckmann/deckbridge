@@ -74,6 +74,9 @@ class LibraryCleanupTest {
         rule.waitForIdle()
         val tidy = assertNotNull(a.tidy)
         assertTrue(tidy.none { it.rule == OrgRule.DUPLICATE }, "repetidas têm tela própria")
+        // Cada mudança de nome como fica: ARTISTA e TÍTULO inteiros, cada um na sua linha (antes a frase era cortada).
+        assertTrue(rule.onAllNodesWithText("ARTISTA", substring = true).fetchSemanticsNodes().isNotEmpty())
+        rule.onAllNodesWithText("antes: sem artista", substring = true).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty()) }
         rule.onRoot().captureRoboImage(File(out, "mobile-63-vertical-arrumar-nomes.png").path)
         rule.onAllNodesWithText("Aplicar", substring = true)[0].performClick()
         rule.waitForIdle()

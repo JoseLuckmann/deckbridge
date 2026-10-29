@@ -57,6 +57,7 @@ fun LibraryTools(app: ManagerApp, actions: Actions, onClose: () -> Unit) {
     val options = listOf<Pair<String, () -> Unit>>(
         "Importar pasta" to { actions.pickFolder() },
         "Analisar todas · ${counts[QuickFilter.UNANALYZED] ?: 0}" to { app.analyzeAll() },
+        "Marcar pontos (cues)" to { app.markPoints() },
         "Arrumar nomes" to { app.openTidy() },
         "Procurar repetidas" to { app.findDuplicates() },
         "Refazer grades" to { app.refreshGrids() },

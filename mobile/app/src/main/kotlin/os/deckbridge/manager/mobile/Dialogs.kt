@@ -148,26 +148,52 @@ fun SearchHelpDialog(onClose: () -> Unit) {
     )
 }
 
+/**
+ * Uma mudança de nome de forma que não confunde: como fica (ARTISTA e TÍTULO, cada um na sua linha, inteiros) e, pequeno,
+ * como estava. Antes a frase "título … → …; artista "" → …" era cortada e parecia que o artista ficava vazio.
+ */
+@Composable
+private fun NameChange(old: os.deckbridge.manager.pdb.TrackItem, patch: os.deckbridge.manager.pdb.TrackPatch) {
+    val artist = patch.artist ?: old.artist
+    val title = patch.title ?: old.title
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row {
+            Text("ARTISTA ", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(62.dp).padding(top = 3.dp))
+            Text(artist.ifEmpty { "—" }, color = if (patch.artist != null) Palette.keyInk else Palette.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        }
+        Row {
+            Text("TÍTULO ", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(62.dp).padding(top = 3.dp))
+            Text(title, color = if (patch.title != null) Palette.keyInk else Palette.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        }
+        Text("antes: " + listOf(old.artist.ifEmpty { "sem artista" }, old.title).joinToString(" — "), color = Palette.muted, fontSize = 11.sp)
+    }
+}
+
 /** "Arrumar tudo": ajustes sugeridos por regras (espaços, maiúsculas, nome do arquivo). Tudo marcado por padrão; nada muda sem confirmar. */
 @Composable
 fun TidyDialog(app: ManagerApp, all: List<os.deckbridge.manager.organize.Suggestion>) {
     val on = remember(all) { androidx.compose.runtime.mutableStateListOf<Boolean>().apply { addAll(all.map { it.defaultOn }) } }
     AlertDialog(
         onDismissRequest = { app.tidy = null },
-        title = { Text("Arrumar tudo") },
+        title = { Text("Arrumar nomes") },
         text = {
             if (all.isEmpty()) {
                 Text("Nada a arrumar ✓", color = Palette.keyInk)
             } else {
                 Column {
-                    LazyColumn(Modifier.height(320.dp)) {
+                    LazyColumn(Modifier.height(440.dp)) {
                         items(all.indices.toList()) { i ->
                             val s = all[i]
                             Row(Modifier.fillMaxWidth().clickable { on[i] = !on[i] }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 androidx.compose.material3.Checkbox(checked = on[i], onCheckedChange = { on[i] = it })
                                 Column(Modifier.padding(start = 6.dp)) {
-                                    Text("${s.rule.title}: ${s.title}", color = Palette.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                    Text(s.detail, color = Palette.muted, fontSize = 12.sp, maxLines = 3)
+                                    val patch = (s.edit as? os.deckbridge.manager.pdb.Edit.SetTracks)?.patch
+                                    val old = s.trackIds.singleOrNull()?.let { app.model.view?.track(it) }
+                                    if (patch != null && old != null && (patch.title != null || patch.artist != null)) NameChange(old, patch)
+                                    else {
+                                        Text("${s.rule.title}: ${s.title}", color = Palette.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                        Text(s.detail, color = Palette.muted, fontSize = 12.sp)
+                                    }
                                 }
                             }
                         }

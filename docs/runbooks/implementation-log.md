@@ -1295,3 +1295,10 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Celular: título em até duas linhas na lista; topo da faixa aberta sem cortar; INFO com nome completo e arquivo (selecionáveis); SEPARAR ARTISTA E TÍTULO (palavras como botões, prévia, APLICAR), também no topo de MARCAR quando falta o artista.
 - Computador: o teste do MIX passou a abrir a aba AJUSTAR antes de mexer no ritmo (a aba nova da tela MIX).
 - Evidência: núcleo `TrackNamesTest` (+2: artista conhecido e lista; dividir na palavra); celular `LibraryCleanupTest` (+1: sugestão em Arrumar nomes, nome inteiro no topo, separar tocando, INFO com arquivo; capturas mobile-68, mobile-69).
+
+## 2026-10-29 — Pontos de interesse como cues na importação; Arrumar nomes legível (0.28.0)
+
+- Pedido do dono: análise na importação que marca os pontos de interesse como cues (intro, drop, break e outros). Detalhes: `docs/ux-biblioteca-limpa.md`.
+- Núcleo: `CuePlanner` (pontos pelas frases: seções unidas, contagem Drop 2…, Fill antes de drop, Fim; hot cues A–H por prioridade em ordem de tempo, cores por tipo; `merge` que nunca tira nem move cues do DJ); `ImportPrep` usa ele.
+- Celular: MÚSICAS → ⋯ → "Marcar pontos (cues)" (lotes de 6 com gravação, como Analisar todas); letras e lista de cues com nome e cor do ponto; Arrumar nomes mostra ARTISTA/TÍTULO inteiros e o antes (o print do dono mostrava a frase cortada em "artista """).
+- Evidência: núcleo `CuePlannerTest` 2 (pontos e hot cues; juntar sem mexer nos do DJ), suíte 169/169; celular `CuePointsTest` (importação marca Intro, Drop, Break, Drop 2, Outro; Marcar pontos mantém o cue do DJ; captura mobile-70), `LibraryCleanupTest` 3 (captura mobile-63 com o antes/depois).

@@ -86,3 +86,23 @@ Padrão "Artista1,_Artista2_Título_Extended_Mix.wav" (WAV sem etiquetas): o úl
   remixer é conhecido — `TrackNames.mixParens`.
 - Quando nada disso decide ("Wolfram, Josh Ludlow YoYo Disco…"), o separar da faixa já vem marcado com o palpite de duas
   palavras para o último artista, para o DJ conferir.
+
+## Pontos de interesse como cues já na importação (0.28.0)
+
+Pedido do dono (2026-10-29): "ele deveria rodar na importação já a análise que faz toda a camada de marcação dos pontos
+interessantes da música e deixar marcado como cues (intro, drop, break e mais outros pontos de interesse)".
+
+- **Na importação** (`ImportPrep` → `CuePlanner`): pelas frases da análise do app, uma memória em cada começo de seção
+  — Intro (na primeira batida 1), Build, Drop, Break, Drop 2, Break 2…, Outro —, o **Fill** (o compasso em que o bumbo
+  sai antes de um drop) e o **Fim** (a última batida 1). Os oito mais úteis viram hot cues A–H em ordem de tempo
+  (prioridade: Intro, Drop, Break, Drop 2, Outro, Build, Break 2, Drop 3), com cor por tipo: Intro verde, Build
+  amarelo, Drop vermelho, Break azul, Outro roxo. Tudo na batida 1 mais próxima. Antes eram até 5 hot cues e a Intro
+  no começo do arquivo ficava de fora.
+- **Nas que já estão na biblioteca**: MÚSICAS → ⋯ → Marcar pontos (cues). Só acrescenta: os cues do DJ ficam, os hot
+  cues novos vão para as letras vagas (os mais importantes primeiro) e memórias novas só onde não há outra a menos de
+  0,5 s. Em lotes, com cópia de segurança; um desfazer volta o lote da fila.
+- **Na faixa**: as letras e a lista de cues mostram o nome do ponto e a cor do tipo.
+- **Arrumar nomes**: cada mudança aparece como ARTISTA e TÍTULO, inteiros, e o "antes" embaixo (a frase antiga era
+  cortada e parecia deixar o artista vazio).
+- Limite: a qualidade dos pontos é a da análise de frases do app (conferida em faixas sintéticas e no corpus local, não
+  nas músicas do dono); não acha voz nem riff.

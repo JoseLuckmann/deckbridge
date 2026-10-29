@@ -364,6 +364,51 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
     }
 
     /**
+     * Marca os pontos de interesse de todas as faixas como cues (intro, build, drop, break, fill, outro, fim), pela análise
+     * de frases do app — o que a importação já faz nas novas. Só acrescenta: os cues do DJ ficam, os hot cues novos vão
+     * para as letras vagas e as memórias novas só onde não há outra perto. Grava em lotes, como "Analisar todas".
+     */
+    fun markPoints() {
+        val v = model.view ?: return
+        val todo = v.tracks.filter { File(root, it.filePath.replace('\\', '/').trimStart('/')).isFile }
+        if (todo.isEmpty()) return say("Nenhuma faixa com áudio no aparelho")
+        background("Marcando pontos") { j ->
+            var changed = 0
+            var added = 0
+            var failed = 0
+            val edits = ArrayList<Pair<Edit, String>>()
+            for ((n, t) in todo.withIndex()) {
+                if (j.cancelled) break
+                j.text = "${n + 1}/${todo.size}: ${t.title}"
+                val p = runCatching { ImportPrep.prepare(File(root, t.filePath.replace('\\', '/').trimStart('/'))) }.getOrNull()
+                if (p == null) { failed++; continue }
+                if (!model.hasAnalysis(t)) {
+                    edits += Edit.AttachAnalysis(t.id, p, p.suggestedCues, t.bpm <= 0.0, t.key.isBlank()) to "Análise e pontos de \"${t.title}\""
+                    changed++; added += p.suggestedCues.size
+                } else {
+                    val have = runCatching { model.trackGrid(t).cues }.getOrDefault(emptyList())
+                    val merged = os.deckbridge.manager.anlz.CuePlanner.merge(have, p.suggestedCues)
+                    if (merged.size > have.size) {
+                        edits += Edit.SetCues(t.id, merged) to "Pontos de \"${t.title}\""
+                        changed++; added += merged.size - have.size
+                    }
+                }
+                if (edits.size >= 6) {
+                    model.submitAll(edits)
+                    edits.clear()
+                    model.apply(null) { j.text = it }
+                }
+            }
+            if (edits.isNotEmpty()) {
+                model.submitAll(edits)
+                model.apply(null) { j.text = it }
+            }
+            pruneBackups()
+            say(if (changed == 0) "Pontos já marcados ✓" else "$added pontos em $changed faixa(s)" + (if (failed > 0) " · $failed falharam" else ""))
+        }
+    }
+
+    /**
      * Refaz as grades de todas as faixas analisadas com o analisador atual (só a grade: cues, ondas e tom ficam). As que
      * já estão iguais não mudam; o tempo 1 de cada compasso é mantido quando a grade só se desloca. Grava em lotes, cada
      * um com cópia de segurança, como "Analisar todas".

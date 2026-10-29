@@ -227,15 +227,22 @@ private fun CueSection(app: ManagerApp, t: TrackItem) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 for (hot in rowStart until rowStart + 4) {
                     val existing = files.cues.firstOrNull { it.hot == hot }
+                    // A cor do ponto (Intro verde, Drop vermelho…) quando tem; senão, a da letra.
+                    val color = rgb(existing?.rgb ?: padRgb(hot))
                     Row(
-                        Modifier.weight(1f).height(48.dp).background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, if (existing != null) rgb(padRgb(hot)) else Palette.line), RbShape).clickable {
+                        Modifier.weight(1f).height(48.dp).background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, if (existing != null) color else Palette.line), RbShape).clickable {
                             val rest = files.cues.filter { it.hot != hot }
                             m.submit(Edit.SetCues(t.id, rest + Cue(hot, pos, comment = "", rgb = padRgb(hot))), "Hot cue ${hotLetter(hot)} em \"${t.title}\"")
                         }.padding(horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(hotLetter(hot), color = rgb(padRgb(hot)), fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Text(existing?.let { "${it.timeMs / 60000}:%02d".format(it.timeMs / 1000 % 60) } ?: "", color = Palette.mutedBright, fontSize = 11.sp, fontFamily = Mono, modifier = Modifier.padding(start = 6.dp), maxLines = 1)
+                        Text(hotLetter(hot), color = color, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        // O nome do ponto (Intro, Drop…) quando tem; senão, o tempo.
+                        Text(
+                            existing?.let { it.comment.ifBlank { "${it.timeMs / 60000}:%02d".format(it.timeMs / 1000 % 60) } } ?: "",
+                            color = Palette.mutedBright, fontSize = 11.sp, fontFamily = if (existing?.comment.isNullOrBlank()) Mono else null,
+                            modifier = Modifier.padding(start = 6.dp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
@@ -244,12 +251,14 @@ private fun CueSection(app: ManagerApp, t: TrackItem) {
             onClick = { m.submit(Edit.SetCues(t.id, files.cues + Cue(0, pos)), "Cue de memória em \"${t.title}\"") },
             modifier = Modifier.fillMaxWidth().height(44.dp),
         ) { Text("＋ MEMÓRIA") }
-        files.cues.forEach { c ->
+        // Todos os pontos em ordem de tempo, com o nome (Intro, Build, Drop, Break, Fill, Outro, Fim).
+        files.cues.sortedWith(compareBy({ it.timeMs }, { if (it.isHot) 0 else 1 })).forEach { c ->
             Row(Modifier.fillMaxWidth().clickable { pos = c.timeMs }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(28.dp).background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.orange), RbShape), contentAlignment = Alignment.Center) {
                     Text(hotLetter(c.hot), color = if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.orange, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
-                Text(formatMs(c.timeMs) + if (c.isLoop) "  → ${formatMs(c.loopEndMs!!)}" else "", color = Palette.text, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                Text(formatMs(c.timeMs) + if (c.isLoop) "  → ${formatMs(c.loopEndMs!!)}" else "", color = Palette.text, fontSize = 14.sp, fontFamily = Mono, modifier = Modifier.padding(start = 12.dp))
+                Text(c.comment, color = if (c.isHot) rgb(c.rgb ?: padRgb(c.hot)) else Palette.mutedBright, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 10.dp))
                 TextButton(onClick = { m.submit(Edit.SetCues(t.id, files.cues - c), "Apagar cue de \"${t.title}\"") }) { Text("✕", color = Palette.danger, fontSize = 16.sp) }
             }
         }

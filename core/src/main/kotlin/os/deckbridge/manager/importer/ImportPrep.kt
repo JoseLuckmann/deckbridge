@@ -244,8 +244,6 @@ class PreparedTrack(
 )
 
 object ImportPrep {
-    private val colors = listOf(0xFF3B3B, 0x2EC5FF, 0x3DDC6A, 0xB44DFF, 0xFF8A1E)
-
     /** Lê, decodifica e analisa com o analisador do app (BPM, tom, grade, ondas, estrutura). Pesado: rode fora da interface. */
     fun prepare(file: File): PreparedTrack {
         val info = AudioIo.probe(file)
@@ -253,14 +251,8 @@ object ImportPrep {
         if (mono.samples.size < mono.rate * 2) throw ImportException("${file.name} é curto demais para analisar (menos de 2 s).")
         val read = analyzeTrack(mono.samples, mono.rate)
         val waves = wavesFromPcm(mono.samples, mono.rate)
-        val s = read.structure
-        val points = listOf(os.deckbridge.logic.Section.INTRO to s.introSec, os.deckbridge.logic.Section.BUILD to s.buildSec, os.deckbridge.logic.Section.DROP to s.dropSec, os.deckbridge.logic.Section.BREAK to s.breakSec, os.deckbridge.logic.Section.OUTRO to s.outroSec)
-        val limit = info.durationSec * 1000
-        val hot = points.mapIndexedNotNull { n, (name, sec) ->
-            val ms = (sec * 1000).toInt()
-            if (sec <= 0.0 || ms >= limit) null else Cue(n + 1, ms, comment = name, rgb = colors[n])
-        }.distinctBy { it.timeMs }.mapIndexed { n, c -> c.copy(hot = n + 1, rgb = colors[n % colors.size]) }
-        val memory = hot.firstOrNull()?.let { listOf(Cue(0, it.timeMs, comment = it.comment, rgb = null)) }.orEmpty()
-        return PreparedTrack(file, info, read, waves, hot + memory, os.deckbridge.logic.AudioPrint.of(mono.samples, mono.rate))
+        // Os pontos de interesse pela análise de frases: memória em cada seção, os oito mais úteis como hot cues.
+        val cues = os.deckbridge.manager.anlz.CuePlanner.cues(read.phrases, read.beats, info.durationSec * 1000)
+        return PreparedTrack(file, info, read, waves, cues, os.deckbridge.logic.AudioPrint.of(mono.samples, mono.rate))
     }
 }
