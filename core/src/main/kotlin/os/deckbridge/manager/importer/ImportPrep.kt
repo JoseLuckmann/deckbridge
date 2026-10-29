@@ -10,7 +10,7 @@ import os.deckbridge.manager.anlz.Cue
 
 class ImportException(message: String) : Exception(message)
 
-class AudioInfo(
+data class AudioInfo(
     val durationSec: Int,
     val sampleRate: Int,
     val bitrateKbps: Int,
@@ -52,7 +52,17 @@ object AudioIo {
 
     private fun stem(name: String) = name.substringBeforeLast('.')
 
+    /**
+     * Duração, taxa e etiquetas, com título e artista limpos ([os.deckbridge.manager.organize.TrackNames]): sem número de
+     * faixa, sublinhados nem lixo de site, e "Artista - Título" separado quando as etiquetas não dizem.
+     */
     fun probe(file: File): AudioInfo {
+        val raw = rawProbe(file)
+        val n = os.deckbridge.manager.organize.TrackNames.clean(raw.title, raw.artist, file.name)
+        return raw.copy(title = n.title, artist = n.artist)
+    }
+
+    private fun rawProbe(file: File): AudioInfo {
         if (!file.isFile) throw ImportException("Não achei ${file.path}.")
         val size = file.length()
         var duration = 0.0
@@ -229,6 +239,8 @@ class PreparedTrack(
     val read: TrackRead,
     val waves: PcmWaves,
     val suggestedCues: List<Cue>,
+    /** Impressão digital do áudio, para não importar a mesma música com outro nome. */
+    val print: os.deckbridge.logic.AudioPrint? = null,
 )
 
 object ImportPrep {
@@ -249,6 +261,6 @@ object ImportPrep {
             if (sec <= 0.0 || ms >= limit) null else Cue(n + 1, ms, comment = name, rgb = colors[n])
         }.distinctBy { it.timeMs }.mapIndexed { n, c -> c.copy(hot = n + 1, rgb = colors[n % colors.size]) }
         val memory = hot.firstOrNull()?.let { listOf(Cue(0, it.timeMs, comment = it.comment, rgb = null)) }.orEmpty()
-        return PreparedTrack(file, info, read, waves, hot + memory)
+        return PreparedTrack(file, info, read, waves, hot + memory, os.deckbridge.logic.AudioPrint.of(mono.samples, mono.rate))
     }
 }

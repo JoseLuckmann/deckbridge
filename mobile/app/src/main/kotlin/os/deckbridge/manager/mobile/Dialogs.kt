@@ -182,3 +182,48 @@ fun TidyDialog(app: ManagerApp, all: List<os.deckbridge.manager.organize.Suggest
         containerColor = Palette.surfaceHigh,
     )
 }
+
+/**
+ * Repetidas: cada grupo é a mesma música que entrou mais de uma vez (áudio igual, ou mesmo nome e duração). A sugerida
+ * para ficar já vem marcada (melhor qualidade, mais usada, nome mais arrumado); tocar em outra troca. JUNTAR leva as
+ * playlists, a nota e a cor das outras para ela e tira as outras da biblioteca; o aviso tem Desfazer.
+ */
+@Composable
+fun DuplicatesDialog(app: ManagerApp, groups: List<os.deckbridge.manager.organize.Duplicates.Group>) {
+    val keep = remember(groups) { androidx.compose.runtime.mutableStateMapOf<Int, Int>().apply { groups.forEachIndexed { i, g -> put(i, g.keep.id) } } }
+    AlertDialog(
+        onDismissRequest = { app.duplicates = null },
+        title = { Text("Repetidas · ${groups.size}") },
+        text = {
+            LazyColumn(Modifier.height(420.dp)) {
+                items(groups.indices.toList()) { i ->
+                    val g = groups[i]
+                    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                        Text(if (g.sameAudio) "MESMO ÁUDIO" else "MESMO NOME E DURAÇÃO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        g.tracks.forEach { t ->
+                            val on = keep[i] == t.id
+                            Row(
+                                Modifier.fillMaxWidth().clip(RbShape).background(if (on) Palette.blueActiveFill else Palette.surfaceHigh).clickable { keep[i] = t.id }.padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(t.title, color = Palette.text, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    val dur = "%d:%02d".format(t.durationSeconds / 60, t.durationSeconds % 60)
+                                    Text(listOf(t.artist.ifBlank { "sem artista" }, dur, if (t.bitrate > 0) "${t.bitrate} kbps" else "", "★".repeat(t.rating)).filter { it.isNotEmpty() }.joinToString(" · "), color = Palette.mutedBright, fontSize = 11.sp, maxLines = 1)
+                                }
+                                Text(if (on) "FICA" else "SAI", color = if (on) Palette.keyInk else Palette.muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+                            }
+                            androidx.compose.foundation.layout.Spacer(Modifier.height(3.dp))
+                        }
+                        TextButton(onClick = { app.mergeDuplicates(g, g.tracks.first { it.id == keep[i] }) }) { Text("JUNTAR") }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { groups.forEachIndexed { i, g -> app.mergeDuplicates(g, g.tracks.first { it.id == keep[i] }) } }) { Text("Juntar todas ${groups.size}") }
+        },
+        dismissButton = { TextButton(onClick = { app.duplicates = null }) { Text("Fechar") } },
+        containerColor = Palette.surfaceHigh,
+    )
+}

@@ -269,7 +269,51 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
 
     fun openTidy() {
         val v = model.view ?: return
-        tidy = Organizer.suggest(v) { model.hasAnalysis(it) }.filter { it.edit != null }
+        // As repetidas têm tela própria (escolher qual fica e juntar as playlists): aqui ficam só os nomes e campos.
+        tidy = Organizer.suggest(v) { model.hasAnalysis(it) }.filter { it.edit != null && it.rule != os.deckbridge.manager.organize.Rule.DUPLICATE }
+    }
+
+    // --- Repetidas -----------------------------------------------------------------------------
+
+    /** As impressões digitais do áudio de cada faixa (fora da biblioteca, na pasta do app). */
+    val prints = os.deckbridge.manager.organize.PrintStore(File(root.parentFile, "digitais")) { t -> File(root, t.filePath.replace('\\', '/').trimStart('/')) }
+
+    /** Os grupos de repetidas achados (a tela de repetidas está aberta enquanto não é null). */
+    var duplicates by mutableStateOf<List<os.deckbridge.manager.organize.Duplicates.Group>?>(null)
+
+    /**
+     * Procura a mesma música entrando mais de uma vez: ouve (impressão digital) só as faixas que têm outra de duração
+     * parecida, numa tarefa de fundo, e abre a tela com os grupos.
+     */
+    fun findDuplicates() {
+        val v = model.view ?: return
+        background("Procurando repetidas") { j ->
+            val byDur = v.tracks.sortedBy { it.durationSeconds }
+            val near = byDur.filterIndexed { i, t ->
+                (i > 0 && t.durationSeconds - byDur[i - 1].durationSeconds <= 8) || (i < byDur.lastIndex && byDur[i + 1].durationSeconds - t.durationSeconds <= 8)
+            }
+            for ((n, t) in near.withIndex()) {
+                if (j.cancelled) throw Cancelled()
+                j.text = "Ouvindo ${n + 1}/${near.size}: ${t.title}"
+                prints.get(t)
+            }
+            j.text = "Comparando"
+            val inLists = v.tracks.associate { t -> t.id to v.entries.count { t.id in it.value } }
+            val groups = os.deckbridge.manager.organize.Duplicates.find(v, { prints.cached(it) }, { inLists[it.id] ?: 0 })
+            onMain {
+                if (groups.isEmpty()) say("Nenhuma repetida ✓") else duplicates = groups
+            }
+        }
+    }
+
+    /** Junta o grupo em [keep] (playlists, nota, cor) e tira as outras da biblioteca. Um desfazer volta tudo. */
+    fun mergeDuplicates(g: os.deckbridge.manager.organize.Duplicates.Group, keep: TrackItem) {
+        val v = model.view ?: return
+        val rest = g.tracks.filter { it.id != keep.id }
+        val n = model.submitAll(os.deckbridge.manager.organize.Duplicates.merge(v, keep, rest))
+        duplicates = duplicates?.filter { it !== g }?.takeIf { it.isNotEmpty() }
+        if (detailId in rest.map { it.id }) detailId = null
+        if (n > 0) say("Juntou \"${keep.title}\" (${rest.size} repetida${if (rest.size == 1) "" else "s"} fora)", undo = true)
     }
 
     fun applyTidy(chosen: List<Suggestion>) {

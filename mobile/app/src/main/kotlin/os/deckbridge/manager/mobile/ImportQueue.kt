@@ -87,6 +87,8 @@ class ImportQueue(private val app: ManagerApp) {
         // O que foi para a fila do modelo e de qual arquivo do cache veio: depois de gravado, o arquivo some.
         val submitted = java.util.Collections.synchronizedList(ArrayList<Pair<Edit, File>>())
         val seen = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        // As impressões digitais das que entraram nesta importação (duração, andamento e impressão).
+        val prints = ArrayList<Triple<Int, Double, os.deckbridge.logic.AudioPrint>>()
         var sinceSave = 0
         var lastSave = System.currentTimeMillis()
 
@@ -124,7 +126,9 @@ class ImportQueue(private val app: ManagerApp) {
                     slots.acquire()
                     current = name
                     publish()
-                    val copy = File(cache, "%04d-%s".format(n++, name.replace(Regex("[\\\\/:*?\"<>|]"), "_")))
+                    // Cada cópia numa pasta numerada, com o nome original: o título lido do nome do arquivo não ganha o
+                    // número da fila na frente (até a 0.24.0 ganhava: "0003-Artista_-_Título").
+                    val copy = File(File(cache, "%04d".format(n++)).apply { mkdirs() }, name.replace(Regex("[\\\\/:*?\"<>|]"), "_"))
                     try {
                         app.context.contentResolver.openInputStream(uri)!!.use { i -> copy.outputStream().use { i.copyTo(it) } }
                     } catch (e: Exception) {
@@ -139,7 +143,7 @@ class ImportQueue(private val app: ManagerApp) {
                         try {
                             if (cancelled) return@execute
                             val info = os.deckbridge.manager.importer.AudioIo.probe(copy)
-                            val key = "${info.title.lowercase().trim()}|${info.artist.lowercase().trim()}"
+                            val key = os.deckbridge.manager.organize.TrackNames.key(os.deckbridge.manager.organize.TrackNames.Names(info.title, info.artist)) + "|" + info.durationSec / 3
                             val v = app.model.view
                             if ((v != null && Smart.findDuplicate(v, info.title, info.artist, info.durationSec) != null) || !seen.add(key)) {
                                 dups.incrementAndGet()
@@ -147,6 +151,22 @@ class ImportQueue(private val app: ManagerApp) {
                                 return@execute
                             }
                             val p = ImportPrep.prepare(copy)
+                            // A mesma música com outro nome: o áudio bate com uma da biblioteca ou desta importação. Pular é
+                            // sozinho, então só com tudo batendo: áudio, duração (até 3 s) e andamento (até 0,5 BPM).
+                            val print = p.print
+                            if (print != null) {
+                                val bpm = p.read.bpm
+                                val inBatch = synchronized(prints) {
+                                    prints.any { (d, b, other) -> kotlin.math.abs(d - p.info.durationSec) <= 3 && kotlin.math.abs(b - bpm) <= 0.5 && os.deckbridge.logic.AudioPrint.distance(print, other) < os.deckbridge.logic.AudioPrint.SAME }
+                                }
+                                val near = v?.tracks.orEmpty().filter { kotlin.math.abs(it.bpm - bpm) <= 0.5 }
+                                if (inBatch || app.prints.sameAs(print, p.info.durationSec, near, toleranceSec = 3) != null) {
+                                    dups.incrementAndGet()
+                                    copy.delete()
+                                    return@execute
+                                }
+                                synchronized(prints) { prints += Triple(p.info.durationSec, bpm, print) }
+                            }
                             val edit = Edit.ImportTrack(p, p.info.title, p.info.artist, p.info.album, p.info.genre, p.read.keyName, p.info.year, p.info.trackNumber, p.suggestedCues)
                             // A música entra na lista agora (na fila do modelo); a gravação vem depois, em lote.
                             val ok = onMainSync { app.model.submit(edit, "Importar \"${p.info.title}\"") }

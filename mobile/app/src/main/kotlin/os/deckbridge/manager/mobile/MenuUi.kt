@@ -38,6 +38,7 @@ fun MenuTab(app: ManagerApp, actions: Actions) {
         Line("Importar pasta", "") { actions.pickFolder() }
         Line("Analisar todas", "${counts[QuickFilter.UNANALYZED] ?: 0}") { app.analyzeAll() }
         Line("Arrumar nomes", "") { app.openTidy() }
+        Line("Procurar repetidas", "") { app.findDuplicates() }
         Line("Refazer grades", "") { app.refreshGrids() }
         Line("Marcar (ouvir e dar nota)", "${counts[QuickFilter.UNRATED] ?: 0}") { app.startTriage() }
         Line("Rever as marcadas", "${(m.view?.tracks?.size ?: 0) - (counts[QuickFilter.UNRATED] ?: 0)}") { app.startTriage(review = true) }

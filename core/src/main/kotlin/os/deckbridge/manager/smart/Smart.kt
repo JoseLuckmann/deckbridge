@@ -160,17 +160,20 @@ object Smart {
         return out
     }
 
-    private fun norm(x: String) = x.lowercase().replace(Regex("\\s+"), " ").trim()
 
     /**
-     * A faixa que já está na biblioteca com o mesmo título e artista (sem diferença de caixa e espaços) e duração a até
+     * A faixa que já está na biblioteca com o mesmo título e artista (limpos: sem caixa, acentos, pontuação, número de
+     * faixa nem "(Original Mix)") e duração a até
      * 2 s; null se não há. Serve para não importar a mesma música duas vezes.
      */
     fun findDuplicate(view: LibraryView, title: String, artist: String, durationSec: Int): TrackItem? {
-        val t = norm(title)
-        val a = norm(artist)
-        if (t.isEmpty()) return null
-        return view.tracks.firstOrNull { norm(it.title) == t && norm(it.artist) == a && kotlin.math.abs(it.durationSeconds - durationSec) <= 2 }
+        // Os nomes limpos dos dois lados: "0003-Artista_-_Título" na biblioteca é o mesmo que "Artista - Título" chegando.
+        val key = os.deckbridge.manager.organize.TrackNames.key(os.deckbridge.manager.organize.TrackNames.clean(title, artist, ""))
+        if (key.endsWith("|")) return null
+        return view.tracks.firstOrNull {
+            kotlin.math.abs(it.durationSeconds - durationSec) <= 2 &&
+                os.deckbridge.manager.organize.TrackNames.key(os.deckbridge.manager.organize.TrackNames.clean(it.title, it.artist, it.fileName)) == key
+        }
     }
 
     /**

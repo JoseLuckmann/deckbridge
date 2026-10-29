@@ -52,7 +52,7 @@ class OrganizerTest {
         assertTrue(f.none { 2 in it.trackIds })
         val p3 = (f.first { 3 in it.trackIds }.edit as Edit.SetTracks).patch
         assertNull(p3.artist)
-        assertEquals("so o titulo", p3.title)
+        assertEquals("So o Titulo", p3.title)
     }
 
     @Test

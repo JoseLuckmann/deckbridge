@@ -12,8 +12,8 @@ import os.deckbridge.manager.pdb.TrackPatch
 enum class Rule(val title: String) {
     TIDY("Espaços sobrando"),
     CASE("Maiúsculas e minúsculas"),
-    FILENAME("Artista e título pelo nome do arquivo"),
-    DUPLICATE("Possíveis duplicatas"),
+    FILENAME("Título e artista arrumados"),
+    DUPLICATE("Repetidas"),
     MISSING("Campos vazios"),
     ANALYSIS("Sem análise"),
     GRID("Grade refeita"),
@@ -91,35 +91,28 @@ object Organizer {
             if (!patch.isEmpty) out += Suggestion(Rule.CASE, listOf(t.id), "\"${t.title}\"", changes(t, patch), Edit.SetTracks(listOf(t.id), patch))
         }
 
-        // 3. Nome do arquivo → artista/título/número
+        // 3. Nomes: título e artista limpos (número da importação ou da faixa, sublinhados, "Artista - Título" no título
+        // ou no nome do arquivo, lixo de vídeo e de site) e o número da faixa pelo nome do arquivo.
         for (t in view.tracks) {
-            val (artist, title, number) = fromFileName(t.fileName)
+            val n = TrackNames.clean(t.title, t.artist, t.fileName)
+            val number = fromFileName(t.fileName).third
             val patch = TrackPatch(
-                artist = artist?.takeIf { t.artist.isBlank() },
-                title = title.takeIf { t.title.isBlank() && it.isNotEmpty() },
-                trackNumber = number?.takeIf { t.trackNumber == 0 },
+                // O que só muda espaços ou maiúsculas fica com as regras 1 e 2.
+                title = n.title.takeIf { it.isNotEmpty() && it != tidy(t.title) && it != titleCase(tidy(t.title)) },
+                artist = n.artist.takeIf { it.isNotEmpty() && it != tidy(t.artist) && it != titleCase(tidy(t.artist)) },
+                trackNumber = number?.takeIf { t.trackNumber == 0 && it in 1..99 && TrackNames.clean("", "", t.fileName).title.isNotEmpty() },
             )
-            if (!patch.isEmpty) out += Suggestion(Rule.FILENAME, listOf(t.id), t.fileName, changes(t, patch), Edit.SetTracks(listOf(t.id), patch))
+            if (!patch.isEmpty) out += Suggestion(Rule.FILENAME, listOf(t.id), "\"${t.title}\"", changes(t, patch), Edit.SetTracks(listOf(t.id), patch))
         }
 
-        // 4. Duplicatas: mesmo artista e título (sem pontuação nem caixa) e duração próxima.
-        view.tracks.groupBy { norm(it.artist) + "|" + norm(it.title) }.filter { it.value.size > 1 && it.key != "|" }.forEach { (_, group) ->
-            val sorted = group.sortedBy { it.durationSeconds }
-            val clusters = ArrayList<MutableList<TrackItem>>()
-            for (t in sorted) {
-                val c = clusters.lastOrNull()
-                if (c != null && t.durationSeconds - c.last().durationSeconds <= 3) c += t else clusters += mutableListOf(t)
-            }
-            clusters.filter { it.size > 1 }.forEach { c ->
-                // Fica a de maior taxa de bits (depois a de menor id); as outras podem sair da biblioteca.
-                val keep = c.sortedWith(compareByDescending<TrackItem> { it.bitrate }.thenBy { it.id }).first()
-                val rest = c.filter { it.id != keep.id }.map { it.id }
-                out += Suggestion(
-                    Rule.DUPLICATE, c.map { it.id }, "\"${keep.title}\" — ${keep.artist}",
-                    "${c.size} faixas parecem ser a mesma (ids ${c.joinToString { it.id.toString() }}). Manteria a ${keep.id} (${keep.bitrate} kbps) e tiraria da biblioteca ${rest.joinToString()}. O áudio no pendrive não é apagado.",
-                    Edit.RemoveTracks(rest), defaultOn = false,
-                )
-            }
+        // 4. Repetidas pelo nome limpo e a duração (o áudio é comparado na tela de repetidas, com a impressão digital).
+        for (g in Duplicates.find(view, { null }, { t -> view.entries.count { t.id in it.value } })) {
+            val rest = g.rest
+            out += Suggestion(
+                Rule.DUPLICATE, g.tracks.map { it.id }, "\"${g.keep.title}\" — ${g.keep.artist}",
+                "${g.tracks.size} faixas parecem ser a mesma. Fica a ${g.keep.id} (${g.keep.bitrate} kbps); ela entra nas playlists das outras, e as outras (${rest.joinToString { it.id.toString() }}) saem da biblioteca.",
+                Edit.RemoveTracks(rest.map { it.id }), defaultOn = false,
+            )
         }
 
         // 5. Campos vazios (só informa)
