@@ -252,7 +252,7 @@ fun RmxDock(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit, compa
             }
         }
         // ISOLATE dos dois canais, compacto, à direita.
-        Row(Modifier.width(if (split) 200.dp else if (compact) 250.dp else 330.dp).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.width(if (split) 220.dp else if (compact) 250.dp else 330.dp).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IsolatorColumn("CH 1", rmx.low[0], rmx.mid[0], rmx.high[0], Modifier.weight(1f)) { band, value ->
                 onRmx(rmx.copy(low = rmx.low.setAt(0, if (band == 0) value else rmx.low[0]), mid = rmx.mid.setAt(0, if (band == 1) value else rmx.mid[0]), high = rmx.high.setAt(0, if (band == 2) value else rmx.high[0])))
             }
@@ -301,7 +301,7 @@ private fun isoDbLabel(gain: Float): String {
 private fun IsoBar(label: String, gain: Float, modifier: Modifier, onChange: (Float) -> Unit) {
     val kill = gain <= 0.02f
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        TextInk(isoDbLabel(gain), fontSize = 13.sp, weight = FontWeight.Bold, mono = true, color = Color(if (kill) StagePalette.onAir else StagePalette.ink))
+        TextInk(isoDbLabel(gain), fontSize = 11.sp, weight = FontWeight.Bold, mono = true, color = Color(if (kill) StagePalette.onAir else StagePalette.ink), maxLines = 1)
         Box(
             Modifier.weight(1f).fillMaxWidth().border(1.5.dp, Color(if (kill) StagePalette.onAir else StagePalette.line)).pointerInput(Unit) {
                 detectVerticalDragGestures { change, _ ->
