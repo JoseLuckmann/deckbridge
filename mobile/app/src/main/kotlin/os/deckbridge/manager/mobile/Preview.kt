@@ -127,8 +127,11 @@ class Preview(private val app: ManagerApp) : StudioPreview {
                 // `this@Preview.stop()`: dentro da thread, `stop()` sozinho é o Thread.stop() do Java, que lança
                 // UnsupportedOperationException na thread da tela (derrubava o app quando a prévia chegava ao fim).
                 if (!stopped) app.onMain { if (stream === this) this@Preview.stop() }
-            } catch (e: Exception) {
-                app.onMain { if (stream === this) { this@Preview.stop(); app.notice = os.deckbridge.manager.Banner("Não consegui tocar a prévia: ${e.message}", true) } }
+            } catch (e: Throwable) {
+                // Throwable, não só Exception: um erro nesta thread (falta de memória, estado do AudioTrack solto por
+                // halt() no meio de um write) derrubava o app inteiro; aqui só para a prévia e avisa.
+                if (stopped) return
+                app.onMain { if (stream === this) { this@Preview.stop(); app.notice = os.deckbridge.manager.Banner("A prévia parou: ${e.message ?: e.javaClass.simpleName}", true) } }
             }
         }
 

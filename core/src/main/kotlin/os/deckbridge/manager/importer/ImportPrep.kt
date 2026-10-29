@@ -151,7 +151,7 @@ object AudioIo {
      * vai pelo decodificador da plataforma ou pelo ffmpeg. Null se não deu para ler.
      */
     fun segment(file: File, startMs: Int, lengthMs: Int): os.deckbridge.logic.DecodedPcm? {
-        if (file.extension.lowercase() == "wav") os.deckbridge.logic.decodeWavSegment(file.readBytes(), startMs / 1000.0, lengthMs / 1000.0)?.let { return it }
+        if (file.extension.lowercase() == "wav") wavSegment(file, startMs, lengthMs)?.let { return it }
         platform?.segment(file, startMs, lengthMs)?.let { return it }
         if (!ffmpeg) return null
         val p = ProcessBuilder("ffmpeg", "-v", "error", "-ss", "%.3f".format(java.util.Locale.ROOT, startMs / 1000.0), "-t", "%.3f".format(java.util.Locale.ROOT, lengthMs / 1000.0), "-i", file.path, "-vn", "-ac", "2", "-ar", "44100", "-f", "s16le", "pipe:1")
@@ -176,59 +176,104 @@ object AudioIo {
         return MonoAudio(FloatArray(n) { (((raw[it * 2].toInt() and 0xFF) or (raw[it * 2 + 1].toInt() shl 8)).toShort()) / 32768f }, 22050)
     }
 
-    private fun wavMono(file: File): MonoAudio? {
-        val b = file.readBytes()
-        if (b.size < 44 || String(b, 0, 4, Charsets.US_ASCII) != "RIFF" || String(b, 8, 4, Charsets.US_ASCII) != "WAVE") return null
-        var at = 12
-        var fmt = 0
-        var ch = 0
-        var rate = 0
-        var bits = 0
-        var dataAt = -1
-        var dataLen = 0
-        while (at + 8 <= b.size) {
-            val id = String(b, at, 4, Charsets.US_ASCII)
-            val len = le32(b, at + 4)
-            if (len < 0) return null
+    /** O cabeçalho de um WAV PCM/float: onde começam os dados e como são. Null se não for WAV que se lê aqui. */
+    private class WavFormat(val float: Boolean, val ch: Int, val rate: Int, val bits: Int, val dataAt: Long, val dataLen: Long) {
+        val frameBytes get() = ch * bits / 8
+        val frames get() = dataLen / frameBytes
+    }
+
+    /**
+     * Só o cabeçalho, pulando os blocos sem ler (o arquivo inteiro na memória não: um Extended Mix em WAV tem 80–150 MB,
+     * e a prévia do MIX, a análise da troca e o set tocando liam ao mesmo tempo — acabava a memória e o app caía).
+     */
+    private fun wavFormat(f: java.io.RandomAccessFile): WavFormat? {
+        val h = ByteArray(12)
+        if (f.length() < 44) return null
+        f.seek(0); f.readFully(h)
+        if (String(h, 0, 4, Charsets.US_ASCII) != "RIFF" || String(h, 8, 4, Charsets.US_ASCII) != "WAVE") return null
+        var at = 12L
+        var fmt = 0; var ch = 0; var rate = 0; var bits = 0
+        val c = ByteArray(8)
+        val body = ByteArray(40)
+        while (at + 8 <= f.length()) {
+            f.seek(at); f.readFully(c)
+            val id = String(c, 0, 4, Charsets.US_ASCII)
+            val len = le32(c, 4).toLong() and 0xFFFFFFFFL
             if (id == "fmt ") {
-                fmt = le16(b, at + 8)
-                ch = le16(b, at + 10)
-                rate = le32(b, at + 12)
-                bits = le16(b, at + 22)
-                if (fmt == 0xFFFE && len >= 26) fmt = le16(b, at + 32)
+                val n = minOf(len, body.size.toLong()).toInt()
+                if (n < 16) return null
+                f.readFully(body, 0, n)
+                fmt = le16(body, 0); ch = le16(body, 2); rate = le32(body, 4); bits = le16(body, 14)
+                if (fmt == 0xFFFE && n >= 26) fmt = le16(body, 24)
             } else if (id == "data") {
-                dataAt = at + 8
-                dataLen = minOf(len, b.size - dataAt)
-                break
+                val ok = (fmt == 1 && bits in setOf(16, 24, 32)) || (fmt == 3 && bits == 32)
+                if (ch !in 1..8 || rate < 8000 || !ok) return null
+                return WavFormat(fmt == 3, ch, rate, bits, at + 8, minOf(len, f.length() - at - 8))
             }
             at += 8 + len + (len and 1)
         }
-        val ok = (fmt == 1 && bits in setOf(16, 24, 32)) || (fmt == 3 && bits == 32)
-        if (dataAt < 0 || ch !in 1..8 || rate < 8000 || !ok) return null
-        val bytes = bits / 8
-        val frames = dataLen / (bytes * ch)
-        val factor = (rate / 22050).coerceAtLeast(1)
-        val outLen = frames / factor
-        val out = FloatArray(outLen)
-        for (o in 0 until outLen) {
-            var acc = 0.0
-            for (k in 0 until factor) {
-                val frame = o * factor + k
-                var mix = 0.0
-                for (c in 0 until ch) {
-                    val p = dataAt + (frame * ch + c) * bytes
-                    mix += when {
-                        fmt == 3 -> java.lang.Float.intBitsToFloat(le32(b, p)).toDouble()
-                        bits == 16 -> (le16(b, p).toShort()) / 32768.0
-                        bits == 24 -> (((b[p].toInt() and 0xFF) or ((b[p + 1].toInt() and 0xFF) shl 8) or (b[p + 2].toInt() shl 16)) / 8388608.0)
-                        else -> le32(b, p) / 2147483648.0
-                    }
-                }
-                acc += mix / ch
-            }
-            out[o] = (acc / factor).toFloat()
+        return null
+    }
+
+    /** Uma amostra (−1..1) do byte [p] de [b]. */
+    private fun sample(w: WavFormat, b: ByteArray, p: Int): Float = when {
+        w.float -> java.lang.Float.intBitsToFloat(le32(b, p))
+        w.bits == 16 -> le16(b, p).toShort() / 32768f
+        w.bits == 24 -> ((b[p].toInt() and 0xFF) or ((b[p + 1].toInt() and 0xFF) shl 8) or (b[p + 2].toInt() shl 16)) / 8388608f
+        else -> (le32(b, p) / 2147483648.0).toFloat()
+    }
+
+    /** Lê os quadros [first] até [first] + [count] em blocos de ~256 KB, entregando cada quadro (bloco e posição nele). */
+    private inline fun eachFrame(f: java.io.RandomAccessFile, w: WavFormat, first: Long, count: Long, use: (ByteArray, Int) -> Unit) {
+        val fb = w.frameBytes
+        val per = (262_144 / fb).coerceAtLeast(1)
+        val buf = ByteArray(per * fb)
+        var done = 0L
+        f.seek(w.dataAt + first * fb)
+        while (done < count) {
+            val n = minOf(per.toLong(), count - done).toInt()
+            f.readFully(buf, 0, n * fb)
+            for (i in 0 until n) use(buf, i * fb)
+            done += n
         }
-        return MonoAudio(out, rate / factor)
+    }
+
+    /** Um trecho estéreo do WAV, lendo do disco só o trecho. */
+    private fun wavSegment(file: File, startMs: Int, lengthMs: Int): os.deckbridge.logic.DecodedPcm? = runCatching {
+        java.io.RandomAccessFile(file, "r").use { f ->
+            val w = wavFormat(f) ?: return null
+            val first = (startMs.coerceAtLeast(0).toLong() * w.rate / 1000).coerceAtMost(w.frames)
+            val count = minOf(lengthMs.toLong() * w.rate / 1000, w.frames - first).toInt()
+            if (count <= 0) return null
+            val l = FloatArray(count)
+            val r = FloatArray(count)
+            val bytes = w.bits / 8
+            var i = 0
+            eachFrame(f, w, first, count.toLong()) { b, p ->
+                l[i] = sample(w, b, p)
+                r[i] = if (w.ch == 1) l[i] else sample(w, b, p + bytes)
+                i++
+            }
+            os.deckbridge.logic.DecodedPcm(l, r, w.rate)
+        }
+    }.getOrNull()
+
+    private fun wavMono(file: File): MonoAudio? = java.io.RandomAccessFile(file, "r").use { f ->
+        val w = wavFormat(f) ?: return null
+        val factor = (w.rate / 22050).coerceAtLeast(1)
+        val outLen = (w.frames / factor).toInt()
+        val out = FloatArray(outLen)
+        val bytes = w.bits / 8
+        var frame = 0L
+        var acc = 0.0
+        eachFrame(f, w, 0, outLen.toLong() * factor) { b, p ->
+            var mix = 0.0
+            for (c in 0 until w.ch) mix += sample(w, b, p + c * bytes)
+            acc += mix / w.ch
+            frame++
+            if (frame % factor == 0L) { out[(frame / factor - 1).toInt()] = (acc / factor).toFloat(); acc = 0.0 }
+        }
+        MonoAudio(out, w.rate / factor)
     }
 }
 

@@ -1308,3 +1308,10 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Correção do dono: em "Lorenz Rhode, Purple Disco Machine At the Disko", os dois primeiros são artistas; título quase nunca tem vírgula. Detalhes: `docs/ux-biblioteca-limpa.md`.
 - Núcleo: `TrackNames.splitByCommaGuess` (último artista até 3 palavras, acabando antes de palavra que abre título, ou 2 palavras), `sureSplit`; `guessSplit` usa o palpite quando nada é conhecido, então `clean` separa já na importação e em Arrumar nomes. Celular: o SEPARAR usa o mesmo palpite.
 - Evidência: núcleo `TrackNamesTest` 10 (+1: biblioteca vazia, nomes de arquivo do dono; caso Wolfram passa a separar), `OrganizerTest` 8.
+
+## 2026-10-29 — App caía ouvindo a mixagem entre duas faixas (0.28.2)
+
+- Relato do dono: "o app começou a crashar quando estou ouvindo uma mixagem entre duas músicas". Sem log do aparelho; causa provável pelo código: os WAVs do dono (Extended Mix, 80–150 MB) eram lidos inteiros na memória (`file.readBytes()`) para cada trecho. Ouvindo no MIX, ao mesmo tempo: a prévia lia as duas faixas inteiras, ACHAR A TROCA (0.24.0) lia as duas de novo para o perfil, e o set inteiro (0.26.0) lia a faixa inteira a cada pedaço. A falta de memória cai na thread que pedir memória; na thread do áudio só `Exception` era tratada, então o `OutOfMemoryError` derrubava o app.
+- Núcleo: `AudioIo` lê WAV do disco por partes (`RandomAccessFile`, blocos de 256 KB): o trecho lê só o trecho; o mono da análise só guarda a saída. Também lê WAV de 24/32 bits e float direto (antes ia para o MediaCodec).
+- Celular: a thread da prévia ao vivo trata `Throwable`: um erro ali para a prévia e avisa, sem fechar o app.
+- Evidência: núcleo `AudioIoTest` +2 (trecho igual ao leitor antigo; 24 bits, mono e float; 1 s de um WAV de 30 s aloca < 1,5 MB e o mono < 4 MB). A queda em si não foi reproduzida em aparelho (`BLOCKED_HARDWARE`): se voltar a cair, o log do Android (`adb logcat`) diz a causa.

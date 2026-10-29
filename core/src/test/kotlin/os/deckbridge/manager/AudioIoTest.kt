@@ -92,4 +92,44 @@ class AudioIoTest {
         }
         assertTrue(tried >= 2, "o ffmpeg desta máquina só gerou $tried formato(s) de teste")
     }
+
+    @Test
+    fun `trecho do WAV lido do disco igual ao de antes e em 24 bits tambem`() {
+        // Antes o arquivo inteiro ia para a memória (a prévia do MIX caía com WAVs longos). O trecho tem de sair igual.
+        val f16 = wav(44100, 2, 16, false, seconds = 4)
+        val old = os.deckbridge.logic.decodeWavSegment(f16.readBytes(), 1.25, 2.0)!!
+        val now = AudioIo.segment(f16, 1250, 2000)!!
+        assertEquals(old.sampleRate, now.sampleRate)
+        assertEquals(old.left.size, now.left.size)
+        for (i in old.left.indices step 97) { assertEquals(old.left[i], now.left[i], 1e-6f); assertEquals(old.right[i], now.right[i], 1e-6f) }
+        // Até o fim do arquivo, sem passar dele; e o pedido depois do fim não dá nada.
+        assertEquals(44100 * 1, AudioIo.segment(f16, 3000, 5000)!!.left.size)
+        assertEquals(null, AudioIo.segment(f16, 9000, 1000))
+        // 24 bits e mono: a mesma senoide.
+        for ((ch, bits, float) in listOf(Triple(2, 24, false), Triple(1, 16, false), Triple(2, 32, true))) {
+            val s = AudioIo.segment(wav(48000, ch, bits, float), 500, 1000)!!
+            assertEquals(48000, s.left.size)
+            val rms = sqrt(s.left.sumOf { (it * it).toDouble() } / s.left.size)
+            assertEquals(0.5 / sqrt(2.0), rms, 0.01, "$ch canais, $bits bits")
+            assertEquals(s.left[100], s.right[100], 1e-6f)
+        }
+    }
+
+    @Test
+    fun `ler um trecho nao carrega o arquivo inteiro`() {
+        val f = wav(44100, 2, 16, false, seconds = 30) // ~5,3 MB
+        val mx = java.lang.management.ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+        val id = Thread.currentThread().id
+        AudioIo.segment(f, 10_000, 1000) // aquece
+        val before = mx.getThreadAllocatedBytes(id)
+        AudioIo.segment(f, 20_000, 1000)!!
+        val used = mx.getThreadAllocatedBytes(id) - before
+        // 1 s estéreo em float (~350 KB) e o bloco de leitura (256 KB); o arquivo inteiro seria 5,3 MB.
+        assertTrue(used < 1_500_000, "alocou $used bytes para 1 s")
+        val before2 = mx.getThreadAllocatedBytes(id)
+        AudioIo.mono(f)
+        val mono = mx.getThreadAllocatedBytes(id) - before2
+        // A análise: só a saída (22 kHz mono, ~2,6 MB) e o bloco, não os 5,3 MB do arquivo mais a saída.
+        assertTrue(mono < 4_000_000, "mono alocou $mono bytes")
+    }
 }
