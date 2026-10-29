@@ -89,7 +89,7 @@ fun SetScreen(app: StudioHost) {
     var rejoinOpen by remember { mutableStateOf(false) }
     val poolAt = desk.poolStart(ids)
     val poolEnd = desk.poolEnd(ids)
-    val allKey = desk.setKey(plan)
+    val allKey = desk.wholeKey(plan)
     val issues = remember(ids, plan, v) { desk.issues(ids, plan) }
     var sortOpen by remember { mutableStateOf(false) }
     var bridgeFor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -120,7 +120,7 @@ fun SetScreen(app: StudioHost) {
                 GoalLength((boardPath?.lengthMs ?: 0L).toInt(), desk.goalMinutes)
             } else {
                 GoalLength(SetPlanner.lengthMs(v, ids, plan), desk.goalMinutes)
-                PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playAll(plan) }
+                PlayButton(on = app.preview.playingKey == allKey, enabled = plan.isNotEmpty(), label = "OUVIR") { desk.playWhole(plan) }
             }
             // O que se usa pouco (ordenar) fica no ⋯; numa pool a ordem é escolhida na hora.
             TextButton(onClick = { menuOpen = true }, modifier = Modifier.semantics { contentDescription = "Mais" }) { Text("⋯", fontSize = 20.sp) }
@@ -247,6 +247,8 @@ fun SetScreen(app: StudioHost) {
         val options = buildList {
             // Antes de sair de casa: a conferência do que dá problema na cabine.
             add("Pronto pro show?" to { picked = null; showOpen = true })
+            // O OUVIR toca o set inteiro; aqui, só as viradas em sequência (conferir as trocas depressa).
+            if (plan.isNotEmpty()) add("Ouvir só as viradas" to { desk.playAll(plan) })
             if (canSort) add("Ordenar para mixar" to { sortOpen = true })
             add("Transição · " + (app.transitionBars?.let { "$it compassos" } ?: "até o drop") to { app.nextTransitionBars() })
             if (board) {

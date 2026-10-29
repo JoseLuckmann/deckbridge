@@ -145,13 +145,13 @@ private fun SetPlayerBar(app: ManagerApp) {
             Text(p.nowPlaying(), color = Palette.text, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val total = sp.durationMs
             Text(
-                "SET · ${sp.title} · ${mmss(pos)}" + (if (total > 0) " / ${mmss(total)}" else "") + (if (p.paused) " · pausado" else ""),
+                p.whereLabel() + " · ${mmss(pos)}" + (if (total > 0) " / ${mmss(total)}" else "") + (if (p.paused) " · pausado" else ""),
                 color = Palette.mutedBright, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
-        TextButton(onClick = { p.skip(-1) }, modifier = Modifier.semantics { contentDescription = "Trecho anterior" }) { Text("⏮", fontSize = 16.sp) }
+        TextButton(onClick = { p.skip(-1) }, modifier = Modifier.semantics { contentDescription = "Virada anterior" }) { Text("⏮", fontSize = 16.sp) }
         TextButton(onClick = { p.togglePause() }, modifier = Modifier.semantics { contentDescription = if (p.paused) "Tocar" else "Pausar" }) { Text(if (p.paused) "▶" else "⏸", fontSize = 18.sp) }
-        TextButton(onClick = { p.skip(1) }, modifier = Modifier.semantics { contentDescription = "Próximo trecho" }) { Text("⏭", fontSize = 16.sp) }
+        TextButton(onClick = { p.skip(1) }, modifier = Modifier.semantics { contentDescription = "Próxima virada" }) { Text("⏭", fontSize = 16.sp) }
         TextButton(onClick = { p.stop() }, modifier = Modifier.semantics { contentDescription = "Parar o set" }) { Text("✕", fontSize = 14.sp) }
     }
 }

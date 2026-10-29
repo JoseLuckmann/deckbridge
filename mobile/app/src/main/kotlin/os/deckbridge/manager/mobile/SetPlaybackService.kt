@@ -103,12 +103,8 @@ class SetPlaybackService : Service() {
         return cover
     }
 
-    /** "Virada 3/8 · Sexta à noite": o número da virada e o set (a segunda linha do player). */
-    private fun subtitle(): String {
-        val sp = preview.setPlay ?: return ""
-        val at = chapterNow()
-        return if (sp.chapters.isEmpty() || at < 0) sp.title else "Virada ${at + 1}/${sp.chapters.size} · ${sp.title}"
-    }
+    /** "Virada 3/8 · Sexta à noite" ou "Faixa 4/9 · …": onde está no set (a segunda linha do player). */
+    private fun subtitle(): String = preview.whereLabel()
 
     private fun publish() {
         val sp = preview.setPlay ?: return
@@ -190,8 +186,9 @@ class SetPlaybackService : Service() {
         }
 
         /**
-         * A capa da virada para o player da notificação e da tela de bloqueio: fundo escuro, "VIRADA 3/8", a que sai (cor do
-         * deck 1) e a que entra (cor do deck 2), e embaixo a linha do set com um traço por virada (a de agora acesa).
+         * A capa para o player da notificação e da tela de bloqueio: fundo escuro com as cores dos dois decks; numa virada,
+         * "VIRADA 3/8", a que sai (cor do deck 1) e a que entra (cor do deck 2); numa faixa, "FAIXA 4/9", ela e a que vem
+         * a seguir. Embaixo, a linha do set com um traço por virada (as que já foram em azul, a de agora em laranja).
          */
         fun cover(setName: String, chapters: List<Chapter>, at: Int, size: Int = 640): android.graphics.Bitmap {
             val pal = os.deckbridge.logic.StagePalette
@@ -200,7 +197,6 @@ class SetPlaybackService : Service() {
             c.drawColor(pal.bg)
             val u = size / 640f
             val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-            // Brilho das duas cores dos decks no fundo (a troca de um para o outro).
             paint.shader = android.graphics.LinearGradient(0f, 0f, size.toFloat(), size.toFloat(), intArrayOf((pal.deckA and 0x00FFFFFF) or 0x55000000, pal.bg, (pal.deckB and 0x00FFFFFF) or 0x55000000), null, android.graphics.Shader.TileMode.CLAMP)
             c.drawRect(0f, 0f, size.toFloat(), size.toFloat(), paint)
             paint.shader = null
@@ -213,29 +209,47 @@ class SetPlaybackService : Service() {
                 c.drawText(s, x, y, paint)
             }
             val left = 48 * u
-            val total = chapters.size
-            text(if (total > 0 && at >= 0) "VIRADA ${at + 1}/$total" else "SET", left, 92 * u, 34 * u, pal.accentOrange, bold = true)
-            text(setName, left, 136 * u, 28 * u, pal.inkMuted)
-            val parts = chapters.getOrNull(at)?.title?.split(" → ", limit = 2).orEmpty()
-            text("SAI", left, 250 * u, 24 * u, pal.inkMuted, bold = true)
-            text(parts.getOrNull(0) ?: setName, left, 300 * u, 46 * u, pal.deckA, bold = true)
-            text("↓", left, 370 * u, 44 * u, pal.ink)
-            text("ENTRA", left, 430 * u, 24 * u, pal.inkMuted, bold = true)
-            text(parts.getOrNull(1) ?: "", left, 480 * u, 46 * u, pal.deckB, bold = true)
-            // A linha do set: um traço por virada; as que já foram em azul, a de agora em laranja.
+            val now = chapters.getOrNull(at)
+            val turns = chapters.filter { it.turn }
+            val tracks = chapters.filter { !it.turn }
+            if (now == null || now.turn) {
+                val k = if (now == null) -1 else turns.indexOf(now)
+                text(if (k >= 0) "VIRADA ${k + 1}/${turns.size}" else "SET", left, 92 * u, 34 * u, pal.accentOrange, bold = true)
+                text(setName, left, 136 * u, 28 * u, pal.inkMuted)
+                val parts = now?.title?.split(" → ", limit = 2).orEmpty()
+                text("SAI", left, 250 * u, 24 * u, pal.inkMuted, bold = true)
+                text(parts.getOrNull(0) ?: setName, left, 300 * u, 46 * u, pal.deckA, bold = true)
+                text("↓", left, 370 * u, 44 * u, pal.ink)
+                text("ENTRA", left, 430 * u, 24 * u, pal.inkMuted, bold = true)
+                text(parts.getOrNull(1) ?: "", left, 480 * u, 46 * u, pal.deckB, bold = true)
+            } else {
+                val k = tracks.indexOf(now)
+                text("FAIXA ${k + 1}/${tracks.size}", left, 92 * u, 34 * u, pal.accentOrange, bold = true)
+                text(setName, left, 136 * u, 28 * u, pal.inkMuted)
+                text("TOCANDO", left, 250 * u, 24 * u, pal.inkMuted, bold = true)
+                text(now.title, left, 300 * u, 46 * u, pal.deckA, bold = true)
+                tracks.getOrNull(k + 1)?.let { next ->
+                    text("A SEGUIR", left, 430 * u, 24 * u, pal.inkMuted, bold = true)
+                    text(next.title, left, 480 * u, 46 * u, pal.deckB, bold = true)
+                }
+            }
+            // A linha do set: um traço por virada.
+            val total = turns.size
             if (total > 0) {
+                val pos = now?.startMs ?: 0
                 val y = 568 * u
                 val w = size - 2 * left
                 val gap = 6 * u
                 val seg = (w - gap * (total - 1)) / total
-                for (i in 0 until total) {
+                for ((i, t) in turns.withIndex()) {
+                    val current = now != null && now.turn && t == now
                     paint.color = when {
-                        i == at -> pal.accentOrange
-                        i < at -> pal.accentBlue
+                        current -> pal.accentOrange
+                        t.startMs < pos -> pal.accentBlue
                         else -> pal.line
                     }
                     val x0 = left + i * (seg + gap)
-                    c.drawRect(x0, y - (if (i == at) 9 else 5) * u, x0 + seg, y + (if (i == at) 9 else 5) * u, paint)
+                    c.drawRect(x0, y - (if (current) 9 else 5) * u, x0 + seg, y + (if (current) 9 else 5) * u, paint)
                 }
             }
             return bmp

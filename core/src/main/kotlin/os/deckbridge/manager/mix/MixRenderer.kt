@@ -60,6 +60,9 @@ interface PcmSource {
 
     /** Até onde já foi feito (ms); quem toca desconta o que ainda está no buffer para saber o que se ouve. */
     val renderedMs: Int
+
+    /** Quem toca parou: solta o que a fonte segura (threads de fundo). */
+    fun close() {}
 }
 
 /**

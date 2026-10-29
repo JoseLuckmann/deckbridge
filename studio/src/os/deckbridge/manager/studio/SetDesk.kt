@@ -1287,7 +1287,34 @@ class SetDesk(private val app: StudioHost) {
         }
     }
 
-    /** As transições do set uma depois da outra, para ouvir o set de ponta a ponta. */
+    fun wholeKey(plan: List<Transition>) = "inteiro|" + setKey(plan)
+
+    /**
+     * Ouvir o set inteiro: as faixas do começo (ou de onde a virada anterior deixou) até o ponto de saída e as viradas
+     * planejadas, feito na hora enquanto toca ([os.deckbridge.manager.mix.SetStream]). Toca como player de música: dá
+     * para sair do set e do app. Tocar de novo para.
+     */
+    fun playWhole(plan: List<Transition>) {
+        if (plan.isEmpty()) return
+        val v = app.model.view ?: return
+        val key = wholeKey(plan)
+        if (app.preview.playingKey == key) return app.preview.stop()
+        val items = (listOf(plan.first().fromId) + plan.map { it.toId }).map { v.track(it) ?: return }
+        val tracks = items.map { t -> os.deckbridge.manager.mix.SetStream.Track(t.title, reader(t), t.bpm, grid(t)?.durationMs?.takeIf { it > 0 } ?: (t.durationSeconds * 1000)) }
+        val stream = os.deckbridge.manager.mix.SetStream(tracks, plan) { i ->
+            val a = items[i]
+            val b = items[i + 1]
+            // A virada no andamento da que sai: ela segue igual e a que entra estica até ela.
+            runCatching { MixRenderer.transition(reader(a), a.bpm, reader(b), b.bpm, plan[i], 0, 0, tempo = a.bpm) }.getOrNull()
+        }
+        val chapters = stream.pieces.map { p ->
+            Chapter(p.startMs, if (p.isTransition) "${items[p.index].title} → ${items[p.index + 1].title}" else items[p.index].title, turn = p.isTransition)
+        }
+        val name = v.playlists.firstOrNull { it.id == (rootId() ?: playlistId) }?.name ?: "Set"
+        app.preview.playSetStream(stream, key, name, chapters, playlistId, stream.lengthMs)
+    }
+
+    /** Só as viradas do set, uma depois da outra (8 s antes e depois de cada uma), para conferir as trocas depressa. */
     fun playAll(plan: List<Transition>, tempos: List<Double?> = plan.map { tempoFor(it) }) {
         if (plan.isEmpty()) return
         val key = setKey(plan, tempos)

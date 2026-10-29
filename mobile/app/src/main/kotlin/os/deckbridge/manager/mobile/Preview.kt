@@ -19,6 +19,11 @@ import os.deckbridge.manager.pdb.TrackItem
  * valer a pena. Só decide em aparelho de verdade: nos testes de JVM não há codec (`BLOCKED_HARDWARE`).
  */
 class Preview(private val app: ManagerApp) : StudioPreview {
+    companion object {
+        /** Saltar para uma virada cai este tanto antes dela, para ouvir a troca chegando. */
+        const val LEAD_IN_MS = 10_000
+    }
+
     override var playingId by mutableStateOf<Int?>(null)
         private set
 
@@ -67,6 +72,7 @@ class Preview(private val app: ManagerApp) : StudioPreview {
      */
     private inner class StreamRun(val source: os.deckbridge.manager.mix.PcmSource) : Thread("deckbridge-mix-ao-vivo") {
         @Volatile var stopped = false
+        @Volatile var paused = false
         @Volatile var pendingSeek = -1
         @Volatile private var written = 0L
         val track: AudioTrack = run {
@@ -96,6 +102,12 @@ class Preview(private val app: ManagerApp) : StudioPreview {
             try {
                 track.play()
                 while (!stopped) {
+                    if (paused) {
+                        runCatching { track.pause() }
+                        while (paused && !stopped) sleep(30)
+                        if (stopped) break
+                        runCatching { track.play() }
+                    }
                     val seek = pendingSeek
                     if (seek >= 0) {
                         source.seek(seek)
@@ -118,6 +130,7 @@ class Preview(private val app: ManagerApp) : StudioPreview {
             stopped = true
             runCatching { track.pause(); track.flush() }
             runCatching { track.release() }
+            runCatching { source.close() }
         }
     }
 
@@ -240,38 +253,73 @@ class Preview(private val app: ManagerApp) : StudioPreview {
         SetPlaybackService.start(app.context)
     }
 
+    /** O set inteiro, feito na hora ([source]), como player de música em segundo plano. */
+    override fun playSetStream(source: os.deckbridge.manager.mix.PcmSource, key: String, title: String, chapters: List<Chapter>, setId: Int?, lengthMs: Int) {
+        if (playingKey == key) {
+            stop()
+            return
+        }
+        stop()
+        if (audio != null && audio.requestAudioFocus(setFocus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            source.close()
+            app.notice = os.deckbridge.manager.Banner("Áudio ocupado", true)
+            return
+        }
+        val run = runCatching { StreamRun(source) }.getOrElse {
+            source.close()
+            app.notice = os.deckbridge.manager.Banner("Não consegui tocar \"$title\": ${it.message}", true)
+            return
+        }
+        stream = run
+        playingKey = key
+        setPlay = SetPlay(key, title, chapters, lengthMs, setId)
+        paused = false
+        run.isDaemon = true
+        run.start()
+        SetPlaybackService.start(app.context)
+    }
+
     fun pause() {
-        val p = player ?: return
         if (setPlay == null) return stop()
-        runCatching { p.pause() }
+        val s = stream
+        if (s != null) s.paused = true else runCatching { player?.pause() ?: return }
         paused = true
         SetPlaybackService.refresh(app.context)
     }
 
     fun resume() {
-        val p = player ?: return
         if (audio != null && audio.requestAudioFocus(setFocus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return
-        runCatching { p.start() }
+        val s = stream
+        if (s != null) s.paused = false else runCatching { player?.start() ?: return }
         paused = false
         SetPlaybackService.refresh(app.context)
     }
 
     fun togglePause() = if (paused) resume() else pause()
 
-    /** Pula para o trecho seguinte (+1) ou volta (−1; no meio de um trecho, volta ao começo dele). */
+    /**
+     * Salta de virada em virada: para a próxima (+1) ou volta (−1; logo depois de uma, volta à anterior). Cai uns
+     * segundos antes da virada ([LEAD_IN_MS]) para ouvir a troca chegando. Sem viradas marcadas, pula de trecho em trecho.
+     */
     fun skip(step: Int) {
         val sp = setPlay ?: return
-        if (sp.chapters.isEmpty()) return
+        val turns = sp.chapters.filter { it.turn }.map { (it.startMs - if (sp.chapters.any { c -> !c.turn }) LEAD_IN_MS else 0).coerceAtLeast(0) }
+        if (turns.isEmpty()) return
         val pos = positionMs()
-        val at = Chapter.at(sp.chapters, pos).coerceAtLeast(0)
-        val target = when {
-            step > 0 -> at + 1
-            pos - sp.chapters[at].startMs > 3_000 -> at
-            else -> at - 1
-        }
-        if (target >= sp.chapters.size) return stop()
-        seekTo(sp.chapters[target.coerceAtLeast(0)].startMs)
+        val target = if (step > 0) turns.firstOrNull { it > pos + 500 } else turns.lastOrNull { it < pos - 3_000 } ?: 0
+        if (target == null) return stop()
+        seekTo(target)
         SetPlaybackService.refresh(app.context)
+    }
+
+    /** "Virada 3/8" na virada, "Faixa 4/9" entre elas (o set inteiro), para a segunda linha do player. */
+    fun whereLabel(): String {
+        val sp = setPlay ?: return ""
+        val pos = positionMs()
+        val now = sp.chapters.getOrNull(Chapter.at(sp.chapters, pos)) ?: return sp.title
+        val turns = sp.chapters.filter { it.turn }
+        val tracks = sp.chapters.filter { !it.turn }
+        return if (now.turn) "Virada ${turns.indexOf(now) + 1}/${turns.size} · ${sp.title}" else "Faixa ${tracks.indexOf(now) + 1}/${tracks.size} · ${sp.title}"
     }
 
     /** O trecho tocando agora ("A → B"), para a notificação e a barra do player. */

@@ -55,27 +55,26 @@ class SetPlayerTest {
         assertTrue(done(), what)
     }
 
-    @Test fun theSetKeepsPlayingInTheBackgroundWithAPlayerBar() {
+    @Test fun theWholeSetPlaysInTheBackgroundWithAPlayerBar() {
         val a = app()
         a.sets.open(1)
         rule.setContent { ManagerRoot(a, Actions({}, {})) }
         rule.waitForIdle()
         val plan = a.sets.plan()
-        // Monta antes e diz ao player do Robolectric quanto o arquivo dura (não há codec na JVM).
-        val f = assertNotNull(a.sets.renderSet(plan))
-        ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(f.absolutePath), ShadowMediaPlayer.MediaInfo(plan.size * 40_000, 0))
-        a.sets.playAll(plan)
+        // OUVIR: o set inteiro, faixas e viradas, feito na hora.
+        rule.onNodeWithText("OUVIR").performClick()
         rule.waitForIdle()
         val sp = assertNotNull(a.preview.setPlay, a.notice?.text)
-        assertEquals(plan.size, sp.chapters.size, "um trecho por transição")
-        assertTrue(sp.chapters.first().title.contains("→"))
-        // A capa da virada para o player da notificação e da tela de bloqueio.
-        val cover = SetPlaybackService.cover(sp.title, sp.chapters, 1)
-        assertEquals(640, cover.width)
-        File(out, "mobile-66-notificacao-capa-virada.png").outputStream().use { cover.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        assertEquals(plan.size, sp.chapters.count { it.turn }, "uma virada por troca")
+        assertEquals(plan.size + 1, sp.chapters.count { !it.turn }, "e cada faixa")
+        assertTrue(sp.durationMs > plan.size * 20_000, "o set inteiro, não só as viradas: ${sp.durationMs}")
         // O serviço de mídia (notificação, controles na tela bloqueada) foi ligado.
         val started = shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).nextStartedService
         assertEquals(SetPlaybackService::class.java.name, started?.component?.className)
+        // As capas do player da notificação: numa faixa e numa virada.
+        fun save(at: Int, name: String) = File(out, name).outputStream().use { SetPlaybackService.cover(sp.title, sp.chapters, at).compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        save(0, "mobile-66-notificacao-capa-faixa.png")
+        save(sp.chapters.indexOfFirst { it.turn }, "mobile-67-notificacao-capa-virada.png")
         // Sair do set não para: a barra do player aparece nas outras telas.
         a.sets.close()
         rule.waitForIdle()
@@ -88,21 +87,40 @@ class SetPlayerTest {
         rule.onNode(hasContentDescription("Pausar")).performClick()
         rule.waitForIdle()
         assertTrue(a.preview.paused)
-        rule.onNode(hasContentDescription("Tocar")).assertExists()
-        // Próximo trecho: a cabeça vai para o começo da transição seguinte.
-        rule.onNode(hasContentDescription("Próximo trecho")).performClick()
+        rule.onNode(hasContentDescription("Tocar")).performClick()
         rule.waitForIdle()
-        assertEquals(sp.chapters[1].startMs.toDouble(), a.preview.positionMs().toDouble(), 50.0)
+        // Próxima virada: cai 10 s antes dela, para ouvir a troca chegando.
+        rule.onNode(hasContentDescription("Próxima virada")).performClick()
+        rule.waitForIdle()
+        val turn = sp.chapters.first { it.turn }.startMs
+        assertEquals((turn - Preview.LEAD_IN_MS).toDouble(), a.preview.positionMs().toDouble(), 300.0)
         // Tocar no nome volta ao set.
-        rule.onNodeWithText(sp.chapters[1].title).performClick()
+        rule.onNode(hasContentDescription("Virada anterior")).assertExists()
+        a.sets.open(1)
         rule.waitForIdle()
-        assertEquals(1, a.sets.playlistId)
         a.sets.close()
         rule.waitForIdle()
         rule.onNode(hasContentDescription("Parar o set")).performClick()
         rule.waitForIdle()
         assertNull(a.preview.setPlay)
         rule.onNode(hasContentDescription("Pausar")).assertDoesNotExist()
+    }
+
+    @Test fun onlyTheTurnsIsStillThereInTheMenu() {
+        val a = app()
+        a.sets.open(1)
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        rule.waitForIdle()
+        val plan = a.sets.plan()
+        val f = assertNotNull(a.sets.renderSet(plan))
+        ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(f.absolutePath), ShadowMediaPlayer.MediaInfo(plan.size * 40_000, 0))
+        rule.onNode(hasContentDescription("Mais")).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Ouvir só as viradas").performClick()
+        rule.waitForIdle()
+        val sp = assertNotNull(a.preview.setPlay, a.notice?.text)
+        assertTrue(sp.chapters.isNotEmpty() && sp.chapters.all { it.turn })
+        a.preview.stop()
     }
 
     private fun anyKeepsScreenOn(v: View): Boolean = v.keepScreenOn || (v is ViewGroup && (0 until v.childCount).any { anyKeepsScreenOn(v.getChildAt(it)) })

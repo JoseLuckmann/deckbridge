@@ -108,12 +108,19 @@ interface StudioPreview {
      */
     fun playSet(file: File, key: String, title: String, chapters: List<Chapter>, setId: Int? = null) = toggleFile(file, key, title)
 
+    /**
+     * Toca o set inteiro feito na hora ([source]: as faixas e as viradas), como player de música em segundo plano, com
+     * [lengthMs] de duração e os trechos em [chapters].
+     */
+    fun playSetStream(source: os.deckbridge.manager.mix.PcmSource, key: String, title: String, chapters: List<Chapter>, setId: Int?, lengthMs: Int) =
+        playStream(source, key, title)
+
     /** O set está tocando em segundo plano (sair da tela do set não para). */
     val inBackground: Boolean get() = false
 }
 
-/** Um trecho do set montado: onde começa (ms) e o que toca ("Night Signal → Tidal Bloom"). */
-data class Chapter(val startMs: Int, val title: String) {
+/** Um trecho do set: onde começa (ms), o que toca ("Night Signal → Tidal Bloom") e se é uma virada (ou uma faixa). */
+data class Chapter(val startMs: Int, val title: String, val turn: Boolean = true) {
     companion object {
         fun encode(list: List<Chapter>) = list.joinToString("\n") { "${it.startMs}\t${it.title}" }
         fun decode(text: String) = text.lines().mapNotNull { l -> l.split('\t', limit = 2).takeIf { it.size == 2 }?.let { Chapter(it[0].toIntOrNull() ?: return@let null, it[1]) } }
