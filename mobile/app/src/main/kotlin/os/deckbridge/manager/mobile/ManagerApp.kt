@@ -508,6 +508,9 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
                 say(e.message ?: e.code, error = true)
             } catch (e: Exception) {
                 say(friendlyError(e), error = true)
+            } catch (e: OutOfMemoryError) {
+                // Uma faixa enorme (ou muitas de uma vez) não fecha o app: a tarefa para e avisa.
+                say("Faltou memória em \"$title\". Feche outros apps e tente de novo.", error = true)
             } finally {
                 job = null
             }
@@ -530,7 +533,7 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
         if (job != null) return
         val queued = model.beginQuiet() ?: return
         Thread({
-            val done = model.writeQuiet(queued)
+            val done = runCatching { model.writeQuiet(queued) }.getOrNull()
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 model.finishQuiet(done)
                 if (done != null) pruneBackups() else say(model.banner?.text ?: "Não consegui gravar.", error = true)

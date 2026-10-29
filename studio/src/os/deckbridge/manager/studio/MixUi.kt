@@ -118,17 +118,14 @@ private fun MixContent(app: StudioHost) {
     }
     val ga = desk.grid(a)
     val gb = desk.grid(b)
-    val pos = desk.cursorMs
+    // A posição muda a cada quadro enquanto toca: só quem desenha a cabeça (ondas, contadores, passo) a lê, por esta
+    // função. Ler aqui recompunha a tela inteira 60 vezes por segundo — o plano do set, a checagem e o resumo junto — e o
+    // lixo disso disputava com o áudio.
+    val pos: () -> Int = remember(desk) { { desk.cursorMs } }
     // As frases das duas (quando já foram ouvidas): chegam em segundo plano e a tela recompõe.
     @Suppress("UNUSED_EXPRESSION") desk.heard
     val pa = desk.cachedProfile(a)
     val pb = desk.cachedProfile(b)
-    // O que o mixer mostra: o automático, a mixagem em ensaio e a mão agora — o mesmo que se ouve.
-    val pass = desk.mixPlayer?.pass
-    @Suppress("UNUSED_EXPRESSION") desk.touchedNow
-    val levels = p?.levelsAt(pos, tr, desk.draftTake, pass) ?: Levels()
-    val bar = p?.relBar(pos) ?: 0.0
-    val hand: (Ctl) -> Boolean = { c -> pass?.at(c, bar) != null || desk.draftTake?.at(c, bar) != null }
     var advanced by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf(MixPage.TURN) }
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
@@ -157,7 +154,7 @@ private fun MixContent(app: StudioHost) {
                 }
                 MixPage.MIXER -> {
                     TakeBar(desk, tr, playing)
-                    MixerPanel(levels, hand, enabled = p != null, onSet = { c, v -> desk.setControl(c, v) }, onRelease = { desk.releaseDeck(it) })
+                    MixerNow(desk, tr, p)
                     SyncPanel(desk, tr, p)
                 }
                 MixPage.SETTINGS -> Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
@@ -343,7 +340,8 @@ private fun WhyPanel(tr: Transition, a: TrackItem, b: TrackItem, pa: os.deckbrid
  * quanto estica), tom e quanto falta da faixa.
  */
 @Composable
-private fun DeckLine(n: Int, t: TrackItem, tr: Transition, p: MixPreview?, pos: Int, g: TrackGrid?, master: Boolean, from: TrackItem? = null) {
+private fun DeckLine(n: Int, t: TrackItem, tr: Transition, p: MixPreview?, posNow: () -> Int, g: TrackGrid?, master: Boolean, from: TrackItem? = null) {
+    val pos = posNow()
     val trackMs = when {
         p == null -> if (master) tr.outMs else tr.inMs
         master -> p.aAt(pos)
@@ -375,24 +373,30 @@ private fun DeckLine(n: Int, t: TrackItem, tr: Transition, p: MixPreview?, pos: 
 @OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
 @Composable
 private fun DeckWave(
-    p: MixPreview?, wave: ColorWave?, pos: Int, g: TrackGrid?, isA: Boolean, height: Dp, tr: Transition, shiftMs: Double = 0.0,
+    p: MixPreview?, wave: ColorWave?, posNow: () -> Int, g: TrackGrid?, isA: Boolean, height: Dp, tr: Transition, shiftMs: Double = 0.0,
     /** As frases da faixa (quando já ouvida): uma faixa colorida embaixo da onda com INTRO, DROP, BREAK, OUTRO. */
     phrases: os.deckbridge.manager.mix.TrackProfile? = null,
     onSeek: (Int) -> Unit,
 ) {
-    val start = pos - (WINDOW_MS * HEAD_AT).toInt()
+    fun startOf(pos: Int) = pos - (WINDOW_MS * HEAD_AT).toInt()
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    // O pico da onda inteira não muda enquanto toca: medido uma vez (antes, a cada quadro, nas duas ondas).
+    val peak = remember(wave) { ((wave?.height?.maxOfOrNull { it.toInt() and 0xFF } ?: 255).coerceAtLeast(1)) / 255f }
+    val seek by androidx.compose.runtime.rememberUpdatedState(onSeek)
     Row(Modifier.fillMaxWidth().height(height).padding(horizontal = 6.dp, vertical = 2.dp)) {
         Canvas(
+            // A posição é lida na hora do gesto (posNow), não a do começo: arrastar tocando pulava para trás, e o toque
+            // reiniciava o detector a cada quadro e se perdia.
             Modifier.weight(1f).fillMaxHeight().clip(RbShape).background(Palette.waveBg).border(BorderStroke(1.dp, Palette.line), RbShape)
                 .pointerInput(p) {
                     detectHorizontalDragGestures { change, drag ->
                         change.consume()
-                        onSeek(pos - (drag / size.width * WINDOW_MS).toInt())
+                        seek(posNow() - (drag / size.width * WINDOW_MS).toInt())
                     }
                 }
-                .pointerInput(p, pos) { detectTapGestures { o -> onSeek(start + (o.x / size.width * WINDOW_MS).toInt()) } },
+                .pointerInput(p) { detectTapGestures { o -> seek(startOf(posNow()) + (o.x / size.width * WINDOW_MS).toInt()) } },
         ) {
+            val start = startOf(posNow())
             val w = size.width
             val h = size.height
             val tickH = h * 0.12f
@@ -416,7 +420,6 @@ private fun DeckWave(
                     (start + shiftMs) / 1000.0, WINDOW_MS / 1000.0, pixels, wave.perSecond, wave.columns,
                     { wave.height[it].toInt() and 0xFF }, { wave.rgb[it] },
                 )
-                val peak = (wave.height.maxOfOrNull { it.toInt() and 0xFF } ?: 255).coerceAtLeast(1) / 255f
                 val slot = w / pixels
                 for (i in 0 until pixels) {
                     val hgt = strip.heights[i] / peak
@@ -496,16 +499,16 @@ private fun DeckWave(
             val head = w * HEAD_AT
             drawLine(Palette.text, Offset(head, 0f), Offset(head, h), 2.5f)
         }
-        BarsBox(p, pos, isA, Modifier.width(56.dp).fillMaxHeight())
+        BarsBox(p, posNow, isA, Modifier.width(56.dp).fillMaxHeight())
     }
 }
 
 /** Ao lado da onda, como no player: quantos compassos faltam para o ponto (ou desde ele). */
 @Composable
-private fun BarsBox(p: MixPreview?, pos: Int, isA: Boolean, modifier: Modifier) {
+private fun BarsBox(p: MixPreview?, posNow: () -> Int, isA: Boolean, modifier: Modifier) {
     Column(modifier.padding(start = 4.dp), verticalArrangement = Arrangement.Center) {
         if (p == null) return@Column
-        val bars = (pos - p.leadMs) / p.barMsA
+        val bars = (posNow() - p.leadMs) / p.barMsA
         val label = when {
             bars < 0 -> if (isA) "SAI EM" else "ENTRA EM"
             bars * p.barMsA < p.overlapMs -> "JUNTAS"
@@ -519,10 +522,14 @@ private fun BarsBox(p: MixPreview?, pos: Int, isA: Boolean, modifier: Modifier) 
 
 /** A prévia inteira em miniatura: deck 1 em cima, deck 2 embaixo, o trecho junto e a cabeça. Tocar pula. */
 @Composable
-private fun Overview(p: MixPreview?, pos: Int, tr: Transition, onSeek: (Int) -> Unit) {
+private fun Overview(p: MixPreview?, posNow: () -> Int, tr: Transition, onSeek: (Int) -> Unit) {
+    val seek by androidx.compose.runtime.rememberUpdatedState(onSeek)
+    // A miniatura é a prévia inteira e não rola: as duas faixas de onda são feitas uma vez por prévia e largura (antes,
+    // a cada quadro tocando).
+    val strips = remember(p) { HashMap<Int, Pair<os.deckbridge.logic.WaveStrip?, os.deckbridge.logic.WaveStrip?>>() }
     Canvas(
         Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 6.dp, vertical = 3.dp).background(Palette.waveBg).border(BorderStroke(1.dp, Palette.line))
-            .pointerInput(p) { detectTapGestures { o -> if (p != null) onSeek((o.x / size.width * p.lengthMs).toInt()) } },
+            .pointerInput(p) { detectTapGestures { o -> if (p != null) seek((o.x / size.width * p.lengthMs).toInt()) } },
     ) {
         if (p == null) return@Canvas
         val w = size.width
@@ -530,10 +537,12 @@ private fun Overview(p: MixPreview?, pos: Int, tr: Transition, onSeek: (Int) -> 
         val len = p.lengthMs.coerceAtLeast(1)
         fun x(ms: Int) = ms.toFloat() / len * w
         drawRect(Palette.blueActiveFill, Offset(x(p.leadMs), 0f), Size(x(p.overlapMs), h))
-        fun lane(wave: ColorWave?, top: Float, bottom: Float) {
-            if (wave == null || wave.columns == 0) return
-            val pixels = (w / 2).toInt().coerceAtLeast(1)
-            val strip = waveStrip(0.0, len / 1000.0, pixels, wave.perSecond, wave.columns, { wave.height[it].toInt() and 0xFF }, { wave.rgb[it] })
+        val pixels = (w / 2).toInt().coerceAtLeast(1)
+        fun stripOf(wave: ColorWave?) = if (wave == null || wave.columns == 0) null
+            else waveStrip(0.0, len / 1000.0, pixels, wave.perSecond, wave.columns, { wave.height[it].toInt() and 0xFF }, { wave.rgb[it] })
+        val (stripA, stripB) = strips.getOrPut(pixels) { stripOf(p.waveA) to stripOf(p.waveB) }
+        fun lane(strip: os.deckbridge.logic.WaveStrip?, top: Float, bottom: Float) {
+            if (strip == null) return
             val peak = strip.heights.maxOrNull()?.coerceAtLeast(0.01f) ?: 1f
             val slot = w / pixels
             val mid = (top + bottom) / 2
@@ -542,13 +551,14 @@ private fun Overview(p: MixPreview?, pos: Int, tr: Transition, onSeek: (Int) -> 
                 if (r > 0) drawLine(rgb(strip.colors[i]), Offset(i * slot, mid - r), Offset(i * slot, mid + r), slot + 0.4f)
             }
         }
-        lane(p.waveA, 2f, h / 2 - 1f)
-        lane(p.waveB, h / 2 + 1f, h - 2f)
+        lane(stripA, 2f, h / 2 - 1f)
+        lane(stripB, h / 2 + 1f, h - 2f)
         // Onde o grave vira.
         if (tr.style == MixStyle.BASS_SWAP) {
             val sx = x(p.leadMs + (tr.swapAt * p.overlapMs).toInt())
             drawLine(Palette.keyInk, Offset(sx, 0f), Offset(sx, h), 2f)
         }
+        val pos = posNow()
         drawLine(Palette.text, Offset(x(pos), 0f), Offset(x(pos), h), 2f)
     }
 }
@@ -599,6 +609,19 @@ private fun TakeBar(desk: SetDesk, tr: Transition, playing: Boolean) {
  * baixo), o ECHO e o fader (arrastar). Mexer vale na hora e grava ([SetDesk.setControl]); o que está na sua mão fica
  * laranja, o automático azul. AUTO devolve o canal ao automático dali em diante.
  */
+@Composable
+private fun MixerNow(desk: SetDesk, tr: Transition, p: MixPreview?) {
+    // O que o mixer mostra: o automático, a mixagem em ensaio e a mão agora — o mesmo que se ouve. Lê a posição aqui
+    // dentro: a cada quadro só o mixer recompõe.
+    val pos = desk.cursorMs
+    val pass = desk.mixPlayer?.pass
+    @Suppress("UNUSED_EXPRESSION") desk.touchedNow
+    val levels = p?.levelsAt(pos, tr, desk.draftTake, pass) ?: Levels()
+    val bar = p?.relBar(pos) ?: 0.0
+    val hand: (Ctl) -> Boolean = { c -> pass?.at(c, bar) != null || desk.draftTake?.at(c, bar) != null }
+    MixerPanel(levels, hand, enabled = p != null, onSet = { c, v -> desk.setControl(c, v) }, onRelease = { desk.releaseDeck(it) })
+}
+
 @Composable
 private fun MixerPanel(lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, onSet: (Ctl, Float) -> Unit, onRelease: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth().height(172.dp).padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -801,9 +824,9 @@ private fun SyncPanel(desk: SetDesk, tr: Transition, p: MixPreview?) {
  * quantos compassos faltam. É o mesmo que a prévia faz no mixer acima.
  */
 @Composable
-private fun StepsPanel(tr: Transition, p: MixPreview?, pos: Int) {
+private fun StepsPanel(tr: Transition, p: MixPreview?, posNow: () -> Int) {
     val steps = remember(tr) { os.deckbridge.manager.mix.MixGuide.steps(tr) }
-    val bar = if (p == null) -1.0 else (pos - p.leadMs) / p.barMsA
+    val bar = if (p == null) -1.0 else (posNow() - p.leadMs) / p.barMsA
     val (now, next) = os.deckbridge.manager.mix.MixGuide.at(steps, bar)
     Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).rbPanel().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -858,11 +881,11 @@ private fun NotePanel(desk: SetDesk, tr: Transition) {
 
 /** Fileira de transporte: pular compassos e PLAY/PAUSE grande, verde como no player. */
 @Composable
-private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSeek: (Int) -> Unit, pos: Int, jumps: Boolean, loop: Boolean = false, onLoop: () -> Unit = {}) {
+private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSeek: (Int) -> Unit, pos: () -> Int, jumps: Boolean, loop: Boolean = false, onLoop: () -> Unit = {}) {
     val bar = p?.barMsA ?: 2000.0
     Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        PadButton("◀◀ 4", Modifier.weight(1f)) { onSeek(pos - (4 * bar).toInt()) }
-        PadButton("◀ 1", Modifier.weight(1f)) { onSeek(pos - bar.toInt()) }
+        PadButton("◀◀ 4", Modifier.weight(1f)) { onSeek(pos() - (4 * bar).toInt()) }
+        PadButton("◀ 1", Modifier.weight(1f)) { onSeek(pos() - bar.toInt()) }
         Box(
             // A ação principal da tela maior que as outras e de outra cor: acha-se de relance (pesquisa do Material 3
             // Expressive, Google 2025; ver docs/design-referencias.md).
@@ -870,8 +893,8 @@ private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSe
                 .border(BorderStroke(1.dp, if (playing) Palette.blue else Palette.playInk.copy(alpha = 0.4f)), RbShape).clickable(enabled = p != null, onClick = onPlay),
             contentAlignment = Alignment.Center,
         ) { Text(if (playing) "❚❚ PAUSE" else "▶ PLAY", color = if (playing) Palette.text else Palette.playInk, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
-        PadButton("1 ▶", Modifier.weight(1f)) { onSeek(pos + bar.toInt()) }
-        PadButton("4 ▶▶", Modifier.weight(1f)) { onSeek(pos + (4 * bar).toInt()) }
+        PadButton("1 ▶", Modifier.weight(1f)) { onSeek(pos() + bar.toInt()) }
+        PadButton("4 ▶▶", Modifier.weight(1f)) { onSeek(pos() + (4 * bar).toInt()) }
         // Repetir a troca: ensaiar de novo, mexendo, até achar o jeito.
         PadButton("LOOP", Modifier.weight(0.9f), on = loop, enabled = p != null) { onLoop() }
     }

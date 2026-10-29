@@ -1315,3 +1315,16 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Núcleo: `AudioIo` lê WAV do disco por partes (`RandomAccessFile`, blocos de 256 KB): o trecho lê só o trecho; o mono da análise só guarda a saída. Também lê WAV de 24/32 bits e float direto (antes ia para o MediaCodec).
 - Celular: a thread da prévia ao vivo trata `Throwable`: um erro ali para a prévia e avisa, sem fechar o app.
 - Evidência: núcleo `AudioIoTest` +2 (trecho igual ao leitor antigo; 24 bits, mono e float; 1 s de um WAV de 30 s aloca < 1,5 MB e o mono < 4 MB). A queda em si não foi reproduzida em aparelho (`BLOCKED_HARDWARE`): se voltar a cair, o log do Android (`adb logcat`) diz a causa.
+
+## 2026-10-29 — Revisão de bugs e memória no MIX e na prévia (0.28.3)
+
+Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ouvir a mixagem entre duas faixas) e "otimize essa gestão de memória para não dar OutOfMemory". O que a revisão do caminho achou e o que mudou:
+
+- **Tela MIX recompunha inteira a cada quadro tocando.** A posição era lida no topo da tela, então 60 vezes por segundo rodavam de novo o plano do set inteiro (`mixIndex` → `plan`), a checagem do set (`issues`), o resumo e as abas, e a miniatura refazia as duas ondas inteiras. Agora só lê a posição quem desenha a cabeça (ondas, contadores, passo, mixer), por uma função; a miniatura faz as ondas uma vez por prévia e largura; o pico da onda é medido uma vez.
+- **Arrastar a onda tocando pulava para trás**: o gesto guardava a posição do começo do arrasto. **Tocar na onda tocando se perdia**: o detector de toque reiniciava a cada quadro. Os dois leem a posição na hora do gesto.
+- **AudioTrack solto pela thread da tela no meio de um `write()`** (queda nativa em algumas versões do Android): agora a thread do áudio solta o AudioTrack e a fonte ao sair; `halt()` só pede para parar.
+- **Loop vazio** (fim antes do começo) deixava a thread do áudio numa volta sem fim: vale como sem loop.
+- **Pico de memória da prévia**: cada passo (trecho lido, esticado, com loop, a onda) em função própria, sem os intermediários vivos juntos; a análise da troca (ACHAR A TROCA) espera a prévia acabar de montar em vez de ler as duas faixas ao mesmo tempo.
+- **Gravação da mão do DJ**: a cópia para a thread do áudio copiava todas as fileiras a cada movimento do dedo; agora só a que mudou.
+- **Tarefas de fundo** (Analisar todas, Marcar pontos, teste de áudio) e a gravação silenciosa: falta de memória vira aviso, não fecha o app. A importação analisa uma faixa por vez quando o Android dá menos de 400 MB ao app.
+- Evidência: núcleo `MemoryTest` (a prévia de um WAV de 7 min aloca o mesmo que a de um de 70 s; antes lia os 74 MB duas vezes), `AudioIoTest`, `MixTest`, `MixTakeTest`; demais suítes na entrada de commit. Não reproduzido em aparelho (`BLOCKED_HARDWARE`).
