@@ -141,16 +141,9 @@ private fun MixContent(app: StudioHost) {
             DeckWave(p, p?.waveB, pos, gb, isA = false, height = waveH, tr = tr, shiftMs = p?.shiftMs(tr) ?: 0.0, phrases = pb) { desk.seekMix(it) }
         }
         val tabs = @Composable {
-            // Abas de texto com sublinhado (como as abas de baixo do app): não parecem os botões do FX e do encaixe.
-            Row(Modifier.fillMaxWidth().border(BorderStroke(0.5.dp, Palette.line))) {
-                for ((pg, label) in listOf(MixPage.MIXER to "MIXER", MixPage.TURN to "TROCA", MixPage.SETTINGS to "AJUSTAR")) {
-                    val on = page == pg
-                    Box(Modifier.weight(1f).height(40.dp).clickable { page = pg }, contentAlignment = Alignment.Center) {
-                        Text(label, color = if (on) Palette.blue else Palette.mutedBright, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-                        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.7f).height(3.dp).background(if (on) Palette.blue else Palette.bg))
-                    }
-                }
-            }
+            // O mesmo seletor de abas do app todo (texto com traço embaixo): não parece os botões do FX e do encaixe.
+            val pages = listOf(MixPage.MIXER, MixPage.TURN, MixPage.SETTINGS)
+            os.deckbridge.shared.UnderlineTabs(listOf("MIXER", "TROCA", "AJUSTAR"), pages.indexOf(page), { page = pages[it] })
         }
         val pageContent = @Composable {
             when (page) {

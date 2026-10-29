@@ -50,6 +50,17 @@ class DesignSystemTest {
         assertTrue(offenders.isEmpty(), offenders.joinToString("\n"))
     }
 
+    @Test fun `abas pelo seletor de abas compartilhado`() {
+        // Todas as abas (faixa aberta, MIX, mixer do modo DJ, barra de baixo) usam o UnderlineTabs: um jeito só, diferente dos
+        // botões. Quem mexe nas abas não faz outro seletor: o modo DJ e o app chamam o mesmo componente.
+        val users = listOf(
+            "src/main/kotlin/os/deckbridge/manager/mobile/DetailUi.kt", "src/main/kotlin/os/deckbridge/manager/mobile/Ui.kt",
+            "../../studio/src/os/deckbridge/manager/studio/MixUi.kt", "../../stage/src/os/deckbridge/android/MixerScreen.kt",
+        )
+        for (u in users) assertTrue(File(u).readText().contains("UnderlineTabs("), "$u devia usar o UnderlineTabs")
+        assertTrue(File("../../shared/src/os/deckbridge/shared/UnderlineTabs.kt").isFile)
+    }
+
     @Test fun `fundo preto e texto claro com contraste suficiente`() {
         fun lum(c: Int): Double = os.deckbridge.logic.relativeLuminance(c)
         val ratio = { a: Int, b: Int -> (maxOf(lum(a), lum(b)) + 0.05) / (minOf(lum(a), lum(b)) + 0.05) }

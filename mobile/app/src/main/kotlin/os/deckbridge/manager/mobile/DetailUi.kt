@@ -75,12 +75,8 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
             }
             if (onBack == null) TextButton(onClick = { app.detailId = null }) { Text("✕", fontSize = 16.sp) }
         }
-        // Três abas curtas no lugar de uma página longa.
-        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            DetailPage.values().forEach { pg ->
-                FilterChip(selected = app.detailPage == pg, onClick = { app.detailPage = pg }, label = { Text(pg.title) }, modifier = Modifier.weight(1f))
-            }
-        }
+        // Três abas curtas no lugar de uma página longa (o mesmo seletor de abas do app todo).
+        os.deckbridge.shared.UnderlineTabs(DetailPage.values().map { it.title }, app.detailPage.ordinal, { app.detailPage = DetailPage.values()[it] })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when (app.detailPage) {
                 // Na ordem de quem marca: o que a faixa é, ouvir, dar nota e cor, pôr nas playlists.

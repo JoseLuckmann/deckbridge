@@ -92,9 +92,8 @@ private fun TightMixer(
     Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             TextInk("MIXER", color = Color(StagePalette.accentBlue), fontSize = 16.sp, weight = FontWeight.Bold, modifier = Modifier.width(72.dp))
-            MIXER_PAGES.forEachIndexed { index, name ->
-                UtilityButton(name, { page = index }, selected = page == index, modifier = Modifier.weight(1f))
-            }
+            // O mesmo seletor de abas do app todo, em vez de botões.
+            os.deckbridge.shared.UnderlineTabs(MIXER_PAGES, page, { page = it }, Modifier.weight(1f), height = 40.dp)
             UtilityButton("FECHAR", onClose)
         }
         when (page) {

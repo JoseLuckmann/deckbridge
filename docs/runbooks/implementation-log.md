@@ -1441,3 +1441,10 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - Pedido do dono: os botões do FX (efeito e canal) ficaram parecidos com o seletor das abas; trocar o seletor das abas.
 - MIXER, TROCA e AJUSTAR viraram abas de texto com sublinhado (o mesmo jeito da barra de baixo do app), sem caixa de botão; o FX e o encaixe seguem com os botões.
 - Evidência: `SetFlowTest`, `MixHandTest`, `MixLayoutTest`; captura mobile-76.
+
+## 2026-10-29 — Um seletor de abas para o app todo (0.33.0)
+
+- Pedido do dono: todos os lugares com aba adotam o padrão novo (texto com traço embaixo).
+- `shared/UnderlineTabs`: um componente só, usado na faixa aberta (MARCAR/CUES/INFO, antes chips), no MIX (MIXER/TROCA/AJUSTAR), no mixer do modo DJ (CANAIS/MASTER/OPÇÕES, antes botões) e na barra de baixo do app (MÚSICAS/PLAYLISTS/PENDRIVE, mantendo o destaque do guia e o DJ e o ⋯ ao lado). Os filtros (FilterChip) e os seletores do FX continuam com caixa: não são abas.
+- Teste: `DesignSystemTest` confere que os quatro lugares usam o `UnderlineTabs`.
+- Evidência: `SetFlowTest`, `MixHandTest`, `MixLayoutTest`, `KeepFlowTest`, `NewcomerFlowTest`, `UxFlowTest`, `TouchTargetTest`, `ScreenshotTest` e o modo DJ.

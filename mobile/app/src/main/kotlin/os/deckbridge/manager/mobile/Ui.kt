@@ -261,15 +261,12 @@ private fun NavBar(app: ManagerApp, actions: Actions) {
     Row(Modifier.fillMaxWidth().background(Palette.surface).border(BorderStroke(0.5.dp, Palette.line)).height(56.dp)) {
         // MARCAR não tem aba: é o primeiro botão da fileira de filtros de MÚSICAS.
         // O MENU não é uma aba como as outras: fica no fim, discreto (o que mora lá não se usa sempre).
-        listOf(Tab.LIBRARY, Tab.PLAYLISTS, Tab.USB).forEach { t ->
-            val on = app.tab == t
-            Box(Modifier.weight(1f).fillMaxHeight().clickable { app.tab = t }, contentAlignment = Alignment.Center) {
-                Box(Modifier.align(Alignment.TopCenter).fillMaxWidth(0.6f).height(2.dp).background(if (on) Palette.blue else Palette.surface))
-                Row(Modifier.spotlight(spotlit(app, t)).padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(t.short(), color = if (on) Palette.blue else Palette.mutedBright, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1)
-                }
-            }
-        }
+        // As abas, no mesmo seletor do app todo (a que está aberta, com o traço; no MENU, nenhuma).
+        val tabs = listOf(Tab.LIBRARY, Tab.PLAYLISTS, Tab.USB)
+        os.deckbridge.shared.UnderlineTabs(
+            tabs.map { it.short() }, tabs.indexOf(app.tab), { app.tab = tabs[it] }, Modifier.weight(3f), height = 56.dp, fontSize = 12.sp,
+            marker = { Modifier.spotlight(spotlit(app, tabs[it])).padding(horizontal = 4.dp, vertical = 2.dp) }, framed = false,
+        )
         // O outro modo do app, à mão na barra principal (também no MENU): tocar.
         Box(Modifier.weight(1f).fillMaxHeight().clickable { actions.toDj() }.semantics { contentDescription = "Modo DJ" }, contentAlignment = Alignment.Center) {
             Text("DJ ›", color = Palette.orange, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1)
