@@ -231,7 +231,8 @@ fun TrackRow(app: ManagerApp, t: TrackItem, selected: Boolean) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                // Duas linhas: nomes longos de DJ ("Título (Nome da Mix)") cabem sem cortar no meio.
+                Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             }
             Text(t.artist.ifEmpty { "—" }, color = dim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

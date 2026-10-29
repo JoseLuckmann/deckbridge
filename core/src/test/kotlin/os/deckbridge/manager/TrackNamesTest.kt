@@ -2,6 +2,7 @@ package os.deckbridge.manager
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import os.deckbridge.manager.organize.TrackNames
 import os.deckbridge.manager.organize.TrackNames.Names
 
@@ -49,5 +50,22 @@ class TrackNamesTest {
         val a = TrackNames.key(c("Cola (Original Mix)", "CamelPhat & Elderbrook", "x.mp3"))
         val b = TrackNames.key(c("", "", "02_camelphat_&_elderbrook_-_cola.mp3"))
         assertEquals(a, b)
+    }
+
+    @Test fun `sem separador, separa pelo artista que a biblioteca ja conhece`() {
+        val known = TrackNames.knownArtists(listOf("Duke Dumont", "Purple Disco Machine & Sophie", "Jan Blomqvist", "Adriatique"))
+        assertTrue("Purple Disco Machine" in known && "Sophie" in known)
+        assertEquals(Names("Your Love", "Duke Dumont, Purple Disco Machine"), TrackNames.splitByKnown("Duke Dumont, Purple Disco Machine Your Love", known))
+        assertEquals(Names("The Space In Between", "Jan Blomqvist"), TrackNames.splitByKnown("Jan Blomqvist The Space In Between", known))
+        // Nenhum conhecido no começo, ou só o nome: não separa.
+        assertEquals(null, TrackNames.splitByKnown("Rebuke Along Came Polly", known))
+        assertEquals(null, TrackNames.splitByKnown("Adriatique", known))
+        // "Jan" não casa com "Jan Blomqvist" pela metade de uma palavra.
+        assertEquals(null, TrackNames.splitByKnown("Janet Jackson Again", known))
+    }
+
+    @Test fun `o dj toca onde o artista acaba`() {
+        assertEquals(Names("Along Came Polly", "Rebuke"), TrackNames.splitAtWord("Rebuke Along Came Polly", 1))
+        assertEquals(Names("Yours", "Wolfram, Josh Ludlow"), TrackNames.splitAtWord("Wolfram, Josh Ludlow Yours", 3))
     }
 }

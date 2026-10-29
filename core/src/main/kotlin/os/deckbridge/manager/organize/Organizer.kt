@@ -105,6 +105,16 @@ object Organizer {
             if (!patch.isEmpty) out += Suggestion(Rule.FILENAME, listOf(t.id), "\"${t.title}\"", changes(t, patch), Edit.SetTracks(listOf(t.id), patch))
         }
 
+        // 3b. Sem artista e sem separador no nome: se o título começa com um artista que a biblioteca já conhece, separa.
+        val known = TrackNames.knownArtists(view.tracks.map { it.artist })
+        for (t in view.tracks.filter { it.artist.isBlank() }) {
+            val n = TrackNames.clean(t.title, t.artist, t.fileName)
+            if (n.artist.isNotBlank()) continue
+            val s = TrackNames.splitByKnown(n.title, known) ?: continue
+            val patch = TrackPatch(title = s.title, artist = s.artist)
+            out += Suggestion(Rule.FILENAME, listOf(t.id), "\"${t.title}\"", changes(t, patch) + " (artista que a biblioteca já conhece)", Edit.SetTracks(listOf(t.id), patch))
+        }
+
         // 4. Repetidas pelo nome limpo e a duração (o áudio é comparado na tela de repetidas, com a impressão digital).
         for (g in Duplicates.find(view, { null }, { t -> view.entries.count { t.id in it.value } })) {
             val rest = g.rest

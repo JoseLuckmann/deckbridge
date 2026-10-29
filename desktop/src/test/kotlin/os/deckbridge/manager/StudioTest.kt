@@ -197,6 +197,8 @@ class StudioTest {
             waitForIdle()
         }
         assertNotNull(studio.sets.mixPreview, studio.sets.mixError ?: "a prévia não ficou pronta")
+        // O ritmo e o grave ficam na aba AJUSTAR do MIX (TROCA abre com o passo e o resumo).
+        click("AJUSTAR")
         click("LENTA")
         click("8 COMP.")
         assertEquals(8, studio.sets.mixing?.swapBars)

@@ -1287,3 +1287,11 @@ O equipamento físico fica para o fim. Simulação não foi montada (T075–T077
 - Topo novo (VIRADA n/N, sai → entra, ◀ ▶ entre viradas: `SetDesk.mixIndex`/`stepMix`); resumo (estilo, tom, BPM, nota, onde a troca acontece pelas frases, grave, drop, loops, aviso) com ✓ BOA / ↻ REFAZER (`SetDesk.setMark`); decks em linha fina (`DeckLine`) no lugar dos cartões grandes; frases e ponto do grave desenhados nas ondas (`SetDesk.cachedProfile`); abas TROCA / MIXER / AJUSTAR (o porquê saiu de ACHAR A TROCA e foi para TROCA; "AJUSTAR ▾" virou "MAIS ▾").
 - Testes ajustados às abas novas: `SetFlowTest`, `MixHandTest`, `MixFinderUiTest`, `LargeTextTest`; capturas mobile-39 (TROCA), mobile-47 (MIXER), mobile-53 (AJUSTAR), mobile-18 (deitado).
 - Não verificado em aparelho (tamanho real de toque e leitura sob luz de pista).
+
+## 2026-10-29 — Nomes sem separador e nome completo à vista (0.27.0)
+
+- Relato do dono: faixas sem artista com nomes sem separador ("Duke Dumont, Purple Disco …") e nomes sempre cortados, sem como ver o nome completo ou o arquivo.
+- Núcleo: `TrackNames.knownArtists`, `splitByKnown` (artista conhecido, ou lista "A, B" de conhecidos, por palavras inteiras), `splitAtWord`; `Organizer` sugere a divisão pelo artista conhecido para faixas sem artista.
+- Celular: título em até duas linhas na lista; topo da faixa aberta sem cortar; INFO com nome completo e arquivo (selecionáveis); SEPARAR ARTISTA E TÍTULO (palavras como botões, prévia, APLICAR), também no topo de MARCAR quando falta o artista.
+- Computador: o teste do MIX passou a abrir a aba AJUSTAR antes de mexer no ritmo (a aba nova da tela MIX).
+- Evidência: núcleo `TrackNamesTest` (+2: artista conhecido e lista; dividir na palavra); celular `LibraryCleanupTest` (+1: sugestão em Arrumar nomes, nome inteiro no topo, separar tocando, INFO com arquivo; capturas mobile-68, mobile-69).

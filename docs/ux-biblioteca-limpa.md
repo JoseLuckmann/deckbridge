@@ -57,3 +57,20 @@ marcar deveria ficar dentro da biblioteca de músicas mesmo, não precisa de um 
 - Haitsma, J., Kalker, T. (2002). *A Highly Robust Audio Fingerprinting System.* ISMIR 2002.
 - Norman, D. (2013). *The Design of Everyday Things* (ed. revista). Basic Books.
 - Nielsen, J. (1994). *10 Usability Heuristics for User Interface Design.* Nielsen Norman Group.
+
+## Nomes sem separador e o nome completo à vista (0.27.0)
+
+Relato do dono (2026-10-29): algumas faixas "ele não identificou bem" ("Duke Dumont, Purple Disco …", "Jan Blomqvist The
+Space In B…", sem artista) e "não consigo ver o nome da música ou artista completo em lugar nenhum; ele sempre tranca os
+nomes e não tem uma maneira de ver o nome do ficheiro".
+
+- **Sem separador não há regra segura.** "Rebuke Along Came Polly" pode ser "Rebuke – Along Came Polly" ou "Rebuke Along
+  – Came Polly"; chutar erra. Então: (1) se o começo do título é um artista que a biblioteca já conhece (o campo artista
+  das outras faixas, e cada nome das listas "A, B & C"), Arrumar nomes sugere a divisão (`TrackNames.splitByKnown`);
+  (2) na faixa aberta, SEPARAR ARTISTA E TÍTULO mostra as palavras do título como botões: um toque na última palavra
+  do artista, aparece como fica, APLICAR (`TrackNames.splitAtWord`). Cada artista separado à mão passa a ser conhecido e
+  ajuda nas próximas.
+- **Nome completo.** A lista mostra o título em até duas linhas; o topo da faixa aberta mostra título e artista inteiros;
+  a aba INFO mostra título, artista, álbum e o arquivo da biblioteca (caminho inteiro), selecionáveis para copiar.
+- Limite: o nome original do arquivo de antes da importação não é guardado; o arquivo na biblioteca leva o nome do
+  título da importação.

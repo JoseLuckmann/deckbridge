@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -61,8 +62,9 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
         Row(Modifier.fillMaxWidth().background(Palette.bg).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line)).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) TextButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Voltar" }) { Text("‹", fontSize = 22.sp) }
             Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                Text(t.artist.ifEmpty { "sem artista" }, color = Palette.muted, fontSize = 13.sp, maxLines = 1)
+                // O nome inteiro, sem cortar: a faixa aberta é onde se lê o nome completo.
+                Text(t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text(t.artist.ifEmpty { "sem artista" }, color = if (t.artist.isEmpty()) Palette.orange else Palette.muted, fontSize = 13.sp)
             }
             val list = m.rows().map { it.id }
             val at = list.indexOf(t.id)
@@ -82,6 +84,8 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
             when (app.detailPage) {
                 // Na ordem de quem marca: o que a faixa é, ouvir, dar nota e cor, pôr nas playlists.
                 DetailPage.MARK -> {
+                    // Sem artista: separar já aqui, antes de marcar (um toque na palavra onde o artista acaba).
+                    if (t.artist.isBlank()) NameSplitter(app, t)
                     StatsRow(t)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         PlayableWave(app, t)
@@ -92,7 +96,11 @@ fun DetailPanel(app: ManagerApp, t: TrackItem, onBack: (() -> Unit)? = null) {
                     TrackPlaces(app, t.id)
                 }
                 DetailPage.CUES -> CueSection(app, t)
-                DetailPage.INFO -> Fields(app, t)
+                DetailPage.INFO -> {
+                    FullName(t)
+                    NameSplitter(app, t)
+                    Fields(app, t)
+                }
             }
             Spacer(Modifier.height(16.dp))
         }
@@ -299,6 +307,69 @@ private fun Fields(app: ManagerApp, t: TrackItem) {
             enabled = changed, modifier = Modifier.fillMaxWidth().height(48.dp),
         ) { Text("APLICAR") }
         OutlinedButton(onClick = { app.analyze(t, force = m.hasAnalysis(t)) }, modifier = Modifier.fillMaxWidth().height(44.dp)) { Text(if (m.hasAnalysis(t)) "REANALISAR" else "ANALISAR") }
-        Text(t.filePath.substringAfterLast('/'), color = Palette.muted, fontSize = 11.sp, maxLines = 1)
+    }
+}
+
+/** O nome completo, sem cortar e selecionável (dá para copiar): título, artista, álbum e o arquivo na biblioteca. */
+@Composable
+private fun FullName(t: TrackItem) {
+    androidx.compose.foundation.text.selection.SelectionContainer {
+        Column(Modifier.fillMaxWidth().rbPanel().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            @Composable fun line(label: String, value: String) {
+                Text(label, color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+                Text(value.ifEmpty { "—" }, color = if (value.isEmpty()) Palette.muted else Palette.text, fontSize = 14.sp)
+            }
+            line("TÍTULO", t.title)
+            line("ARTISTA", t.artist)
+            if (t.album.isNotEmpty()) line("ÁLBUM", t.album)
+            line("ARQUIVO", t.filePath.replace('\\', '/').trimStart('/'))
+        }
+    }
+}
+
+/**
+ * Separar artista e título quando o nome veio sem separador ("Duke Dumont, Purple Disco Machine Your Love"): as palavras
+ * do título viram botões e o DJ toca na última palavra do artista; aparece como fica antes de aplicar. Se o começo é um
+ * artista que a biblioteca já conhece, já vem marcado.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun NameSplitter(app: ManagerApp, t: TrackItem) {
+    val m = app.model
+    val words = remember(t.title) { t.title.trim().split(Regex("\\s+")).filter { it.isNotEmpty() } }
+    if (words.size < 2) return
+    val suggested = remember(t.id, m.view) {
+        val known = os.deckbridge.manager.organize.TrackNames.knownArtists(m.view?.tracks.orEmpty().filter { it.id != t.id }.map { it.artist })
+        os.deckbridge.manager.organize.TrackNames.splitByKnown(t.title, known)?.artist?.split(' ')?.size
+    }
+    var cut by remember(t.id, suggested) { mutableStateOf(suggested ?: 0) }
+    Column(Modifier.fillMaxWidth().rbPanel().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("SEPARAR ARTISTA E TÍTULO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+        Text(
+            if (suggested != null) "O começo é um artista que a biblioteca já conhece. Confira e aplique." else "Toque na última palavra do artista.",
+            color = Palette.mutedBright, fontSize = 12.sp,
+        )
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            words.forEachIndexed { i, w ->
+                val inArtist = i < cut
+                Box(
+                    Modifier.heightIn(min = 36.dp).clip(RbShape).background(if (inArtist) Palette.blueActiveFill else Palette.surfaceHigh)
+                        .border(androidx.compose.foundation.BorderStroke(1.dp, if (inArtist) Palette.blue else Palette.line), RbShape)
+                        .clickable(enabled = i < words.lastIndex) { cut = if (cut == i + 1) 0 else i + 1 }.padding(horizontal = 8.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text(w, color = if (inArtist) Palette.text else Palette.mutedBright, fontSize = 14.sp) }
+            }
+        }
+        if (cut > 0) {
+            val n = os.deckbridge.manager.organize.TrackNames.splitAtWord(t.title, cut)
+            Text("Artista: ${n.artist}", color = Palette.text, fontSize = 13.sp)
+            Text("Título: ${n.title}", color = Palette.text, fontSize = 13.sp)
+            Button(
+                onClick = {
+                    if (m.submit(Edit.SetTracks(listOf(t.id), TrackPatch(title = n.title, artist = n.artist)), "Separar artista de \"${t.title}\"")) app.did("Artista: ${n.artist}")
+                },
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+            ) { Text("APLICAR") }
+        }
     }
 }

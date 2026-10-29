@@ -140,4 +140,40 @@ class LibraryCleanupTest {
         a.model.undo()
         assertNotNull(a.model.view!!.track(two.id))
     }
+
+    @Test fun aNameWithoutSeparatorIsSplitByTappingAndTheFullNameShows() {
+        val a = app()
+        val v = a.model.view!!
+        val night = v.tracks.first { it.title == "Night Signal" }
+        // Como chegam alguns arquivos: artista e título sem separador nenhum; "Aurora Drive" a biblioteca já conhece.
+        a.model.submit(Edit.SetTracks(listOf(night.id), TrackPatch(title = "Aurora Drive Night Signal (Extended Club Mix With A Very Long Name)", artist = "")), "sujo")
+        assertNotNull(a.model.apply(null))
+        // Arrumar nomes já sugere pelo artista conhecido.
+        a.openTidy()
+        assertTrue(assertNotNull(a.tidy).any { night.id in it.trackIds && (it.edit as? Edit.SetTracks)?.patch?.artist == "Aurora Drive" })
+        a.tidy = null
+        a.detailId = night.id
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        rule.waitForIdle()
+        // O nome inteiro no topo da faixa aberta, sem cortar.
+        rule.onNodeWithText("Aurora Drive Night Signal (Extended Club Mix With A Very Long Name)").assertExists()
+        rule.onNodeWithText("SEPARAR ARTISTA E TÍTULO").assertExists()
+        rule.onNodeWithText("Artista: Aurora Drive").assertExists()
+        rule.onRoot().captureRoboImage(File(out, "mobile-68-vertical-separar-artista.png").path)
+        // O DJ prefere outra divisão: toca na primeira palavra (só "Aurora") e depois volta a "Drive".
+        rule.onNodeWithText("Aurora").performClick()
+        rule.onNodeWithText("Artista: Aurora").assertExists()
+        rule.onNodeWithText("Drive").performClick()
+        rule.onNodeWithText("APLICAR").performClick()
+        rule.waitForIdle()
+        val now = a.model.view!!.track(night.id)!!
+        assertEquals("Aurora Drive", now.artist)
+        assertEquals("Night Signal (Extended Club Mix With A Very Long Name)", now.title)
+        // Na aba INFO: título, artista e o arquivo inteiros.
+        a.detailPage = DetailPage.INFO
+        rule.waitForIdle()
+        rule.onNodeWithText("ARQUIVO").assertExists()
+        rule.onNodeWithText(now.filePath.replace('\\', '/').trimStart('/')).assertExists()
+        rule.onRoot().captureRoboImage(File(out, "mobile-69-vertical-nome-completo.png").path)
+    }
 }

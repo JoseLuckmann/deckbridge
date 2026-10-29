@@ -131,6 +131,61 @@ object TrackNames {
         return Names(t.ifEmpty { tidy(title).ifEmpty { stem } }, a)
     }
 
+    /**
+     * Os artistas que a biblioteca já conhece: o campo artista de cada faixa e cada nome das listas ("A, B & C feat. D"
+     * dá A, B, C e D, e também "A, B & C"). Para separar os nomes de arquivo sem separador ("Duke Dumont Your Love").
+     */
+    fun knownArtists(artists: Iterable<String>): Set<String> {
+        val out = HashSet<String>()
+        for (raw in artists) {
+            val a = tidy(raw)
+            if (a.length < 2) continue
+            out += a
+            a.split(Regex("""\s*(?:,|&|\bfeat\.|\bx\b|\bvs\.?|\band\b|\be\b)\s*""", RegexOption.IGNORE_CASE)).map { tidy(it) }.filter { it.length >= 2 }.forEach { out += it }
+        }
+        return out
+    }
+
+    /**
+     * Separa "Artista Título" quando o começo do título é um artista conhecido (ou uma lista deles, "A, B"): o artista
+     * mais longo que casa por palavras inteiras, e sobra título. Null quando nenhum casa.
+     */
+    fun splitByKnown(title: String, known: Set<String>): Names? {
+        val t = tidy(title)
+        val lower = t.lowercase()
+        fun startsAt(pos: Int, name: String): Boolean {
+            val n = name.lowercase()
+            if (!lower.startsWith(n, pos)) return false
+            val end = pos + n.length
+            return end < lower.length && !lower[end].isLetterOrDigit()
+        }
+        val byLength = known.sortedByDescending { it.length }
+        var pos = 0
+        var artistEnd = -1
+        // Um artista conhecido, e depois quantos ", B" / " & B" conhecidos vierem.
+        while (true) {
+            val name = byLength.firstOrNull { startsAt(pos, it) } ?: break
+            artistEnd = pos + name.length
+            val rest = t.substring(artistEnd)
+            val joiner = Regex("""^\s*(,|&|feat\.|x)\s+""", RegexOption.IGNORE_CASE).find(rest) ?: break
+            val next = artistEnd + joiner.value.length
+            if (byLength.none { startsAt(next, it) }) break
+            pos = next
+        }
+        if (artistEnd <= 0) return null
+        val artist = tidy(t.substring(0, artistEnd))
+        val rest = tidy(t.substring(artistEnd).trimStart(' ', '-', ',', '–'))
+        if (rest.isEmpty()) return null
+        return Names(rest, artist)
+    }
+
+    /** Separa nas primeiras [words] palavras: elas são o artista, o resto é o título (o DJ toca onde o artista acaba). */
+    fun splitAtWord(title: String, words: Int): Names {
+        val parts = tidy(title).split(' ')
+        val k = words.coerceIn(1, (parts.size - 1).coerceAtLeast(1))
+        return Names(parts.drop(k).joinToString(" "), parts.take(k).joinToString(" ").trimEnd(',', '-', ' '))
+    }
+
     /** Chave para comparar nomes (sem caixa, acentos, pontuação, "feat." e o nome da mix). */
     fun key(n: Names): String {
         fun base(x: String) = java.text.Normalizer.normalize(x, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
