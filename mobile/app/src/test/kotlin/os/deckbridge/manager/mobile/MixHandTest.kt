@@ -56,7 +56,8 @@ class MixHandTest {
 
     /** Põe um knob ou fader em [v] como o leitor de tela (e o dedo) faz: pela ação de ajustar o valor. */
     private fun turn(name: String, v: Float) {
-        rule.onNode(hasContentDescription(name)).performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(v) }
+        // O mixer ocupa a altura e não rola no celular: sem rolar.
+        rule.onNode(hasContentDescription(name)).performSemanticsAction(SemanticsActions.SetProgress) { it(v) }
         rule.waitForIdle()
     }
 
@@ -69,10 +70,8 @@ class MixHandTest {
         a.sets.openMix(tr)
         waitMix(a)
         val p = assertNotNull(a.sets.mixPreview, a.sets.mixError)
-        // A mão do DJ fica na aba MIXER.
-        rule.onNodeWithText("MIXER").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithText("AUTOMÁTICO").assertExists()
+        // A mão do DJ fica na aba MIXER (a que abre); no automático não há aviso nenhum.
+        rule.onNodeWithText("DESFAZER").assertDoesNotExist()
         // Na saída, o DJ abre o grave da que entra (o automático o deixa fechado até a troca).
         a.sets.seekMix(p.leadMs)
         rule.waitForIdle()
@@ -80,7 +79,7 @@ class MixHandTest {
         turn("LOW CH 2", 1f)
         assertEquals(1f, p.levelsAt(p.leadMs + 500, a.sets.mixing!!, a.sets.draftTake).bLow, 0.001f)
         assertTrue(a.sets.takeChanged)
-        rule.onNodeWithText("● SUA MÃO").assertExists()
+        rule.onNodeWithText("GUARDAR").assertExists()
         // E põe um filtro na que sai.
         turn("FILTER CH 1", 0.85f)
         rule.onRoot().captureRoboImage(File(out, "mobile-60-vertical-mix-sua-mao.png").path)
@@ -93,13 +92,15 @@ class MixHandTest {
         rule.waitForIdle()
         val kept = assertNotNull(a.sets.mixing!!.take)
         assertNotNull(kept.at(Ctl.B_LOW, 1.0))
-        rule.onNodeWithText("SUA MIXAGEM").assertExists()
+        rule.onNodeWithText("VOLTAR AO AUTOMÁTICO").assertExists()
         // Guardada no plano do set: a troca toca assim (e o mix de teste do set também).
         assertEquals(kept, a.sets.plan().first { it.fromId == tr.fromId && it.toId == tr.toId }.take)
         // O WAV da prévia tem a mão: no ponto de saída o grave da que entra já soa.
         assertTrue(a.sets.mixFile!!.isFile)
 
-        // Encaixe à mão: vale na hora, sem ler as faixas de novo (a mesma prévia).
+        // Encaixe à mão (na aba AJUSTAR): vale na hora, sem ler as faixas de novo (a mesma prévia).
+        rule.onNodeWithText("AJUSTAR").performClick()
+        rule.waitForIdle()
         rule.onNodeWithText("5 ms ▶").performScrollTo().performClick()
         rule.onNodeWithText("+1 BAT").performScrollTo().performClick()
         rule.waitForIdle()

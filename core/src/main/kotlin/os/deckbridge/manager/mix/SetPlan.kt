@@ -20,6 +20,17 @@ enum class MixStyle(val title: String) {
 }
 
 /**
+ * O efeito do botão FX de cada canal no MIX (os nomes dos Beat FX da DDJ-400). ECHO e REVERB deixam rastro depois de
+ * desligar ou de fechar o canal (bons para sair); FLANGER e ROLL mexem no som enquanto ligados.
+ */
+enum class MixFx(val label: String) {
+    ECHO("ECHO"), REVERB("REVERB"), FLANGER("FLANGER"), ROLL("ROLL");
+
+    /** Continua soando depois que o canal fecha (eco, reverb). */
+    val tail get() = this == ECHO || this == REVERB
+}
+
+/**
  * Uma transição pré-programada: a faixa [fromId] começa a sair em [outMs] (num início de compasso), a [toId] entra a
  * partir de [inMs] no mesmo instante, e as duas tocam juntas por [bars] compassos no andamento da que sai.
  */
@@ -61,6 +72,8 @@ data class Transition(
     val bLoopTimes: Int = 0,
     /** Por que a troca é assim (quando quem montou foi a busca de trocas): frases curtas, para a tela. */
     val why: List<String> = emptyList(),
+    /** O efeito do botão FX dos canais nesta troca (e o da saída com efeito, [MixStyle.ECHO]). */
+    val fx: MixFx = MixFx.ECHO,
 ) {
     /** Quantos compassos a que entra anda além do que toca (as repetições do loop dela). */
     val bLoopExtra get() = if (bLoopBars > 0 && bLoopTimes > 1) bLoopBars * (bLoopTimes - 1) else 0
@@ -335,6 +348,7 @@ object SetPlanner {
             if (t.aLoopBars > 0) p.setProperty("$n.aLoop", t.aLoopBars.toString())
             if (t.bLoopBars > 0) p.setProperty("$n.bLoop", "${t.bLoopBars}x${t.bLoopTimes}")
             if (t.why.isNotEmpty()) p.setProperty("$n.why", t.why.joinToString("|"))
+            if (t.fx != MixFx.ECHO) p.setProperty("$n.fx", t.fx.name)
         }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".novo")
@@ -364,6 +378,7 @@ object SetPlanner {
                     p.getProperty("$i.bLoop")?.substringBefore('x')?.toIntOrNull() ?: 0,
                     p.getProperty("$i.bLoop")?.substringAfter('x', "")?.toIntOrNull() ?: 0,
                     p.getProperty("$i.why")?.split('|')?.filter { it.isNotBlank() }.orEmpty(),
+                    p.getProperty("$i.fx")?.let { f -> runCatching { MixFx.valueOf(f) }.getOrNull() } ?: MixFx.ECHO,
                 )
             }.getOrNull()
         }

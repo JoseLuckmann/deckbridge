@@ -139,3 +139,24 @@ Por quê: mostrar o essencial e esconder o resto até ser pedido (Nielsen, heur�
 progressiva, Nielsen 2006); o estado e o veredito sempre à vista (heurística 1); agrupar por tarefa, cada moldura uma
 coisa (região comum, Palmer 1992); e o fluxo de validar em sequência sem sair da tela (custo de troca de contexto,
 Monsell 2003, *Task switching*, Trends in Cognitive Sciences 7(3)).
+
+
+## MIX mais simples: abre no mixer, topo de uma linha, mais efeitos (0.31.0)
+
+Pedido do dono (2026-10-29): "deveria começar na tela de mixer e não na de guia de virada"; "aquela caixa de texto que
+mostra que tá no automático não precisa existir"; "pense em outro layout, bem mais simplificado"; "adicione outros
+efeitos além do eco"; e, sobre o resumo em cima, "polui muito a tela".
+
+- **Topo de uma linha:** fechar, "1/4", A → B, o veredito como ícones (✓ boa, ↻ refazer) e ◀ ▶. Os fatos (estilo e
+  compassos, tons, BPM, nota, onde sai/entra pelas frases, grave, drop, loops, aviso) foram para a aba TROCA. As linhas
+  DECK 1/DECK 2 saíram (repetiam os nomes do topo); as ondas ficaram mais altas.
+- **Abas MIXER · TROCA · AJUSTAR, abrindo no MIXER.** MIXER: a fileira FX e o mixer; GUARDAR/DESFAZER só aparecem quando
+  a mão mexeu (e VOLTAR AO AUTOMÁTICO quando há uma mixagem sua guardada) — no automático não aparece aviso. O encaixe do
+  CH 2 foi para AJUSTAR.
+- **Transporte:** ◀ 1 · PLAY · 1 ▶ · LOOP (os saltos de 4 compassos ficam no teclado do computador).
+- **Efeitos (FX):** ECHO, REVERB, FLANGER e ROLL, os nomes dos Beat FX da DDJ-400. Um efeito por troca, nos dois canais
+  (como a unidade de Beat FX da controladora atribuída a um canal); o botão FX de cada canal liga e desliga e grava como os
+  outros controles. ECHO e REVERB deixam rastro depois que o canal fecha (bons para sair); FLANGER e ROLL mexem no som só
+  enquanto ligados. REVERB: Schroeder/Moorer (4 pentes amortecidos + 2 passa-tudo, medidas do Freeverb); FLANGER: atraso
+  de 1–7 ms que vai e volta uma vez por compasso, com realimentação; ROLL: grava meia batida ao ligar e repete. Ficam no
+  `MixDsp` do núcleo, o mesmo da prévia no celular e no computador (o motor C++ do modo DJ não roda na Biblioteca).

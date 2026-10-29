@@ -124,6 +124,8 @@ class KeepFlowTest {
         val tr = a.sets.plan().first()
         a.sets.openMix(tr)
         rule.waitForIdle()
+        // O lembrete fica na aba TROCA (o MIX abre no mixer).
+        click("TROCA")
         rule.onNodeWithText("ESCREVER").performScrollTo()
         click("ESCREVER")
         rule.onAllNodes(hasSetTextAction())[0].performTextInput("segurar o grave até o vocal")

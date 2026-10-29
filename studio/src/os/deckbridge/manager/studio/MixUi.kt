@@ -127,37 +127,41 @@ private fun MixContent(app: StudioHost) {
     val pa = desk.cachedProfile(a)
     val pb = desk.cachedProfile(b)
     var advanced by remember { mutableStateOf(false) }
-    var page by remember { mutableStateOf(MixPage.TURN) }
+    // Abre no mixer: é nele que se ouve e mexe na troca (pedido do dono). O passo a passo fica na aba TROCA.
+    var page by remember { mutableStateOf(MixPage.MIXER) }
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg).statusBarsPadding().navigationBarsPadding()) {
         val wide = maxWidth >= WIDE_DP.dp
-        // Validar uma troca é ouvir, julgar e ir para a próxima (Nielsen, heurística 8: só o que importa à vista).
-        // Em cima, o que é a troca e o veredito; no meio, as duas ondas com as frases; embaixo, uma aba por tarefa.
+        // Validar uma troca é ouvir, mexer e julgar (Nielsen, heurística 8: só o que importa à vista). Em cima uma linha só
+        // (qual troca, veredito, anterior e próxima); no meio as duas ondas com as frases; embaixo, uma aba por tarefa —
+        // o mixer primeiro. Os fatos da troca (estilo, tom, BPM, onde vira) ficam na aba TROCA, com o passo a passo.
         val decks = @Composable { waveH: Dp ->
-            DeckLine(1, a, tr, p, pos, ga, master = true)
             DeckWave(p, p?.waveA, pos, ga, isA = true, height = waveH, tr = tr, phrases = pa) { desk.seekMix(it) }
             DeckWave(p, p?.waveB, pos, gb, isA = false, height = waveH, tr = tr, shiftMs = p?.shiftMs(tr) ?: 0.0, phrases = pb) { desk.seekMix(it) }
-            DeckLine(2, b, tr, p, pos, gb, master = false, from = a)
         }
         val tabs = @Composable {
             Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                PadButton("TROCA", Modifier.weight(1f), on = page == MixPage.TURN) { page = MixPage.TURN }
                 PadButton("MIXER", Modifier.weight(1f), on = page == MixPage.MIXER) { page = MixPage.MIXER }
+                PadButton("TROCA", Modifier.weight(1f), on = page == MixPage.TURN) { page = MixPage.TURN }
                 PadButton("AJUSTAR", Modifier.weight(1f), on = page == MixPage.SETTINGS) { page = MixPage.SETTINGS }
             }
         }
         val pageContent = @Composable {
             when (page) {
+                MixPage.MIXER -> {
+                    FxPicker(desk, tr)
+                    MixerNow(desk, tr, p)
+                    TakeActions(desk)
+                }
                 MixPage.TURN -> {
+                    TurnFacts(desk, a, b, tr, ga, gb, pa, pb)
                     StepsPanel(tr, p, pos)
                     WhyPanel(tr, a, b, pa, pb)
                     NotePanel(desk, tr)
                 }
-                MixPage.MIXER -> {
-                    TakeBar(desk, tr, playing)
-                    MixerNow(desk, tr, p)
+                MixPage.SETTINGS -> {
                     SyncPanel(desk, tr, p)
+                    Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
                 }
-                MixPage.SETTINGS -> Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
             }
         }
         val transport = @Composable { Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced, loop = desk.mixLoop, onLoop = { desk.toggleLoop() }) }
@@ -173,19 +177,22 @@ private fun MixContent(app: StudioHost) {
                         KeyHint(app, "Espaço toca / para  ·  ← → um compasso  ·  , . encaixe  ·  L repete  ·  ? atalhos")
                     }
                     Column(Modifier.weight(1f).fillMaxHeight().padding(start = 6.dp)) {
-                        Summary(desk, a, b, tr, ga, gb, pa, pb)
                         tabs()
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { pageContent() }
                         transport()
                     }
                 }
             } else {
-                Summary(desk, a, b, tr, ga, gb, pa, pb)
-                decks(72.dp)
+                decks(84.dp)
                 Overview(p, pos, tr) { desk.seekMix(it) }
                 tabs()
                 val scroll = rememberScrollState()
-                Box(Modifier.weight(1f).fillMaxWidth()) {
+                // No celular o mixer ocupa a altura que sobra (faders mais altos, mais fáceis de mexer); as outras abas rolam.
+                if (page == MixPage.MIXER) Column(Modifier.weight(1f).fillMaxWidth()) {
+                    FxPicker(desk, tr)
+                    MixerNow(desk, tr, p, Modifier.weight(1f))
+                    TakeActions(desk)
+                } else Box(Modifier.weight(1f).fillMaxWidth()) {
                     Column(Modifier.fillMaxSize().verticalScroll(scroll)) { pageContent() }
                     if (scroll.canScrollForward) Box(
                         Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(28.dp)
@@ -209,20 +216,24 @@ enum class MixPage { TURN, MIXER, SETTINGS }
 @Composable
 private fun MixTopBar(desk: SetDesk, a: TrackItem, b: TrackItem, busy: Boolean, estimateMs: Long?) {
     val idx = desk.mixIndex()
+    val tr = desk.mixing
+    // Uma linha só: fechar, qual troca, as duas faixas, o veredito (✓ boa, ↻ refazer) e anterior/próxima.
     Row(Modifier.fillMaxWidth().height(48.dp).border(BorderStroke(1.dp, Palette.line)).padding(start = 2.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = { desk.closeMix() }, modifier = Modifier.semantics { contentDescription = "Fechar o MIX" }) { Text("✕", fontSize = 16.sp) }
         Column(Modifier.weight(1f)) {
             Text(
-                (if (idx != null) "VIRADA ${idx.first + 1}/${idx.second}" else "VIRADA") +
-                    (if (busy) "  · montando" + (estimateMs?.let { " ≈${((it + 999) / 1000).coerceAtLeast(1)} s" } ?: "…") else ""),
-                color = Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, maxLines = 1,
+                (if (idx != null) "${idx.first + 1}/${idx.second}" else "") +
+                    (if (busy) "  montando" + (estimateMs?.let { " ≈${((it + 999) / 1000).coerceAtLeast(1)} s" } ?: "…") else ""),
+                color = Palette.mutedBright, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(a.title, color = Palette.orange, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                Text("  →  ", color = Palette.mutedBright, fontSize = 13.sp)
+                Text(" → ", color = Palette.mutedBright, fontSize = 13.sp)
                 Text(b.title, color = Palette.blue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             }
         }
+        VerdictIcon("✓", "Troca boa", on = tr?.mark == Transition.Mark.GOOD, good = true) { desk.setMark(Transition.Mark.GOOD) }
+        VerdictIcon("↻", "Refazer a troca", on = tr?.mark == Transition.Mark.REDO, good = false) { desk.setMark(Transition.Mark.REDO) }
         TextButton(onClick = { desk.stepMix(-1) }, enabled = idx != null && idx.first > 0, modifier = Modifier.semantics { contentDescription = "Virada anterior" }) { Text("◀", fontSize = 16.sp) }
         TextButton(onClick = { desk.stepMix(1) }, enabled = idx != null && idx.first < idx.second - 1, modifier = Modifier.semantics { contentDescription = "Próxima virada" }) { Text("▶", fontSize = 16.sp) }
     }
@@ -260,7 +271,7 @@ private fun phraseColor(kind: String): Color = when (kind) {
  * as faixas) e os avisos. E o veredito: ✓ BOA ou ↻ REFAZER (fica no plano; o ensaio e o "Pronto pro show?" usam).
  */
 @Composable
-private fun Summary(
+private fun TurnFacts(
     desk: SetDesk, a: TrackItem, b: TrackItem, tr: Transition, ga: TrackGrid?, gb: TrackGrid?,
     pa: os.deckbridge.manager.mix.TrackProfile?, pb: os.deckbridge.manager.mix.TrackProfile?,
 ) {
@@ -295,26 +306,26 @@ private fun Summary(
             if (tr.aLoopBars > 0) add("loop ${tr.aLoopBars} no D1")
             if (tr.bLoopBars > 0 && tr.bLoopTimes > 1) add("loop ${tr.bLoopBars}×${tr.bLoopTimes} no D2")
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(parts.joinToString(" · ").ifEmpty { "ouvindo as faixas…" }, color = Palette.mutedBright, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            // O veredito, sempre à vista: a pergunta da tela é "esta troca está boa?".
-            VerdictButton("✓ BOA", on = tr.mark == Transition.Mark.GOOD, good = true) { desk.setMark(Transition.Mark.GOOD) }
-            Spacer(Modifier.width(4.dp))
-            VerdictButton("↻ REFAZER", on = tr.mark == Transition.Mark.REDO, good = false) { desk.setMark(Transition.Mark.REDO) }
-        }
+        Text(parts.joinToString(" · ").ifEmpty { "ouvindo as faixas…" }, color = Palette.mutedBright, fontSize = 12.sp)
         val warn = desk.issues(listOf(a.id, b.id), listOf(tr)).firstOrNull { it.fromId == a.id && it.toId == b.id }
         if (warn != null) Text("⚠ ${warn.text}", color = Palette.orange, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
+/** O veredito no topo: um ícone (✓ boa, ↻ refazer), aceso na cor quando marcado; 40 × 48 dp de toque. */
 @Composable
-private fun VerdictButton(text: String, on: Boolean, good: Boolean, onClick: () -> Unit) {
+private fun VerdictIcon(text: String, description: String, on: Boolean, good: Boolean, onClick: () -> Unit) {
     val ink = if (good) Palette.keyInk else Palette.orange
     Box(
-        Modifier.height(32.dp).clip(RbShape).background(if (on) (if (good) Palette.keyFill else Palette.dangerBg) else Palette.surfaceHigh)
-            .border(BorderStroke(1.dp, if (on) ink else Palette.line), RbShape).clickable(onClick = onClick).padding(horizontal = 8.dp),
+        Modifier.height(48.dp).width(40.dp).clickable(onClick = onClick).semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
-    ) { Text(text, color = if (on) ink else Palette.mutedBright, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
+    ) {
+        Box(
+            Modifier.height(30.dp).width(32.dp).clip(RbShape).background(if (on) (if (good) Palette.keyFill else Palette.dangerBg) else Palette.bg)
+                .border(BorderStroke(1.dp, if (on) ink else Palette.line), RbShape),
+            contentAlignment = Alignment.Center,
+        ) { Text(text, color = if (on) ink else Palette.mutedBright, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+    }
 }
 
 /** Por que esta troca: o porquê guardado (quando foi achada ouvindo as faixas) ou o que se sabe dela. */
@@ -332,36 +343,6 @@ private fun WhyPanel(tr: Transition, a: TrackItem, b: TrackItem, pa: os.deckbrid
     Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).rbPanel().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text("POR QUE ESTA TROCA", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
         lines.forEach { Text("· $it", color = Palette.keyInk, fontSize = 12.sp) }
-    }
-}
-
-/**
- * A linha de um deck, fina (os cartões grandes repetiam o que as ondas mostram): DECK n, título, BPM no master (com o
- * quanto estica), tom e quanto falta da faixa.
- */
-@Composable
-private fun DeckLine(n: Int, t: TrackItem, tr: Transition, p: MixPreview?, posNow: () -> Int, g: TrackGrid?, master: Boolean, from: TrackItem? = null) {
-    val pos = posNow()
-    val trackMs = when {
-        p == null -> if (master) tr.outMs else tr.inMs
-        master -> p.aAt(pos)
-        else -> p.bAt(pos, tr)
-    }
-    val dur = g?.durationMs ?: (t.durationSeconds * 1000)
-    val tempo = p?.tempo ?: if (from != null) from.bpm else t.bpm
-    val speed = if (t.bpm > 0 && tempo > 0) tempo / t.bpm else 1.0
-    val key = camelotOf(t)
-    val semi = Math.round(SetPlanner.semitones(speed)).toInt()
-    val shifted = if (!master && !tr.masterTempo && key != null && semi != 0) SetPlanner.shiftKey(key, semi) else null
-    val ok = master || from == null || SetPlanner.fit(from, t).keyOk && shifted == null
-    val accent = if (master) Palette.orange else Palette.blue
-    Row(Modifier.fillMaxWidth().height(26.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("DECK $n", color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        Text("  " + t.title.ifEmpty { t.fileName }, color = Palette.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text("%.1f".format(t.bpm * speed), color = Palette.text, fontSize = 12.sp, fontFamily = Mono)
-        if (!master && kotlin.math.abs(speed - 1) > 0.0005) Text(" %+.1f%%".format((speed - 1) * 100), color = Palette.mutedBright, fontSize = 10.sp, fontFamily = Mono)
-        Text("  " + keyText(shifted ?: key, t), color = if (ok) Palette.keyInk else Palette.orange, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.Bold)
-        Text("  −" + mmss(dur - trackMs), color = Palette.mutedBright, fontSize = 11.sp, fontFamily = Mono)
     }
 }
 
@@ -568,38 +549,33 @@ private fun Overview(p: MixPreview?, posNow: () -> Int, tr: Transition, onSeek: 
  * é gravada enquanto toca e vira "a mixagem certa desta troca neste set"; depois de algumas, as trocas novas começam do
  * seu jeito. Ver `docs/ux-mixagem.md`.
  */
+/**
+ * A mão do DJ nesta troca: nada aparece enquanto não há o que fazer (o automático não precisa de aviso). Mexeu no mixer:
+ * DESFAZER e GUARDAR; já tem uma mixagem sua guardada: voltar ao AUTOMÁTICO.
+ */
 @Composable
-private fun TakeBar(desk: SetDesk, tr: Transition, playing: Boolean) {
+private fun TakeActions(desk: SetDesk) {
     val changed = desk.takeChanged
     val mine = desk.draftTake != null
-    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).rbPanel().padding(horizontal = 10.dp, vertical = 4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                when {
-                    changed -> "● SUA MÃO"
-                    mine -> "SUA MIXAGEM"
-                    else -> "AUTOMÁTICO"
-                },
-                color = if (changed || mine) Palette.orange else Palette.blue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp,
-            )
-            Text(
-                when {
-                    changed -> "  não guardada"
-                    mine -> "  esta troca toca assim"
-                    playing -> "  mexa no mixer: grava"
-                    else -> "  toque e mexa no mixer"
-                },
-                color = Palette.mutedBright, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-            )
-            if (changed) {
-                TextButton(onClick = { desk.discardTake() }) { Text("DESFAZER", fontSize = 12.sp) }
-                TextButton(onClick = { desk.keepTake() }) { Text("GUARDAR", color = Palette.orange, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-            } else if (mine) {
-                TextButton(onClick = { desk.autoTake() }) { Text("AUTOMÁTICO", fontSize = 12.sp) }
-            }
-        }
-        desk.habits()?.let { h ->
-            Text("As trocas novas já começam do seu jeito (${h.takes} mixagens suas)", color = Palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    if (!changed && !mine) return
+    Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (changed) {
+            PadButton("DESFAZER", Modifier.weight(1f)) { desk.discardTake() }
+            PadButton("GUARDAR", Modifier.weight(1f), color = Palette.orange) { desk.keepTake() }
+        } else PadButton("VOLTAR AO AUTOMÁTICO", Modifier.weight(1f)) { desk.autoTake() }
+    }
+}
+
+/**
+ * O efeito do botão FX dos dois canais nesta troca: ECHO, REVERB, FLANGER ou ROLL (os Beat FX da DDJ-400). Trocar vale na
+ * hora (a prévia é mixada ao vivo) e fica na troca.
+ */
+@Composable
+private fun FxPicker(desk: SetDesk, tr: Transition) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("FX", color = Palette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
+        os.deckbridge.manager.mix.MixFx.entries.forEach { fx ->
+            PadButton(fx.label, Modifier.weight(1f), on = tr.fx == fx) { if (tr.fx != fx) desk.editMix(tr.copy(fx = fx)) }
         }
     }
 }
@@ -610,7 +586,7 @@ private fun TakeBar(desk: SetDesk, tr: Transition, playing: Boolean) {
  * laranja, o automático azul. AUTO devolve o canal ao automático dali em diante.
  */
 @Composable
-private fun MixerNow(desk: SetDesk, tr: Transition, p: MixPreview?) {
+private fun MixerNow(desk: SetDesk, tr: Transition, p: MixPreview?, modifier: Modifier = Modifier.height(172.dp)) {
     // O que o mixer mostra: o automático, a mixagem em ensaio e a mão agora — o mesmo que se ouve. Lê a posição aqui
     // dentro: a cada quadro só o mixer recompõe.
     val pos = desk.cursorMs
@@ -619,13 +595,13 @@ private fun MixerNow(desk: SetDesk, tr: Transition, p: MixPreview?) {
     val levels = p?.levelsAt(pos, tr, desk.draftTake, pass) ?: Levels()
     val bar = p?.relBar(pos) ?: 0.0
     val hand: (Ctl) -> Boolean = { c -> pass?.at(c, bar) != null || desk.draftTake?.at(c, bar) != null }
-    MixerPanel(levels, hand, enabled = p != null, onSet = { c, v -> desk.setControl(c, v) }, onRelease = { desk.releaseDeck(it) })
+    MixerPanel(levels, hand, enabled = p != null, fxLabel = tr.fx.label, modifier = modifier, onSet = { c, v -> desk.setControl(c, v) }, onRelease = { desk.releaseDeck(it) })
 }
 
 @Composable
-private fun MixerPanel(lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, onSet: (Ctl, Float) -> Unit, onRelease: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().height(172.dp).padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        MixerChannel(0, lv, hand, enabled, onSet, onRelease, Modifier.weight(1f))
+private fun MixerPanel(lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, fxLabel: String, modifier: Modifier, onSet: (Ctl, Float) -> Unit, onRelease: (Int) -> Unit) {
+    Row(modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        MixerChannel(0, lv, hand, enabled, fxLabel, onSet, onRelease, Modifier.weight(1f))
         Column(Modifier.width(44.dp).fillMaxHeight().rbPanel().padding(4.dp), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.CenterHorizontally) {
             Text("MIX", color = Palette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
@@ -636,12 +612,12 @@ private fun MixerPanel(lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, onS
                 drawRect(Palette.text, Offset(size.width / 2 - 5f, 1f), Size(10f, size.height - 2f))
             }
         }
-        MixerChannel(1, lv, hand, enabled, onSet, onRelease, Modifier.weight(1f))
+        MixerChannel(1, lv, hand, enabled, fxLabel, onSet, onRelease, Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun MixerChannel(deck: Int, lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, onSet: (Ctl, Float) -> Unit, onRelease: (Int) -> Unit, modifier: Modifier) {
+private fun MixerChannel(deck: Int, lv: Levels, hand: (Ctl) -> Boolean, enabled: Boolean, fxLabel: String, onSet: (Ctl, Float) -> Unit, onRelease: (Int) -> Unit, modifier: Modifier) {
     fun c(label: String) = Ctl.of(deck, label)
     val anyHand = Ctl.entries.any { it.deck == deck && hand(it) }
     Row(modifier.fillMaxHeight().rbPanel().padding(horizontal = 4.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -650,7 +626,7 @@ private fun MixerChannel(deck: Int, lv: Levels, hand: (Ctl) -> Boolean, enabled:
                 Text("CH ${deck + 1}", color = Palette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 val echo = c("ECHO")
                 val on = lv[echo] >= 0.5f
-                SmallToggle("ECHO", on, hand(echo), enabled) { onSet(echo, if (on) 0f else 1f) }
+                SmallToggle(fxLabel, on, hand(echo), enabled) { onSet(echo, if (on) 0f else 1f) }
                 if (anyHand) SmallToggle("AUTO", false, false, enabled) { onRelease(deck) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -879,12 +855,11 @@ private fun NotePanel(desk: SetDesk, tr: Transition) {
     }
 }
 
-/** Fileira de transporte: pular compassos e PLAY/PAUSE grande, verde como no player. */
+/** Fileira de transporte: um compasso para trás e para a frente, PLAY/PAUSE grande (verde como no player) e LOOP. */
 @Composable
 private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSeek: (Int) -> Unit, pos: () -> Int, jumps: Boolean, loop: Boolean = false, onLoop: () -> Unit = {}) {
     val bar = p?.barMsA ?: 2000.0
     Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        PadButton("◀◀ 4", Modifier.weight(1f)) { onSeek(pos() - (4 * bar).toInt()) }
         PadButton("◀ 1", Modifier.weight(1f)) { onSeek(pos() - bar.toInt()) }
         Box(
             // A ação principal da tela maior que as outras e de outra cor: acha-se de relance (pesquisa do Material 3
@@ -894,7 +869,6 @@ private fun Transport(p: MixPreview?, playing: Boolean, onPlay: () -> Unit, onSe
             contentAlignment = Alignment.Center,
         ) { Text(if (playing) "❚❚ PAUSE" else "▶ PLAY", color = if (playing) Palette.text else Palette.playInk, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         PadButton("1 ▶", Modifier.weight(1f)) { onSeek(pos() + bar.toInt()) }
-        PadButton("4 ▶▶", Modifier.weight(1f)) { onSeek(pos() + (4 * bar).toInt()) }
         // Repetir a troca: ensaiar de novo, mexendo, até achar o jeito.
         PadButton("LOOP", Modifier.weight(0.9f), on = loop, enabled = p != null) { onLoop() }
     }

@@ -114,21 +114,25 @@ class SetFlowTest {
         assertTrue(a.sets.mixing!!.masterTempo, "master tempo ligado por padrão")
         // A cabeça começa dois compassos antes da saída: é onde se quer ouvir.
         assertEquals(p.leadMs - (2 * p.barMsA).toInt(), a.sets.cursorMs)
-        rule.onNodeWithText("DECK 1").assertExists()
         rule.onNodeWithText("▶ PLAY").assertExists()
-        // Em cima, o resumo para julgar e o veredito; a aba TROCA abre com o passo de agora.
-        rule.onNodeWithText("✓ BOA").assertExists()
-        rule.onNodeWithText("PASSO").assertExists()
+        // Em cima uma linha só, com o veredito; abre no MIXER, com os efeitos e sem aviso de automático.
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Troca boa")).assertExists()
+        rule.onNodeWithText("REVERB").assertExists()
+        rule.onNodeWithText("AUTOMÁTICO").assertDoesNotExist()
         rule.onRoot().captureRoboImage(File(out, "mobile-39-vertical-mix-simples.png").path)
-        // No MIXER: a mixagem (automático), o mixer de mexer e o encaixe da que entra à mão.
-        rule.onNodeWithText("MIXER").performClick()
+        // Outro efeito no FX dos canais: fica na troca.
+        rule.onNodeWithText("FLANGER").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("AUTOMÁTICO").assertExists()
-        rule.onNodeWithText("ENCAIXE DO CH 2").performScrollTo().assertExists()
+        assertEquals(os.deckbridge.manager.mix.MixFx.FLANGER, a.sets.mixing!!.fx)
         rule.onRoot().captureRoboImage(File(out, "mobile-47-vertical-mix-mixer.png").path)
-        // Os ajustes ficam na aba AJUSTAR; o PLAY fica fixo embaixo.
+        // A aba TROCA tem os fatos da troca e o passo de agora.
+        rule.onNodeWithText("TROCA").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("PASSO").assertExists()
+        // Os ajustes (com o encaixe da que entra) ficam na aba AJUSTAR; o PLAY fica fixo embaixo.
         rule.onNodeWithText("AJUSTAR").performClick()
         rule.waitForIdle()
+        rule.onNodeWithText("ENCAIXE DO CH 2").performScrollTo().assertExists()
         rule.onRoot().captureRoboImage(File(out, "mobile-53-vertical-mix-ajustes.png").path)
         rule.onNodeWithText("MAIS ▾").performScrollTo().performClick()
         rule.waitForIdle()
@@ -290,7 +294,7 @@ class SetFlowTest {
         rule.waitForIdle()
         rule.onNodeWithText("PASSO").assertExists()
         rule.onNodeWithText("Troca o grave aos poucos", substring = true).assertExists()
-        rule.onRoot().captureRoboImage(File(out, "mobile-47-vertical-mix-mixer.png").path)
+        rule.onRoot().captureRoboImage(File(out, "mobile-72-vertical-mix-troca.png").path)
         // A prévia segue a troca escolhida: perto do ponto do grave, os dois graves estão se cruzando (aos poucos).
         val p = a.sets.mixPreview!!
         val lv = p.levelsAt(p.leadMs + (p.overlapMs * 0.75 - p.barMsA * 2).toInt(), a.sets.mixing!!)

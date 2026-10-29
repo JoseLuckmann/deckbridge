@@ -1364,3 +1364,10 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - `shared/MenuButton`: só "⋯" em cinza (`StagePalette.mutedInk`), estreito (44 dp; 36 dp na barra baixa do celular deitado), azul quando o MENU está aberto; contentDescription "Menu". O mesmo componente nos dois modos.
 - Modo DJ: MENU saiu dos botões grandes da barra (SOURCE, BROWSE, TAG LIST, PLAYLIST, SEARCH — agora uma lista só, `NAV_BUTTONS`, antes repetida nas duas versões da barra) e virou o "⋯" no fim. Biblioteca: o MENU saiu das abas (MÚSICAS, LISTAS, PENDRIVE, DJ) e é o "⋯" no fim da barra; no trilho do modo deitado, embaixo de tudo.
 - Testes: `NewcomerFlowTest` abre o MENU pelo "⋯".
+
+## 2026-10-29 — MIX simplificado e mais efeitos (0.31.0)
+
+- Pedido do dono: abrir no mixer; sem a caixa do automático; layout mais simples; topo que não polua; efeitos além do eco. Detalhes: `docs/ux-mixagem.md`.
+- Núcleo: `MixFx` (ECHO, REVERB, FLANGER, ROLL) e `Transition.fx` (guardado no plano); `MixDsp` com REVERB (Schroeder/Moorer), FLANGER e ROLL, sem alocar enquanto toca; passo a passo da saída com efeito diz o efeito.
+- Tela MIX: topo de uma linha com o veredito em ícones; fatos da troca na aba TROCA; sem as linhas DECK; abas MIXER (padrão) · TROCA · AJUSTAR; fileira FX; GUARDAR/DESFAZER só quando há o que guardar; encaixe em AJUSTAR; transporte ◀ 1 · PLAY · 1 ▶ · LOOP.
+- Evidência: núcleo `MixFxTest` (cada efeito muda o som; só eco e reverb deixam rastro; roll repete meia batida; efeito guardado e no passo a passo); celular `SetFlowTest`, `MixHandTest` ajustados (capturas mobile-39, mobile-47, mobile-72). O som dos efeitos em fone/caixa só no aparelho (`BLOCKED_HARDWARE`).

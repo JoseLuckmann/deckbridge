@@ -219,6 +219,13 @@ class MixDsp(private val p: MixPreview) {
         val echoL = FloatArray(maxOf(1, (p.beatMs * MixRenderer.RATE / 1000).toInt()))
         val echoR = FloatArray(echoL.size)
         var echoAt = 0
+        // Os outros efeitos do botão FX (alocados uma vez: nada é criado enquanto toca).
+        val verbL = Verb(0); val verbR = Verb(23)
+        val flangeL = FloatArray(FLANGE_MAX); val flangeR = FloatArray(FLANGE_MAX)
+        var flangeAt = 0
+        val rollL = FloatArray(maxOf(1, echoL.size / 2)); val rollR = FloatArray(rollL.size)
+        var rollRec = -1 // -1: sem roll; < tamanho: gravando; senão tocando
+        var rollAt = 0
         // Ganhos da amostra atual (andam em linha reta do começo ao fim de cada bloco).
         var vol = 0f; var low = 0f; var mid = 0f; var high = 0f; var echo = 0f
     }
@@ -274,8 +281,26 @@ class MixDsp(private val p: MixPreview) {
                 var yaR = a.svfR.step(eq(a, a.lowR, a.midR, ar) * a.vol)
                 var ybL = b.svfL.step(eq(b, b.lowL, b.midL, bl) * b.vol)
                 var ybR = b.svfR.step(eq(b, b.lowR, b.midR, br) * b.vol)
-                yaL += echo(a, 0, yaL, echoFb, echoWet); yaR += echo(a, 1, yaR, echoFb, echoWet)
-                ybL += echo(b, 0, ybL, echoFb, echoWet); ybR += echo(b, 1, ybR, echoFb, echoWet)
+                when (tr.fx) {
+                    MixFx.ECHO -> {
+                        yaL += echo(a, 0, yaL, echoFb, echoWet); yaR += echo(a, 1, yaR, echoFb, echoWet)
+                        ybL += echo(b, 0, ybL, echoFb, echoWet); ybR += echo(b, 1, ybR, echoFb, echoWet)
+                    }
+                    MixFx.REVERB -> {
+                        yaL += a.verbL.step(yaL * a.echo) * VERB_WET; yaR += a.verbR.step(yaR * a.echo) * VERB_WET
+                        ybL += b.verbL.step(ybL * b.echo) * VERB_WET; ybR += b.verbR.step(ybR * b.echo) * VERB_WET
+                    }
+                    MixFx.FLANGER -> {
+                        val lfo = (0.5 + 0.5 * sin(2 * PI * fr / (p.barMsA * rate / 1000))).toFloat()
+                        yaL = flange(a, a.flangeL, yaL, lfo); yaR = flange(a, a.flangeR, yaR, 1f - lfo)
+                        ybL = flange(b, b.flangeL, ybL, lfo); ybR = flange(b, b.flangeR, ybR, 1f - lfo)
+                        a.flangeAt = (a.flangeAt + 1) % FLANGE_MAX; b.flangeAt = (b.flangeAt + 1) % FLANGE_MAX
+                    }
+                    MixFx.ROLL -> {
+                        roll(a, yaL, yaR); yaL = lr[0]; yaR = lr[1]
+                        roll(b, ybL, ybR); ybL = lr[0]; ybR = lr[1]
+                    }
+                }
                 a.echoAt = (a.echoAt + 1) % a.echoL.size
                 b.echoAt = (b.echoAt + 1) % b.echoL.size
                 outL[offset + i + q] = soft(yaL + ybL)
@@ -302,12 +327,84 @@ class MixDsp(private val p: MixPreview) {
         return old * wet
     }
 
+    /**
+     * FLANGER: atraso curto (1 a 7 ms) que vai e volta uma vez por compasso, com realimentação; [lfo] 0..1 (lados opostos
+     * no estéreo). O botão FX mistura do seco ao efeito.
+     */
+    private fun flange(c: Chan, buf: FloatArray, dry: Float, lfo: Float): Float {
+        val delay = (MixRenderer.RATE * (0.001f + 0.006f * lfo)).coerceIn(1f, FLANGE_MAX - 2f)
+        val pos = c.flangeAt - delay + FLANGE_MAX
+        val i = pos.toInt()
+        val f = pos - i
+        val d = buf[i % FLANGE_MAX] * (1 - f) + buf[(i + 1) % FLANGE_MAX] * f
+        buf[c.flangeAt] = dry + d * 0.55f
+        return mix(dry, 0.6f * dry + 0.7f * d, c.echo)
+    }
+
+    /**
+     * ROLL: ao ligar, grava meia batida e repete essa meia batida enquanto ligado (o roll do CDJ); desligou, volta ao som.
+     * Um quadro: [Chan.rollRec] conta o que já gravou; cheio, [Chan.rollAt] anda no laço. O resultado fica em [lr].
+     */
+    private fun roll(c: Chan, l: Float, r: Float) {
+        lr[0] = l; lr[1] = r
+        if (c.echo < 0.5f) { c.rollRec = -1; return }
+        if (c.rollRec < 0) { c.rollRec = 0; c.rollAt = 0 }
+        if (c.rollRec < c.rollL.size) {
+            c.rollL[c.rollRec] = l; c.rollR[c.rollRec] = r; c.rollRec++
+        } else {
+            lr[0] = mix(l, c.rollL[c.rollAt], c.echo); lr[1] = mix(r, c.rollR[c.rollAt], c.echo)
+            c.rollAt = (c.rollAt + 1) % c.rollL.size
+        }
+    }
+
+    /** O par esquerdo/direito que [roll] devolve (sem criar nada por quadro). */
+    private val lr = FloatArray(2)
+
     fun reset() {
         for (c in listOf(a, b)) {
             c.lowL.y = 0f; c.lowR.y = 0f; c.midL.y = 0f; c.midR.y = 0f
             c.svfL.clear(); c.svfR.clear()
             c.echoL.fill(0f); c.echoR.fill(0f)
             c.echoAt = 0
+            c.verbL.clear(); c.verbR.clear()
+            c.flangeL.fill(0f); c.flangeR.fill(0f); c.flangeAt = 0
+            c.rollRec = -1; c.rollAt = 0
+        }
+    }
+
+    /**
+     * REVERB: o de Schroeder/Moorer (4 pentes com amortecimento em paralelo e 2 passa-tudo em série), nas medidas do
+     * Freeverb a 44,1 kHz; [spread] desloca o lado direito. Entra o que sai do canal com o FX ligado; a cauda continua.
+     */
+    class Verb(spread: Int) {
+        private val combs = intArrayOf(1116, 1188, 1277, 1356).map { FloatArray(it + spread) }
+        private val combAt = IntArray(4)
+        private val combLow = FloatArray(4)
+        private val alls = intArrayOf(556, 441).map { FloatArray(it + spread) }
+        private val allAt = IntArray(2)
+
+        fun step(x: Float): Float {
+            var out = 0f
+            for (k in 0 until 4) {
+                val buf = combs[k]
+                val y = buf[combAt[k]]
+                combLow[k] = y * 0.8f + combLow[k] * 0.2f
+                buf[combAt[k]] = x * 0.3f + combLow[k] * 0.88f
+                combAt[k] = (combAt[k] + 1) % buf.size
+                out += y
+            }
+            for (k in 0 until 2) {
+                val buf = alls[k]
+                val b = buf[allAt[k]]
+                buf[allAt[k]] = out + b * 0.5f
+                out = b - out
+                allAt[k] = (allAt[k] + 1) % buf.size
+            }
+            return out
+        }
+
+        fun clear() {
+            combs.forEach { it.fill(0f) }; alls.forEach { it.fill(0f) }; combLow.fill(0f)
         }
     }
 
@@ -359,6 +456,12 @@ class MixDsp(private val p: MixPreview) {
          * vazar o começo de um bumbo.
          */
         const val BLOCK = 16
+
+        /** Atraso máximo do FLANGER (quadros, ~11 ms). */
+        const val FLANGE_MAX = 512
+
+        /** Quanto do REVERB volta para a mixagem. */
+        const val VERB_WET = 0.5f
     }
 }
 
@@ -457,9 +560,9 @@ object MixGuide {
                     Transition.Pace.SLOW -> 0.5
                 }
                 listOf(
-                    MixStep(0.0, 0.0, "Liga o ECHO no CH 1"),
+                    MixStep(0.0, 0.0, "Liga o ${tr.fx.label} no CH 1"),
                     MixStep(0.0, frac(rise), "Sobe o fader do CH 2"),
-                    MixStep(1.0, 1.0, "Fecha o CH 1: fica só o eco"),
+                    MixStep(1.0, 1.0, if (tr.fx.tail) "Fecha o CH 1: fica só o ${tr.fx.label.lowercase()}" else "Fecha o CH 1"),
                 ).sortedBy { it.fromBar }
             }
             MixStyle.CUT -> listOf(MixStep(0.0, 0.0, "Corte seco: troca de canal no início do compasso"))
