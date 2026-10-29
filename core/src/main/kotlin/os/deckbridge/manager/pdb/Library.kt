@@ -183,6 +183,8 @@ sealed interface Edit {
         val comment: String = "",
         /** As My Tags da classificação (gênero, componentes, situação). */
         val myTags: List<os.deckbridge.logic.RbTag> = emptyList(),
+        /** A cor da faixa (campo Color, 1–8; 0 sem cor), das cores automáticas do DJ. */
+        val colorId: Int = 0,
     ) : Edit
 }
 
@@ -703,6 +705,7 @@ class PdbEditor(private val raw: RawPdb, root: File? = null) {
         row.dateAdded = today
         row.analyzeDate = today
         row.comment = e.comment.trim()
+        if (e.colorId in 1..8 && rowsOf(PdbType.COLORS).any { NameRows.colorId(it) == e.colorId }) row.colorId = e.colorId
         tracks += row.encode()
         addMyTags(id, e.myTags)
     }
@@ -716,23 +719,65 @@ class PdbEditor(private val raw: RawPdb, root: File? = null) {
         if (tags.isEmpty()) return
         val extRel = "PIONEER/rekordbox/exportExt.pdb"
         val bytes = files.read(extRel) ?: return
-        val known = os.deckbridge.logic.parseExportExt(bytes) ?: return
-        val columns = known.tags.filter { it.category }.associate { it.id to it.name.lowercase() }
-        val ids = tags.mapNotNull { t ->
-            known.tags.firstOrNull { !it.category && it.name.equals(t.name, ignoreCase = true) && columns[it.categoryId] == t.category.lowercase() }?.id
-        }.distinct()
-        if (ids.isEmpty()) return
+        var known = os.deckbridge.logic.parseExportExt(bytes) ?: return
         val ext = try {
             RawPdb.parse(bytes)
         } catch (e: PdbFormatException) {
             throw EditException("O exportExt.pdb não pôde ser lido: ${e.message}")
         }
+        // Momentos do set que o rekordbox não traz (Warm Up, Closing, After Hours): criados uma vez na coluna Situation.
+        val tagRows = ext.table(3)?.rows
+        var newTagRows: List<ByteArray>? = null
+        if (tagRows != null) {
+            val columnId = known.tags.firstOrNull { it.category && it.name.equals("Situation", ignoreCase = true) }?.id
+            val missing = tags.filter { it.category.equals("Situation", ignoreCase = true) && it.name in os.deckbridge.manager.organize.TrackClassifier.NEW_SITUATIONS }
+                .filter { t -> known.tags.none { !it.category && it.categoryId == columnId && it.name.equals(t.name, ignoreCase = true) } }
+            val template = columnId?.let { c -> tagRows.firstOrNull { r -> (r.u16(0) and 0x04) == 0 && known.tags.any { !it.category && it.categoryId == c && it.id == r.u32(0x14) } } }
+            if (columnId != null && template != null && missing.isNotEmpty()) {
+                val rows = tagRows.toMutableList()
+                var nextId = (known.tags.maxOfOrNull { it.id } ?: 0) + 1
+                var position = known.tags.count { !it.category && it.categoryId == columnId }
+                for (t in missing.distinctBy { it.name.lowercase() }) {
+                    rows += tagRowLike(template, nextId++, t.name, columnId, position++, rows.size * 0x20)
+                }
+                newTagRows = rows
+                known = os.deckbridge.logic.parseExportExt(ext.write(mapOf(3 to rows))) ?: known
+            }
+        }
+        val columns = known.tags.filter { it.category }.associate { it.id to it.name.lowercase() }
+        val ids = tags.mapNotNull { t ->
+            known.tags.firstOrNull { !it.category && it.name.equals(t.name, ignoreCase = true) && columns[it.categoryId] == t.category.lowercase() }?.id
+        }.distinct()
+        if (ids.isEmpty()) return
         val links = ext.table(4)?.rows ?: return
         val have = links.filter { it.u32(4) == trackId }.map { it.u32(8) }.toSet()
         val added = ids.filter { it !in have }.map { tagId ->
             ByteArray(16).also { r -> r.putU32(4, trackId); r.putU32(8, tagId); r.putU32(12, 3) }
         }
-        if (added.isNotEmpty()) files.put(extRel, ext.write(mapOf(4 to links + added)))
+        if (added.isNotEmpty() || newTagRows != null) files.put(extRel, ext.write(buildMap { put(4, links + added); newTagRows?.let { put(3, it) } }))
+    }
+
+    /**
+     * Uma linha de tag nova no formato de uma que já está no arquivo (a do próprio rekordbox): copia o cabeçalho de
+     * [template] e troca id, coluna, posição e nome; o nome vai logo depois do cabeçalho e, atrás dele, a segunda string
+     * vazia que o formato traz. [indexShift] é o campo de posição da linha na tabela (0x20 por linha).
+     */
+    private fun tagRowLike(template: ByteArray, id: Int, name: String, categoryId: Int, position: Int, indexShift: Int): ByteArray {
+        val nameAt = template[0x1D].toInt() and 0xFF
+        val text = DeviceString.encode(name)
+        val head = template.copyOf(nameAt)
+        val row = ByteArray(nameAt + text.size + 1 + 8)
+        head.copyInto(row)
+        row.putU16(2, indexShift and 0xFFFF)
+        row.putU32(0x0C, categoryId)
+        row.putU32(0x10, position)
+        row.putU32(0x14, id)
+        row.putU32(0x18, 0)
+        text.copyInto(row, nameAt)
+        // O ponteiro da segunda string (se o formato tiver) aponta para a string vazia depois do nome.
+        if (nameAt > 0x1E) row[0x1E] = (nameAt + text.size).toByte()
+        row[nameAt + text.size] = 0x03
+        return row
     }
 
     private fun adoptTrack(e: Edit.AdoptTrack) {

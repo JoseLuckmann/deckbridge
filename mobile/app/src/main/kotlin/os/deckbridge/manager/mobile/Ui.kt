@@ -105,6 +105,7 @@ fun ManagerRoot(app: ManagerApp, actions: Actions) {
             if (app.libraryTools) LibraryTools(app, actions) { app.libraryTools = false }
             app.tidy?.let { TidyDialog(app, it) }
             app.duplicates?.let { DuplicatesDialog(app, it) }
+            if (app.colorsOpen) ColorRulesDialog(app)
             JobOverlay(app)
             NoticeToast(app)
         }

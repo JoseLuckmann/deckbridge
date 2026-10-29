@@ -167,7 +167,7 @@ class ImportQueue(private val app: ManagerApp) {
                                 }
                                 synchronized(prints) { prints += Triple(p.info.durationSec, bpm, print) }
                             }
-                            val edit = Edit.ImportTrack(p, p.info.title, p.info.artist, p.info.album, p.genre, p.read.keyName, p.info.year, p.info.trackNumber, p.suggestedCues, p.comment, p.myTags)
+                            val edit = Edit.ImportTrack(p, p.info.title, p.info.artist, p.info.album, p.genre, p.read.keyName, p.info.year, p.info.trackNumber, p.suggestedCues, p.comment, p.myTags, app.autoColor(p.classification?.energy, p.genre))
                             // A música entra na lista agora (na fila do modelo); a gravação vem depois, em lote.
                             val ok = onMainSync { app.model.submit(edit, "Importar \"${p.info.title}\"") }
                             if (ok) {

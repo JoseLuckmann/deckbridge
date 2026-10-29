@@ -28,6 +28,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.border
+import androidx.compose.foundation.verticalScroll
 
 @Composable
 fun NameDialog(title: String, initial: String = "", confirm: String = "OK", onName: (String) -> Unit, onClose: () -> Unit) {
@@ -252,4 +255,59 @@ fun DuplicatesDialog(app: ManagerApp, groups: List<os.deckbridge.manager.organiz
         dismissButton = { TextButton(onClick = { app.duplicates = null }) { Text("Fechar") } },
         containerColor = Palette.surfaceHigh,
     )
+}
+
+/**
+ * As cores automáticas: o DJ escolhe se a cor da faixa (o Color do rekordbox) vem da energia ou do gênero, e qual cor
+ * para cada faixa de energia e cada gênero (tocar no quadrado abre a escolha de cor). Valem para as faixas que entram e
+ * para "Classificar"; APLICAR pinta agora as que estão sem cor. A cor que o DJ deu nunca é trocada.
+ */
+@Composable
+fun ColorRulesDialog(app: ManagerApp) {
+    val r = app.colorRules
+    var picking by remember { mutableStateOf<((Int) -> Unit)?>(null) }
+    @Composable fun Swatch(color: Int, label: String, onPick: (Int) -> Unit) {
+        Row(Modifier.fillMaxWidth().clickable { picking = onPick }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, color = Palette.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            val c = Palette.trackColors.getOrNull(color - 1)
+            androidx.compose.foundation.layout.Box(Modifier.size(26.dp).clip(RbShape).background(c ?: Palette.surface).border(androidx.compose.foundation.BorderStroke(1.dp, Palette.line), RbShape))
+            Text(if (c != null) Palette.trackColorNames[color - 1] else "sem cor", color = Palette.mutedBright, fontSize = 12.sp, modifier = Modifier.width(76.dp).padding(start = 8.dp))
+        }
+    }
+    AlertDialog(
+        onDismissRequest = { app.colorsOpen = false },
+        title = { Text("Cores automáticas") },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    os.deckbridge.manager.organize.ColorRules.Mode.entries.forEach { m ->
+                        val on = r.mode == m
+                        androidx.compose.foundation.layout.Box(
+                            Modifier.weight(1f).height(40.dp).clip(RbShape).background(if (on) Palette.blue else Palette.surface)
+                                .border(androidx.compose.foundation.BorderStroke(1.dp, if (on) Palette.blue else Palette.line), RbShape).clickable { app.changeColorRules(r.copy(mode = m)) },
+                            contentAlignment = Alignment.Center,
+                        ) { Text(m.title, color = if (on) Palette.bg else Palette.blue, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                    }
+                }
+                when (r.mode) {
+                    os.deckbridge.manager.organize.ColorRules.Mode.OFF ->
+                        Text("A faixa entra sem cor. Escolha energia ou gênero para pintar sozinho.", color = Palette.mutedBright, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                    os.deckbridge.manager.organize.ColorRules.Mode.ENERGY -> os.deckbridge.manager.organize.ColorRules.BANDS.forEachIndexed { i, band ->
+                        Swatch(r.byEnergy[i], "Energia $band") { c -> app.changeColorRules(app.colorRules.withEnergy(i, c)) }
+                    }
+                    os.deckbridge.manager.organize.ColorRules.Mode.GENRE -> {
+                        // Os gêneros da biblioteca e os que a classificação palpita.
+                        val names = (app.model.view?.tracks.orEmpty().map { it.genre.trim() }.filter { it.isNotEmpty() } +
+                            os.deckbridge.manager.organize.ColorRules.DEFAULT_GENRES.keys.map { k -> k.split(' ').joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } } })
+                            .distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
+                        names.forEach { g -> Swatch(r.byGenre[g.lowercase()] ?: 0, g) { c -> app.changeColorRules(app.colorRules.withGenre(g, c.takeIf { it in 1..8 })) } }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { app.colorsOpen = false; app.applyColors() }, enabled = r.mode != os.deckbridge.manager.organize.ColorRules.Mode.OFF) { Text("Pintar as sem cor") } },
+        dismissButton = { TextButton(onClick = { app.colorsOpen = false }) { Text("Fechar") } },
+        containerColor = Palette.surfaceHigh,
+    )
+    picking?.let { onPick -> ColorDialog(onPick = { onPick(it); picking = null }, onClose = { picking = null }) }
 }

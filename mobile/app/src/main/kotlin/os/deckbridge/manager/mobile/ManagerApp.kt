@@ -300,6 +300,36 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
     /** Os grupos de repetidas achados (a tela de repetidas está aberta enquanto não é null). */
     var duplicates by mutableStateOf<List<os.deckbridge.manager.organize.Duplicates.Group>?>(null)
 
+    /** As cores automáticas do DJ (Color pela energia ou pelo gênero), guardadas no aparelho. */
+    var colorRules by mutableStateOf(os.deckbridge.manager.organize.ColorRules.decode(prefs.getString("coresAuto", null)))
+        private set
+
+    /** A janela das cores automáticas aberta. */
+    var colorsOpen by mutableStateOf(false)
+
+    fun changeColorRules(r: os.deckbridge.manager.organize.ColorRules) {
+        colorRules = r
+        prefs.edit().putString("coresAuto", r.encode()).apply()
+    }
+
+    /** A cor automática para uma faixa (0: sem cor) — a regra do DJ pela energia do Comment ou pelo gênero. */
+    fun autoColor(energy: Int?, genre: String): Int = colorRules.colorFor(energy, genre) ?: 0
+
+    /**
+     * Dá a cor automática às faixas da biblioteca que estão sem cor (a energia vem do Comment, "Energy N"; o gênero, do
+     * Genre). Não lê áudio: rápido. A cor que o DJ deu fica. Um desfazer volta tudo.
+     */
+    fun applyColors() {
+        val v = model.view ?: return
+        val byColor = v.tracks.filter { it.colorId == 0 }
+            .groupBy { autoColor(os.deckbridge.manager.organize.TrackClassifier.energyOf(it.comment), it.genre) }
+            .filterKeys { it in 1..8 }
+        if (byColor.isEmpty()) return say(if (colorRules.mode == os.deckbridge.manager.organize.ColorRules.Mode.OFF) "Escolha energia ou gênero" else "Nenhuma faixa sem cor para pintar")
+        val edits = byColor.map { (c, ts) -> Edit.SetTracks(ts.map { it.id }, os.deckbridge.manager.pdb.TrackPatch(colorId = c)) to "Cor ${Palette.trackColorNames[c - 1]} em ${ts.size} faixa(s)" }
+        model.submitAll(edits)
+        say("${byColor.values.sumOf { it.size }} faixa(s) pintadas", undo = true)
+    }
+
     /**
      * Procura a mesma música entrando mais de uma vez: ouve (impressão digital) só as faixas que têm outra de duração
      * parecida, numa tarefa de fundo, e abre a tela com os grupos.
@@ -412,9 +442,12 @@ class ManagerApp(val context: Context, override val root: File = defaultRoot(con
             if (changed == 0) "Músicas já classificadas ✓" else "$changed faixa(s) classificada(s)" + (if (failed > 0) " · $failed falharam" else "")
         }) { t, p ->
             val c = p.classification ?: return@eachTrackAnalyzed emptyList()
+            val genre = t.genre.ifBlank { c.genre }
             val patch = os.deckbridge.manager.pdb.TrackPatch(
                 genre = c.genre.takeIf { t.genre.isBlank() && it.isNotEmpty() },
                 comment = os.deckbridge.manager.organize.TrackClassifier.comment(t.comment, c.energy).takeIf { it != t.comment },
+                // A cor automática só em faixa sem cor.
+                colorId = autoColor(c.energy, genre).takeIf { t.colorId == 0 && it != 0 },
             )
             val have = model.myTags()[t.id].orEmpty()
             val newTags = c.myTags.filter { it !in have }

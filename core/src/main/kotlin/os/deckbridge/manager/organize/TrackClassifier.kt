@@ -10,13 +10,13 @@ import os.deckbridge.manager.mix.TrackProfile
  * colunas padrão — [situation] (Situation) e [components] (Components), e o gênero também na coluna Genre quando é um dos
  * nomes dela.
  */
-data class TrackClass(val energy: Int, val genre: String, val situation: String, val components: List<String>, val why: List<String>) {
+data class TrackClass(val energy: Int, val genre: String, val situations: List<String>, val components: List<String>, val why: List<String>) {
     /** As My Tags (nome e coluna, o mesmo [RbTag] que o modo DJ lê do pendrive). */
     val myTags: List<RbTag>
         get() = buildList {
             if (genre in TrackClassifier.GENRE_TAGS) add(RbTag(genre, "Genre"))
             components.forEach { add(RbTag(it, "Components")) }
-            if (situation.isNotEmpty()) add(RbTag(situation, "Situation"))
+            situations.forEach { add(RbTag(it, "Situation")) }
         }
 }
 
@@ -30,11 +30,20 @@ data class TrackClass(val energy: Int, val genre: String, val situation: String,
  * - **Gênero** (palpite, só quando o arquivo não diz): pelo andamento e pelo timbre e ritmo — as mesmas famílias de medida
  *   que a classificação de gênero clássica usa (Tzanetakis & Cook 2002), que acerta uma parte e erra outra: por isso só
  *   preenche vazio e fica fácil de trocar.
- * - **Situation**: pela energia (Lounge, Build up, Main Floor, Peak Time).
+ * - **Situation** (o momento do set, pode ser mais de um): Warm Up (energia 4–5), Main Floor (6–7), Peak Time (8–10),
+ *   Lounge (1–3); Closing para a melódica e clara de energia média-alta (fecha a noite com emoção) e After Hours para a
+ *   escura e hipnótica (grave e batida fortes, pouco agudo, andamento de pista) — como os DJs organizam o set por fase
+ *   (warm-up, peak, closing, after).
  * - **Components**: Vocal (título com feat./vocal, sem Dub/Instrumental), Sub Bass (grave que fica perto do nível total),
  *   Beat (batida marcada), Dark (pouco agudo), Upper (energia alta e brilho).
  */
 object TrackClassifier {
+    /**
+     * Os momentos do set que não existem nas My Tags padrão do rekordbox: o editor cria na coluna Situation quando a
+     * classificação usa (Peak Time, Main Floor e Lounge já são padrão).
+     */
+    val NEW_SITUATIONS = setOf("Warm Up", "Closing", "After Hours")
+
     /** Os gêneros da coluna Genre das My Tags padrão do rekordbox. */
     val GENRE_TAGS = setOf("Acid House", "Deep House", "Techno", "Nu Disco", "Electro House", "Bass Music", "Trap")
 
@@ -73,11 +82,17 @@ object TrackClassifier {
             }.also { if (it.isNotEmpty()) why += "gênero pelo andamento e timbre (palpite)" }
         }
 
-        val situation = when (energy) {
-            in 1..3 -> "Lounge"
-            in 4..5 -> "Build up"
-            in 6..7 -> "Main Floor"
-            else -> "Peak Time"
+        // Quantos compassos têm melodia ou voz forte (médio e agudo perto do patamar): a faixa "que canta".
+        val melodic = if (audible.isEmpty()) 0.0 else audible.count { profile.melodic(it) }.toDouble() / audible.size
+        val situations = buildList {
+            add(when (energy) {
+                in 1..3 -> "Lounge"
+                in 4..5 -> "Warm Up"
+                in 6..7 -> "Main Floor"
+                else -> "Peak Time"
+            })
+            if (energy in 5..8 && !dark && melodic >= 0.4) add("Closing")
+            if (energy in 4..7 && dark && beat >= 0.4 && bpm >= 118) add("After Hours")
         }
         val components = buildList {
             val t = title.lowercase()
@@ -87,7 +102,7 @@ object TrackClassifier {
             if (dark) add("Dark")
             if (energy >= 7 && bright >= -12) add("Upper")
         }
-        return TrackClass(energy, genre, situation, components, why)
+        return TrackClass(energy, genre, situations, components, why)
     }
 
     private val energyToken = Regex("""(?i)\benergy\s*\d{1,2}\b""")

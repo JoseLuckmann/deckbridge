@@ -1384,3 +1384,25 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - `SyncPanel` (como era, um pouco mais baixo) volta para a aba MIXER, embaixo do mixer; o valor do centro é o jog (arrastar horizontal: 1 ms a cada 3 dp); `SetDesk.jog` vale ao vivo e grava ao soltar. AJUSTAR fica só com os ajustes da troca.
 - Os quatro botões de cada canal em grade 2×2 (empilhados ficavam minúsculos, com o encaixe embaixo).
 - Evidência: celular `MixHandTest` (encaixe na própria tela; o jog adianta e grava ao soltar, sem montar a prévia de novo), `SetFlowTest`.
+
+## 2026-10-29 — Classificação na entrada, My Tags e cores automáticas (0.32.0)
+
+- Pedido do dono: classificar gênero, energia e afins na entrada, nos campos do rekordbox; escolher cores padrão para gênero ou energia. Detalhes: `docs/ux-biblioteca-limpa.md`.
+- Núcleo:
+  - `TrackClassifier` (energia 1–10, palpite de gênero, Situation, Components; usa o `TrackProfile` do MIX).
+  - `ColorRules` (modo, cores por faixa de energia e por gênero; guardado em uma linha).
+  - `ImportPrep.classify` e `PreparedTrack.genre/comment/myTags`.
+  - `Edit.ImportTrack` com comment, My Tags e cor.
+  - `Edit.AddMyTags`: ligações faixa↔tag no `exportExt.pdb` (linha de 16 bytes; só tags existentes; nada sai).
+  - `ManagerModel.myTags` e `tagsByTrack` (agora públicos e compartilhados com o modo DJ; usa o `RbTag` que já existia em vez de um tipo novo).
+- Celular:
+  - Importação classifica e pinta.
+  - MÚSICAS → ⋯ → "Classificar" e "Cores automáticas" (`ColorRulesDialog` reaproveita o `ColorDialog`).
+  - O lote de "Marcar pontos" virou `eachTrackAnalyzed`, usado também pelo Classificar.
+  - INFO mostra gênero, energia e My Tags.
+- Computador: a importação grava gênero, energia e My Tags.
+- Momento do set (pedido no meio da rodada: "peak time, warmup e coisas desse tipo"): Situation com Warm Up, Main Floor, Peak Time, Lounge, Closing e After Hours (mais de um por faixa). As três que o rekordbox não traz são criadas na coluna Situation copiando uma linha de tag existente (`tagRowLike`).
+- Evidência:
+  - Núcleo `ClassifierTest` 5 (+1: momentos novos criados uma vez, padrão intactas, as duas faixas ligadas): energia e situação em três estilos sintéticos; Deep House; vocal pelo título; comentário; a importação grava Genre, Comment e My Tags, relidos pelo leitor do modo DJ, sem duplicar; cores por energia e gênero, guardadas e relidas.
+  - Celular `ClassifyTest`: classificar a biblioteca, cores por energia, faixa com energia e My Tags; capturas mobile-73 e mobile-74.
+  - My Tags lidas num CDJ/rekordbox real: `BLOCKED_HARDWARE`.

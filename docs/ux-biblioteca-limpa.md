@@ -123,3 +123,41 @@ interessantes da música e deixar marcado como cues (intro, drop, break e mais o
   cortada e parecia deixar o artista vazio).
 - Limite: a qualidade dos pontos é a da análise de frases do app (conferida em faixas sintéticas e no corpus local, não
   nas músicas do dono); não acha voz nem riff.
+
+## Classificação na entrada: gênero, energia, My Tags e cores (0.32.0)
+
+Pedido do dono (2026-10-29): classificar a música que entra em gênero, energia "e coisas do tipo", usando os mesmos
+campos do rekordbox; e escolher cores padrão para gênero ou energia.
+
+- **Onde vai cada coisa (campos do rekordbox):**
+  - Gênero → campo **Genre**. O das etiquetas do arquivo sempre ganha; sem ele, um palpite pela análise.
+  - Energia de 1 a 10 → **Comment**, como "Energy 7": a convenção do Mixed In Key, que o rekordbox mostra e busca.
+    Se o comentário já tem "Energy N", só o número muda; o resto do texto fica.
+  - Gênero, componentes e situação → **My Tag**, nas colunas padrão do rekordbox (`exportExt.pdb`):
+    - Genre: Deep House, Techno, Nu Disco, Electro House, Bass Music…
+    - Components: Vocal, Sub Bass, Beat, Dark, Upper.
+    - Situation, o momento do set (pode ser mais de um): Warm Up (energia 4–5), Main Floor (6–7), Peak Time
+      (8–10), Lounge (1–3), Closing (melódica e clara, energia média-alta) e After Hours (escura e hipnótica, grave
+      e batida fortes). Warm Up, Closing e After Hours não vêm no rekordbox: são criadas uma vez na coluna Situation,
+      copiando o formato de uma tag que já está no arquivo; as padrão ficam com as mesmas ids.
+  - Só entram tags que já existem no arquivo, e nada que o DJ marcou sai.
+  - Cor → campo **Color**, pelas cores automáticas do DJ, e só em faixa sem cor.
+- **Como mede** (`TrackClassifier`): é o mesmo perfil por compasso do MIX (grave, médio, agudo, batida, nível).
+  - Energia: nível das partes cheias, pulso da batida, andamento e brilho. São os fatores de energia percebida da
+    literatura (Gabrielsson & Lindström 2010; Eerola & Vuoskoski 2011).
+  - Gênero: andamento, timbre e ritmo (a família de medidas de Tzanetakis & Cook 2002). Erra às vezes, por isso só
+    preenche gênero vazio.
+  - Vocal: pelo título (feat./vocal, sem Dub/Instrumental).
+- **Na entrada:** toda faixa importada já sai classificada.
+- **Na biblioteca:** MÚSICAS → ⋯ → "Classificar (gênero, energia, tags)". Lê o áudio de cada faixa e grava em lotes com
+  cópia de segurança.
+- **Cores automáticas:** MÚSICAS → ⋯ → "Cores automáticas".
+  - Modos: desligado, por energia (uma cor para cada faixa 1–3, 4–5, 6–7, 8–10; começa azul, verde, amarelo, vermelho)
+    ou por gênero (uma cor por gênero da biblioteca).
+  - Tocar no quadrado abre a escolha de cor. "Pintar as sem cor" aplica agora, sem ler áudio, com desfazer.
+  - Também valem na entrada e no Classificar. A cor que o DJ deu nunca é trocada.
+- **Na faixa (INFO):** gênero, a régua de energia e as My Tags por coluna.
+- **Limites:**
+  - O palpite de gênero e a energia foram conferidos em faixas sintéticas de estilos diferentes, não nas músicas do dono.
+  - Ler as My Tags gravadas num CDJ ou no rekordbox de verdade ainda não foi feito (`BLOCKED_HARDWARE`).
+  - As cores automáticas ainda não existem no app do computador.
