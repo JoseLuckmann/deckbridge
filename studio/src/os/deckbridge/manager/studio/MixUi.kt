@@ -151,6 +151,7 @@ private fun MixContent(app: StudioHost) {
                 MixPage.MIXER -> {
                     FxPanel(desk, tr)
                     MixerNow(desk, tr, p)
+                    SyncPanel(desk, tr, p)
                     TakeActions(desk)
                 }
                 MixPage.TURN -> {
@@ -159,10 +160,7 @@ private fun MixContent(app: StudioHost) {
                     WhyPanel(tr, a, b, pa, pb)
                     NotePanel(desk, tr)
                 }
-                MixPage.SETTINGS -> {
-                    SyncPanel(desk, tr, p)
-                    Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
-                }
+                MixPage.SETTINGS -> Controls(app, a, b, tr, ga, gb, advanced) { advanced = !advanced }
             }
         }
         val transport = @Composable { Transport(p, playing, onPlay = { desk.playMix() }, onSeek = { desk.seekMix(it) }, pos = pos, jumps = advanced, loop = desk.mixLoop, onLoop = { desk.toggleLoop() }) }
@@ -192,6 +190,7 @@ private fun MixContent(app: StudioHost) {
                 if (page == MixPage.MIXER) Column(Modifier.weight(1f).fillMaxWidth()) {
                     FxPanel(desk, tr)
                     MixerNow(desk, tr, p, Modifier.weight(1f), tall = true)
+                    SyncPanel(desk, tr, p)
                     TakeActions(desk)
                 } else Box(Modifier.weight(1f).fillMaxWidth()) {
                     Column(Modifier.fillMaxSize().verticalScroll(scroll)) { pageContent() }
@@ -636,7 +635,7 @@ private fun MixerChannel(deck: Int, lv: Levels, hand: (Ctl) -> Boolean, enabled:
     fun c(label: String) = Ctl.of(deck, label)
     val anyHand = Ctl.entries.any { it.deck == deck && hand(it) }
     if (tall) {
-        // No celular: o canal é uma coluna — nome, o botão do efeito grande, quatro botões grandes empilhados e o fader ao lado.
+        // No celular: o canal é uma coluna — nome, o botão do efeito grande, quatro botões grandes em grade 2×2 e o fader ao lado.
         Row(modifier.fillMaxHeight().rbPanel().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -646,8 +645,11 @@ private fun MixerChannel(deck: Int, lv: Levels, hand: (Ctl) -> Boolean, enabled:
                 val echo = c("ECHO")
                 val on = lv[echo] >= 0.5f
                 SmallToggle("FX", on, hand(echo), enabled, Modifier.fillMaxWidth(), 44.dp, 14.sp) { onSet(echo, if (on) 0f else 1f) }
-                for ((label, bip) in listOf("HI" to false, "MID" to false, "LOW" to false, "FILTER" to true)) {
-                    Knob(c(label), lv[c(label)], hand(c(label)), enabled, Modifier.weight(1f).fillMaxWidth(), onSet, bipolar = bip, big = true)
+                // Os quatro botões em grade 2×2: cada um com o tamanho que a coluna dá (dá uns 60 dp de arco).
+                for (row in listOf(listOf("HI" to false, "MID" to false), listOf("LOW" to false, "FILTER" to true))) {
+                    Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        for ((label, bip) in row) Knob(c(label), lv[c(label)], hand(c(label)), enabled, Modifier.weight(1f).fillMaxHeight(), onSet, bipolar = bip, big = true)
+                    }
                 }
             }
             Fader(c("FADER"), lv[c("FADER")], hand(c("FADER")), enabled, Modifier.width(44.dp).fillMaxHeight(), onSet)
@@ -813,9 +815,9 @@ private fun Fader(c: Ctl, value: Float, hand: Boolean, enabled: Boolean, modifie
  */
 @Composable
 private fun SyncPanel(desk: SetDesk, tr: Transition, p: MixPreview?) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).rbPanel().padding(horizontal = 6.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).rbPanel().padding(horizontal = 6.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("ENCAIXE DO CH 2", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            Text("ENCAIXE DO CH 2 · arraste o centro como o jog", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, modifier = Modifier.weight(1f).padding(start = 4.dp))
             val m = p?.measuredMs
             Text(
                 "medido " + (m?.let { "%+.0f ms".format(it) } ?: "—"),
@@ -825,11 +827,24 @@ private fun SyncPanel(desk: SetDesk, tr: Transition, p: MixPreview?) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             PadButton("-1 BAT", Modifier.weight(1f), enabled = p != null) { desk.shiftBeat(-1) }
             PadButton("◀ 5 ms", Modifier.weight(1f), enabled = p != null) { desk.nudge(-5) }
+            // O centro é o jog: arrastar para a direita adianta a que entra, para a esquerda freia (1 ms a cada 3 dp).
+            val density = androidx.compose.ui.platform.LocalDensity.current.density
             Column(
-                Modifier.weight(1.3f).height(38.dp).border(BorderStroke(1.dp, if (tr.nudgeMs != 0 || tr.beatShift != 0) Palette.orange else Palette.line), RbShape),
+                Modifier.weight(1.3f).height(38.dp).border(BorderStroke(1.dp, if (tr.nudgeMs != 0 || tr.beatShift != 0) Palette.orange else Palette.line), RbShape)
+                    .pointerInput(p != null) {
+                        if (p == null) return@pointerInput
+                        var acc = 0f
+                        detectHorizontalDragGestures(onDragStart = { acc = 0f }, onDragEnd = { desk.jog(0, save = true) }, onDragCancel = { desk.jog(0, save = true) }) { change, dx ->
+                            change.consume()
+                            acc += dx / (3f * density)
+                            val steps = acc.toInt()
+                            if (steps != 0) { acc -= steps; desk.jog(steps, save = false) }
+                        }
+                    }
+                    .semantics { contentDescription = "Jog do encaixe" },
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
             ) {
-                Text("%+d ms".format(tr.nudgeMs), color = if (tr.nudgeMs != 0) Palette.orange else Palette.mutedBright, fontSize = 11.sp, lineHeight = 12.sp, fontFamily = Mono, maxLines = 1)
+                Text("◂ %+d ms ▸".format(tr.nudgeMs), color = if (tr.nudgeMs != 0) Palette.orange else Palette.mutedBright, fontSize = 11.sp, lineHeight = 12.sp, fontFamily = Mono, maxLines = 1)
                 Text("%+d bat".format(tr.beatShift), color = if (tr.beatShift != 0) Palette.orange else Palette.muted, fontSize = 9.sp, lineHeight = 10.sp, fontFamily = Mono, maxLines = 1)
             }
             PadButton("5 ms ▶", Modifier.weight(1f), enabled = p != null) { desk.nudge(5) }

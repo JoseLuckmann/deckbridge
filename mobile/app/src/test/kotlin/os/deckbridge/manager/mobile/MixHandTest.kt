@@ -10,6 +10,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -98,18 +100,22 @@ class MixHandTest {
         // O WAV da prévia tem a mão: no ponto de saída o grave da que entra já soa.
         assertTrue(a.sets.mixFile!!.isFile)
 
-        // Encaixe à mão (na aba AJUSTAR): vale na hora, sem ler as faixas de novo (a mesma prévia).
-        rule.onNodeWithText("AJUSTAR").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithText("5 ms ▶").performScrollTo().performClick()
-        rule.onNodeWithText("+1 BAT").performScrollTo().performClick()
+        // Encaixe à mão (na própria tela do mixer): vale na hora, sem ler as faixas de novo (a mesma prévia).
+        rule.onNodeWithText("5 ms ▶").performClick()
+        rule.onNodeWithText("+1 BAT").performClick()
         rule.waitForIdle()
         assertEquals(5, a.sets.mixing!!.nudgeMs)
         assertEquals(1, a.sets.mixing!!.beatShift)
         assertSame(p, a.sets.mixPreview, "não montou de novo")
         assertEquals(p.shiftMs(tr) + 5 + p.beatMs, p.shiftMs(a.sets.mixing!!), 0.01)
         rule.onRoot().captureRoboImage(File(out, "mobile-61-vertical-mix-encaixe.png").path)
-        rule.onNodeWithText("ZERAR").performScrollTo().performClick()
+        // O centro é o jog: arrastar para a direita adianta a que entra (vale na hora e grava ao soltar).
+        rule.onNode(hasContentDescription("Jog do encaixe")).performTouchInput { swipeRight() }
+        rule.waitForIdle()
+        assertTrue(a.sets.mixing!!.nudgeMs > 5, "o jog adiantou: ${a.sets.mixing!!.nudgeMs}")
+        assertEquals(a.sets.mixing!!.nudgeMs, a.sets.plan().first { it.fromId == tr.fromId && it.toId == tr.toId }.nudgeMs, "gravou ao soltar")
+        assertSame(p, a.sets.mixPreview, "o jog não monta de novo")
+        rule.onNodeWithText("ZERAR").performClick()
         rule.waitForIdle()
         assertEquals(0, a.sets.mixing!!.nudgeMs)
         // Repetir a troca para ensaiar de novo. (O aviso de baixo some sozinho no aparelho; aqui o relógio não anda e ele

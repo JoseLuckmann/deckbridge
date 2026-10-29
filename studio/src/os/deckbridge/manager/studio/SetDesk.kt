@@ -1029,6 +1029,18 @@ class SetDesk(private val app: StudioHost) {
         editMix(tr.copy(nudgeMs = (tr.nudgeMs + ms).coerceIn(-250, 250)))
     }
 
+    /**
+     * O jog do encaixe: arrastar empurra ou freia a que entra ([ms] a cada passo do arrasto, como o prato). Vale na hora na
+     * prévia que toca; só grava no plano quando o dedo solta ([save]) — gravar o arquivo a cada passo do arrasto era demais.
+     */
+    fun jog(ms: Int, save: Boolean) {
+        val tr = mixing ?: return
+        val changed = if (ms != 0) tr.copy(nudgeMs = (tr.nudgeMs + ms).coerceIn(-250, 250), mark = null) else tr
+        mixing = changed
+        mixPlayer?.transition = changed
+        if (save) update(changed)
+    }
+
     /** A que entra uma batida inteira para a frente (+1) ou para trás (-1): para a grade que caiu na batida errada. */
     fun shiftBeat(beats: Int) {
         val tr = mixing ?: return

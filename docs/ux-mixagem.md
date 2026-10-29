@@ -174,3 +174,10 @@ knob de nível, "igual no modelo da DDJ-400 que a gente fez".
   efeito: ECHO, o tanto de repetição e de retorno (`EchoSpec`); REVERB, o retorno; FLANGER e ROLL, quanto do efeito entra.
   O botão de cada canal agora só diz "FX" (o efeito está no painel).
 - **Um jeito de mexer em botões:** `knobGestures` é o mesmo arrasto e a mesma acessibilidade para EQ, FILTER e LEVEL.
+
+### O encaixe volta à tela do mixer, com jog (0.31.2)
+
+Pedido do dono: o encaixe fica na tela do mixer, "simulando o jogger", com a interface de antes. O painel ENCAIXE DO CH 2
+(−1 BAT, ◀ 5 ms, valor, 5 ms ▶, +1 BAT, SYNC FINO, GRADE D2, ZERAR) saiu de AJUSTAR e fica embaixo do mixer. O centro, onde
+aparece o valor, é o jog: arrastar para a direita adianta a que entra e para a esquerda freia (1 ms a cada 3 dp, até ±250
+ms); vale na hora na prévia que toca e só grava no plano quando o dedo solta (`SetDesk.jog`).

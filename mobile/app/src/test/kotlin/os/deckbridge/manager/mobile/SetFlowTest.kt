@@ -129,15 +129,16 @@ class SetFlowTest {
         a.sets.setFxLevel(0.3f, save = true)
         assertEquals(0.3f, a.sets.mixing!!.fxLevel)
         assertEquals(0.3f, a.sets.plan().first { it.fromId == a.sets.mixing!!.fromId && it.toId == a.sets.mixing!!.toId }.fxLevel)
+        // O encaixe da que entra está na própria tela do mixer (com o jog).
+        rule.onNodeWithText("ENCAIXE DO CH 2", substring = true).assertExists()
         rule.onRoot().captureRoboImage(File(out, "mobile-47-vertical-mix-mixer.png").path)
         // A aba TROCA tem os fatos da troca e o passo de agora.
         rule.onNodeWithText("TROCA").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("PASSO").assertExists()
-        // Os ajustes (com o encaixe da que entra) ficam na aba AJUSTAR; o PLAY fica fixo embaixo.
+        // Os ajustes da troca (estilo, duração, ritmo) ficam na aba AJUSTAR; o PLAY fica fixo embaixo.
         rule.onNodeWithText("AJUSTAR").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("ENCAIXE DO CH 2").performScrollTo().assertExists()
         rule.onRoot().captureRoboImage(File(out, "mobile-53-vertical-mix-ajustes.png").path)
         rule.onNodeWithText("MAIS ▾").performScrollTo().performClick()
         rule.waitForIdle()

@@ -1377,3 +1377,10 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - Retorno do dono: a tela do mixer da 0.31.0 ficou ruim; e o FX deveria ter um knob de nível como o da DDJ-400.
 - Mixer em colunas por canal com botões grandes (`KnobDial` desenhado uma vez para pequeno e grande; `knobGestures` único para EQ, FILTER e LEVEL); painel FX em grade 2×2 com o knob LEVEL; `Transition.fxLevel` guardado, `SetDesk.setFxLevel` (vale ao vivo, grava ao soltar); `MixDsp` usa o nível no eco, reverb, flanger e roll.
 - Evidência: núcleo `MixFxTest` (+1: o LEVEL muda quanto efeito entra; sem LEVEL o flanger e o reverb não mudam o som; nível guardado e relido); celular `SetFlowTest` (LEVEL na tela e guardado no plano), `MixHandTest`; captura mobile-39. O som no fone/caixa só no aparelho (`BLOCKED_HARDWARE`).
+
+## 2026-10-29 — Encaixe na tela do mixer, com jog (0.31.2)
+
+- Pedido do dono: o encaixe na tela do mixer, simulando o jog, com a interface de antes.
+- `SyncPanel` (como era, um pouco mais baixo) volta para a aba MIXER, embaixo do mixer; o valor do centro é o jog (arrastar horizontal: 1 ms a cada 3 dp); `SetDesk.jog` vale ao vivo e grava ao soltar. AJUSTAR fica só com os ajustes da troca.
+- Os quatro botões de cada canal em grade 2×2 (empilhados ficavam minúsculos, com o encaixe embaixo).
+- Evidência: celular `MixHandTest` (encaixe na própria tela; o jog adianta e grava ao soltar, sem montar a prévia de novo), `SetFlowTest`.
