@@ -69,6 +69,10 @@ class SetPlayerTest {
         val sp = assertNotNull(a.preview.setPlay, a.notice?.text)
         assertEquals(plan.size, sp.chapters.size, "um trecho por transição")
         assertTrue(sp.chapters.first().title.contains("→"))
+        // A capa da virada para o player da notificação e da tela de bloqueio.
+        val cover = SetPlaybackService.cover(sp.title, sp.chapters, 1)
+        assertEquals(640, cover.width)
+        File(out, "mobile-66-notificacao-capa-virada.png").outputStream().use { cover.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         // O serviço de mídia (notificação, controles na tela bloqueada) foi ligado.
         val started = shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).nextStartedService
         assertEquals(SetPlaybackService::class.java.name, started?.component?.className)

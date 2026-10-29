@@ -84,15 +84,44 @@ class SetPlaybackService : Service() {
         return START_NOT_STICKY
     }
 
+    /** A capa da virada tocando (refeita só quando muda de virada). */
+    private var coverAt = -2
+    private var cover: android.graphics.Bitmap? = null
+
+    private fun chapterNow(): Int {
+        val sp = preview.setPlay ?: return -1
+        return Chapter.at(sp.chapters, preview.positionMs())
+    }
+
+    private fun coverNow(): android.graphics.Bitmap? {
+        val sp = preview.setPlay ?: return null
+        val at = chapterNow()
+        if (at != coverAt || cover == null) {
+            cover = runCatching { cover(sp.title, sp.chapters, at) }.getOrNull()
+            coverAt = at
+        }
+        return cover
+    }
+
+    /** "Virada 3/8 · Sexta à noite": o número da virada e o set (a segunda linha do player). */
+    private fun subtitle(): String {
+        val sp = preview.setPlay ?: return ""
+        val at = chapterNow()
+        return if (sp.chapters.isEmpty() || at < 0) sp.title else "Virada ${at + 1}/${sp.chapters.size} · ${sp.title}"
+    }
+
     private fun publish() {
         val sp = preview.setPlay ?: return
         val pos = preview.positionMs().toLong()
+        val art = coverNow()
         session.setMetadata(
             MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, preview.nowPlaying())
-                .putString(MediaMetadata.METADATA_KEY_ARTIST, sp.title)
-                .putString(MediaMetadata.METADATA_KEY_ALBUM, "DeckBridge · set")
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, subtitle())
+                .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, subtitle())
+                .putString(MediaMetadata.METADATA_KEY_ALBUM, sp.title)
                 .putLong(MediaMetadata.METADATA_KEY_DURATION, sp.durationMs.toLong())
+                .apply { if (art != null) { putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, art); putBitmap(MediaMetadata.METADATA_KEY_ART, art) } }
                 .build(),
         )
         session.setPlaybackState(
@@ -116,14 +145,15 @@ class SetPlaybackService : Service() {
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(preview.nowPlaying().ifEmpty { "Set" })
-            .setContentText(sp?.title ?: "")
+            .setContentText(subtitle().ifEmpty { sp?.title ?: "" })
+            .setLargeIcon(coverNow())
             .setContentIntent(open)
             .setOngoing(!preview.paused)
             .setShowWhen(false)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .addAction(action(android.R.drawable.ic_media_previous, "Voltar", ACTION_PREV))
+            .addAction(action(android.R.drawable.ic_media_previous, "Virada anterior", ACTION_PREV))
             .addAction(if (preview.paused) action(android.R.drawable.ic_media_play, "Tocar", ACTION_TOGGLE) else action(android.R.drawable.ic_media_pause, "Pausar", ACTION_TOGGLE))
-            .addAction(action(android.R.drawable.ic_media_next, "Próxima", ACTION_NEXT))
+            .addAction(action(android.R.drawable.ic_media_next, "Próxima virada", ACTION_NEXT))
             .addAction(action(android.R.drawable.ic_menu_close_clear_cancel, "Parar", ACTION_STOP))
             .setStyle(Notification.MediaStyle().setMediaSession(session.sessionToken).setShowActionsInCompactView(0, 1, 2))
             .build()
@@ -157,6 +187,58 @@ class SetPlaybackService : Service() {
 
         fun stop(context: Context) {
             runCatching { context.stopService(Intent(context, SetPlaybackService::class.java)) }
+        }
+
+        /**
+         * A capa da virada para o player da notificação e da tela de bloqueio: fundo escuro, "VIRADA 3/8", a que sai (cor do
+         * deck 1) e a que entra (cor do deck 2), e embaixo a linha do set com um traço por virada (a de agora acesa).
+         */
+        fun cover(setName: String, chapters: List<Chapter>, at: Int, size: Int = 640): android.graphics.Bitmap {
+            val pal = os.deckbridge.logic.StagePalette
+            val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+            val c = android.graphics.Canvas(bmp)
+            c.drawColor(pal.bg)
+            val u = size / 640f
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            // Brilho das duas cores dos decks no fundo (a troca de um para o outro).
+            paint.shader = android.graphics.LinearGradient(0f, 0f, size.toFloat(), size.toFloat(), intArrayOf((pal.deckA and 0x00FFFFFF) or 0x55000000, pal.bg, (pal.deckB and 0x00FFFFFF) or 0x55000000), null, android.graphics.Shader.TileMode.CLAMP)
+            c.drawRect(0f, 0f, size.toFloat(), size.toFloat(), paint)
+            paint.shader = null
+            fun text(t: String, x: Float, y: Float, sizePx: Float, color: Int, bold: Boolean = false, maxW: Float = size - 2 * 48 * u) {
+                paint.color = color
+                paint.textSize = sizePx
+                paint.typeface = if (bold) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
+                var s = t
+                while (s.length > 1 && paint.measureText(s) > maxW) s = s.dropLast(2) + "…"
+                c.drawText(s, x, y, paint)
+            }
+            val left = 48 * u
+            val total = chapters.size
+            text(if (total > 0 && at >= 0) "VIRADA ${at + 1}/$total" else "SET", left, 92 * u, 34 * u, pal.accentOrange, bold = true)
+            text(setName, left, 136 * u, 28 * u, pal.inkMuted)
+            val parts = chapters.getOrNull(at)?.title?.split(" → ", limit = 2).orEmpty()
+            text("SAI", left, 250 * u, 24 * u, pal.inkMuted, bold = true)
+            text(parts.getOrNull(0) ?: setName, left, 300 * u, 46 * u, pal.deckA, bold = true)
+            text("↓", left, 370 * u, 44 * u, pal.ink)
+            text("ENTRA", left, 430 * u, 24 * u, pal.inkMuted, bold = true)
+            text(parts.getOrNull(1) ?: "", left, 480 * u, 46 * u, pal.deckB, bold = true)
+            // A linha do set: um traço por virada; as que já foram em azul, a de agora em laranja.
+            if (total > 0) {
+                val y = 568 * u
+                val w = size - 2 * left
+                val gap = 6 * u
+                val seg = (w - gap * (total - 1)) / total
+                for (i in 0 until total) {
+                    paint.color = when {
+                        i == at -> pal.accentOrange
+                        i < at -> pal.accentBlue
+                        else -> pal.line
+                    }
+                    val x0 = left + i * (seg + gap)
+                    c.drawRect(x0, y - (if (i == at) 9 else 5) * u, x0 + seg, y + (if (i == at) 9 else 5) * u, paint)
+                }
+            }
+            return bmp
         }
     }
 }
