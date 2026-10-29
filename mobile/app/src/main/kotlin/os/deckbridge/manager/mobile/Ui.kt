@@ -183,14 +183,8 @@ private fun UndoButtons(app: ManagerApp) {
     if (m.redoStack.isNotEmpty()) TextButton(onClick = { m.redo() }, modifier = Modifier.semantics { contentDescription = "Refazer" }) { Text("↷", fontSize = 20.sp) }
 }
 
-/** O que falta em cada área, num número pequeno no botão: músicas sem nota (MARCAR). */
-private fun pending(app: ManagerApp, t: Tab?): Int = when (t) {
-    null -> app.model.view?.tracks?.count { it.rating == 0 } ?: 0
-    else -> 0
-}
-
 /** O botão da área do próximo passo do guia leva o destaque (contorno duplo). */
-private fun spotlit(app: ManagerApp, t: Tab?): Boolean {
+private fun spotlit(app: ManagerApp, t: Tab): Boolean {
     if (app.guideHidden) return false
     val step = app.step() ?: return false
     // Importar se faz na própria lista de músicas (já aberta no começo): sem destaque na fileira.
@@ -199,28 +193,20 @@ private fun spotlit(app: ManagerApp, t: Tab?): Boolean {
 }
 
 /**
- * Fileira de botões iguais, como SOURCE / BROWSE / TAG LIST / PLAYLIST / SEARCH / MENU, na ordem do trabalho: músicas,
- * marcar, playlists, pendrive. O ativo: azul-escuro, contorno azul.
+ * Fileira de botões iguais, como SOURCE / BROWSE / TAG LIST / PLAYLIST / SEARCH / MENU, na ordem do trabalho: músicas
+ * (onde também se marca), playlists, pendrive. O ativo: azul-escuro, contorno azul.
  */
 @Composable
 private fun NavBar(app: ManagerApp) {
     // Uma barra só, sem caixas: o ativo em azul com o traço em cima, os outros apagados (como as abas do player).
     Row(Modifier.fillMaxWidth().background(Palette.surface).border(BorderStroke(0.5.dp, Palette.line)).height(56.dp)) {
-        listOf(Tab.LIBRARY, null, Tab.PLAYLISTS, Tab.USB, Tab.MENU).forEach { t ->
-            val on = t != null && app.tab == t
-            val label = t?.short() ?: "MARCAR"
-            val count = pending(app, t)
-            Box(
-                Modifier.weight(1f).fillMaxHeight().clickable { if (t == null) app.startTriage() else app.tab = t },
-                contentAlignment = Alignment.Center,
-            ) {
+        // MARCAR não tem aba: é o primeiro botão da fileira de filtros de MÚSICAS.
+        listOf(Tab.LIBRARY, Tab.PLAYLISTS, Tab.USB, Tab.MENU).forEach { t ->
+            val on = app.tab == t
+            Box(Modifier.weight(1f).fillMaxHeight().clickable { app.tab = t }, contentAlignment = Alignment.Center) {
                 Box(Modifier.align(Alignment.TopCenter).fillMaxWidth(0.6f).height(2.dp).background(if (on) Palette.blue else Palette.surface))
                 Row(Modifier.spotlight(spotlit(app, t)).padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(label, color = if (on) Palette.blue else Palette.mutedBright, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1)
-                    if (count > 0) Text(
-                        if (count > 99) "99+" else "$count", color = Palette.bg, fontSize = 9.sp, fontFamily = Mono, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 3.dp).clip(RbShape).background(Palette.orange).padding(horizontal = 3.dp),
-                    )
+                    Text(t.short(), color = if (on) Palette.blue else Palette.mutedBright, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1)
                 }
             }
         }
@@ -231,12 +217,12 @@ private fun NavBar(app: ManagerApp) {
 @Composable
 private fun NavRail(app: ManagerApp) {
     Column(Modifier.width(64.dp).fillMaxHeight().background(Palette.bg).border(BorderStroke(1.dp, Palette.line)).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        data class Item(val tab: Tab?, val glyph: String, val label: String)
-        listOf(Item(Tab.LIBRARY, "≡", "MÚSICAS"), Item(null, "★", "MARCAR"), Item(Tab.PLAYLISTS, "♫", "LISTAS"), Item(Tab.USB, "⎘", "PENDRIVE"), Item(Tab.MENU, "⋯", "MENU")).forEach { it ->
-            val on = it.tab != null && app.tab == it.tab
+        data class Item(val tab: Tab, val glyph: String, val label: String)
+        listOf(Item(Tab.LIBRARY, "≡", "MÚSICAS"), Item(Tab.PLAYLISTS, "♫", "LISTAS"), Item(Tab.USB, "⎘", "PENDRIVE"), Item(Tab.MENU, "⋯", "MENU")).forEach { it ->
+            val on = app.tab == it.tab
             val hot = spotlit(app, it.tab)
             Column(
-                Modifier.fillMaxWidth().spotlight(hot).clickable { if (it.tab == null) app.startTriage() else app.tab = it.tab }.padding(vertical = 8.dp),
+                Modifier.fillMaxWidth().spotlight(hot).clickable { app.tab = it.tab }.padding(vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(it.glyph, color = if (on) Palette.blue else Palette.mutedBright, fontSize = 20.sp)

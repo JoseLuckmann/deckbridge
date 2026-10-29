@@ -2,7 +2,8 @@
 
 Pedido do dono (2026-10-29): "subi algumas faixas duplicadas, mesma música e nomes diferentes, e outras faixas com nomes
 diferentes, e ele não lidou em refinar o nome, artista etc."; e "esses recursos de menu não deveriam ficar dentro dos
-meus menus específicos (por exemplo Analisar todas)? Ali só ter coisas que transcendem todo o app?"
+meus menus específicos (por exemplo Analisar todas)? Ali só ter coisas que transcendem todo o app?"; e "a função de
+marcar deveria ficar dentro da biblioteca de músicas mesmo, não precisa de um menu só dele".
 
 ## O que estava errado
 
@@ -24,7 +25,7 @@ meus menus específicos (por exemplo Analisar todas)? Ali só ter coisas que tra
 | Arrumar as que já entraram | MÚSICAS → ⋯ → Arrumar nomes: antes → depois de cada uma, tudo marcado, nada muda sem Aplicar; Desfazer no aviso. | `Organizer` (regra "Título e artista arrumados") |
 | A mesma música com outro nome | Impressão digital do áudio: não importa duas vezes (com áudio, duração até 3 s e BPM até 0,5 batendo), e MÚSICAS → ⋯ → Procurar repetidas mostra os grupos ("MESMO ÁUDIO" ou "MESMO NOME E DURAÇÃO"). | `AudioPrint`, `PrintStore`, `Duplicates` |
 | Juntar sem perder nada | Fica a sugerida (melhor qualidade, em mais playlists, com nota, nome arrumado) ou a que você tocar; ela entra nas playlists das outras no lugar delas (a ordem do set fica), leva a nota, a cor, o gênero e o comentário, e as outras saem. Um Desfazer volta tudo. | `Duplicates.merge` |
-| Menus no lugar | MENU só com o que vale para o app todo (Modo DJ, ajuda, tom, teste de áudio, cópias de segurança). Ferramentas da biblioteca no ⋯ do topo de MÚSICAS; "Transição" já estava no ⋯ do SET. | `LibraryTools`, `MenuTab` |
+| Menus no lugar | MENU só com o que vale para o app todo (Modo DJ, ajuda, tom, teste de áudio, cópias de segurança). Ferramentas da biblioteca no ⋯ do topo de MÚSICAS; "Transição" já estava no ⋯ do SET. MARCAR deixou de ser aba: é o primeiro botão da fileira de MÚSICAS ("★ MARCAR 4", só quando há sem nota); a barra de baixo fica com MÚSICAS, PLAYLISTS, PENDRIVE e MENU. | `LibraryTools`, `MenuTab`, `NavBar` |
 
 ## Por que assim
 

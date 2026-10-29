@@ -55,7 +55,7 @@ class SetVideoTest : VideoTestBase() {
         app.notice = null
         hold(1.5)
         val stars = mapOf("Imagination" to 5, "See You Again" to 5, "Shinjuku" to 4, "How Does It Feel" to 4, "Fuck It" to 3)
-        tapText("MARCAR")
+        tapText("★ MARCAR")
         hold(1.0)
         while (app.triage != null && app.triageAt < app.triage!!.size) {
             val title = app.model.view!!.track(app.triage!![app.triageAt])!!.title

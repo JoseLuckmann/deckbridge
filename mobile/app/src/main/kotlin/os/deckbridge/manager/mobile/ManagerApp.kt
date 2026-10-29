@@ -44,9 +44,9 @@ enum class GuideStep(val label: String) {
     }
 
     /** A área do app onde este passo se faz. */
-    val tab: Tab? get() = when (this) {
+    val tab: Tab get() = when (this) {
         IMPORT -> Tab.LIBRARY
-        RATE -> null
+        RATE -> Tab.LIBRARY
         PLAYLIST -> Tab.PLAYLISTS
         USB -> Tab.USB
     }

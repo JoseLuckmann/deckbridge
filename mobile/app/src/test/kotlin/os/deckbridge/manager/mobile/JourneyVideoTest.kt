@@ -82,7 +82,7 @@ class JourneyVideoTest : VideoTestBase() {
         // 2. Marcar: triagem, uma nota por faixa (a triagem passa sozinha para a próxima).
         step("2 · Marcar: nota em cada faixa")
         val stars = mapOf("Imagination" to 5, "See You Again" to 5, "Shinjuku" to 4, "How Does It Feel" to 4, "Fuck It" to 3)
-        tapText("MARCAR")
+        tapText("★ MARCAR")
         hold(1.2)
         while (app.triage != null && app.triageAt < app.triage!!.size) {
             val id = app.triage!![app.triageAt]

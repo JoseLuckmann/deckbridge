@@ -65,6 +65,15 @@ fun LibraryTab(app: ManagerApp, actions: Actions) {
         if (app.searchOpen || m.query.isNotEmpty()) SearchField(app) { dialog = Dialog.SearchHelp }
         // Uma única fileira: filtros, a playlist alvo (se houver) e "salvar" quando a lista está filtrada. Sem músicas, nada.
         if (m.view?.tracks?.isNotEmpty() == true) LazyRow(Modifier.padding(vertical = 6.dp), contentPadding = PaddingValues(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // MARCAR é trabalho sobre as músicas: mora aqui, na frente da fileira, com quantas faltam (sem aba própria).
+            val unrated = counts[QuickFilter.UNRATED] ?: 0
+            if (unrated > 0) item {
+                FilterChip(
+                    selected = false, onClick = { app.startTriage() },
+                    modifier = Modifier.spotlight(!app.guideHidden && app.step() == GuideStep.RATE),
+                    label = { Text("★ MARCAR", color = Palette.orange, fontWeight = FontWeight.Bold, maxLines = 1); Text(" $unrated", color = Palette.orange, fontFamily = Mono, maxLines = 1) },
+                )
+            }
             m.target?.let { id -> m.playlist(id) }?.let { p ->
                 // Para onde vai o "+" de cada linha.
                 item { FilterChip(selected = true, onClick = { dialog = Dialog.PickTarget }, label = { Text("＋ ${p.name}", maxLines = 1) }) }

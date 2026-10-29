@@ -2,6 +2,7 @@ package os.deckbridge.manager.mobile
 
 import os.deckbridge.manager.studio.*
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
@@ -57,9 +58,8 @@ class NewcomerFlowTest {
         rule.onNodeWithText("IMPORTAR MÚSICAS").assertExists()
         click("PLAYLISTS")
         rule.onNodeWithText("IMPORTAR MÚSICAS").assertExists()
-        // MARCAR sem músicas responde (não fica mudo).
-        click("MARCAR")
-        assertEquals("Importe músicas primeiro", a.notice?.text)
+        // MARCAR não tem aba: mora em MÚSICAS e só aparece quando há músicas sem nota.
+        rule.onAllNodes(androidx.compose.ui.test.hasText("MARCAR", substring = true)).assertCountEquals(0)
     }
 
     @Test fun theGuideWalksThroughRatePlaylistMixAndUsb() {
