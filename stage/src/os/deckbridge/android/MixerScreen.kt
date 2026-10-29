@@ -66,7 +66,7 @@ fun MixerScreen(
 ) {
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(StagePalette.bg))) {
         // Celular deitado: não cabe tudo de uma vez sem cortar os números; vira três abas (canais, master, opções).
-        if (maxHeight < TIGHT_HEIGHT || maxWidth < 1000.dp) {
+        if (maxHeight < os.deckbridge.shared.ScreenSize.TIGHT_HEIGHT || maxWidth < 1000.dp) {
             TightMixer(mixer, onKnob, onColorFx, console, chCurve, crossCurve, onConsole, onCurves, onClose)
         } else {
             WideMixer(mixer, onKnob, onColorFx, console, chCurve, crossCurve, onConsole, onCurves, onClose)

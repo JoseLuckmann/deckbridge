@@ -201,7 +201,7 @@ fun PlayerScreen(
         // Celular deitado (S25 Ultra: 891×412 dp; 832×384 com zoom de tela maior): a altura é a metade da do tablet.
         // As ondas são o que o DJ olha; o topo vira uma linha só, a coluna de info dos decks sai (o tom e os compassos
         // já estão no cartão e na onda) e os hot cues e cartões encolhem.
-        val tight = maxHeight < TIGHT_HEIGHT
+        val tight = maxHeight < os.deckbridge.shared.ScreenSize.TIGHT_HEIGHT
         val side = if (compact) 112.dp else 168.dp
         val rail = if (tight) 136.dp else if (compact) 156.dp else 228.dp
         val cardHeight = if (tight) 136.dp else if (compact) 150.dp else 208.dp
@@ -370,9 +370,6 @@ fun PlayerScreen(
         }
     }
 }
-
-/** Abaixo desta altura (celular deitado) o player usa o arranjo apertado. O Tab S6 Lite deitado tem 800 dp. */
-val TIGHT_HEIGHT = 520.dp
 
 @Composable
 private fun TopBar(

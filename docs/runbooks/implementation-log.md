@@ -1348,3 +1348,12 @@ Pedido do dono: "trabalho forte de identificar problemas e bugs nessa parte" (ou
 - Pedido do dono: não duplicar este tipo de recurso; usar as mesmas funções.
 - Nova pasta `shared/src` (pacote `os.deckbridge.shared`), incluída pelos três builds (app DJ, Biblioteca, computador), para o que as telas do modo DJ (`stage/`) e do MIX (`studio/`) dividem. Primeira função: `drawTextFitting` (desenha o texto só se cabe inteiro, com fundo opcional). As cinco cópias da conferência (MIX e as ondas do modo DJ) passaram a chamar ela.
 - `DesignSystemTest` ganhou a regra: nenhum `drawText` solto fora de `shared/` (também varre `stage/`).
+
+## 2026-10-29 — Modo DJ em qualquer tela (celular deitado, S25 Ultra)
+
+- Relato do dono: "no meu Samsung S25 Ultra fica horrível". Os prints do modo DJ eram em mdpi (px = dp) e nenhum tinha a altura de um celular deitado (412 dp, metade da do Tab S6 Lite). Detalhes e decisões: `docs/ux-telas-adaptaveis.md`.
+- Defeitos vistos nas capturas novas (S25 Ultra 891×412 e 832×384 dp): ondas com ~45 dp; info dos decks cortada; Beat FX cortado embaixo; MIXER com números cortados e o crossfader por cima do medidor; RMX com nomes cortados e o ganho do isolador em duas linhas; barras do sistema comendo altura; em pé, dois decks sem caber.
+- Correções: arranjo apertado abaixo de 520 dp de altura (topo numa linha, sem a coluna de info, hot cues e cartões menores; ondas ~90 dp); painel do Beat FX rola; MIXER em abas (CANAIS, MASTER, OPÇÕES); RMX com a última linha em duas; tela cheia de palco (barras escondidas, deslize mostra) com folga só no recorte da câmera; modo DJ sempre deitado (`sensorLandscape`). O Tab S6 Lite não muda.
+- Os cortes de tamanho (`ScreenSize.WIDE_DP` do modo Biblioteca e `ScreenSize.TIGHT_HEIGHT` do modo DJ) moram em `shared/src`, usados por stage/ e studio/.
+- Evidência: modo DJ `:app:testMultiDebugUnitTest` 153 (8 pulados por arquivos locais), 0 falhas, com `PhoneScreenShots` (capturas S25 Ultra e Tab S6 Lite) e `DjModeOrientation`; Biblioteca (DesignSystem, Screenshot, MixFinderUi, SetPlayer, DevMode, Modes) 27, 0 falhas; computador `./gradlew test` 15 (2 pulados), 0 falhas.
+- `BLOCKED_HARDWARE`: não visto num S25 Ultra de verdade (o Robolectric não tem barras do sistema nem recorte de câmera); o tamanho real do recorte e o gesto das barras ficam para o aparelho.

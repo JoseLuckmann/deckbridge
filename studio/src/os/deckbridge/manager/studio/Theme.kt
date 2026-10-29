@@ -81,8 +81,8 @@ fun rgb(v: Int?, fallback: Color = Color.Gray): Color = if (v == null) fallback 
 /** Cor do pad de hot cue (1 = A … 8 = H), a mesma do player, como RGB gravável no cue. */
 fun padRgb(hot: Int): Int = StagePalette.pads[(hot - 1).coerceIn(0, 7)] and 0xFFFFFF
 
-/** A partir desta largura a tela vira duas colunas (celular deitado, tablet, computador). */
-const val WIDE_DP = 600
+/** A partir desta largura a tela vira duas colunas (celular deitado, tablet, computador); o corte mora em shared/. */
+const val WIDE_DP = os.deckbridge.shared.ScreenSize.WIDE_DP
 
 /** Cantos quase retos, como os botões e painéis do player. */
 val RbShape = RoundedCornerShape(3.dp)

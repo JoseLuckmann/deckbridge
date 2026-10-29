@@ -20,7 +20,7 @@ mostraram, no S25 Ultra deitado:
 
 ## O que faz agora
 
-- **Arranjo apertado** quando a altura é menor que 520 dp (`TIGHT_HEIGHT`, `PlayerScreen.kt`): topo numa linha só (navegação,
+- **Arranjo apertado** quando a altura é menor que 520 dp (`ScreenSize.TIGHT_HEIGHT`, em `shared/src`, junto do corte de largura do modo Biblioteca): topo numa linha só (navegação,
   REC, relógio e INFO; 34 dp), sem a coluna de info dos decks (tom no cartão, compassos na onda), hot cues sem rótulo
   (60 dp), cartões de 136 dp sem a régua de minutos, faixa do Beat FX mais estreita. As ondas passam de ~45 para ~90 dp
   cada no S25 Ultra.
