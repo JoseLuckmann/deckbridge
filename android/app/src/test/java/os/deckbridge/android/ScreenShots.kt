@@ -785,3 +785,11 @@ class ScreenShotsPhrases {
         )
     }
 }
+
+// Para os prints de celular (PhoneScreenShots.kt).
+internal fun simulatedCatalogForTests(): RbCatalog = simulatedCatalog()
+internal fun shot(path: String, fill: (ScreenshotActivity) -> Unit) = capture(path, fill)
+internal fun playerForTests(
+    activity: ScreenshotActivity, catalog: RbCatalog, zoom: WaveZoom, fx: BeatFxState, browse: BrowsePlace? = null,
+    posA: Float = 9.2f, overlay: String = "", nav: String = "", rmx: RmxState = RmxState(), leftTitle: String = "Night Bus", startPopup: String = "",
+): ComposeView = player(activity, catalog, zoom, fx, browse, posA = posA, overlay = overlay, nav = nav, rmx = rmx, leftTitle = leftTitle, startPopup = startPopup)

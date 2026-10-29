@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -14,7 +15,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -57,11 +64,120 @@ fun MixerScreen(
     onCurves: (Int, Int) -> Unit = { _, _ -> },
     onClose: () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().background(Color(StagePalette.bg)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color(StagePalette.bg))) {
+        // Celular deitado: não cabe tudo de uma vez sem cortar os números; vira três abas (canais, master, opções).
+        if (maxHeight < TIGHT_HEIGHT || maxWidth < 1000.dp) {
+            TightMixer(mixer, onKnob, onColorFx, console, chCurve, crossCurve, onConsole, onCurves, onClose)
+        } else {
+            WideMixer(mixer, onKnob, onColorFx, console, chCurve, crossCurve, onConsole, onCurves, onClose)
+        }
+    }
+}
+
+private val MIXER_PAGES = listOf("CANAIS", "MASTER", "OPÇÕES")
+
+@Composable
+private fun TightMixer(
+    mixer: MixerState,
+    onKnob: (PerformanceAction) -> Unit,
+    onColorFx: (Int) -> Unit,
+    console: ConsoleState,
+    chCurve: Int,
+    crossCurve: Int,
+    onConsole: (ConsoleState) -> Unit,
+    onCurves: (Int, Int) -> Unit,
+    onClose: () -> Unit,
+) {
+    var page by remember { mutableIntStateOf(0) }
+    Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextInk("MIXER", color = Color(StagePalette.accentBlue), fontSize = 16.sp, weight = FontWeight.Bold, modifier = Modifier.width(72.dp))
+            MIXER_PAGES.forEachIndexed { index, name ->
+                UtilityButton(name, { page = index }, selected = page == index, modifier = Modifier.weight(1f))
+            }
+            UtilityButton("FECHAR", onClose)
+        }
+        when (page) {
+            0 -> Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Channel(0, mixer, console, onKnob, onConsole, Modifier.weight(1f), small = true)
+                Channel(1, mixer, console, onKnob, onConsole, Modifier.weight(1f), small = true)
+            }
+            1 -> TightCenter(mixer, console, onKnob, onConsole, Modifier.weight(1f).fillMaxWidth())
+            else -> Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MixerOptions(mixer, onColorFx, console, chCurve, crossCurve, onConsole, onCurves)
+            }
+        }
+    }
+}
+
+/** O master num arranjo baixo: isolador, Send e fones lado a lado, o medidor à direita e o crossfader embaixo. */
+@Composable
+private fun TightCenter(mixer: MixerState, console: ConsoleState, onKnob: (PerformanceAction) -> Unit, onConsole: (ConsoleState) -> Unit, modifier: Modifier) {
+    Column(modifier.border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.width(56.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextInk("ISOLATOR", fontSize = 10.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted), maxLines = 1)
+                UtilityButton("ON", { onConsole(console.copy(isolatorOn = !console.isolatorOn)) }, selected = console.isolatorOn)
+            }
+            for (band in 2 downTo 0) {
+                val knob = console.isolator[band]
+                Bar(EQ_BAND_NAMES[band], knob, isolatorDbLabel(knob), true, Modifier.weight(1f), kill = console.isolatorOn && knob <= 0.03f, small = true) {
+                    onConsole(console.copy(isolator = console.isolator.mapIndexed { index, value -> if (index == band) it else value }))
+                }
+            }
+            SendBars(console, onConsole, small = true)
+            Bar("HEAD MIX", mixer.headMix, headMixLabel(mixer.headMix), false, Modifier.weight(1f), small = true) {
+                onKnob(PerformanceAction(-1, PerformanceAction.Kind.HEAD_MIX, slider = it.toDouble()))
+            }
+            Bar("HEAD LVL", mixer.headLevel, headLevelDbLabel(mixer.headLevel), false, Modifier.weight(1f), small = true) {
+                onKnob(PerformanceAction(-1, PerformanceAction.Kind.HEAD_GAIN, slider = it.toDouble()))
+            }
+            Bar("OUT", mixer.masterLevel, masterLabel(mixer.masterLevel), false, Modifier.weight(1f), small = true) {
+                onKnob(PerformanceAction(-1, PerformanceAction.Kind.MASTER_LEVEL, slider = it.toDouble()))
+            }
+            Meter("MASTER", listOf(mixer.levels[2], mixer.levels[3]), Modifier.width(44.dp).fillMaxHeight())
+        }
+        Crossfader(mixer)
+    }
+}
+
+@Composable
+private fun WideMixer(
+    mixer: MixerState,
+    onKnob: (PerformanceAction) -> Unit,
+    onColorFx: (Int) -> Unit,
+    console: ConsoleState,
+    chCurve: Int,
+    crossCurve: Int,
+    onConsole: (ConsoleState) -> Unit,
+    onCurves: (Int, Int) -> Unit,
+    onClose: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextInk("MIXER", color = Color(StagePalette.accentBlue), fontSize = 20.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
             UtilityButton("FECHAR", onClose)
         }
+        MixerOptions(mixer, onColorFx, console, chCurve, crossCurve, onConsole, onCurves)
+        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Channel(0, mixer, console, onKnob, onConsole, Modifier.weight(1f))
+            Center(mixer, console, onKnob, onConsole, Modifier.width(260.dp))
+            Channel(1, mixer, console, onKnob, onConsole, Modifier.weight(1f))
+        }
+    }
+}
+
+/** COLOR FX, curvas e SEND: as escolhas que valem para a mesa toda. */
+@Composable
+private fun MixerOptions(
+    mixer: MixerState,
+    onColorFx: (Int) -> Unit,
+    console: ConsoleState,
+    chCurve: Int,
+    crossCurve: Int,
+    onConsole: (ConsoleState) -> Unit,
+    onCurves: (Int, Int) -> Unit,
+) {
         // COLOR FX: o tipo vale para os dois canais; o knob FILTER de cada canal faz o resto.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             TextInk("COLOR FX", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted), modifier = Modifier.width(84.dp))
@@ -87,16 +203,10 @@ fun MixerScreen(
                 UtilityButton(name, { onConsole(console.copy(sendType = if (console.sendType == index) -1 else index)) }, selected = console.sendType == index, modifier = Modifier.weight(1f))
             }
         }
-        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Channel(0, mixer, console, onKnob, onConsole, Modifier.weight(1f))
-            Center(mixer, console, onKnob, onConsole, Modifier.width(260.dp))
-            Channel(1, mixer, console, onKnob, onConsole, Modifier.weight(1f))
-        }
-    }
 }
 
 @Composable
-private fun Channel(deck: Int, mixer: MixerState, console: ConsoleState, onKnob: (PerformanceAction) -> Unit, onConsole: (ConsoleState) -> Unit, modifier: Modifier) {
+private fun Channel(deck: Int, mixer: MixerState, console: ConsoleState, onKnob: (PerformanceAction) -> Unit, onConsole: (ConsoleState) -> Unit, modifier: Modifier, small: Boolean = false) {
     Column(modifier.border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextInk("CH ${deck + 1}", fontSize = 16.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -104,31 +214,31 @@ private fun Channel(deck: Int, mixer: MixerState, console: ConsoleState, onKnob:
                 TextInk("CUE FONES", fontSize = 12.sp, weight = FontWeight.Bold, color = Color(StagePalette.accentOrange))
             }
         }
-        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Bar("TRIM", mixer.trim[deck], trimDbLabel(mixer.trim[deck]), true, Modifier.weight(1f)) {
+        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(if (small) 4.dp else 8.dp)) {
+            Bar("TRIM", mixer.trim[deck], trimDbLabel(mixer.trim[deck]), true, Modifier.weight(1f), small = small) {
                 onKnob(PerformanceAction(deck, PerformanceAction.Kind.TRIM, slider = it.toDouble()))
             }
             // COMP (DJM-V10): todo embaixo é o som original.
             val comp = console.comp[deck]
-            Bar("COMP", comp, if (comp < 0.01f) "OFF" else "%d".format((comp * 10).toInt()), false, Modifier.weight(1f)) {
+            Bar("COMP", comp, if (comp < 0.01f) "OFF" else "%d".format((comp * 10).toInt()), false, Modifier.weight(1f), small = small) {
                 onConsole(console.copy(comp = console.comp.mapIndexed { index, value -> if (index == deck) it else value }))
             }
             // HI no alto, como no mixer: a ordem da tela é HI, MID, LOW.
             for (band in 2 downTo 0) {
                 val knob = mixer.eq[deck][band]
-                Bar(EQ_BAND_NAMES[band], knob, eqDbLabel(knob), true, Modifier.weight(1f), kill = knob <= 0.03f) {
+                Bar(EQ_BAND_NAMES[band], knob, eqDbLabel(knob), true, Modifier.weight(1f), kill = knob <= 0.03f, small = small) {
                     onKnob(PerformanceAction(deck, PerformanceAction.Kind.EQ, hotIndex = band, slider = it.toDouble()))
                 }
             }
             val filter = mixer.filter[deck] / 127f
-            Bar("FILTER", filter, filterLabel(mixer.filter[deck]), true, Modifier.weight(1f)) {
+            Bar("FILTER", filter, filterLabel(mixer.filter[deck]), true, Modifier.weight(1f), small = small) {
                 onKnob(PerformanceAction(deck, PerformanceAction.Kind.FILTER, slider = it.toDouble()))
             }
             val send = console.send[deck]
-            Bar("SEND", send, if (send < 0.01f) "OFF" else "%d%%".format((send * 100).toInt()), false, Modifier.weight(1f)) {
+            Bar("SEND", send, if (send < 0.01f) "OFF" else "%d%%".format((send * 100).toInt()), false, Modifier.weight(1f), small = small) {
                 onConsole(console.copy(send = console.send.mapIndexed { index, value -> if (index == deck) it else value }))
             }
-            Bar("FADER", mixer.volume[deck], "%d%%".format((mixer.volume[deck] * 100).toInt()), false, Modifier.weight(1f)) {
+            Bar("FADER", mixer.volume[deck], "%d%%".format((mixer.volume[deck] * 100).toInt()), false, Modifier.weight(1f), small = small) {
                 onKnob(PerformanceAction(deck, PerformanceAction.Kind.VOLUME, slider = it.toDouble()))
             }
             Meter("LVL", listOf(mixer.levels[deck]), Modifier.width(30.dp))
@@ -154,18 +264,7 @@ private fun Center(mixer: MixerState, console: ConsoleState, onKnob: (Performanc
             }
         }
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Bar(if (console.sendType == 3) "SIZE" else "FEEDBACK", console.sendSize, "%d".format((console.sendSize * 10).toInt()), false, Modifier.weight(1f)) {
-                onConsole(console.copy(sendSize = it))
-            }
-            Bar("TIME", console.sendTime, sendTimeLabel(console.sendType, console.sendTime), false, Modifier.weight(1f)) {
-                onConsole(console.copy(sendTime = it))
-            }
-            Bar("TONE", console.sendTone, filterLabel((console.sendTone * 127).toInt()), true, Modifier.weight(1f)) {
-                onConsole(console.copy(sendTone = it))
-            }
-            Bar("RETURN", console.sendReturn, "%d%%".format((console.sendReturn * 100).toInt()), false, Modifier.weight(1f)) {
-                onConsole(console.copy(sendReturn = it))
-            }
+            SendBars(console, onConsole)
         }
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Bar("HEAD MIX", mixer.headMix, headMixLabel(mixer.headMix), false, Modifier.weight(1f)) {
@@ -179,13 +278,38 @@ private fun Center(mixer: MixerState, console: ConsoleState, onKnob: (Performanc
             }
         }
         Meter("MASTER", listOf(mixer.levels[2], mixer.levels[3]), Modifier.height(90.dp).fillMaxWidth())
-        TextInk("CROSSFADER", fontSize = 11.sp, color = Color(StagePalette.inkMuted))
-        TextInk(crossfaderLabel(mixer.cross), fontSize = 14.sp, weight = FontWeight.Bold, mono = true)
-        Canvas(Modifier.fillMaxWidth().height(14.dp).background(Color(StagePalette.bg)).border(1.dp, Color(StagePalette.line))) {
-            val x = size.width * mixer.cross.coerceIn(0f, 1f)
-            drawLine(Color(StagePalette.ink), Offset(size.width * 0.5f, 0f), Offset(size.width * 0.5f, size.height), 1f)
-            drawRect(Color(StagePalette.accentBlue), Offset((x - 5f).coerceAtLeast(0f), 0f), Size(10f, size.height))
-        }
+        Crossfader(mixer)
+    }
+}
+
+/** Os quatro controles do Send (tamanho/realimentação, tempo, tom, retorno), numa linha com peso. */
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.SendBars(console: ConsoleState, onConsole: (ConsoleState) -> Unit, small: Boolean = false) {
+    Bar(if (console.sendType == 3) "SIZE" else "FEEDBACK", console.sendSize, "%d".format((console.sendSize * 10).toInt()), false, Modifier.weight(1f), small = small) {
+        onConsole(console.copy(sendSize = it))
+    }
+    Bar("TIME", console.sendTime, sendTimeLabel(console.sendType, console.sendTime), false, Modifier.weight(1f), small = small) {
+        onConsole(console.copy(sendTime = it))
+    }
+    Bar("TONE", console.sendTone, filterLabel((console.sendTone * 127).toInt()), true, Modifier.weight(1f), small = small) {
+        onConsole(console.copy(sendTone = it))
+    }
+    Bar("RETURN", console.sendReturn, "%d%%".format((console.sendReturn * 100).toInt()), false, Modifier.weight(1f), small = small) {
+        onConsole(console.copy(sendReturn = it))
+    }
+}
+
+/** O crossfader: o rótulo e o valor numa linha, a barra embaixo. */
+@Composable
+private fun Crossfader(mixer: MixerState) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        TextInk("CROSSFADER", fontSize = 11.sp, color = Color(StagePalette.inkMuted), maxLines = 1, modifier = Modifier.weight(1f))
+        TextInk(crossfaderLabel(mixer.cross), fontSize = 14.sp, weight = FontWeight.Bold, mono = true, maxLines = 1)
+    }
+    Canvas(Modifier.fillMaxWidth().height(14.dp).background(Color(StagePalette.bg)).border(1.dp, Color(StagePalette.line))) {
+        val x = size.width * mixer.cross.coerceIn(0f, 1f)
+        drawLine(Color(StagePalette.ink), Offset(size.width * 0.5f, 0f), Offset(size.width * 0.5f, size.height), 1f)
+        drawRect(Color(StagePalette.accentBlue), Offset((x - 5f).coerceAtLeast(0f), 0f), Size(10f, size.height))
     }
 }
 
@@ -206,9 +330,9 @@ private fun filterLabel(value: Int): String = when {
 
 /** Barra vertical: o valor sobe de baixo; a linha marca o centro. Arrastar muda o valor. */
 @Composable
-private fun Bar(label: String, knob: Float, text: String, centred: Boolean, modifier: Modifier, kill: Boolean = false, onChange: (Float) -> Unit) {
+private fun Bar(label: String, knob: Float, text: String, centred: Boolean, modifier: Modifier, kill: Boolean = false, small: Boolean = false, onChange: (Float) -> Unit) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        TextInk(text, fontSize = 13.sp, weight = FontWeight.Bold, mono = true, color = Color(if (kill) StagePalette.onAir else StagePalette.ink), maxLines = 1)
+        TextInk(text, fontSize = if (small) 10.sp else 13.sp, weight = FontWeight.Bold, mono = true, color = Color(if (kill) StagePalette.onAir else StagePalette.ink), maxLines = 1)
         Box(
             Modifier.weight(1f).fillMaxWidth().padding(vertical = 4.dp).border(1.5.dp, Color(if (kill) StagePalette.onAir else StagePalette.line)).pointerInput(label) {
                 detectVerticalDragGestures { change, _ ->
@@ -223,7 +347,7 @@ private fun Bar(label: String, knob: Float, text: String, centred: Boolean, modi
                 if (centred) drawLine(Color(StagePalette.ink), Offset(0f, size.height * 0.5f), Offset(size.width, size.height * 0.5f), 2f)
             }
         }
-        TextInk(label, fontSize = 12.sp, weight = FontWeight.Bold, maxLines = 1)
+        TextInk(label, fontSize = if (small) 9.sp else 12.sp, weight = FontWeight.Bold, maxLines = 1)
     }
 }
 

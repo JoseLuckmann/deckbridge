@@ -188,8 +188,12 @@ fun RmxDock(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit, compa
     val build = rmx.scene < 4
     val accent = Color(if (build) StagePalette.accentOrange else StagePalette.accentBlue)
     val drumArmed = rmx.xOn && rmx.xMode == 2
-    val row = if (compact) 36.dp else 46.dp
-    Row(modifier.border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+    // Estreito (celular deitado, tablet de 7"): a última linha (RELEASE, ROLL, CH) vira duas, senão os nomes eram
+    // cortados ("ECH…", "BAC…"), e o isolador encolhe.
+    val split = maxWidth < 1250.dp
+    val row = if (split && maxHeight < 300.dp) 30.dp else if (compact) 36.dp else 46.dp
+    Row(Modifier.fillMaxSize().border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextInk("REMIX FX", color = accent, fontSize = if (compact) 13.sp else 16.sp, weight = FontWeight.Bold)
@@ -241,7 +245,29 @@ fun RmxDock(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit, compa
                 MiniChoice("ECHO OUT", rmx.release == 1, Modifier.weight(1f).height(row), big = true) { onRmx(rmx.copy(release = if (rmx.release == 1) -1 else 1, panel = true)) }
                 MiniChoice("BACKSPIN", rmx.release == 2, Modifier.weight(1f).height(row), big = true) { onRmx(rmx.copy(release = if (rmx.release == 2) -1 else 2, panel = true)) }
                 MiniChoice(if (rmx.gate) "GATE ON" else "GATE", rmx.gate, Modifier.weight(0.8f).height(row), big = true) { onRmx(rmx.copy(gate = !rmx.gate)) }
-                TextInk("ROLL", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = Modifier.padding(start = 4.dp))
+                if (!split) RollAndChannel(rmx, onRmx, row, false)
+            }
+            if (split) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                RollAndChannel(rmx, onRmx, row, true)
+            }
+        }
+        // ISOLATE dos dois canais, compacto, à direita.
+        Row(Modifier.width(if (split) 200.dp else if (compact) 250.dp else 330.dp).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IsolatorColumn("CH 1", rmx.low[0], rmx.mid[0], rmx.high[0], Modifier.weight(1f)) { band, value ->
+                onRmx(rmx.copy(low = rmx.low.setAt(0, if (band == 0) value else rmx.low[0]), mid = rmx.mid.setAt(0, if (band == 1) value else rmx.mid[0]), high = rmx.high.setAt(0, if (band == 2) value else rmx.high[0])))
+            }
+            IsolatorColumn("CH 2", rmx.low[1], rmx.mid[1], rmx.high[1], Modifier.weight(1f)) { band, value ->
+                onRmx(rmx.copy(low = rmx.low.setAt(1, if (band == 0) value else rmx.low[1]), mid = rmx.mid.setAt(1, if (band == 1) value else rmx.mid[1]), high = rmx.high.setAt(1, if (band == 2) value else rmx.high[1])))
+            }
+        }
+    }
+    }
+}
+
+/** ROLL (compassos, gap, tom) e CH do RMX; numa linha própria quando [own] (tela estreita). */
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.RollAndChannel(rmx: RmxState, onRmx: (RmxState) -> Unit, row: androidx.compose.ui.unit.Dp, own: Boolean) {
+                TextInk("ROLL", fontSize = 10.sp, color = Color(StagePalette.inkMuted), modifier = if (own) Modifier.width(62.dp) else Modifier.padding(start = 4.dp))
                 listOf(4, 8, 16).forEach { bars ->
                     MiniChoice("${bars}c", rmx.drumBars == bars, Modifier.weight(0.5f).height(row), big = true) { onRmx(rmx.copy(drumBars = bars)) }
                 }
@@ -251,18 +277,6 @@ fun RmxDock(rmx: RmxState, onRmx: (RmxState) -> Unit, onClose: () -> Unit, compa
                 listOf("1" to 0, "2" to 1, "MST" to 2).forEach { (label, channel) ->
                     MiniChoice(label, rmx.channel == channel, Modifier.weight(0.5f).height(row), big = true) { onRmx(rmx.copy(channel = channel)) }
                 }
-            }
-        }
-        // ISOLATE dos dois canais, compacto, à direita.
-        Row(Modifier.width(if (compact) 250.dp else 330.dp).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IsolatorColumn("CH 1", rmx.low[0], rmx.mid[0], rmx.high[0], Modifier.weight(1f)) { band, value ->
-                onRmx(rmx.copy(low = rmx.low.setAt(0, if (band == 0) value else rmx.low[0]), mid = rmx.mid.setAt(0, if (band == 1) value else rmx.mid[0]), high = rmx.high.setAt(0, if (band == 2) value else rmx.high[0])))
-            }
-            IsolatorColumn("CH 2", rmx.low[1], rmx.mid[1], rmx.high[1], Modifier.weight(1f)) { band, value ->
-                onRmx(rmx.copy(low = rmx.low.setAt(1, if (band == 0) value else rmx.low[1]), mid = rmx.mid.setAt(1, if (band == 1) value else rmx.mid[1]), high = rmx.high.setAt(1, if (band == 2) value else rmx.high[1])))
-            }
-        }
-    }
 }
 
 @Composable

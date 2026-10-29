@@ -198,11 +198,18 @@ fun PlayerScreen(
     val fxBpm = (tracks.getOrNull(fxDeck)?.bpm ?: 0.0) * (faces.getOrElse(fxDeck) { DeckFace() }.pitch)
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(StagePalette.bg))) {
         val compact = maxWidth < 1400.dp || maxHeight < 700.dp
+        // Celular deitado (S25 Ultra: 891×412 dp; 832×384 com zoom de tela maior): a altura é a metade da do tablet.
+        // As ondas são o que o DJ olha; o topo vira uma linha só, a coluna de info dos decks sai (o tom e os compassos
+        // já estão no cartão e na onda) e os hot cues e cartões encolhem.
+        val tight = maxHeight < TIGHT_HEIGHT
         val side = if (compact) 112.dp else 168.dp
-        val rail = if (compact) 156.dp else 228.dp
-        Column(Modifier.fillMaxSize().padding(horizontal = if (compact) 4.dp else 8.dp, vertical = if (compact) 3.dp else 6.dp)) {
+        val rail = if (tight) 136.dp else if (compact) 156.dp else 228.dp
+        val cardHeight = if (tight) 136.dp else if (compact) 150.dp else 208.dp
+        val gap = if (tight) 2.dp else if (compact) 3.dp else 6.dp
+        Column(Modifier.fillMaxSize().padding(horizontal = if (compact) 4.dp else 8.dp, vertical = gap)) {
             TopBar(
                 compact = compact,
+                tight = tight,
                 note = note,
                 warnings = warnings,
                 clock = clock,
@@ -233,10 +240,10 @@ fun PlayerScreen(
                 onRecord = onRecord,
             )
             Row(
-                Modifier.fillMaxWidth().weight(1f).padding(top = if (compact) 3.dp else 6.dp),
+                Modifier.fillMaxWidth().weight(1f).padding(top = gap),
                 horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp),
             ) {
-                Column(Modifier.width(side).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (!tight) Column(Modifier.width(side).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     DeckInfo(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, catalog, quantize, settings.quantizeBeats, compact, Modifier.weight(1f))
                     DeckInfo(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, catalog, quantize, settings.quantizeBeats, compact, Modifier.weight(1f))
                 }
@@ -275,19 +282,19 @@ fun PlayerScreen(
                 )
             }
             if (rmx.full) {
-                RmxDock(rmx, onRmx, { onRmx(rmx.copy(full = false)) }, compact, Modifier.fillMaxWidth().height(if (compact) 292.dp else 400.dp).padding(top = if (compact) 3.dp else 6.dp))
+                RmxDock(rmx, onRmx, { onRmx(rmx.copy(full = false)) }, compact, Modifier.fillMaxWidth().height(if (tight) 268.dp else if (compact) 292.dp else 400.dp).padding(top = gap))
             }
-            if (!rmx.full) HotCueBand(catalog, tracks, faces, compact, settings.cuePreset, onActive, onHot, onHotUp, Modifier.fillMaxWidth().padding(top = if (compact) 3.dp else 6.dp))
+            if (!rmx.full) HotCueBand(catalog, tracks, faces, compact, settings.cuePreset, onActive, onHot, onHotUp, Modifier.fillMaxWidth().padding(top = gap), tight)
             if (!rmx.full) Row(
-                Modifier.fillMaxWidth().height(if (compact) 150.dp else 208.dp).padding(top = if (compact) 3.dp else 4.dp),
+                Modifier.fillMaxWidth().height(cardHeight).padding(top = gap),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0), settings.cuePreset), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings, popup, popupDeck, togglePopup, onDeckAction)
-                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1), settings.cuePreset), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings, popup, popupDeck, togglePopup, onDeckAction)
+                DeckCard(0, tracks.getOrNull(0), faces.getOrElse(0) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(0), settings.cuePreset), master == 0, activeDeck == 0, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings, popup, popupDeck, togglePopup, onDeckAction, tight)
+                DeckCard(1, tracks.getOrNull(1), faces.getOrElse(1) { DeckFace() }, analysisOf(catalog, tracks.getOrNull(1), settings.cuePreset), master == 1, activeDeck == 1, quantize, settings.quantizeBeats, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onRemain, onRange, onMaster, onQuantize, onPlay, artworkOf, onSeek, waveModeIndex(settings.waveColor), settings, popup, popupDeck, togglePopup, onDeckAction, tight)
             }
         }
         if (popup.isNotEmpty() && !rmx.full) {
-            val cards = (if (compact) 150 else 208) + 6
+            val cards = cardHeight.value.toInt() + 6
             val popTrack = tracks.getOrNull(popupDeck)
             val popFace = faces.getOrElse(popupDeck) { DeckFace() }
             Box(Modifier.fillMaxSize().clickable { popup = "" })
@@ -364,9 +371,13 @@ fun PlayerScreen(
     }
 }
 
+/** Abaixo desta altura (celular deitado) o player usa o arranjo apertado. O Tab S6 Lite deitado tem 800 dp. */
+val TIGHT_HEIGHT = 520.dp
+
 @Composable
 private fun TopBar(
     compact: Boolean,
+    tight: Boolean = false,
     note: String?,
     warnings: List<String>,
     clock: String,
@@ -380,6 +391,31 @@ private fun TopBar(
     recWarn: String?,
     onRecord: () -> Unit,
 ) {
+    if (tight) {
+        // Uma linha só: os botões de navegação à esquerda, REC, relógio e INFO à direita (o aviso de simulação some).
+        Row(Modifier.fillMaxWidth().height(34.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            listOf("SOURCE", "BROWSE", "TAG LIST", "PLAYLIST", "SEARCH", "MENU").forEach { label ->
+                NavButton(label, true, nav == label, Modifier.weight(1f)) { onNav(label) }
+            }
+            warnings.firstOrNull()?.let { warning ->
+                TextInk(warning, color = Color(StagePalette.accentOrange), fontSize = 10.sp, weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.widthIn(max = 120.dp).padding(start = 4.dp))
+            }
+            Box(
+                Modifier.padding(start = 4.dp).height(26.dp).width(58.dp).border(1.dp, Color(if (recording) StagePalette.onAir else StagePalette.line)).clickable(onClick = onRecord).padding(horizontal = 4.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                TextInk(if (recording) recClock else "REC", color = Color(if (recording) StagePalette.onAir else StagePalette.ink), fontSize = 10.sp, weight = FontWeight.Bold, maxLines = 1)
+            }
+            Column(Modifier.padding(start = 4.dp), horizontalAlignment = Alignment.End) {
+                TextInk(clock, fontSize = 11.sp, weight = FontWeight.Medium, mono = true, maxLines = 1)
+                TextInk(remain, fontSize = 10.sp, color = Color(StagePalette.inkMuted), mono = true, maxLines = 1)
+            }
+            Box(Modifier.height(34.dp).clickable(onClick = onInfo).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+                TextInk("INFO", color = Color(StagePalette.accentBlue), fontSize = 11.sp, weight = FontWeight.Bold)
+            }
+        }
+        return
+    }
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().height(if (compact) 22.dp else 26.dp), verticalAlignment = Alignment.CenterVertically) {
             if (note != null) {
@@ -503,7 +539,8 @@ private fun FxRail(
     var listOpen by remember { mutableStateOf(false) }
     val showList = fxList || listOpen
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Column(Modifier.weight(1f).fillMaxWidth().border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).padding(if (compact) 4.dp else 8.dp)) {
+        // Rola quando não cabe (celular deitado): antes o resto do Beat FX era cortado embaixo.
+        Column(Modifier.weight(1f).fillMaxWidth().border(1.dp, Color(StagePalette.line)).background(Color(StagePalette.panel)).verticalScroll(rememberScrollState()).padding(if (compact) 4.dp else 8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Choice("BEAT FX", fxPanel && !rmx.panel, compact, Modifier.weight(1f)) {
                     onFxPanel(true)
@@ -643,12 +680,13 @@ private fun HotCueBand(
     onHot: (Int, Int) -> Unit,
     onHotUp: (Int, Int) -> Unit,
     modifier: Modifier,
+    tight: Boolean = false,
 ) {
-    Row(modifier.height(if (compact) 78.dp else 108.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(modifier.height(if (tight) 60.dp else if (compact) 78.dp else 108.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         val left = faces.getOrElse(0) { DeckFace() }
         val right = faces.getOrElse(1) { DeckFace() }
-        HotGrid(0, analysisOf(catalog, tracks.getOrNull(0), preset), left.cueBank, left.slip, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot, onHotUp)
-        HotGrid(1, analysisOf(catalog, tracks.getOrNull(1), preset), right.cueBank, right.slip, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot, onHotUp)
+        HotGrid(0, analysisOf(catalog, tracks.getOrNull(0), preset), left.cueBank, left.slip, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot, onHotUp, tight)
+        HotGrid(1, analysisOf(catalog, tracks.getOrNull(1), preset), right.cueBank, right.slip, compact, Modifier.weight(1f).fillMaxHeight(), onActive, onHot, onHotUp, tight)
     }
 }
 
@@ -663,9 +701,11 @@ private fun HotGrid(
     onActive: (Int) -> Unit,
     onHot: (Int, Int) -> Unit,
     onHotUp: (Int, Int) -> Unit,
+    tight: Boolean = false,
 ) {
     Column(modifier) {
-        TextInk("HOT CUE ${cueBankLetter(bank)}", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
+        // Sem o rótulo em cima no celular deitado: o banco fora do A acende o ··· do cartão (e aparece no menu dele).
+        if (!tight) TextInk("HOT CUE ${cueBankLetter(bank)}", fontSize = if (compact) 9.sp else 11.sp, weight = FontWeight.Bold, color = Color(StagePalette.inkMuted))
         repeat(2) { row ->
             Row(Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 repeat(4) { column ->
@@ -830,6 +870,7 @@ private fun DeckCard(
     popupDeck: Int = -1,
     onPopup: (Int, String) -> Unit = { _, _ -> },
     onDeckAction: (Int, String) -> Unit = { _, _ -> },
+    tight: Boolean = false,
 ) {
     val duration = (track?.durationSeconds ?: 0).toDouble()
     val shown = if (track == null) {
@@ -932,7 +973,7 @@ private fun DeckCard(
         }
         OverviewWave(track, analysis, face.position.toDouble(), Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), waveMode) { seconds -> onSeek(deck, seconds) }
         PhraseBar(track, analysis?.phrases.orEmpty(), Modifier.fillMaxWidth().height(if (compact) 4.dp else 7.dp))
-        TimeTicks(duration, compact, Modifier.fillMaxWidth())
+        if (!tight) TimeTicks(duration, compact, Modifier.fillMaxWidth())
         Row(Modifier.padding(top = if (compact) 1.dp else 3.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.clickable { onPlay(deck) }) { Lamp(if (face.playing) "PLAY" else "PAUSE", face.playing, compact) }
             Lamp("A.HOT CUE", true, compact)

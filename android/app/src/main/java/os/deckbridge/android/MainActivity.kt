@@ -28,6 +28,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -69,6 +72,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Em palco a tela não pode apagar nem bloquear no meio da música.
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        stageWindow()
         val screen = intent?.getStringExtra("deckbridge.screen").orEmpty()
         val play = intent?.getBooleanExtra("deckbridge.play", false) ?: false
         val midi = intent?.getBooleanExtra("deckbridge.midi", false) ?: false
@@ -79,8 +83,38 @@ class MainActivity : ComponentActivity() {
         setContent {
             // O MENU do DJ leva ao modo Biblioteca (que roda no processo dele; este é encerrado).
             androidx.compose.runtime.CompositionLocalProvider(LocalModeSwitch provides ("BIBLIOTECA ›" to toLibrary)) {
-                App(screen, play, midi, openLocal)
+                // O furo da câmera (S25 Ultra deitado: na borda esquerda) não cobre nada: a tela vai até a borda e
+                // só o lado do recorte ganha a folga dele.
+                androidx.compose.foundation.layout.Box(
+                    Modifier.fillMaxSize().background(Color(StagePalette.bg))
+                        .windowInsetsPadding(WindowInsets.displayCutout),
+                ) {
+                    App(screen, play, midi, openLocal)
+                }
             }
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Depois de um diálogo, da cortina de notificações ou de voltar ao app, as barras escondem de novo.
+        if (hasFocus) stageWindow()
+    }
+
+    /**
+     * Tela cheia de palco: sem barra de status nem de navegação (num celular deitado elas comiam ~15% da altura);
+     * um deslize da borda mostra as duas por uns segundos. O conteúdo vai até o recorte da câmera.
+     */
+    private fun stageWindow() {
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        androidx.core.view.WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
 }
