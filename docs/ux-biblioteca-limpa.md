@@ -74,3 +74,15 @@ nomes e não tem uma maneira de ver o nome do ficheiro".
   a aba INFO mostra título, artista, álbum e o arquivo da biblioteca (caminho inteiro), selecionáveis para copiar.
 - Limite: o nome original do arquivo de antes da importação não é guardado; o arquivo na biblioteca leva o nome do
   título da importação.
+
+### Os nomes de arquivo do dono (vistos no gerenciador de arquivos)
+
+Padrão "Artista1,_Artista2_Título_Extended_Mix.wav" (WAV sem etiquetas): o último artista da lista encosta no título.
+
+- O último artista termina onde o nome é um artista conhecido ("Duke Dumont, **Purple Disco Machine** | Something On My
+  Mind") ou um nome que se repete depois de "feat" no próprio arquivo ("Praise Cats, **Andrea Love** | Shined On Me feat
+  Andrea Love…") — `TrackNames.splitByCommaList`.
+- O que é da mix vai para parênteses: "Extended Mix", "Radio Edit"…, o "(feat. Fulano)" e o "(Remixer … Remix)" quando o
+  remixer é conhecido — `TrackNames.mixParens`.
+- Quando nada disso decide ("Wolfram, Josh Ludlow YoYo Disco…"), o separar da faixa já vem marcado com o palpite de duas
+  palavras para o último artista, para o DJ conferir.

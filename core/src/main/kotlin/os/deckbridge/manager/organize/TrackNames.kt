@@ -97,7 +97,11 @@ object TrackNames {
      * Os nomes limpos de uma faixa: [title] e [artist] das etiquetas (ou do que está na biblioteca) e [fileName] (com ou
      * sem extensão e pasta). Se as etiquetas não dizem, vale o nome do arquivo.
      */
-    fun clean(title: String, artist: String, fileName: String): Names {
+    fun clean(
+        title: String, artist: String, fileName: String,
+        /** Artistas que a biblioteca já conhece ([knownArtists]): ajudam a separar nomes sem separador. */
+        known: Set<String> = emptySet(),
+    ): Names {
         val stem = fileName.substringAfterLast('/').substringAfterLast('\\').let { n -> if ('.' in n && n.substringAfterLast('.').length in 2..4) n.substringBeforeLast('.') else n }
         var t = tidy(title)
         var a = tidy(artist)
@@ -126,6 +130,9 @@ object TrackNames {
             val (fa, _) = split(stripLead(scrub(stem), requireSeparator = true))
             if (fa != null && !looksLikeFile(fa)) a = fa
         }
+        // Sem separador nenhum: pelo artista conhecido ou pela lista com vírgula ("A, B Título").
+        if (a.isEmpty()) guessSplit(t, known)?.let { g -> a = g.artist; t = g.title }
+        t = mixParens(tidy(t), known + knownArtists(listOf(a)))
         t = Organizer.titleCase(tidy(t))
         a = Organizer.titleCase(tidy(a))
         return Names(t.ifEmpty { tidy(title).ifEmpty { stem } }, a)
@@ -177,6 +184,70 @@ object TrackNames {
         val rest = tidy(t.substring(artistEnd).trimStart(' ', '-', ',', '–'))
         if (rest.isEmpty()) return null
         return Names(rest, artist)
+    }
+
+    /**
+     * "A, B Título" sem separador: o último artista da lista termina onde o nome casa com um artista conhecido ou com
+     * um nome que aparece depois de "feat." no próprio texto ("Praise Cats, Andrea Love Shined On Me feat. Andrea Love").
+     * Null se não dá para saber.
+     */
+    fun splitByCommaList(text: String, known: Set<String>): Names? {
+        val t = tidy(text)
+        val comma = t.indexOf(',')
+        if (comma <= 0) return null
+        // A lista de artistas é o começo: o último ", " antes de qualquer palavra de mix ou "feat".
+        var last = comma
+        while (true) {
+            val nx = t.indexOf(',', last + 1)
+            if (nx < 0 || nx > 120 || mixWord.containsMatchIn(t.substring(0, nx)) || "feat" in t.substring(0, nx).lowercase()) break
+            last = nx
+        }
+        val head = t.substring(0, last)
+        if (head.split(' ').size > 8 || mixWord.containsMatchIn(head) || "feat" in head.lowercase()) return null
+        val after = t.substring(last + 1).trim().split(' ').filter { it.isNotEmpty() }
+        val feats = Regex("""(?i)\bfeat\.?\s+(.+)$""").find(t)?.groupValues?.get(1)?.lowercase().orEmpty()
+        val lowerKnown = known.map { it.lowercase() }.toSet()
+        var best = 0
+        for (k in 1..minOf(4, after.size - 1)) {
+            val n = after.take(k).joinToString(" ").lowercase()
+            val inFeat = feats.startsWith(n) && (feats.length == n.length || !feats[n.length].isLetterOrDigit())
+            if (n in lowerKnown || inFeat) best = k
+        }
+        if (best == 0) return null
+        return Names(after.drop(best).joinToString(" "), "$head, ${after.take(best).joinToString(" ")}")
+    }
+
+    /** A melhor divisão sem separador: artista conhecido no começo, ou a lista com vírgula. */
+    fun guessSplit(text: String, known: Set<String>): Names? = splitByKnown(text, known) ?: splitByCommaList(text, known)
+
+    /**
+     * O que é da mix no fim do título vai para parênteses: "Título Extended Mix" → "Título (Extended Mix)"; "Título feat.
+     * Fulano Les Bisous Remix" → "Título (feat. Fulano) (Les Bisous Remix)" quando Fulano é conhecido; "Título Purple
+     * Disco Machine Extended Remix" → "Título (Purple Disco Machine Extended Remix)" quando o remixer é conhecido.
+     */
+    fun mixParens(title: String, known: Set<String>): String {
+        val t = tidy(title)
+        if (t.endsWith(")") || t.endsWith("]")) return t
+        val feat = Regex("""(?i)\s+feat\.\s+(.+)$""").find(t)
+        if (feat != null) {
+            val rest = feat.groupValues[1]
+            val name = known.filter { k -> rest.lowercase().startsWith(k.lowercase()) && (rest.length == k.length || !rest[k.length].isLetterOrDigit()) }.maxByOrNull { it.length }
+            if (name != null) {
+                val tail = tidy(rest.substring(name.length))
+                val base = t.substring(0, feat.range.first)
+                return tidy("$base (feat. ${rest.substring(0, name.length)})" + if (tail.isNotEmpty()) " (${tail.trim('(', ')')})" else "")
+            }
+        }
+        val std = Regex("""(?i)\s+((?:extended|original|club|radio|dub|instrumental|vocal|main|long|short|vip)\s+(?:mix|edit|version|remix|dub)|radio edit|extended)$""")
+        // "<Remixer conhecido> ... Remix" primeiro: o nome do remixer é parte do que vai entre parênteses.
+        if (Regex("""(?i)\b(remix|rework|dub)$""").containsMatchIn(t)) {
+            val lower = t.lowercase()
+            val hit = known.mapNotNull { k -> Regex("""\b${Regex.escape(k.lowercase())}\b""").find(lower)?.let { it.range.first to k } }
+                .filter { it.first > 0 }.minByOrNull { it.first }
+            if (hit != null) return tidy(t.substring(0, hit.first)) + " (" + tidy(t.substring(hit.first)) + ")"
+        }
+        std.find(t)?.let { m -> return tidy(t.substring(0, m.range.first)) + " (" + tidy(m.groupValues[1]) + ")" }
+        return t
     }
 
     /** Separa nas primeiras [words] palavras: elas são o artista, o resto é o título (o DJ toca onde o artista acaba). */

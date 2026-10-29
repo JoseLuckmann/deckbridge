@@ -68,4 +68,21 @@ class TrackNamesTest {
         assertEquals(Names("Along Came Polly", "Rebuke"), TrackNames.splitAtWord("Rebuke Along Came Polly", 1))
         assertEquals(Names("Yours", "Wolfram, Josh Ludlow"), TrackNames.splitAtWord("Wolfram, Josh Ludlow Yours", 3))
     }
+
+    @Test fun `nomes de arquivo como os do dono, sem separador`() {
+        // A biblioteca já conhece estes (de outras faixas como "Purple Disco Machine - In My Arms").
+        val known = TrackNames.knownArtists(listOf("Purple Disco Machine", "Purple Disco Machine, Kungs", "The Shapeshifters"))
+        fun f(file: String) = TrackNames.clean(file.substringBeforeLast('.'), "", file, known)
+        assertEquals(Names("Something On My Mind (Extended Mix)", "Duke Dumont, Purple Disco Machine"), f("Duke_Dumont,_Purple_Disco_Machine_Something_On_My_Mind_Extended_Mix.wav"))
+        assertEquals(Names("At the Disko (Extended Mix)", "Lorenz Rhode, Purple Disco Machine"), f("Lorenz_Rhode,_Purple_Disco_Machine_At_the_Disko_Extended_Mix.wav"))
+        // O nome depois de "feat" no próprio arquivo diz onde a lista de artistas acaba.
+        assertEquals(Names("Shined On Me (feat. Andrea Love) (Les Bisous Remix)", "Praise Cats, Andrea Love"), f("Praise_Cats,_Andrea_Love_Shined_On_Me_feat_Andrea_Love_Les_Bisous_Remix.wav"))
+        // Com separador, como sempre; a cópia "(1)" sai.
+        assertEquals(Names("Lola's Theme (VIP)", "The Shapeshifters"), f("The Shapeshifters - Lola's Theme (VIP) (1).wav"))
+        assertEquals(Names("Substitution (Extended)", "Purple Disco Machine, Kungs"), f("Purple Disco Machine, Kungs - Substitution (Extended).wav"))
+        // Ambíguo (nenhum dos artistas da lista é conhecido): o remix vai para parênteses, o resto fica para o toque.
+        val w = f("Wolfram,_Josh_Ludlow_YoYo_Disco_Purple_Disco_Machine_Extended_Remix.wav")
+        assertEquals("", w.artist)
+        assertTrue(w.title.endsWith("(Purple Disco Machine Extended Remix)"), w.title)
+    }
 }

@@ -338,15 +338,26 @@ private fun NameSplitter(app: ManagerApp, t: TrackItem) {
     val m = app.model
     val words = remember(t.title) { t.title.trim().split(Regex("\\s+")).filter { it.isNotEmpty() } }
     if (words.size < 2) return
-    val suggested = remember(t.id, m.view) {
+    // A divisão mais provável já vem marcada: artista conhecido, nome repetido depois de "feat", ou — numa lista com
+    // vírgula sem nada conhecido — duas palavras para o último artista (o mais comum; o DJ confere).
+    val (suggested, sure) = remember(t.id, m.view) {
         val known = os.deckbridge.manager.organize.TrackNames.knownArtists(m.view?.tracks.orEmpty().filter { it.id != t.id }.map { it.artist })
-        os.deckbridge.manager.organize.TrackNames.splitByKnown(t.title, known)?.artist?.split(' ')?.size
+        val g = os.deckbridge.manager.organize.TrackNames.guessSplit(t.title, known)?.artist?.split(' ')?.size
+        if (g != null) g to true
+        else {
+            val comma = words.indexOfFirst { it.endsWith(",") }
+            if (comma in 0..5 && comma + 3 < words.size) (comma + 3) to false else null to false
+        }
     }
     var cut by remember(t.id, suggested) { mutableStateOf(suggested ?: 0) }
     Column(Modifier.fillMaxWidth().rbPanel().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("SEPARAR ARTISTA E TÍTULO", color = Palette.blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
         Text(
-            if (suggested != null) "O começo é um artista que a biblioteca já conhece. Confira e aplique." else "Toque na última palavra do artista.",
+            when {
+                suggested != null && sure -> "Achei o artista pelo que a biblioteca já conhece. Confira e aplique."
+                suggested != null -> "Palpite: confira onde o artista acaba (toque na última palavra dele)."
+                else -> "Toque na última palavra do artista."
+            },
             color = Palette.mutedBright, fontSize = 12.sp,
         )
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
