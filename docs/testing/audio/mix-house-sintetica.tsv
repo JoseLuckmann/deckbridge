@@ -1,0 +1,23 @@
+0.000	0.0	A sozinha, referencia
+7.619	4.0	Color SPACE
+9.524	5.0	Color DUB ECHO
+11.429	6.0	Color SWEEP
+13.333	7.0	Color NOISE
+15.238	8.0	Color CRUSH
+17.143	9.0	Color FILTER
+19.048	10.0	Beat FX eco
+20.952	11.0	Beat FX spiral
+22.857	12.0	Beat FX reverb
+24.762	13.0	Beat FX pitch
+26.667	14.0	Beat FX filter ritmico
+30.476	16.0	BUILD 1: bumbo subindo + ruido, 8 compassos
+45.714	24.0	DROP 1
+76.190	40.0	BUILD 2: eco up + bumbo e palma, 8 compassos
+91.429	48.0	DROP 2, cauda do eco
+121.905	64.0	BUILD 3: spiral up, 4 compassos
+129.524	68.0	DROP 3, cauda do spiral
+152.381	80.0	BUILD 4: reverb up, 4 compassos
+160.000	84.0	DROP 4, cauda da reverb. B entra sem grave
+167.619	88.0	B abre
+175.238	92.0	troca de grave A -> B
+182.857	96.0	A sai

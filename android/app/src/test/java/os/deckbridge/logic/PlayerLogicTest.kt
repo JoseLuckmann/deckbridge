@@ -79,10 +79,39 @@ class PlayerLogicTest {
         assertEquals(0, scene.hotIndex)
         assertEquals(1.0, scene.slider!!, 0.0)
         assertEquals(0.0, hit(151, 48, 0)!!.slider!!, 0.0)
-        assertEquals(null, hit(152, 48, 127))
+        // O segundo banco de pads escolhe o som do drum build (0.14.1): pad 8 é o primeiro som.
+        val voice = hit(152, 48, 127)
+        assertEquals(PerformanceAction.Kind.RMX, voice!!.kind)
+        assertEquals(8, voice.hotIndex)
         val page = hit(152, 39, 127)
         assertEquals(PerformanceAction.Kind.BEAT_JUMP_PAGE, page!!.kind)
         assertEquals(1, page.hotIndex)
+    }
+
+    @Test
+    fun mixerKnobsUseTheHighByteOfTheFourteenBitPairs() {
+        fun act(status: Int, note: Int, value: Int) = interpretPerformance(map.lookup(status, note), value, TempoAssembler())
+        val kill = act(176, 15, 0)
+        assertEquals(PerformanceAction.Kind.EQ, kill!!.kind)
+        assertEquals(0, kill.deck)
+        assertEquals(0, kill.hotIndex)
+        assertEquals(0.0, kill.slider!!, 0.0)
+        val hiB = act(177, 7, 127)
+        assertEquals(1, hiB!!.deck)
+        assertEquals(2, hiB.hotIndex)
+        assertEquals(1.0, hiB.slider!!, 0.0)
+        assertEquals(1, act(176, 11, 64)!!.hotIndex)
+        // O byte baixo (+32) não pode mexer nos controles: eram 7 bits de ruído sobre o valor do byte alto.
+        assertEquals(null, act(176, 47, 90))
+        assertEquals(null, act(176, 51, 100))
+        assertEquals(null, act(182, 63, 100))
+        assertEquals(PerformanceAction.Kind.VOLUME, act(176, 19, 100)!!.kind)
+        assertEquals(PerformanceAction.Kind.CROSSFADER, act(182, 31, 100)!!.kind)
+        val trim = act(177, 4, 64)
+        assertEquals(PerformanceAction.Kind.TRIM, trim!!.kind)
+        assertEquals(1, trim.deck)
+        assertEquals(PerformanceAction.Kind.HEAD_MIX, act(182, 12, 127)!!.kind)
+        assertEquals(PerformanceAction.Kind.HEAD_GAIN, act(182, 13, 127)!!.kind)
     }
 
     @Test
@@ -192,5 +221,79 @@ class PlayerLogicTest {
         assertTrue(edited[2].timeMs > 1000)
         assertEquals(120.0 / 1.001, gridBpm(120.0, GridEdit(stretch = 1.001)), 1e-9)
         before.forEach { (path, bytes) -> assertTrue(volume.read(path)!!.contentEquals(bytes)) }
+    }
+}
+
+class MixerViewTest {
+    @org.junit.Test
+    fun eqCurveMatchesTheEngine() {
+        org.junit.Assert.assertEquals(0f, eqGain(0f), 0f)
+        org.junit.Assert.assertEquals(1f, eqGain(0.5f), 1e-6f)
+        org.junit.Assert.assertEquals(1.995f, eqGain(1f), 0.01f)
+        org.junit.Assert.assertEquals("KILL", eqDbLabel(0f))
+        org.junit.Assert.assertEquals("0 dB", eqDbLabel(0.5f))
+        org.junit.Assert.assertEquals("+6 dB", eqDbLabel(1f))
+        org.junit.Assert.assertEquals("−12 dB".replace('−', '-'), trimDbLabel(0f))
+        org.junit.Assert.assertEquals("CUE", headMixLabel(0f))
+        org.junit.Assert.assertEquals("CENTRO", crossfaderLabel(0.5f))
+    }
+}
+
+class SyncPhaseTest {
+    @org.junit.Test
+    fun phaseShiftTakesTheShortestWayToTheOtherBeat() {
+        // 120 BPM, batida a cada 0,5 s. O outro deck está na batida; este está 0,1 s depois dela.
+        val shift = syncPhaseShiftSeconds(10.1, 0.0, 120.0, 20.0, 0.0, 120.0)
+        org.junit.Assert.assertEquals(-0.1, shift, 1e-9)
+        // 0,4 s depois da batida é 0,1 s antes da próxima: avança.
+        org.junit.Assert.assertEquals(0.1, syncPhaseShiftSeconds(10.4, 0.0, 120.0, 20.0, 0.0, 120.0), 1e-9)
+        // A origem da grade conta: este deck tem origem 0,2 s, então 10,2 s já é uma batida; o outro está na batida em 20,0 s.
+        org.junit.Assert.assertEquals(0.0, syncPhaseShiftSeconds(10.2, 0.2, 120.0, 20.0, 0.0, 120.0), 1e-9)
+        // Sem contar a origem este deck estaria 0,2 s fora: recua 0,2 s.
+        org.junit.Assert.assertEquals(-0.2, syncPhaseShiftSeconds(10.2, 0.0, 120.0, 20.0, 0.0, 120.0), 1e-9)
+        org.junit.Assert.assertEquals(0.0, syncPhaseShiftSeconds(1.0, 0.0, 0.0, 2.0, 0.0, 120.0), 0.0)
+        org.junit.Assert.assertEquals(0.5, beatPhase(0.25, 0.0, 120.0), 1e-9)
+    }
+}
+
+class MeterTest {
+    @org.junit.Test
+    fun meterScaleRunsFromMinus48ToZeroDbfs() {
+        org.junit.Assert.assertEquals(0f, meterFraction(0f), 0f)
+        org.junit.Assert.assertEquals(1f, meterFraction(1f), 1e-6f)
+        org.junit.Assert.assertEquals(0.5f, meterFraction(0.0631f), 0.01f)
+        org.junit.Assert.assertEquals(0f, meterFraction(0.001f), 0f)
+    }
+}
+
+class PflMapTest {
+    @org.junit.Test
+    fun channelCueButtonTogglesHeadphoneCue() {
+        val map = MidiMap.loadResource()
+        // O botão CUE do canal tem nome "pfl" no mapa; o byte exato vem do mapa pinado.
+        val hits = (0..127).flatMap { note -> listOf(144, 145, 146, 147, 148, 149, 150).map { map.lookup(it, note) } }.filter { it.key == "pfl" }
+        org.junit.Assert.assertEquals(2, hits.size)
+        hits.forEach { hit ->
+            val action = interpretPerformance(hit, 127, TempoAssembler())
+            org.junit.Assert.assertEquals(PerformanceAction.Kind.PFL, action!!.kind)
+            org.junit.Assert.assertNull(interpretPerformance(hit, 0, TempoAssembler()))
+        }
+        org.junit.Assert.assertEquals(setOf(0, 1), hits.map { interpretPerformance(it, 127, TempoAssembler())!!.deck }.toSet())
+    }
+}
+
+class ExtraPerformanceTest {
+    @org.junit.Test
+    fun shiftCueAndQuickJumpAreMapped() {
+        val map = MidiMap.loadResource()
+        fun hitsOf(key: String) = (0..127).flatMap { note -> (144..151).map { map.lookup(it, note) } }.filter { it.key == key }
+        val start = hitsOf("start_play")
+        org.junit.Assert.assertEquals(2, start.size)
+        org.junit.Assert.assertEquals(PerformanceAction.Kind.START, interpretPerformance(start.first(), 127, TempoAssembler())!!.kind)
+        val back = interpretPerformance(hitsOf("PioneerDDJ400.quickJumpBack").first(), 127, TempoAssembler())!!
+        org.junit.Assert.assertEquals(PerformanceAction.Kind.BEAT_JUMP, back.kind)
+        org.junit.Assert.assertEquals(-32.0, back.slider!!, 0.0)
+        val forward = interpretPerformance(hitsOf("PioneerDDJ400.quickJumpForward").first(), 127, TempoAssembler())!!
+        org.junit.Assert.assertEquals(32.0, forward.slider!!, 0.0)
     }
 }

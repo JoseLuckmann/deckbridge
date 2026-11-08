@@ -23,3 +23,7 @@ Na trilha Raspberry, a decisão acima continua: montar `ro,nodev,nosuid,noexec` 
 ## Fontes
 
 https://manual.mixxx.org/2.5/en_gb/chapters/library ; https://github.com/xsco/libdjinterop/blob/main/GUIDE.md
+
+## Emenda Library Manager — 25/10/2026
+
+O ADR-0009 cria o "projeto separado de writeback" que a seção Consequências previa. Só o programa de desktop (`desktop/`) escreve num pendrive rekordbox, com opt-in explícito, backup local, troca atômica e verificação. A performance (Android, Pi, Mixxx) segue somente leitura, como decidido acima.

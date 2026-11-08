@@ -12,21 +12,22 @@
 
 namespace deckbridge {
 
-inline bool loadDrumFlac(const void *data, size_t size, int voice) {
-    if (data == nullptr || size < 8 || voice < 0 || voice > 4) return false;
+// Decodifica um one-shot FLAC para mono a 48 kHz. Não mexe no banco: pode rodar fora do lock do áudio.
+inline std::vector<float> decodeDrumFlac(const void *data, size_t size) {
+    if (data == nullptr || size < 8) return {};
     drflac *flac = drflac_open_memory(data, size, nullptr);
-    if (flac == nullptr) return false;
+    if (flac == nullptr) return {};
     const int channels = static_cast<int>(flac->channels);
     const int rate = static_cast<int>(flac->sampleRate);
     const drflac_uint64 frames = flac->totalPCMFrameCount;
     if (channels < 1 || rate <= 0 || frames < 8 || frames > 48000ull * 5ull) {
         drflac_close(flac);
-        return false;
+        return {};
     }
     std::vector<float> interleaved(static_cast<size_t>(frames) * static_cast<size_t>(channels));
     const drflac_uint64 got = drflac_read_pcm_frames_f32(flac, frames, interleaved.data());
     drflac_close(flac);
-    if (got < 8) return false;
+    if (got < 8) return {};
     std::vector<float> mono(static_cast<size_t>(got));
     for (drflac_uint64 index = 0; index < got; ++index) {
         float sum = 0.f;
@@ -49,7 +50,14 @@ inline bool loadDrumFlac(const void *data, size_t size, int voice) {
         }
         mono.swap(resampled);
     }
-    drumBank().set(voice, mono.data(), static_cast<int>(mono.size()));
+    return mono;
+}
+
+inline bool loadDrumFlac(const void *data, size_t size, int voice) {
+    if (voice < 0 || voice > 4) return false;
+    std::vector<float> mono = decodeDrumFlac(data, size);
+    if (mono.size() < 8) return false;
+    drumBank().take(voice, std::move(mono));
     return !drumBank().empty(voice);
 }
 

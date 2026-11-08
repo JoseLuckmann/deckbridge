@@ -13,7 +13,20 @@ Arquivos em `src/` e `tests/` são nossos. Licença provisória: GPL-2.0-or-late
 | `third_party/mixxx/2.5.6/res/controllers/Pioneer-DDJ-400.midi.xml` | mixxxdj/mixxx tag 2.5.6, commit `3ebac449e7e5fe2a0186596657696e87ce8b0e56` | GPL-2.0-or-later, conforme o preâmbulo do `LICENSE` dessa tag |
 | `third_party/mixxx/2.5.6/res/controllers/Pioneer-DDJ-400-script.js` | o mesmo commit | a mesma |
 
-Autores no cabeçalho desses dois arquivos: Warker, nschloe, dj3730, jusko, tiesjan.
+| `android/app/src/main/cpp/third_party/dr_flac.h` (v0.13.4) | mackron/dr_libs, commit `b4264c5c1f61c1d460aced4cf4d8a8dec197ca48` | domínio público (Unlicense) ou MIT-0, à escolha; ver o fim do arquivo |
+| `android/app/src/main/cpp/third_party/dr_mp3.h` (v0.7.4) | o mesmo commit do dr_libs | a mesma |
+
+Autores no cabeçalho dos dois arquivos de mapping: Warker, nschloe, dj3730, jusko, tiesjan. dr_flac e dr_mp3: David Reid. O SHA-256 do `dr_flac.h` daqui (`96b3dfca…3c9e`) é o do arquivo nesse commit. A entrada dele só foi escrita em 2026-10-25, junto com a do dr_mp3; antes ele entrou sem registro.
+
+## Ligado no Pi (ADR-0007), sem copiar código
+
+| Biblioteca | Como | Licença |
+|---|---|---|
+| alsa-lib (libasound) | ligada dinamicamente pelo programa do Pi; vem do sistema | LGPL-2.1-or-later |
+| SDL2 e SDL2_ttf | ligadas dinamicamente pela tela nativa do Pi (ADR-0008); vêm do sistema | zlib |
+| fonte DejaVu | lida do sistema (`fonts-dejavu-core`), não empacotada | licença Bitstream Vera / DejaVu (livre) |
+
+O LAME e o `flac` de linha de comando só geram arquivos de teste neste PC. Não entram em nenhum binário.
 
 ## Consultado e não copiado
 

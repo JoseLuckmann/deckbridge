@@ -124,3 +124,28 @@ stateDiagram-v2
 - P4: overlays de frases e exercícios, nunca tirando o foco dos decks.
 - 0.13.0: a barra de frase usa PSSI quando o `.EXT` traz a tag, senão as seções detetadas no áudio (intro, subida, drop, break, outro), com cores deste app. O menu troca a onda pelo medidor de fase. BROWSE ganha MATCHING e SUGGEST. O cartão mostra o trim de auto gain. Os cues automáticos ficam no app.
 - 0.13.1: o tom mostrado no cartão e no browser passa a vir do CQT com o perfil EDMA. Não há controlo novo.
+
+
+## 6. Library Manager (celular e computador): mesmo design system do player
+
+O Library Manager não tem identidade própria: usa o design system do player (`StagePalette`, em `android/.../logic/StagePalette.kt`, compartilhado com o app de performance, o Pi e o desktop). Uma conferência automática (`mobile/.../DesignSystemTest`) falha se alguém escrever cor à mão, usar botão/painel arredondado do Material, ou desviar dos valores do `StagePalette`.
+
+| Elemento | Regra (igual ao player) |
+|---|---|
+| Fundo | preto; painéis `panel`/`panelRaised`; linhas finas `line` |
+| Botão comum | painel elevado, contorno de linha, texto azul-claro (`accentBlue`), cantos quase retos (3 dp) |
+| Botão principal / ativo | preenchimento azul-escuro (`activeFill`), contorno azul, texto branco |
+| Linha de lista selecionada | azul `selectedRow` |
+| Rótulos de seção, topo | caixa alta, azul, negrito, espaçamento de letras |
+| Valores que pedem atenção (contagens, mudança na fila, aviso) | laranja `accentOrange` |
+| Tom compatível | célula verde-escura `keyFill`, texto `keyInk` (a faixa aberta é o "master" da lista) |
+| BPM, tempo | fonte monoespaçada |
+| Botão de tocar | `playBg`/`playInk` |
+| Aviso | faixa âmbar `simBg`/`simInk`; erro `dangerBg`/`danger` |
+| Hot cue | grade 2×4, célula escura com a letra na cor do pad (`pads`) |
+| Onda | `wave` sobre `waveBg`; início de compasso em vermelho, demais batidas em branco fraco |
+| Navegação | em pé: fileira de botões iguais embaixo (FAIXAS · PLAYLISTS · TRIAGEM · PENDRIVE · MENU), o ativo em azul-escuro com contorno azul. Deitado: coluna de ícones com três ou quatro letras à esquerda |
+| Lista de faixas | disco na cor da faixa, miniatura da onda, título/artista, BPM monoespaçado, tom; cabeçalho que ordena ao toque (TÍTULO · NOTA · BPM · TOM) |
+| MENU | linhas com rótulo à esquerda e valor/ação (laranja) à direita |
+
+Não verificado: a comparação é com as telas do player deste projeto e com o que este documento descreve do rekordbox; não houve comparação lado a lado com o rekordbox real.

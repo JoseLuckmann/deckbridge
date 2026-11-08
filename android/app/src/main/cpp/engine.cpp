@@ -5,19 +5,64 @@
 #include <oboe/Oboe.h>
 
 #include <android/log.h>
+// Fora do Android (Linux/ALSA, testes de host) o motor compila sem JNI: DECKBRIDGE_NO_JNI.
+#ifndef DECKBRIDGE_NO_JNI
 #include <jni.h>
+#endif
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
+#if defined(__x86_64__) || defined(__i386__)
+#include <xmmintrin.h>
+#endif
+
 namespace {
+
+// Liga flush-to-zero (e denormals-are-zero / default-NaN onde existe) na thread de áudio pelo tempo do callback.
+// Caudas de reverb e eco decaindo em silêncio viram subnormais; no ARMv6/VFP11 cada operação com subnormal cai no
+// código de suporte do kernel (muito lento), no x86 custa dezenas de ciclos. Restaura o estado ao sair.
+struct DenormalGuard {
+#if defined(__aarch64__)
+    uint64_t saved = 0;
+    DenormalGuard() {
+        asm volatile("mrs %0, fpcr" : "=r"(saved));
+        asm volatile("msr fpcr, %0" : : "r"(saved | (1ull << 24)));
+    }
+    ~DenormalGuard() { asm volatile("msr fpcr, %0" : : "r"(saved)); }
+#elif defined(__arm__) && defined(__ARM_FP)
+    uint32_t saved = 0;
+    DenormalGuard() {
+        asm volatile("vmrs %0, fpscr" : "=r"(saved));
+        asm volatile("vmsr fpscr, %0" : : "r"(saved | (1u << 24) | (1u << 25)));
+    }
+    ~DenormalGuard() { asm volatile("vmsr fpscr, %0" : : "r"(saved)); }
+#elif defined(__x86_64__) || defined(__i386__)
+    unsigned saved = 0;
+    DenormalGuard() {
+        saved = _mm_getcsr();
+        _mm_setcsr(saved | 0x8040u);
+    }
+    ~DenormalGuard() { _mm_setcsr(saved); }
+#endif
+};
+
+// Tudo que chega do Kotlin passa por aqui: um NaN ou um valor enorme que viesse de uma conta errada de lá entraria nos
+// filtros e nos atrasos e deixaria o áudio morto (ou com estouro de índice) até reiniciar o app. Não finito vira o
+// padrão; o resto é preso à faixa útil.
+// Guarda de saída: remove o não finito sem cortar o sinal (quem limita é o limiter, não esta função).
+inline float safeOut(float x) { return std::isfinite(x) ? std::clamp(x, -16.f, 16.f) : 0.f; }
+inline float fin(float v, float lo, float hi, float fallback) { return std::isfinite(v) ? std::clamp(v, lo, hi) : fallback; }
+inline double finD(double v, double lo, double hi, double fallback) { return std::isfinite(v) ? std::clamp(v, lo, hi) : fallback; }
 
 constexpr double kHz[4] = {440.0, 554.0, 659.0, 880.0};
 constexpr float kAmplitude = 0.2f;
@@ -48,8 +93,9 @@ const char *performanceName(oboe::PerformanceMode mode) {
 }
 
 struct Deck {
-    std::vector<float> left;
-    std::vector<float> right;
+    // PCM da faixa em int16 (ver deckbridge::pcmValue).
+    std::vector<int16_t> left;
+    std::vector<int16_t> right;
     int sampleRate = 48000;
     double position = 0.0;
     double pitch = 1.0;
@@ -68,14 +114,21 @@ struct Deck {
     double rollOrigin = -1.0;
     double rollLength = -1.0;
     double slip = -1.0;
+    // Posição "ao vivo" durante o Roll, para o balanço original/roll; rollMix 1 = só o roll.
+    double shadow = -1.0;
+    float rollMix = 1.f;
     bool keyLock = false;
     int keyShift = 0;
     bool reversed = false;
     bool userSlip = false;
     double slipAnchor = -1.0;
     bool holdingCue = false;
-    deckbridge::PitchShift shiftL;
-    deckbridge::PitchShift shiftR;
+    deckbridge::Wsola stretch;
+    deckbridge::ScratchFollower scratch;
+    deckbridge::MotorGain motorGain;
+    double expectedPos = -1.0;
+    int shiftCached = 999;
+    double shiftFactor = 1.0;
 
     Deck() {
         for (double &item : hot) item = -1.0;
@@ -88,9 +141,26 @@ struct Deck {
     void read(int outputRate, float &leftOut, float &rightOut) {
         leftOut = 0.f;
         rightOut = 0.f;
-        if (!playing || left.empty() || sampleRate <= 0 || outputRate <= 0) return;
+        if ((!playing && !scratch.driving()) || left.empty() || sampleRate <= 0 || outputRate <= 0) return;
         if (position < 0.0) position = 0.0;
         wrapLoop();
+        if (scratch.driving()) {
+            // Prato tocado ou solto girando (backspin): leitura direta na posição que o prato manda, sem Master Tempo.
+            const int total = static_cast<int>(left.size());
+            leftOut = deckbridge::readInterp(left.data(), total, position);
+            rightOut = deckbridge::readInterp(right.data(), total, position);
+            const double unit = rateMul * static_cast<double>(sampleRate) / static_cast<double>(outputRate);
+            const double normal = playing ? deckbridge::directedStep(pitch, rateMul, sampleRate, outputRate, reversed) : 0.0;
+            const double moved = scratch.step(outputRate, normal, unit);
+            const float motor = motorGain.next(moved / (static_cast<double>(sampleRate) / outputRate), outputRate);
+            leftOut *= motor;
+            rightOut *= motor;
+            position = std::min(std::max(0.0, position + moved), static_cast<double>(total - 2));
+            lastEmitted = position;
+            expectedPos = position;
+            stretch.reset();
+            return;
+        }
         const int frames = static_cast<int>(left.size());
         const int index = static_cast<int>(position);
         if (index >= frames) {
@@ -99,25 +169,54 @@ struct Deck {
             return;
         }
         lastEmitted = position;
-        leftOut = deckbridge::readPerformance(left.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
-                                             deckbridge::kFadeSamples);
-        rightOut = deckbridge::readPerformance(right.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
-                                              deckbridge::kFadeSamples);
-        float ratio = 1.f;
-        bool shift = false;
-        if (keyLock && pitch > 0.05 && std::abs(pitch - 1.0) > 0.01) {
-            ratio = static_cast<float>(1.0 / pitch);
-            shift = true;
-        }
-        if (keyShift != 0) {
-            ratio *= std::pow(2.f, static_cast<float>(keyShift) / 12.f);
-            shift = true;
-        }
-        if (shift && std::abs(ratio - 1.f) > 0.0008f) {
-            leftOut = shiftL.process(leftOut, ratio);
-            rightOut = shiftR.process(rightOut, ratio);
+        // Salto vindo de fora (seek, hot cue, deck pausado e movido): o grão em andamento não vale mais.
+        if (expectedPos >= 0.0 && std::fabs(position - expectedPos) > 4096.0) stretch.reset();
+        // Master Tempo e Key Shift: WSOLA lê o grão direto da faixa (tom pela taxa de leitura, tempo pela posição).
+        // Sem nenhum dos dois, ou com o tempo a menos de 1% do original sob Master Tempo, a leitura é direta.
+        const bool lockActive = keyLock && pitch > 0.05 && std::abs(pitch - 1.0) > 0.01;
+        if (lockActive || keyShift != 0) {
+            const double convert = rateMul * static_cast<double>(sampleRate) / static_cast<double>(outputRate);
+            const double base = lockActive ? 1.0 : std::max(0.05, pitch);
+            if (shiftCached != keyShift) {
+                shiftCached = keyShift;
+                shiftFactor = std::pow(2.0, static_cast<double>(keyShift) / 12.0);
+            }
+            const double grainRate = base * shiftFactor * convert;
+            const double dir = reversed ? -1.0 : 1.0;
+            const bool wrapped = loopEnd > loopStart || (rollLength > 1.0 && rollOrigin >= 0.0);
+            auto readSource = [&](double at, float &a, float &b) {
+                if (rollLength > 1.0 && rollOrigin >= 0.0) {
+                    const double end = rollOrigin + rollLength;
+                    if (at >= end) at = rollOrigin + std::fmod(at - rollOrigin, rollLength);
+                } else if (loopEnd > loopStart) {
+                    const double length = loopEnd - loopStart;
+                    if (!reversed && at >= loopEnd) at = loopStart + std::fmod(at - loopStart, length);
+                    else if (reversed && at < loopStart) at = loopEnd - std::fmod(loopStart - at, length);
+                }
+                a = deckbridge::readPerformance(left.data(), frames, at, loopStart, loopEnd, rollOrigin, rollLength, deckbridge::kFadeSamples);
+                b = deckbridge::readPerformance(right.data(), frames, at, loopStart, loopEnd, rollOrigin, rollLength, deckbridge::kFadeSamples);
+            };
+            const double analysis = deckbridge::directedStep(pitch, rateMul, sampleRate, outputRate, reversed);
+            stretch.next(readSource, position, dir, grainRate, analysis, wrapped, leftOut, rightOut);
+        } else {
+            leftOut = deckbridge::readPerformance(left.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
+                                                 deckbridge::kFadeSamples);
+            rightOut = deckbridge::readPerformance(right.data(), frames, position, loopStart, loopEnd, rollOrigin, rollLength,
+                                                  deckbridge::kFadeSamples);
+            // Ao voltar para a leitura direta, o próximo grão começa limpo.
+            if (stretch.havePrev || stretch.phase < deckbridge::Wsola::kHop) stretch.reset();
         }
         const double step = deckbridge::directedStep(pitch, rateMul, sampleRate, outputRate, reversed);
+        const float motor = motorGain.next(step / (static_cast<double>(sampleRate) / outputRate), outputRate);
+        leftOut *= motor;
+        rightOut *= motor;
+        if (rollLength > 1.0 && rollOrigin >= 0.0 && shadow >= 0.0) {
+            if (rollMix < 0.999f && shadow < frames - 1) {
+                leftOut = deckbridge::rollBalance(leftOut, deckbridge::readInterp(left.data(), frames, shadow), rollMix);
+                rightOut = deckbridge::rollBalance(rightOut, deckbridge::readInterp(right.data(), frames, shadow), rollMix);
+            }
+            shadow += step;
+        }
         if (slip >= 0.0) slip += (pitch * static_cast<double>(sampleRate)) / static_cast<double>(outputRate);
         position += step;
         if (rollLength > 1.0 && rollOrigin >= 0.0 && position >= rollOrigin + rollLength) {
@@ -130,6 +229,7 @@ struct Deck {
             if (reversed && !(loopEnd > loopStart)) playing = false;
         }
         wrapLoop();
+        expectedPos = position;
     }
 };
 
@@ -138,6 +238,9 @@ public:
     std::string start(int deviceId, int route) {
         std::lock_guard<std::mutex> lock(mutex_);
         closeLocked();
+        wantOpen_ = true;
+        lastDevice_ = deviceId;
+        lastRoute_ = route;
         route_.store(route);
         phonesSent_ = false;
         fallbackToTwo_ = false;
@@ -190,6 +293,11 @@ public:
         } else if (route == 1 || route == 3) {
             phonesSent_ = false;
         }
+        {
+            // O stream ainda não toca: o lock do áudio está livre e o preparo não atrasa nenhum callback.
+            std::lock_guard<std::mutex> mix(mixMutex_);
+            mixFx_.prepareAll(sampleRate_);
+        }
         result = stream_->requestStart();
         if (result != oboe::Result::OK) {
             error_ = oboe::convertToText(result);
@@ -205,6 +313,7 @@ public:
     void stop() {
         recorder_.stop();
         std::lock_guard<std::mutex> lock(mutex_);
+        wantOpen_ = false;
         route_.store(0);
         closeLocked();
     }
@@ -228,29 +337,50 @@ public:
     void loadDeck(int deck, const float *data, int count, int channels, int rate, float bpm, float cueSeconds,
                   const float *hot, int hotCount, float loopStartSec, float loopEndSec) {
         if (deck < 0 || deck > 1 || data == nullptr) return;
-        std::lock_guard<std::mutex> lock(mixMutex_);
-        Deck &target = decks_[deck];
         const int ch = channels == 2 ? 2 : 1;
         const int frames = std::max(0, ch == 2 ? count / 2 : count);
-        target.left.assign(frames, 0.f);
-        target.right.assign(frames, 0.f);
+        std::vector<int16_t> newLeft(static_cast<size_t>(frames));
+        std::vector<int16_t> newRight(static_cast<size_t>(frames));
         for (int index = 0; index < frames; ++index) {
             if (ch == 2) {
-                target.left[index] = data[index * 2];
-                target.right[index] = data[index * 2 + 1];
+                newLeft[index] = deckbridge::toPcm16(data[index * 2]);
+                newRight[index] = deckbridge::toPcm16(data[index * 2 + 1]);
             } else {
-                target.left[index] = data[index];
-                target.right[index] = data[index];
+                newLeft[index] = deckbridge::toPcm16(data[index]);
+                newRight[index] = newLeft[index];
             }
         }
-        target.sampleRate = rate > 0 ? rate : 48000;
-        target.bpm = bpm;
+        installDeck(deck, std::move(newLeft), std::move(newRight), rate, bpm, cueSeconds, hot, hotCount, loopStartSec, loopEndSec);
+    }
+
+    // A cópia de dezenas de MB acontece FORA do mutex do callback de áudio; dentro dele só se troca o vetor.
+    // Antes, carregar uma faixa travava o áudio do outro deck pelo tempo da cópia.
+    void installDeck(int deck, std::vector<int16_t> newLeft, std::vector<int16_t> newRight, int rate, float bpm, float cueSeconds,
+                     const float *hot, int hotCount, float loopStartSec, float loopEndSec) {
+        if (deck < 0 || deck > 1) return;
+        std::vector<int16_t> oldLeft;
+        std::vector<int16_t> oldRight;
+        {
+            std::lock_guard<std::mutex> lock(mixMutex_);
+            Deck &swapTarget = decks_[deck];
+            // Para a leitura antes da troca: o callback nunca vê uma posição de uma faixa na outra.
+            swapTarget.playing = false;
+            oldLeft.swap(swapTarget.left);
+            oldRight.swap(swapTarget.right);
+            swapTarget.left.swap(newLeft);
+            swapTarget.right.swap(newRight);
+        }
+        // oldLeft/oldRight liberam a memória da faixa antiga aqui, fora do lock.
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        Deck &target = decks_[deck];
+        target.sampleRate = rate > 0 ? std::min(rate, 384000) : 48000;
+        target.bpm = fin(bpm, 0.f, 400.f, 0.f);
         target.position = 0.0;
         target.playing = false;
         target.reversed = false;
-        target.cue = std::max(0.0, static_cast<double>(cueSeconds) * target.sampleRate);
-        const double start = static_cast<double>(loopStartSec) * target.sampleRate;
-        const double end = static_cast<double>(loopEndSec) * target.sampleRate;
+        target.cue = finD(static_cast<double>(cueSeconds), 0.0, 36000.0, 0.0) * target.sampleRate;
+        const double start = finD(static_cast<double>(loopStartSec), -1.0, 36000.0, -1.0) * target.sampleRate;
+        const double end = finD(static_cast<double>(loopEndSec), -1.0, 36000.0, -1.0) * target.sampleRate;
         if (end > start && start >= 0.0) {
             target.loopStart = start;
             target.loopEnd = end;
@@ -261,7 +391,9 @@ public:
         for (double &item : target.hot) item = -1.0;
         int limit = std::min(hotCount, kMaxHot);
         for (int index = 0; index < limit; ++index) {
-            if (hot != nullptr && hot[index] >= 0.f) target.hot[index] = static_cast<double>(hot[index]) * target.sampleRate;
+            if (hot != nullptr && std::isfinite(hot[index]) && hot[index] >= 0.f && hot[index] < 36000.f) {
+                target.hot[index] = static_cast<double>(hot[index]) * target.sampleRate;
+            }
         }
     }
 
@@ -304,11 +436,11 @@ public:
 
     void setMix(float volA, float volB, float pitchA, float pitchB, float cross, bool pflA, bool pflB) {
         std::lock_guard<std::mutex> lock(mixMutex_);
-        decks_[0].volume = std::clamp(volA, 0.f, 1.f);
-        decks_[1].volume = std::clamp(volB, 0.f, 1.f);
-        decks_[0].pitch = std::clamp(static_cast<double>(pitchA), 0.5, 2.0);
-        decks_[1].pitch = std::clamp(static_cast<double>(pitchB), 0.5, 2.0);
-        cross_ = std::clamp(cross, 0.f, 1.f);
+        decks_[0].volume = fin(volA, 0.f, 1.f, 0.f);
+        decks_[1].volume = fin(volB, 0.f, 1.f, 0.f);
+        decks_[0].pitch = finD(static_cast<double>(pitchA), 0.5, 2.0, 1.0);
+        decks_[1].pitch = finD(static_cast<double>(pitchB), 0.5, 2.0, 1.0);
+        cross_ = fin(cross, 0.f, 1.f, 0.5f);
         decks_[0].pfl = pflA;
         decks_[1].pfl = pflB;
     }
@@ -316,17 +448,35 @@ public:
     void setTrim(int deck, float linear) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
-        trim_[deck] = std::clamp(linear, 0.05f, 4.f);
+        trim_[deck] = fin(linear, 0.05f, 4.f, 1.f);
     }
 
     void seekSeconds(int deck, double seconds) {
+        if (!std::isfinite(seconds)) return;
         std::lock_guard<std::mutex> lock(mixMutex_);
         placeSeconds(deck, seconds, false);
     }
 
-    void nudge(int deck, double seconds) {
+    void scratchTouch(int deck, bool on) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1) return;
+        decks_[deck].scratch.touch(on);
+    }
+
+    void scratchMove(int deck, double seconds) {
+        if (!std::isfinite(seconds)) return;
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
+        // Um passo de prato nunca passa de 2 s de faixa; mais que isso é lixo.
+        decks_[deck].scratch.move(finD(seconds, -2.0, 2.0, 0.0) * decks_[deck].sampleRate);
+    }
+
+    void nudge(int deck, double seconds) {
+        if (!std::isfinite(seconds)) return;
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
+        // Prato solto ainda girando depois do backspin: o giro já é a inércia, não um empurrão.
+        if (decks_[deck].scratch.coasting) return;
         if (seconds == 0.0 && decks_[deck].userSlip && decks_[deck].slipAnchor >= 0.0) {
             decks_[deck].position = clampFrame(decks_[deck], decks_[deck].slipAnchor);
             return;
@@ -337,14 +487,47 @@ public:
 
     void setBeatFx(int effect, bool on, int level, int channel, float bpm, float beats) {
         std::lock_guard<std::mutex> lock(mixMutex_);
-        mixFx_.setSampleRate(48000);
-        mixFx_.setBeat(effect, on, std::clamp(level / 127.f, 0.f, 1.f), channel, bpm, beats);
+        mixFx_.setSampleRate(rateForFx());
+        mixFx_.setBeat(std::clamp(effect, 0, 64), on, std::clamp(level / 127.f, 0.f, 1.f), channel, fin(bpm, 20.f, 400.f, 120.f),
+                       fin(beats, 0.0625f, 64.f, 1.f));
     }
 
     void setFilter(int deck, float norm) {
         std::lock_guard<std::mutex> lock(mixMutex_);
-        mixFx_.setSampleRate(48000);
-        mixFx_.setFilter(deck, norm);
+        mixFx_.setSampleRate(rateForFx());
+        mixFx_.setFilter(deck, fin(norm, 0.f, 1.f, 0.5f));
+    }
+
+    void setEq(int deck, float low, float mid, float high) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        mixFx_.setSampleRate(rateForFx());
+        mixFx_.setEq(deck, fin(low, 0.f, 1.f, 0.5f), fin(mid, 0.f, 1.f, 0.5f), fin(high, 0.f, 1.f, 0.5f));
+    }
+
+    // TRIM do canal, 0..1: −12 dB à esquerda, 0 dB no centro, +12 dB à direita.
+    void setTrimKnob(int deck, float norm) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        if (deck < 0 || deck > 1) return;
+        const float k = fin(norm, 0.f, 1.f, 0.5f);
+        trimKnob_[deck] = std::pow(10.f, (k - 0.5f) * 2.f * 12.f / 20.f);
+    }
+
+    // HEADPHONES MIX (0 = só cue, 1 = só master) e LEVEL (0..1, 0 dB em 0,75).
+    void setHead(float mix, float level) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        headMix_ = fin(mix, 0.f, 1.f, 0.f);
+        const float k = fin(level, 0.f, 1.f, 0.75f);
+        headGain_ = k <= 0.01f ? 0.f : std::pow(10.f, (k - 0.75f) * 2.f * 12.f / 20.f);
+    }
+
+    void takeLevels(float *out) {
+        for (int index = 0; index < 4; ++index) out[index] = levels_[index].exchange(0.f);
+    }
+
+    void setColorKind(int deck, int kind) {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        mixFx_.setSampleRate(rateForFx());
+        mixFx_.setColorKind(deck, kind);
     }
 
     void setKeyLock(int deck, bool enabled) {
@@ -393,21 +576,41 @@ public:
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1 || decks_[deck].sampleRate <= 0) return;
         Deck &target = decks_[deck];
+        if (!std::isfinite(startSec) || !std::isfinite(endSec) || endSec > 36000.f) {
+            startSec = -1.f;
+            endSec = -1.f;
+        }
         if (endSec > startSec && startSec >= 0.f) {
             target.loopStart = static_cast<double>(startSec) * target.sampleRate;
             target.loopEnd = static_cast<double>(endSec) * target.sampleRate;
         } else {
+            const bool wasLooping = target.loopEnd > target.loopStart;
             target.loopStart = -1.0;
             target.loopEnd = -1.0;
+            // Loop roll com SLIP: ao sair do loop a faixa volta ao ponto em que estaria sem ele.
+            if (wasLooping && target.userSlip && target.slipAnchor >= 0.0) {
+                const double frames = static_cast<double>(target.left.size());
+                target.position = std::min(std::max(0.0, target.slipAnchor), frames > 1.0 ? frames - 1.0 : 0.0);
+            }
         }
     }
 
     void setBufferFrames(int frames) { bufferFrames_ = frames; }
 
-    void setRmx(const float *values, int count) {
-        if (values == nullptr || count < 18) return;
+    // A taxa do stream aberto; antes de abrir, 48000. Os setters nunca pedem outra taxa que a do callback,
+    // senão o MixerFx realocaria buffers dentro do áudio.
+    int rateForFx() const { return sampleRate_ > 0 ? sampleRate_ : 48000; }
+
+    void setRmx(const float *raw, int count) {
+        if (raw == nullptr || count < 18) return;
+        // Cópia limpa: o índice 17 é o BPM (120 se vier lixo), os demais 0; tudo preso a ±1000.
+        float values[32];
+        const int used = std::min(count, 32);
+        for (int index = 0; index < used; ++index) values[index] = fin(raw[index], -1000.f, 1000.f, index == 17 ? 120.f : 0.f);
+        values[17] = fin(values[17], 20.f, 400.f, 120.f);
+        count = used;
         std::lock_guard<std::mutex> lock(mixMutex_);
-        mixFx_.setSampleRate(48000);
+        mixFx_.setSampleRate(rateForFx());
         const float drumBuild = count >= 19 ? values[18] : 0.f;
         const int drumVoice = count >= 20 ? static_cast<int>(values[19]) : 0;
         const int drumBars = count >= 21 ? static_cast<int>(values[20]) : 8;
@@ -421,17 +624,51 @@ public:
                       gridDeck);
     }
 
+    void setConsole(const float *raw, int count) {
+        if (raw == nullptr || count <= 0) return;
+        float values[32];
+        const int used = std::min(count, 32);
+        for (int index = 0; index < used; ++index) values[index] = fin(raw[index], -1000.f, 1000.f, std::nanf(""));
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        mixFx_.setConsole(values, used);
+    }
+
+    void previewLoad(const float *left, const float *right, int frames, int rate) {
+        // A cópia (alguns MB) fica fora do lock; o áudio só espera a troca dos vetores.
+        deckbridge::PreviewVoice next;
+        next.load(left, right, frames, rate);
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        std::swap(preview_, next);
+    }
+
+    void previewStop() {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        preview_.stop();
+    }
+
+    bool previewPlaying() {
+        std::lock_guard<std::mutex> lock(mixMutex_);
+        return preview_.playing;
+    }
+
     void setGrid(int deck, float originSec, float bpm) {
         std::lock_guard<std::mutex> lock(mixMutex_);
         if (deck < 0 || deck > 1) return;
-        decks_[deck].gridOriginSec = static_cast<double>(originSec);
-        decks_[deck].gridBpm = bpm > 1.f ? static_cast<double>(bpm) : 0.0;
+        decks_[deck].gridOriginSec = finD(static_cast<double>(originSec), -3600.0, 36000.0, 0.0);
+        const float clean = fin(bpm, 0.f, 400.f, 0.f);
+        decks_[deck].gridBpm = clean > 1.f ? static_cast<double>(clean) : 0.0;
     }
 
     void loadDrum(int voice, const uint8_t *data, int size) {
-        std::lock_guard<std::mutex> lock(mixMutex_);
-        if (data == nullptr || size <= 0) return;
-        deckbridge::loadDrumFlac(data, static_cast<size_t>(size), voice);
+        if (data == nullptr || size <= 0 || voice < 0 || voice > 4) return;
+        // Decodifica fora do lock (antes segurava o áudio por 90–532 µs por voz no x86); só a troca fica dentro.
+        std::vector<float> mono = deckbridge::decodeDrumFlac(data, static_cast<size_t>(size));
+        if (mono.size() < 8) return;
+        std::vector<float> old;
+        {
+            std::lock_guard<std::mutex> lock(mixMutex_);
+            old = deckbridge::drumBank().take(voice, std::move(mono));
+        }
     }
 
     float positionSeconds(int deck) {
@@ -440,7 +677,24 @@ public:
         return static_cast<float>(decks_[deck].position / decks_[deck].sampleRate);
     }
 
+    /** Conta uma falha quando o bloco demora mais que 90% do tempo que ele toca (o próximo bloco chegaria atrasado). */
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) override {
+        const auto began = std::chrono::steady_clock::now();
+        DenormalGuard denormals;
+        const auto result = processAudio(audioStream, audioData, numFrames);
+        const int rate = audioStream->getSampleRate();
+        if (rate > 0 && numFrames > 0) {
+            const double spent = std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+            if (spent > 0.9 * static_cast<double>(numFrames) / static_cast<double>(rate)) glitches_.fetch_add(1, std::memory_order_relaxed);
+        }
+        return result;
+    }
+
+    void setMasterGain(float linear) { masterGain_.store(fin(linear, 0.f, 4.f, 1.f), std::memory_order_relaxed); }
+
+    int glitchCount() const { return glitches_.load(std::memory_order_relaxed); }
+
+    oboe::DataCallbackResult processAudio(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) {
         auto *out = static_cast<float *>(audioData);
         const int channels = audioStream->getChannelCount();
         const int route = route_.load();
@@ -449,8 +703,9 @@ public:
         if (route == 3) {
             std::lock_guard<std::mutex> lock(mixMutex_);
             const bool phonesOpen = channels >= 4;
-            phonesAudible_.store(phonesOpen && (decks_[0].pfl || decks_[1].pfl));
+            phonesAudible_.store(phonesOpen && (decks_[0].pfl || decks_[1].pfl || preview_.audible()));
             mixFx_.setSampleRate(rate);
+            float peak[4] = {0.f, 0.f, 0.f, 0.f};
             for (int frame = 0; frame < numFrames; ++frame) {
                 mixFx_.beginSample();
                 if (mixFx_.release.active() && mixFx_.release.kind != 1) {
@@ -473,33 +728,61 @@ public:
                 const bool gridLive = grid.playing && grid.sampleRate > 0 && gridBpm > 1.0;
                 mixFx_.setDrumPhase(deckbridge::musicalBeat(grid.lastEmitted, grid.sampleRate, gridBpm, grid.gridOriginSec),
                                     gridLive, true);
+                // TRIM antes do canal, como num mixer: o COMP e o EQ veem o nível já ajustado.
+                al *= trim_[0] * trimKnob_[0];
+                ar *= trim_[0] * trimKnob_[0];
+                bl *= trim_[1] * trimKnob_[1];
+                br *= trim_[1] * trimKnob_[1];
                 mixFx_.processDeck(0, al, ar);
                 mixFx_.processDeck(1, bl, br);
-                al *= trim_[0];
-                ar *= trim_[0];
-                bl *= trim_[1];
-                br *= trim_[1];
-                float masterL = al * (1.f - cross_) * decks_[0].volume + bl * cross_ * decks_[1].volume;
-                float masterR = ar * (1.f - cross_) * decks_[0].volume + br * cross_ * decks_[1].volume;
+                // Crossfader e faders pelas curvas escolhidas (a lenta é aditiva: os dois inteiros no centro).
+                float sideA = 1.f;
+                float sideB = 1.f;
+                mixFx_.sides(cross_, sideA, sideB);
+                const float faderA = mixFx_.faderGain(decks_[0].volume);
+                const float faderB = mixFx_.faderGain(decks_[1].volume);
+                float masterL = al * sideA * faderA + bl * sideB * faderB;
+                float masterR = ar * sideA * faderA + br * sideB * faderB;
+                mixFx_.addSend(al * faderA, ar * faderA, bl * faderB, br * faderB, masterL, masterR);
                 mixFx_.processMaster(masterL, masterR);
+                // Ganho de saída do app (−12 a +6 dB): o DDJ-400 do mapa pinado não manda um knob de master em MIDI.
+                const float outGain = masterGain_.load(std::memory_order_relaxed);
+                // Última defesa: um NaN que passasse pelas guardas de entrada não pode chegar ao DAC nem ao limiter.
+                masterL = safeOut(masterL * outGain);
+                masterR = safeOut(masterR * outGain);
                 masterLimit_.process(masterL, masterR);
+                peak[0] = std::max(peak[0], std::max(std::fabs(al), std::fabs(ar)));
+                peak[1] = std::max(peak[1], std::max(std::fabs(bl), std::fabs(br)));
+                peak[2] = std::max(peak[2], std::fabs(masterL));
+                peak[3] = std::max(peak[3], std::fabs(masterR));
                 liveRate_.store(rate);
                 recorder_.push(masterL, masterR);
                 float phoneL = 0.f;
                 float phoneR = 0.f;
                 if (phonesOpen) {
+                    // CUE antes do fader, como num mixer: com o fader embaixo a próxima faixa se ouve no fone.
                     if (decks_[0].pfl) {
-                        phoneL += al * decks_[0].volume;
-                        phoneR += ar * decks_[0].volume;
+                        phoneL += al;
+                        phoneR += ar;
                     }
                     if (decks_[1].pfl) {
-                        phoneL += bl * decks_[1].volume;
-                        phoneR += br * decks_[1].volume;
+                        phoneL += bl;
+                        phoneR += br;
                     }
                     if (decks_[0].pfl && decks_[1].pfl) {
                         phoneL *= 0.5f;
                         phoneR *= 0.5f;
                     }
+                    // Pré-escuta da lista: entra no lado CUE do fone, por cima do que estiver no CUE.
+                    float previewL = 0.f;
+                    float previewR = 0.f;
+                    preview_.read(rate, previewL, previewR);
+                    phoneL += previewL;
+                    phoneR += previewR;
+                    phoneL = safeOut((phoneL * (1.f - headMix_) + masterL * headMix_) * headGain_);
+                    phoneR = safeOut((phoneR * (1.f - headMix_) + masterR * headMix_) * headGain_);
+                    // O fone também tem limiter: o CUE soma dois canais antes do fader com EQ e trim, e passava de 1,0.
+                    phoneLimit_.process(phoneL, phoneR);
                 }
                 for (int channel = 0; channel < channels; ++channel) {
                     float sample = 0.f;
@@ -509,6 +792,9 @@ public:
                     else if (channel == 3) sample = phoneR;
                     out[frame * channels + channel] = sample;
                 }
+            }
+            for (int index = 0; index < 4; ++index) {
+                if (peak[index] > levels_[index].load()) levels_[index].store(peak[index]);
             }
             return oboe::DataCallbackResult::Continue;
         }
@@ -530,10 +816,49 @@ public:
     }
 
     void onErrorAfterClose(oboe::AudioStream *, oboe::Result error) override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        opened_.store(false);
-        error_ = oboe::convertToText(error);
-        stream_.reset();
+        glitches_.fetch_add(1, std::memory_order_relaxed);
+        bool retry = false;
+        int device = 0;
+        int route = 0;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            opened_.store(false);
+            error_ = oboe::convertToText(error);
+            stream_.reset();
+            retry = wantOpen_ && !restarting_.exchange(true);
+            device = lastDevice_;
+            route = lastRoute_;
+        }
+        // Desconexão ou troca de rota do áudio: tenta reabrir, para o som voltar sem mexer na tela.
+        // As faixas e as posições dos decks não são tocadas. O hotplug de outro aparelho USB é tratado no Kotlin.
+        if (retry) {
+            // A thread fica guardada (não mais detach): o destrutor espera por ela, e a próxima desconexão espera a
+            // anterior terminar (ela já saiu do laço, porque restarting_ voltou a false).
+            if (retry_.joinable()) {
+                if (retry_.get_id() == std::this_thread::get_id()) retry_.detach();
+                else retry_.join();
+            }
+            retry_ = std::thread([this, device, route]() {
+                for (int attempt = 0; attempt < 6; ++attempt) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(300 + attempt * 400));
+                    {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        if (!wantOpen_ || opened_.load()) break;
+                    }
+                    start(device, route);
+                    if (opened_.load()) break;
+                }
+                restarting_.store(false);
+            });
+        }
+    }
+
+    ~ToneEngine() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            wantOpen_ = false;
+        }
+        if (retry_.joinable() && retry_.get_id() != std::this_thread::get_id()) retry_.join();
     }
 
 private:
@@ -546,13 +871,16 @@ private:
             const double origin = std::floor(target.position / slice) * slice;
             target.rollOrigin = origin;
             target.rollLength = slice;
+            target.shadow = target.position;
             if (mixFx_.slipDeck[deck]) target.slip = target.position;
         }
+        if (want) target.rollMix = mixFx_.rollMix;
         if (!want && target.rollLength > 0.0) {
             if (target.slip >= 0.0) target.position = target.slip;
             target.slip = -1.0;
             target.rollOrigin = -1.0;
             target.rollLength = -1.0;
+            target.shadow = -1.0;
         }
     }
 
@@ -634,20 +962,34 @@ private:
     std::mutex mutex_;
     std::mutex mixMutex_;
     std::shared_ptr<oboe::AudioStream> stream_;
+    std::atomic<int> glitches_{0};
+    std::atomic<float> masterGain_{1.f};
     std::atomic<int> route_{0};
     std::atomic<int> openedChannels_{0};
     std::atomic<bool> opened_{false};
     std::atomic<bool> phonesAudible_{false};
+    // Picos desde a última leitura: canal 1, canal 2, master E, master D. A thread de áudio só sobe; a tela zera ao ler.
+    std::atomic<float> levels_[4] = {0.f, 0.f, 0.f, 0.f};
     Deck decks_[2];
     deckbridge::MixerFx mixFx_;
     deckbridge::PeakLimiter masterLimit_;
+    deckbridge::PeakLimiter phoneLimit_;
     float trim_[2]{1.f, 1.f};
+    float trimKnob_[2]{1.f, 1.f};
+    deckbridge::PreviewVoice preview_;
+    float headMix_ = 0.f;
+    float headGain_ = 1.f;
     deckbridge::MasterRecorder recorder_;
     std::atomic<int> liveRate_{48000};
     int bufferFrames_ = 256;
     float cross_ = 0.5f;
     double phase_[4]{};
     int sampleRate_ = 0;
+    bool wantOpen_ = false;
+    int lastDevice_ = 0;
+    int lastRoute_ = 0;
+    std::atomic<bool> restarting_{false};
+    std::thread retry_;
     bool phonesSent_ = false;
     bool fallbackToTwo_ = false;
     std::string error_;
@@ -658,7 +1000,7 @@ ToneEngine &engine() {
     return instance;
 }
 
-std::string startSafe(int deviceId, int route) {
+[[maybe_unused]] std::string startSafe(int deviceId, int route) {
     try {
         return engine().start(deviceId, route);
     } catch (const std::exception &ex) {
@@ -671,6 +1013,8 @@ std::string startSafe(int deviceId, int route) {
 }
 
 }  // namespace
+
+#ifndef DECKBRIDGE_NO_JNI
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeStart(JNIEnv *env, jobject, jint deviceId, jint route) {
@@ -699,6 +1043,34 @@ Java_os_deckbridge_android_NativeEngine_nativeLoadDeck(
     engine().loadDeck(deck, data, count, channels, rate, bpm, cueSeconds, hotData, hotCount, loopStart, loopEnd);
     env->ReleaseFloatArrayElements(samples, data, JNI_ABORT);
     if (hotData != nullptr) env->ReleaseFloatArrayElements(hot, hotData, JNI_ABORT);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeLoadDeckStereo(
+        JNIEnv *env, jobject, jint deck, jfloatArray left, jfloatArray right, jint frames, jint rate, jfloat bpm,
+        jfloat cueSeconds, jfloatArray hot, jfloat loopStart, jfloat loopEnd) {
+    if (left == nullptr || right == nullptr || frames <= 0) return;
+    const jsize available = std::min(env->GetArrayLength(left), env->GetArrayLength(right));
+    const int count = std::min<int>(frames, available);
+    // Do array Java para o int16 do motor em pedaços de 16 k quadros: sem uma cópia float do tamanho da faixa.
+    std::vector<int16_t> newLeft(static_cast<size_t>(count));
+    std::vector<int16_t> newRight(static_cast<size_t>(count));
+    std::vector<float> chunk(16384);
+    for (int at = 0; at < count; at += static_cast<int>(chunk.size())) {
+        const int n = std::min<int>(static_cast<int>(chunk.size()), count - at);
+        env->GetFloatArrayRegion(left, at, n, chunk.data());
+        for (int i = 0; i < n; ++i) newLeft[static_cast<size_t>(at + i)] = deckbridge::toPcm16(chunk[static_cast<size_t>(i)]);
+        env->GetFloatArrayRegion(right, at, n, chunk.data());
+        for (int i = 0; i < n; ++i) newRight[static_cast<size_t>(at + i)] = deckbridge::toPcm16(chunk[static_cast<size_t>(i)]);
+    }
+    std::vector<float> hotValues;
+    if (hot != nullptr) {
+        const jsize hotCount = env->GetArrayLength(hot);
+        hotValues.resize(static_cast<size_t>(hotCount));
+        if (hotCount > 0) env->GetFloatArrayRegion(hot, 0, hotCount, hotValues.data());
+    }
+    engine().installDeck(deck, std::move(newLeft), std::move(newRight), rate, bpm, cueSeconds,
+                         hotValues.empty() ? nullptr : hotValues.data(), static_cast<int>(hotValues.size()), loopStart, loopEnd);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -743,6 +1115,16 @@ Java_os_deckbridge_android_NativeEngine_nativeSeek(JNIEnv *, jobject, jint deck,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeScratchTouch(JNIEnv *, jobject, jint deck, jboolean on) {
+    engine().scratchTouch(deck, on == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeScratchMove(JNIEnv *, jobject, jint deck, jfloat seconds) {
+    engine().scratchMove(deck, seconds);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeNudge(JNIEnv *, jobject, jint deck, jfloat seconds) {
     engine().nudge(deck, seconds);
 }
@@ -756,6 +1138,26 @@ Java_os_deckbridge_android_NativeEngine_nativeSetBeatFx(
 extern "C" JNIEXPORT void JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeSetFilter(JNIEnv *, jobject, jint deck, jfloat norm) {
     engine().setFilter(deck, norm);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetEq(JNIEnv *, jobject, jint deck, jfloat low, jfloat mid, jfloat high) {
+    engine().setEq(deck, low, mid, high);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetTrimKnob(JNIEnv *, jobject, jint deck, jfloat norm) {
+    engine().setTrimKnob(deck, norm);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetHead(JNIEnv *, jobject, jfloat mix, jfloat level) {
+    engine().setHead(mix, level);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetColorKind(JNIEnv *, jobject, jint deck, jint kind) {
+    engine().setColorKind(deck, kind);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -812,6 +1214,36 @@ Java_os_deckbridge_android_NativeEngine_nativeSetRmx(JNIEnv *env, jobject, jfloa
     env->ReleaseFloatArrayElements(values, data, JNI_ABORT);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativePreviewLoad(JNIEnv *env, jobject, jfloatArray left, jfloatArray right, jint frames, jint rate) {
+    if (left == nullptr || right == nullptr) return;
+    const jsize count = std::min(std::min(env->GetArrayLength(left), env->GetArrayLength(right)), frames);
+    jfloat *l = env->GetFloatArrayElements(left, nullptr);
+    jfloat *r = env->GetFloatArrayElements(right, nullptr);
+    engine().previewLoad(l, r, count, rate);
+    env->ReleaseFloatArrayElements(left, l, JNI_ABORT);
+    env->ReleaseFloatArrayElements(right, r, JNI_ABORT);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativePreviewStop(JNIEnv *, jobject) {
+    engine().previewStop();
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_os_deckbridge_android_NativeEngine_nativePreviewPlaying(JNIEnv *, jobject) {
+    return engine().previewPlaying() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetConsole(JNIEnv *env, jobject, jfloatArray values) {
+    if (values == nullptr) return;
+    const jsize count = env->GetArrayLength(values);
+    jfloat *data = env->GetFloatArrayElements(values, nullptr);
+    engine().setConsole(data, count);
+    env->ReleaseFloatArrayElements(values, data, JNI_ABORT);
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeRecordStart(JNIEnv *env, jobject, jstring path, jboolean side) {
     if (path == nullptr) return JNI_FALSE;
@@ -832,6 +1264,24 @@ Java_os_deckbridge_android_NativeEngine_nativeRecordPoll(JNIEnv *env, jobject) {
     return env->NewStringUTF(line.c_str());
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeSetMasterGain(JNIEnv *, jobject, jfloat linear) {
+    engine().setMasterGain(linear);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeGlitches(JNIEnv *, jobject) {
+    return engine().glitchCount();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_os_deckbridge_android_NativeEngine_nativeLevels(JNIEnv *env, jobject, jfloatArray dest) {
+    if (dest == nullptr || env->GetArrayLength(dest) < 4) return;
+    float values[4];
+    engine().takeLevels(values);
+    env->SetFloatArrayRegion(dest, 0, 4, values);
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_os_deckbridge_android_NativeEngine_nativeRecordPull(JNIEnv *env, jobject, jfloatArray dest) {
     if (dest == nullptr) return 0;
@@ -842,3 +1292,5 @@ Java_os_deckbridge_android_NativeEngine_nativeRecordPull(JNIEnv *env, jobject, j
     env->ReleaseFloatArrayElements(dest, data, 0);
     return frames;
 }
+
+#endif  // DECKBRIDGE_NO_JNI

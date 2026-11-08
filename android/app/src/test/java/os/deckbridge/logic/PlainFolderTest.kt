@@ -55,6 +55,13 @@ class PlainFolderTest {
         assertEquals(used, decodes)
         assertEquals(house.bpm, second.tracks.first { it.title == "Click House" }.bpm, 0.01)
         assertEquals("A", second.tracks.first { it.title == "Tom A" }.keyName)
+        // O cache não guarda o detalhe de 150 colunas/s; a carga no deck o refaz a partir do PCM.
+        val cached = second.analyses.getValue(second.tracks.first { it.title == "Click House" }.id)
+        assertTrue(cached.lacksDetail())
+        val filled = cached.withDetail(wavesFromPcm(samples, rate))
+        assertTrue(!filled.lacksDetail())
+        assertEquals(wave?.rgbDetail?.columns, filled.rgbDetail?.columns)
+        assertEquals(cached.beats, filled.beats)
     }
 
     @Test

@@ -59,6 +59,28 @@ float windowRms(const std::vector<float> &data, int start, int count) {
 }  // namespace
 
 int main() {
+    {
+        // PCM em int16 no deck: para fonte de 16 bit (s/32768) a leitura é bit a bit a mesma do float.
+        std::vector<float> f(4096);
+        std::vector<int16_t> q(4096);
+        uint32_t seed = 12345u;
+        bool same = true;
+        for (size_t i = 0; i < f.size(); ++i) {
+            seed = seed * 1664525u + 1013904223u;
+            const int sample = static_cast<int>(seed >> 16) - 32768;
+            f[i] = static_cast<float>(sample) / 32768.f;
+            q[i] = deckbridge::toPcm16(f[i]);
+            same = same && deckbridge::pcmValue(q[i]) == f[i];
+        }
+        for (double pos = 0.0; pos < 4090.0; pos += 0.37) {
+            same = same && deckbridge::readInterp(q.data(), 4096, pos) == deckbridge::readInterp(f.data(), 4096, pos);
+            same = same && deckbridge::readPerformance(q.data(), 4096, pos, 100.0, 900.0, -1.0, -1.0, deckbridge::kFadeSamples) ==
+                           deckbridge::readPerformance(f.data(), 4096, pos, 100.0, 900.0, -1.0, -1.0, deckbridge::kFadeSamples);
+        }
+        expect(same, "int16 deck PCM reads bit-identical to float for 16-bit sources");
+        expect(deckbridge::toPcm16(2.f) == 32767 && deckbridge::toPcm16(-2.f) == -32768 && deckbridge::toPcm16(NAN) == 0,
+               "int16 conversion clips and drops NaN");
+    }
     const double beat = deckbridge::samplesPerBeat(120.0, 48000.0);
     expect(std::abs(beat - 24000.0) < 1e-6, "beat length at 120 bpm");
 
@@ -234,6 +256,31 @@ int main() {
         float r = 0.2f;
         scene.process(l, r);
         expect(std::abs(l - 0.2f) < 1e-3f && scene.intensity <= 0.001f, std::string(scenes[sceneId]) + " release returns to dry");
+    }
+
+    // EQ de canal: kill à esquerda, unidade no centro, +6 dB à direita; LOW não mexe em 5 kHz.
+    {
+        expect(deckbridge::eqGainFromKnob(0.f) == 0.f && std::abs(deckbridge::eqGainFromKnob(0.5f) - 1.f) < 1e-6f, "EQ knob: kill e centro");
+        expect(std::abs(deckbridge::eqGainFromKnob(1.f) - 1.995f) < 0.01f, "EQ knob: +6 dB no fim");
+        auto rmsAfter = [&](float freq, float low, float mid, float high) {
+            deckbridge::MixerFx fx;
+            fx.setSampleRate(48000);
+            fx.setEq(0, low, mid, high);
+            const int n = 48000;
+            double sum = 0.0;
+            for (int i = 0; i < n; ++i) {
+                float l = 0.5f * std::sin(static_cast<float>(deckbridge::kTwoPi) * freq * i / 48000.f);
+                float r = l;
+                fx.processDeck(0, l, r);
+                if (i > n / 2) sum += static_cast<double>(l) * l;
+            }
+            return std::sqrt(sum / (n / 2)) / (0.5 / std::sqrt(2.0));
+        };
+        expect(rmsAfter(80.f, 0.f, 0.5f, 0.5f) < 0.05, "EQ LOW kill tira o grave de 80 Hz (mais de 26 dB)");
+        expect(rmsAfter(5000.f, 0.f, 0.5f, 0.5f) > 0.9, "EQ LOW kill deixa o agudo de 5 kHz");
+        expect(rmsAfter(600.f, 0.5f, 0.f, 0.5f) < 0.05, "EQ MID kill tira 600 Hz (mais de 26 dB)");
+        expect(rmsAfter(80.f, 0.5f, 0.5f, 0.5f) > 0.97 && rmsAfter(80.f, 0.5f, 0.5f, 0.5f) < 1.03, "EQ no centro é transparente");
+        expect(rmsAfter(80.f, 1.f, 0.5f, 0.5f) > 1.85, "EQ LOW à direita sobe cerca de 6 dB");
     }
 
     deckbridge::XPad drums;

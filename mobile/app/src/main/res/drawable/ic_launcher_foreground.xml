@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Disco da lista (anel branco e ponto) com a marca azul do prato, nas cores do player (StagePalette). Área segura: raio 33 dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#F4F7FB" android:strokeWidth="6" android:fillColor="#00000000"
+        android:pathData="M54,25 A29,29 0 1,1 53.99,25 Z" />
+    <path android:fillColor="#F4F7FB" android:pathData="M54,48.5 A5.5,5.5 0 1,1 53.99,48.5 Z" />
+    <path android:strokeColor="#8EBEFF" android:strokeWidth="6" android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M54,25 L54,38" />
+    <path android:strokeColor="#FF9A2E" android:strokeWidth="4" android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M76.2,72.6 A29,29 0 0,1 68.5,79.1" />
+</vector>

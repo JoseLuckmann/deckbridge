@@ -1,0 +1,102 @@
+package os.deckbridge.manager
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import os.deckbridge.manager.organize.TrackNames
+import os.deckbridge.manager.organize.TrackNames.Names
+
+/** Nomes como chegam do celular e da internet, e como um DJ quer ver na biblioteca. */
+class TrackNamesTest {
+    private fun c(title: String, artist: String, file: String) = TrackNames.clean(title, artist, file)
+
+    @Test fun `o numero da fila de importacao sai do titulo e do artista`() {
+        // Como apareceu na biblioteca do dono: sem etiquetas, o título era o nome da cópia ("0003-...").
+        assertEquals(Names("Your Love", "Duke Dumont, Purple Disco Machine"), c("0003-Duke_Dumont,_Purple_Disco_Machine_-_Your_Love", "", "0003-Duke_Dumont,_Purple_Disco_Machine_-_Your_Love.mp3"))
+        // Título das etiquetas certo e o artista vindo do nome da cópia: "0000-Adriatique".
+        assertEquals(Names("Mystery (Tale Of Us & Mathame Remix)", "Adriatique"), c("Mystery (Tale Of Us & Mathame Remix)", "0000-Adriatique", "0000-Adriatique - Mystery (Tale Of Us & Mathame Remix).mp3"))
+    }
+
+    @Test fun `numero de faixa, tom e bpm na frente saem`() {
+        assertEquals(Names("Night Bus", "Nara Vale"), c("", "", "07 - Nara Vale - Night Bus.mp3"))
+        assertEquals(Names("Night Bus", "Nara Vale"), c("", "", "07. Nara Vale - Night Bus.flac"))
+        assertEquals(Names("Night Bus", "Nara Vale"), c("", "", "8A - 124 - Nara Vale - Night Bus.mp3"))
+        assertEquals(Names("Pacific State", "808 State"), c("", "", "808 State - Pacific State.mp3"))
+        assertEquals(Names("In Da Club", "50 Cent"), c("In Da Club", "50 Cent", "x.mp3"))
+    }
+
+    @Test fun `artista grudado no titulo e mix com hifen`() {
+        assertEquals(Names("Losing It (Extended Mix)", "Fisher"), c("Fisher - Losing It - Extended Mix", "", "a.mp3"))
+        assertEquals(Names("Losing It (Extended Mix)", "Fisher"), c("Losing It - Extended Mix", "Fisher", "a.mp3"))
+        assertEquals(Names("Losing It", "Fisher"), c("Fisher - Losing It", "Fisher", "a.mp3"))
+        assertEquals(Names("Losing It", "Fisher"), c("Losing It", "", "Fisher – Losing It.mp3"))
+    }
+
+    @Test fun `lixo de video e de site sai, o que e da musica fica`() {
+        assertEquals(Names("Cola (Original Mix)", "Camelphat & Elderbrook"), c("CamelPhat & Elderbrook - Cola (Original Mix) [Official Video]", "", "x.mp3").let { Names(it.title, it.artist.replace("CamelPhat", "Camelphat")) })
+        assertEquals(Names("Innerbloom", "Rüfüs Du Sol"), c("RÜFÜS DU SOL - Innerbloom (Lyrics) [www.musica.com] 320kbps", "", "x.mp3"))
+        assertEquals(Names("Turn Me On (feat. Vula)", "Riton & Oliver Heldens"), c("Turn Me On (ft. Vula)", "Riton & Oliver Heldens", "x.mp3"))
+        assertEquals(Names("Strobe", "Deadmau5"), c("", "", "deadmau5 - strobe (1).mp3").let { Names(it.title, it.artist) })
+        assertEquals(Names("Opus", "Eric Prydz"), c("Opus - Copy", "Eric Prydz", "x.mp3"))
+    }
+
+    @Test fun `nome ja certo nao muda`() {
+        assertEquals(Names("Do You Know Him (Original Mix)", "Armonica"), c("Do You Know Him (Original Mix)", "Armonica", "Armonica - Do You Know Him.mp3"))
+        assertEquals(Names("Love Is In Control (Finger On The Trigger)", "Donna Summer"), c("Love Is In Control (Finger On The Trigger)", "Donna Summer", "x.mp3"))
+        assertEquals(Names("Jay-Z Song", "Jay-Z"), c("Jay-Z Song", "Jay-Z", "x.mp3"))
+    }
+
+    @Test fun `a chave junta nomes escritos diferente`() {
+        val a = TrackNames.key(c("Cola (Original Mix)", "CamelPhat & Elderbrook", "x.mp3"))
+        val b = TrackNames.key(c("", "", "02_camelphat_&_elderbrook_-_cola.mp3"))
+        assertEquals(a, b)
+    }
+
+    @Test fun `sem separador, separa pelo artista que a biblioteca ja conhece`() {
+        val known = TrackNames.knownArtists(listOf("Duke Dumont", "Purple Disco Machine & Sophie", "Jan Blomqvist", "Adriatique"))
+        assertTrue("Purple Disco Machine" in known && "Sophie" in known)
+        assertEquals(Names("Your Love", "Duke Dumont, Purple Disco Machine"), TrackNames.splitByKnown("Duke Dumont, Purple Disco Machine Your Love", known))
+        assertEquals(Names("The Space In Between", "Jan Blomqvist"), TrackNames.splitByKnown("Jan Blomqvist The Space In Between", known))
+        // Nenhum conhecido no começo, ou só o nome: não separa.
+        assertEquals(null, TrackNames.splitByKnown("Rebuke Along Came Polly", known))
+        assertEquals(null, TrackNames.splitByKnown("Adriatique", known))
+        // "Jan" não casa com "Jan Blomqvist" pela metade de uma palavra.
+        assertEquals(null, TrackNames.splitByKnown("Janet Jackson Again", known))
+    }
+
+    @Test fun `o dj toca onde o artista acaba`() {
+        assertEquals(Names("Along Came Polly", "Rebuke"), TrackNames.splitAtWord("Rebuke Along Came Polly", 1))
+        assertEquals(Names("Yours", "Wolfram, Josh Ludlow"), TrackNames.splitAtWord("Wolfram, Josh Ludlow Yours", 3))
+    }
+
+    @Test fun `nomes de arquivo como os do dono, sem separador`() {
+        // A biblioteca já conhece estes (de outras faixas como "Purple Disco Machine - In My Arms").
+        val known = TrackNames.knownArtists(listOf("Purple Disco Machine", "Purple Disco Machine, Kungs", "The Shapeshifters"))
+        fun f(file: String) = TrackNames.clean(file.substringBeforeLast('.'), "", file, known)
+        assertEquals(Names("Something On My Mind (Extended Mix)", "Duke Dumont, Purple Disco Machine"), f("Duke_Dumont,_Purple_Disco_Machine_Something_On_My_Mind_Extended_Mix.wav"))
+        assertEquals(Names("At the Disko (Extended Mix)", "Lorenz Rhode, Purple Disco Machine"), f("Lorenz_Rhode,_Purple_Disco_Machine_At_the_Disko_Extended_Mix.wav"))
+        // O nome depois de "feat" no próprio arquivo diz onde a lista de artistas acaba.
+        assertEquals(Names("Shined On Me (feat. Andrea Love) (Les Bisous Remix)", "Praise Cats, Andrea Love"), f("Praise_Cats,_Andrea_Love_Shined_On_Me_feat_Andrea_Love_Les_Bisous_Remix.wav"))
+        // Com separador, como sempre; a cópia "(1)" sai.
+        assertEquals(Names("Lola's Theme (VIP)", "The Shapeshifters"), f("The Shapeshifters - Lola's Theme (VIP) (1).wav"))
+        assertEquals(Names("Substitution (Extended)", "Purple Disco Machine, Kungs"), f("Purple Disco Machine, Kungs - Substitution (Extended).wav"))
+        // Nenhum artista da lista conhecido: vírgula no começo é lista de artistas; o último fica com 2 palavras.
+        val w = f("Wolfram,_Josh_Ludlow_YoYo_Disco_Purple_Disco_Machine_Extended_Remix.wav")
+        assertEquals("Wolfram, Josh Ludlow", w.artist)
+        assertEquals("YoYo Disco (Purple Disco Machine Extended Remix)", w.title)
+    }
+
+    @Test fun `virgula no comeco e lista de artistas mesmo com a biblioteca vazia`() {
+        // Na importação de uma biblioteca nova ninguém é conhecido; título de música quase nunca tem vírgula.
+        fun f(file: String) = TrackNames.clean(file.substringBeforeLast('.'), "", file)
+        assertEquals(Names("At the Disko (Extended Mix)", "Lorenz Rhode, Purple Disco Machine"), f("Lorenz_Rhode,_Purple_Disco_Machine_At_the_Disko_Extended_Mix.wav"))
+        assertEquals(Names("Something On My Mind (Extended Mix)", "Duke Dumont, Purple Disco Machine"), f("Duke_Dumont,_Purple_Disco_Machine_Something_On_My_Mind_Extended_Mix.wav"))
+        assertEquals("Wolfram, Josh Ludlow", f("Wolfram,_Josh_Ludlow_YoYo_Disco_Extended_Mix.wav").artist)
+        assertEquals(Names("Shined On Me (feat. Andrea Love) (Les Bisous Remix)", "Praise Cats, Andrea Love"), f("Praise_Cats,_Andrea_Love_Shined_On_Me_feat_Andrea_Love_Les_Bisous_Remix.wav"))
+        // Já salvo assim na biblioteca (título com a lista, artista vazio): Arrumar nomes separa.
+        assertEquals(Names("At the Disko (Extended Mix)", "Lorenz Rhode, Purple Disco Machine"), TrackNames.clean("Lorenz Rhode, Purple Disco Machine At the Disko (Extended Mix)", "", "x.wav"))
+        // A vírgula depois do nome da mix não é lista; e o título nunca fica vazio.
+        assertEquals(null, TrackNames.splitByCommaGuess("Night Signal (Extended Mix, Remastered)"))
+        assertEquals(null, TrackNames.splitByCommaGuess("Wolfram, Josh Extended Mix"))
+    }
+}

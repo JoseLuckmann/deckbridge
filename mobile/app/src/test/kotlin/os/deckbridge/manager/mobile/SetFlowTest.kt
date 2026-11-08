@@ -1,0 +1,318 @@
+package os.deckbridge.manager.mobile
+
+import os.deckbridge.manager.studio.*
+
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.test.core.app.ApplicationProvider
+import com.github.takahirom.roborazzi.captureRoboImage
+import java.io.File
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import os.deckbridge.logic.decodeWav
+import os.deckbridge.manager.mix.MixStyle
+import os.deckbridge.manager.mix.Transition
+import os.deckbridge.manager.mix.SetPlanner
+
+/**
+ * Planejar o set: abrir a partir da playlist, ajustar uma transição, montar a prévia e o set inteiro. As faixas são
+ * cliques sintéticos em WAV (lidos sem codec); MP3/FLAC passam pelo MediaCodec, que só existe no aparelho.
+ */
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = "w411dp-h891dp-port-560dpi")
+class SetFlowTest {
+    @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
+
+    private val out = File(System.getProperty("prints.dir") ?: "build/prints").apply { mkdirs() }
+
+    private fun app(): ManagerApp {
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        return ManagerApp(ctx, File(ctx.cacheDir, "set-${System.nanoTime()}/biblioteca/dados")).also { DemoLibrary.build(it, seconds = 60); it.setListView(true) }
+    }
+
+    @Test fun planFromThePlaylistEditARenderAndKeepThePlan() {
+        val a = app()
+        a.hideGuide()
+        a.tab = Tab.PLAYLISTS
+        a.model.openPlaylist = 1
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        rule.onNodeWithText("SET").performClick()
+        rule.waitForIdle()
+        assertEquals(1, a.sets.playlistId)
+        val plan = a.sets.plan()
+        assertEquals(3, plan.size)
+        rule.onNodeWithText("PRÓXIMA").assertExists()
+        rule.onRoot().captureRoboImage(File(out, "mobile-15-vertical-set.png").path)
+
+        // Pontos automáticos em início de compasso da grade analisada.
+        val v = a.model.view!!
+        val first = v.track(plan[0].fromId)!!
+        val g = assertNotNull(a.sets.grid(first))
+        assertTrue(g.beats.any { it.inBar == 1 && it.timeMs == plan[0].outMs }, "saída num início de compasso")
+
+        // Ajuste: 8 compassos, corte; fica guardado ao reabrir.
+        val edited = plan[0].copy(bars = 8, style = MixStyle.CUT)
+        a.sets.update(edited)
+        a.sets.close()
+        a.sets.open(1)
+        assertEquals(edited, a.sets.plan()[0])
+
+        // Prévia da transição: 12 s antes + 8 compassos + 12 s depois.
+        val wav = assertNotNull(decodeWav(a.sets.renderTransition(edited).readBytes()))
+        val expected = minOf(12_000, edited.outMs) + (8 * SetPlanner.barMs(first.bpm)).toInt() + 12_000
+        assertEquals(expected / 1000.0, wav.frameCount / 44100.0, 0.05)
+        assertTrue(wav.left.take(wav.frameCount).any { kotlin.math.abs(it) > 0.1f }, "tem som")
+
+        // O set inteiro: as três transições em sequência.
+        val all = assertNotNull(a.sets.renderSet(a.sets.plan()))
+        val set = assertNotNull(decodeWav(all.readBytes()))
+        assertTrue(set.frameCount / 44100.0 > 3 * 16, "três transições: ${set.frameCount / 44100.0} s")
+
+        // Sugestão: a próxima entra no fim da playlist.
+        val next = a.sets.suggestions(a.sets.ids()).first()
+        a.sets.append(next)
+        assertEquals(next.id, a.sets.ids().last())
+        assertEquals(4, a.sets.plan().size)
+    }
+
+    private fun waitMix(a: ManagerApp) {
+        val until = System.currentTimeMillis() + 60_000
+        while (a.sets.mixBusy && System.currentTimeMillis() < until) {
+            Thread.sleep(20)
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        }
+        rule.waitForIdle()
+    }
+
+    @Test fun mixScreenLooksLikeThePlayerAndEditsRebuildThePreview() {
+        val a = app()
+        a.hideGuide()
+        a.sets.open(1)
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        rule.waitForIdle()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("→", substring = true))[0].performClick()
+        rule.waitForIdle()
+        assertNotNull(a.sets.mixing)
+        waitMix(a)
+        val p = assertNotNull(a.sets.mixPreview, a.sets.mixError)
+        // A próxima espera vai dizer quanto deve levar (pela montagem que acabou).
+        assertNotNull(a.sets.lastBuildMs)
+        assertNotNull(p.waveA)
+        assertNotNull(p.waveB)
+        assertTrue(a.sets.mixing!!.masterTempo, "master tempo ligado por padrão")
+        // A cabeça começa dois compassos antes da saída: é onde se quer ouvir.
+        assertEquals(p.leadMs - (2 * p.barMsA).toInt(), a.sets.cursorMs)
+        rule.onNodeWithText("▶ PLAY").assertExists()
+        // Em cima uma linha só, com o veredito; abre no MIXER, com os efeitos e sem aviso de automático.
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Troca boa")).assertExists()
+        rule.onNodeWithText("REVERB").assertExists()
+        rule.onNodeWithText("AUTOMÁTICO").assertDoesNotExist()
+        rule.onRoot().captureRoboImage(File(out, "mobile-39-vertical-mix-simples.png").path)
+        // Outro efeito no FX dos canais: fica na troca.
+        rule.onNodeWithText("FLANGER").performClick()
+        rule.waitForIdle()
+        assertEquals(os.deckbridge.manager.mix.MixFx.FLANGER, a.sets.mixing!!.fx)
+        // O LEVEL do efeito (o knob do FX): vale na hora e grava ao soltar.
+        // O FX como o da DDJ-400: efeito, canal e o LEVEL; em zero, desligado.
+        rule.onNodeWithText("DESLIG.").assertExists()
+        rule.onNodeWithText("AMBOS").performClick()
+        rule.waitForIdle()
+        assertEquals(0, a.sets.mixing!!.fxChannel)
+        a.sets.setFxLevel(0.3f, save = true)
+        assertEquals(0.3f, a.sets.mixing!!.fxLevel)
+        assertEquals(0.3f, a.sets.plan().first { it.fromId == a.sets.mixing!!.fromId && it.toId == a.sets.mixing!!.toId }.fxLevel)
+        // O encaixe da que entra está na própria tela do mixer (com o jog).
+        rule.onNodeWithText("ENCAIXE DO CH 2", substring = true).assertExists()
+        rule.onRoot().captureRoboImage(File(out, "mobile-47-vertical-mix-mixer.png").path)
+        // A aba TROCA tem os fatos da troca e o passo de agora.
+        rule.onNodeWithText("TROCA").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("PASSO").assertExists()
+        // Os ajustes da troca (estilo, duração, ritmo) ficam na aba AJUSTAR; o PLAY fica fixo embaixo.
+        rule.onNodeWithText("AJUSTAR").performClick()
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage(File(out, "mobile-53-vertical-mix-ajustes.png").path)
+        rule.onNodeWithText("MAIS ▾").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertTrue(a.sets.mixing!!.phaseLock, "sync fino ligado por padrão")
+        // Faixas sintéticas com grade certa: nada a corrigir (o botão de grade fica apagado).
+        assertTrue(kotlin.math.abs(p.measuredMs ?: 0.0) < 3, "medido ${p.measuredMs}")
+        rule.onRoot().captureRoboImage(File(out, "mobile-16-vertical-teste-de-mix.png").path)
+
+        // Leva a cabeça para o meio da troca e confere os níveis do mixer (troca de grave: grave da 2 entrou).
+        rule.onNodeWithText("MIXER").performClick()
+        a.sets.seekMix(p.leadMs + p.overlapMs * 3 / 4)
+        rule.waitForIdle()
+        val lv = p.levelsAt(a.sets.cursorMs, a.sets.mixing!!)
+        assertEquals(0f, lv.aLow)
+        assertEquals(1f, lv.bLow)
+        rule.onAllNodes(androidx.compose.ui.test.hasText("KILL")).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty(), "grave cortado aparece como KILL") }
+        rule.onRoot().captureRoboImage(File(out, "mobile-17-vertical-mix-no-meio.png").path)
+
+        // Ajuste pela fileira: CORTE e 8 compassos, sem master tempo. Monta de novo e guarda no plano.
+        // Os botões ficam abaixo da dobra com o AJUSTAR aberto: rola até cada um antes de tocar. O aviso de baixo some
+        // sozinho no aparelho (aqui o relógio não anda) e ficaria por cima deles.
+        a.notice = null
+        rule.onNodeWithText("AJUSTAR").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("CORTE").performScrollTo().performClick()
+        waitMix(a)
+        rule.onNodeWithText("8").performScrollTo().performClick()
+        waitMix(a)
+        rule.onNodeWithText("MASTER TEMPO").performScrollTo().performClick()
+        waitMix(a)
+        val tr = a.sets.mixing!!
+        assertEquals(MixStyle.CUT, tr.style)
+        assertEquals(8, tr.bars)
+        assertTrue(!tr.masterTempo)
+        assertEquals(8 * a.sets.mixPreview!!.barMsA, a.sets.mixPreview!!.overlapMs.toDouble(), 1.0)
+        assertEquals(tr, a.sets.plan().first { it.fromId == tr.fromId && it.toId == tr.toId })
+        a.sets.closeMix()
+        rule.waitForIdle()
+        rule.onNodeWithText("PRÓXIMA").assertExists()
+    }
+
+    @Test @Config(qualifiers = "w891dp-h411dp-land-560dpi")
+    fun mixScreenLandscape() {
+        val a = app()
+        a.hideGuide()
+        a.sets.open(1)
+        a.sets.openMix(a.sets.plan()[1])
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        waitMix(a)
+        a.sets.seekMix(a.sets.mixPreview!!.leadMs + 1500)
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage(File(out, "mobile-18-horizontal-teste-de-mix.png").path)
+    }
+
+    @Test fun audioCheckMeasuresOnTheLibrary() {
+        val a = app()
+        a.audioCheck()
+        val until = System.currentTimeMillis() + 60_000
+        while (a.job != null && System.currentTimeMillis() < until) {
+            Thread.sleep(20)
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        }
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertTrue(a.audioCheckResult.startsWith("WAV"), a.audioCheckResult + " / " + a.notice?.text)
+    }
+
+    @Test fun refreshGridsFixesOnlyTheTrackThatWasOff() {
+        val a = app()
+        val t = a.model.view!!.tracks.first()
+        val before = a.model.trackFiles(t).beats
+        check(a.model.submit(os.deckbridge.manager.pdb.Edit.SetGrid(t.id, t.bpm, before.first().timeMs + 18), "grade torta"))
+        check(a.model.apply(null) != null)
+        a.refreshGrids()
+        val until = System.currentTimeMillis() + 120_000
+        while (a.work != null && System.currentTimeMillis() < until) {
+            Thread.sleep(20)
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        }
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        val text = a.notice?.text.orEmpty()
+        assertTrue(text.startsWith("1 refeitas") && text.contains("já certas"), text)
+        val after = a.model.trackFiles(a.model.view!!.track(t.id)!!).beats
+        assertTrue(kotlin.math.abs(after.first().timeMs - before.first().timeMs) <= 1, "${after.first()} vs ${before.first()}")
+        assertTrue(!a.model.dirty, "gravado")
+    }
+
+    @Test fun leavingTheMixTestStopsTheMusic() {
+        // Relato: "saiu da mixagem e a música continuou tocando".
+        val a = app()
+        a.hideGuide()
+        a.sets.open(1)
+        a.sets.openMix(a.sets.plan()[0])
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        waitMix(a)
+        rule.mainClock.autoAdvance = false
+        a.sets.playMix()
+        assertTrue(a.preview.isPlaying, "devia estar tocando")
+        rule.mainClock.advanceTimeBy(200)
+        // O ✕ da tela de teste (a última na árvore: as abas de baixo continuam nela).
+        val closes = rule.onAllNodes(androidx.compose.ui.test.hasText("✕"))
+        closes[closes.fetchSemanticsNodes().lastIndex].performClick()
+        rule.mainClock.advanceTimeBy(200)
+        assertTrue(!a.preview.isPlaying, "saiu e continuou tocando")
+        assertEquals(null, a.sets.mixing)
+    }
+
+    @Test fun aPreviewStillBeingBuiltDoesNotStartAfterLeavingTheSet() {
+        val a = app()
+        // O player simulado aceita qualquer arquivo: se a prévia fosse tocar, tocaria.
+        org.robolectric.shadows.ShadowMediaPlayer.setMediaInfoProvider { org.robolectric.shadows.ShadowMediaPlayer.MediaInfo(60_000, 0) }
+        a.sets.open(1)
+        val tr = a.sets.plan()[0]
+        a.sets.play(tr) // monta em segundo plano
+        a.sets.close() // sai antes de ficar pronta (voltar do sistema)
+        val until = System.currentTimeMillis() + 60_000
+        while (a.job != null && System.currentTimeMillis() < until) {
+            Thread.sleep(20)
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        }
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertTrue(!a.preview.isPlaying, "começou a tocar depois de sair do SET")
+        // E com o SET aberto, a mesma prévia toca (o simulado funciona).
+        a.sets.open(1)
+        a.sets.play(tr)
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertTrue(a.preview.isPlaying, "a prévia pronta devia tocar com o SET aberto")
+        a.preview.stop()
+    }
+
+    @Test fun paceAndTheBassSwapPointChangeTheTransition() {
+        val a = app()
+        a.hideGuide()
+        a.sets.open(1)
+        rule.setContent { ManagerRoot(a, Actions({}, {})) }
+        rule.waitForIdle()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("→", substring = true))[0].performClick()
+        rule.waitForIdle()
+        waitMix(a)
+        a.notice = null
+        rule.waitForIdle()
+        // Na aba AJUSTAR: ritmo e o ponto do grave, sem abrir o MAIS.
+        rule.onNodeWithText("AJUSTAR").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("LENTA").performScrollTo().performClick()
+        waitMix(a)
+        rule.onNodeWithText("3/4").performScrollTo().performClick()
+        waitMix(a)
+        rule.onNodeWithText("4 COMP.").performScrollTo().performClick()
+        waitMix(a)
+        val tr = a.sets.mixing!!
+        assertEquals(Transition.Pace.SLOW, tr.pace)
+        assertEquals(0.75, tr.swapAt)
+        assertEquals(4, tr.swapBars, "troca de ${tr.bars} compassos")
+        rule.onRoot().captureRoboImage(File(out, "mobile-40-vertical-mix-ritmo.png").path)
+        // O mixer e o passo a passo andam com a cabeça: no meio da troca, o grave do CH 2 já está entrando e o PASSO diz o que fazer.
+        val mid = a.sets.mixPreview!!
+        rule.onNodeWithText("TROCA").performClick()
+        a.sets.seekMix(mid.leadMs + (mid.overlapMs * 0.75 - mid.barMsA * 2).toInt())
+        rule.waitForIdle()
+        rule.onNodeWithText("PASSO").assertExists()
+        rule.onNodeWithText("Troca o grave aos poucos", substring = true).assertExists()
+        rule.onRoot().captureRoboImage(File(out, "mobile-72-vertical-mix-troca.png").path)
+        // A prévia segue a troca escolhida: perto do ponto do grave, os dois graves estão se cruzando (aos poucos).
+        val p = a.sets.mixPreview!!
+        val lv = p.levelsAt(p.leadMs + (p.overlapMs * 0.75 - p.barMsA * 2).toInt(), a.sets.mixing!!)
+        assertTrue(lv.bLow in 0.1f..0.9f, "grave entrando aos poucos: ${lv.bLow}")
+        // Guardado no plano e mostrado na linha da troca.
+        assertEquals(tr, a.sets.plan().first { it.fromId == tr.fromId && it.toId == tr.toId })
+        rule.onNodeWithText("✕").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("lenta · grave aos poucos", substring = true).assertExists()
+    }
+}

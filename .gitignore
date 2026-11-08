@@ -42,3 +42,19 @@ target/
 !android/app/src/main/assets/drums/*.flac
 *.m4a
 *.ogg
+local-mixes/
+android/.kotlin/
+android/keystore.properties
+*.jks
+*.keystore
+pi/build/
+
+# Library Manager de desktop
+desktop/.gradle/
+desktop/.kotlin/
+core/.gradle/
+core/.kotlin/
+core/build/
+mobile/.gradle/
+mobile/local.properties
+mobile/build/

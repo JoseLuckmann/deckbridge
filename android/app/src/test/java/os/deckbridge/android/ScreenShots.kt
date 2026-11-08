@@ -76,6 +76,13 @@ class ScreenShotsWide {
                         onHeard = {},
                         onShare = {},
                         usbReport = usbVariantReport(),
+                        bringUp = BringUpView(
+                            summary = "Mapa: 97/121 mensagens vistas · 1 desconhecida(s)",
+                            missing = listOf("BEAT FX ON/OFF", "SAMPLER pad 5 (DECK2)", "LOOP OUT (DECK2)", "TEMPO RANGE (DECK2)", "HEADPHONES MIX", "MASTER LEVEL"),
+                            unknown = listOf("0x9F:0x10 ×2"),
+                            learning = "BEAT FX ON/OFF",
+                            remap = "0x9E:0x01=0x94:0x47",
+                        ),
                     )
                 }
             })
@@ -123,11 +130,53 @@ class ScreenShotsTablet {
     }
 
     @Test
+    fun browsePreview() {
+        // Touch Preview: a quinta faixa toca no fone; a borda laranja na onda da lista marca qual.
+        val catalog = simulatedCatalog()
+        val playlist = catalog.playlists.first { it.name == "Todas" }.id
+        val place = BrowsePlace(inList = true, playlistId = playlist, index = 4)
+        val rows = os.deckbridge.logic.browseRows(catalog, place, emptyList(), null, true)
+        val previewId = rows.getOrNull(4)?.track?.id
+        capture("$PRINTS/browse-preview.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), place, previewId = previewId))
+        }
+    }
+
+    @Test
     fun beatFxZoom() {
         val catalog = simulatedCatalog()
         val fx = BeatFxState(effect = 1, fraction = 5, channel = 0, on = true, level = 96)
         capture("$PRINTS/beatfx-zoom.png") { activity ->
             activity.setContentView(player(activity, catalog, WaveZoom.BARS_2, fx, posA = 14.1f))
+        }
+    }
+
+    @Test
+    fun mixerView() {
+        val catalog = simulatedCatalog()
+        val mixer = os.deckbridge.logic.MixerState(
+            eq = listOf(listOf(0.0f, 0.62f, 0.5f), listOf(0.5f, 0.3f, 0.85f)),
+            trim = listOf(0.55f, 0.45f),
+            volume = listOf(0.9f, 0.55f),
+            cross = 0.42f,
+            headMix = 0.35f,
+            headLevel = 0.8f,
+            filter = listOf(64, 30),
+            colorFx = 1,
+            levels = listOf(0.82f, 0.55f, 0.78f, 0.74f),
+        )
+        // COMP no canal 1, isolador do master com o grave cortado, Send de REVERB no canal 2 e curva de corte no crossfader.
+        val console = os.deckbridge.logic.ConsoleState(
+            comp = listOf(0.6f, 0f), isolatorOn = true, isolator = listOf(0f, 0.5f, 0.75f),
+            send = listOf(0f, 0.45f), sendType = 3, sendSize = 0.6f, sendTime = 0.4f, sendTone = 0.62f,
+        )
+        capture("$PRINTS/mixer.png") { activity ->
+            activity.setContentView(
+                player(
+                    activity, catalog, WaveZoom.BARS_4, BeatFxState(), overlay = "mixer", nav = "MIXER", mixer = mixer,
+                    settings = PlayerSettings(chFaderCurve = 1, crossCurve = 2), console = console,
+                ),
+            )
         }
     }
 
@@ -321,6 +370,38 @@ class ScreenShotsTablet {
     }
 }
 
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [33], qualifiers = "w1280dp-h720dp-mdpi")
+class ScreenShotsCompact {
+    @Test
+    fun playerCompact() {
+        val catalog = simulatedCatalog()
+        capture("$PRINTS/compact-player.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), leftTitle = "Quarto Escuro", posA = 100f))
+        }
+    }
+
+    @Test
+    fun popupsCompact() {
+        val catalog = simulatedCatalog()
+        for (kind in listOf("LOOP", "KEY")) {
+            capture("$PRINTS/compact-popup-${kind.lowercase()}.png") { activity ->
+                activity.setContentView(player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), leftTitle = "Quarto Escuro", posA = 100f, startPopup = kind))
+            }
+        }
+    }
+
+    @Test
+    fun rmxDockCompact() {
+        val catalog = simulatedCatalog()
+        val rmx = RmxState(panel = true, full = true, scene = 1, holding = true, intensity = 0.55f, bars = 8, xOn = true, xMode = 2, drumBuild = 1f)
+        capture("$PRINTS/compact-rmx-dock.png") { activity ->
+            activity.setContentView(player(activity, catalog, WaveZoom.BARS_8, BeatFxState(), leftTitle = "Quarto Escuro", posA = 100f, rmx = rmx))
+        }
+    }
+}
+
 private fun capture(path: String, fill: (ScreenshotActivity) -> Unit) {
     val activity = Robolectric.buildActivity(ScreenshotActivity::class.java).setup().get()
     fill(activity)
@@ -354,6 +435,10 @@ private fun player(
     settings: PlayerSettings = PlayerSettings(),
     usbLabel: String = "USB simulado",
     historyIds: List<Int> = emptyList(),
+    mixer: os.deckbridge.logic.MixerState = os.deckbridge.logic.MixerState(),
+    startPopup: String = "",
+    console: os.deckbridge.logic.ConsoleState = os.deckbridge.logic.ConsoleState(),
+    previewId: Int? = null,
 ): ComposeView {
     val left = catalog.tracks.first { it.title == leftTitle }
     val right = catalog.tracks.first { it.title == rightTitle }
@@ -383,6 +468,10 @@ private fun player(
     return ComposeView(activity).apply {
         setContent {
             PlayerScreen(
+            mixer = mixer,
+            startPopup = startPopup,
+            console = console,
+            previewId = previewId,
                 catalog = catalog,
                 tracks = listOf(left, right),
                 clock = "21:14",
@@ -696,3 +785,11 @@ class ScreenShotsPhrases {
         )
     }
 }
+
+// Para os prints de celular (PhoneScreenShots.kt).
+internal fun simulatedCatalogForTests(): RbCatalog = simulatedCatalog()
+internal fun shot(path: String, fill: (ScreenshotActivity) -> Unit) = capture(path, fill)
+internal fun playerForTests(
+    activity: ScreenshotActivity, catalog: RbCatalog, zoom: WaveZoom, fx: BeatFxState, browse: BrowsePlace? = null,
+    posA: Float = 9.2f, overlay: String = "", nav: String = "", rmx: RmxState = RmxState(), leftTitle: String = "Night Bus", startPopup: String = "",
+): ComposeView = player(activity, catalog, zoom, fx, browse, posA = posA, overlay = overlay, nav = nav, rmx = rmx, leftTitle = leftTitle, startPopup = startPopup)

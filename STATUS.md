@@ -1,4 +1,4 @@
-# DeckBridge OS — estado em 0.14.1
+# DeckBridge OS — estado em 0.15.0 (efeitos, sem escuta)
 
 App Android para a DDJ-400. O alvo 1 é o Galaxy Tab S6 Lite. O Raspberry é o alvo 2 e ainda não é um aparelho. Esta página é a leitura única. A spec está em `specs/001-ddj400-standalone/`. A escuta na controladora continua `BLOCKED_HARDWARE`. Simulação não fecha o roteiro.
 
@@ -21,6 +21,7 @@ Cada linha é o que entrou no app. Nenhuma foi ouvida no tablet.
 - **0.13.1.** Tom por CQT e perfil EDMA publicado. MIREX 0,586 nas 58 faixas.
 - **0.14.0.** Knobs que deslizam, de/para com os manuais, drum build sintetizado, mix de demonstração v2.
 - **0.14.1.** One-shots CC0 no drum build, presos à fase da grade. Escolha de som no RMX. Onset medido a 0 ms. versionCode 18.
+- **0.15.0 (host, sem APK novo).** Reverb FDN, deslocador de grão, RMX reescrito com cauda no drop, riser de bumbo (afinação em curva, bombeio, respiro, impacto), seis Sound Color FX. Ver `docs/testing/house-mix.md`.
 
 ## O que funciona, em simulação
 
@@ -32,7 +33,7 @@ Medido no host ou na JVM. Não é o tablet e não é a DDJ-400.
 - Beat FX e Color FX (só o knob FILTER) no motor, com deslize de parâmetro. RMX com cena, X-Pad, isolador e release.
 - Drum build com bumbo, palma, caixa e chimbal em FLAC CC0, na grade do deck. O teste de onset ficou em 0 ms a 120, 128, 140 e 174 BPM, com pitch ±8%.
 - Histórico local e gravação WAV do master. O anel de gravação não aloca na thread de áudio, no teste hospedeiro.
-- Tela desenhada em 800×480, 1024×600 e 2000×1200, na JVM. Falta o ícone.
+- Tela desenhada em 800×480, 1024×600 e 2000×1200, na JVM. O ícone adaptativo existe desde 23/10.
 
 ## O que falta
 
@@ -40,14 +41,14 @@ Medido no host ou na JVM. Não é o tablet e não é a DDJ-400.
 
 O de/para está em `docs/research/fx-de-para.md`. O manual não publica as curvas. O que o app ainda não faz:
 
-- Spiral não sobe o pitch quando a fração muda.
-- Helix não grava nem trava no máximo do knob.
+- Spiral sobe o pitch por repetição (0.15.0), mas não quando a fração muda.
+- Helix trava no máximo do knob (0.15.0); não grava ao subir o knob.
 - Mobius não tem parâmetro publicado para fechar.
-- Pitch não é um deslocador de grão e não cobre −50% a +100%.
+- Pitch é um deslocador de grão de −1 a +1 oitava (0.15.0), com artefatos em material tonal denso.
 - Roll e slip roll não misturam o seco com o roll pelo LEVEL/DEPTH.
-- O Filter de Beat FX não é o filtro que oscila no tempo.
+- O Filter de Beat FX oscila no ciclo da fração (0.15.0); a curva é nossa.
 - O Vinyl Brake não devolve a velocidade com o knob à esquerda.
-- Não há seletor dos seis Sound Color FX. O Q do FILTER é fixo.
+- Os seis Sound Color FX existem no motor e num chip do menu; não há seletor na tela do deck. O Q do FILTER é fixo.
 - As cenas do RMX usam um knob só. O aparelho de referência tem o knob grande e dois sub-parâmetros.
 - O drum build não usa as fontes internas desse aparelho. Os hits são gravações CC0. A palma é prévia MP3 do Freesound, não o WAV de 24 bit.
 
@@ -55,9 +56,9 @@ O de/para está em `docs/research/fx-de-para.md`. O manual não publica as curva
 
 Números em `docs/testing/ground-truth-corpus.md`. Corpus fora do git.
 
-- Tempo, 58 faixas: Acc1 0,655, Acc2 0,724. O alvo era 0,85 e 0,95. House, techno e trance fecham. Drum and bass fica em Acc1 0,400. Dubstep fica em 0,400.
+- Tempo: no holdout, Acc1 0,894 e Acc2 0,947 desde 23/10 (`docs/testing/tempo-corpus.md`). Os números das 58 faixas abaixo são de antes. Na época eram Acc1 0,655 e Acc2 0,724, com alvo de 0,85 e 0,95. House, techno e trance fecham. Drum and bass fica em Acc1 0,400. Dubstep fica em 0,400.
 - Tom nas 58: MIREX 0,586, exato 0,466, Camelot 0,759. O alvo de 0,65 não apareceu. No holdout (16 faixas, fora da escolha dos parâmetros) o MIREX é 0,456 e o exato é 0,312. No extra (190) o MIREX é 0,519 e o exato é 0,437. Nas 248 juntas o exato é 0,444.
-- Frases: 16 de 26 fronteiras anotadas a 1 compasso (61%) e 20 de 26 a 4 compassos. `docs/testing/phrase-annotations.md`.
+- Frases: 17 de 26 fronteiras anotadas a 1 compasso (65%) e 22 de 26 a 4 compassos (24/10, rótulos no estilo do rekordbox). `docs/testing/phrase-annotations.md`.
 - Três faixas com TKEY continuam diferentes do tag: Chromosome Boutique lê F (TKEY Bm), Ecosystem lê Cm (TKEY Ebm), Silver lê D (TKEY Em). Nenhuma foi forçada.
 
 ### Leitor de club
@@ -66,21 +67,20 @@ A tabela está em `docs/research/cdj3000-coverage.md`. Fora desta linha: Pro DJ 
 
 ### App e aparelho
 
-- O APK não tem ícone (`android:icon` aponta para um recurso que não existe).
-- A assinatura é a de debug. Não há chave de release.
+- Ícone adaptativo e assinatura de release existem desde 23/10. A chave de release de verdade ainda precisa ser criada pelo dono.
 - O emulador desta máquina não abriu (A022). Os prints são da JVM.
-- Passos 13 a 24 de `docs/hil/roteiro-validacao-final.md` estão por executar. Incluem escuta, pendrive real, master e fone, e o RMX na controladora.
+- Passos 13 a 30 de `docs/hil/roteiro-validacao-final.md` estão por executar. O 25 (bring-up) deve ser o primeiro com a controladora. Incluem escuta, pendrive real, master e fone, e o RMX na controladora.
 - Busca por voz (A053) e quatro decks (A054) ficam adiados até o dono reabrir.
 - O alvo 2 (imagem de Raspberry, Mixxx no aparelho, gates G0 a G2) não começou no hardware.
 
 ## Roteiro de hardware
 
-`docs/hil/roteiro-validacao-final.md`. Os passos 13 a 24 continuam abertos. A 0.14.1 não fecha nenhum: drum build e grade não são um gesto novo na controladora. A instalação da prova A0 está em `docs/android/prova-a0.md`.
+`docs/hil/roteiro-validacao-final.md`. Os passos 13 a 30 continuam abertos. Comece pelo 25. A 0.14.1 não fecha nenhum: drum build e grade não são um gesto novo na controladora. A instalação da prova A0 está em `docs/android/prova-a0.md`.
 
 ## Backlog, por ordem
 
-1. Ouvir o app no Tab S6 Lite com a DDJ-400 e executar os passos 13 a 24. É o buraco que muda o produto.
-2. Ícone e assinatura de release, antes de entregar o APK fora deste ciclo.
+1. Ouvir o app no Tab S6 Lite com a DDJ-400 e executar os passos 25 e 13 a 30. É o buraco que muda o produto.
+2. Criar a chave de release (o dono) antes de entregar o APK fora deste ciclo.
 3. Os buracos de efeito que a mix já deixa ouvir: spiral, helix, balanço do roll, pitch.
 4. Tempo em drum and bass e dubstep, sem desfazer house, techno e trance.
 5. Tom fora do corte de 58, a começar pelo holdout.
@@ -185,3 +185,54 @@ As mixes de demonstração são do motor do host, não do tablet. Roteiros em `d
 | OD-24 | decidida | Publicar as métricas do analisador sem as tratar como alvo cumprido. |
 
 A constituição 1.1.0 está em `.specify/memory/constitution.md`. A emenda é a ADR-0006.
+
+
+## Atualização de 23/10/2026 (rodada de pendências)
+
+- Master Tempo e Key Shift por WSOLA (o deslocador antigo não segurava a afinação): `docs/testing/master-tempo.md`.
+- Tempo por envelope multibanda: holdout Acc1 0,894 e Acc2 0,947 (antes 0,629 e 0,742); tom por classificador linear: holdout MIREX 0,589 e exato 0,496 (antes 0,472 e 0,374): `docs/testing/tempo-corpus.md`. Frases: sem ganho, sem verdade de terreno.
+- Ícone adaptativo e assinatura de release (chave fora do git, `keystore.properties` ou variáveis `DECKBRIDGE_*`; sem chave o release sai sem assinatura). A chave de release de verdade ainda precisa ser criada pelo dono.
+- Ganho de saída do app (−12 a +6 dB) na tela da mesa; lista do set gravado (.cue e .txt); marcas de frase na onda; BEAT JUMP com valor 16 e setas; balanço do roll.
+- Set completo de seis faixas em vídeo (`docs/testing/session-video.md`).
+- Nada disto foi ouvido no tablet nem na DDJ-400 (`BLOCKED_HARDWARE`).
+
+## Atualização de 24/10/2026 (preparação para o hardware, só neste ambiente)
+
+- Recursos do leitor e da mesa:
+  - Touch Preview no fone, curvas dos faders, COMP por canal, isolador do master e Send/Return interno.
+  - SHIMMER, DELAY e FX FREQUENCY. O tom do Spiral e do Helix agora segue o tempo.
+  - Frases no estilo do rekordbox.
+  - Ver `docs/runbooks/implementation-log.md`.
+- DDJ-400 virtual numa janela separada (1280×760, a partir da foto do produto), com o log MIDI. Vídeos de mix e de RMX gerados com ela.
+- Motor real testado no host (`tools/engine_host_test.cpp`):
+  - Blocos de 64 a 4096 dão saída idêntica bit a bit.
+  - De 1 a 8 canais e de 44,1 a 96 kHz.
+  - Desconexão com nova tentativa.
+  - Fuzz com NaN e infinito.
+  - Quatro threads.
+  - ASan, UBSan e TSan limpos.
+  - O motor ganhou saneamento das entradas e um limitador no fone.
+- Fuzz do caminho MIDI → DeckPage. Achou e corrigiu um crash no ajuste de loop e system common tratado como running status.
+- Fuzz dos parsers da biblioteca: nenhuma exceção. A carga não muda nem cria arquivos num volume sem permissão de escrita (hash antes e depois). A exportação do histórico para o pendrive da biblioteca passou a ser recusada.
+- Bring-up: checklist das 121 mensagens do mapa, lista do que chega fora do mapa e remapeamento aprendido na tela de diagnóstico. Passo 25 do roteiro.
+- Suíte JVM: 141 testes, 0 falhas. Nada disto foi ouvido no tablet nem na DDJ-400 (`BLOCKED_HARDWARE`).
+
+## Atualização de 25/10/2026 (Raspberry Pi, opção C)
+
+- Decisões do dono e ADRs:
+  - ADR-0007 aceita: o motor próprio num Pi Zero 2 W ou Pi 3, com Raspberry Pi OS 64 bit. O Mixxx (opção A) continua sendo a trilha normativa do alvo 2.
+  - ADR-0008: tela nativa em SDL2, medida contra o Compose Desktop. A SDL2 usa de 9 a 18 vezes menos memória privada.
+- `pi/`:
+  - Motor do app sobre ALSA.
+  - DDJ-400 por rawmidi: entrada e LEDs.
+  - Leitor do pendrive em C++, só leitura.
+  - WAV, MP3 e FLAC direto para int16.
+  - Tela no layout do app em 1024×600 e 800×480.
+  - Build aarch64 com testes sob qemu.
+  - Ver `pi/README.md` e `docs/ui/pi-*.png`.
+- Lógica única: o controle e os LEDs da DDJ-400 agora são uma implementação só, em C++, para o app e para o Pi. O motor já era um só.
+- Duplicado de propósito: o leitor do pendrive (Kotlin no app, C++ no Pi). Os dois estão presos pelo `RekordboxGoldenTest`.
+- Demonstração no PC (Xvfb): a tela do Pi mixou duas faixas por roteiro MIDI da DDJ-400, com Beat FX, loops, SYNC e RMX (cenas e X-PAD). Ver `pi/demo/README.md`.
+- Library Manager de desktop (ADR-0009, OD-25): programa em `desktop/`, único que escreve no pendrive. Organiza a biblioteca à mão: metadados, playlists, cues e grade (ANLZ), importar áudio com análise, renomear arquivos por padrão, remover, compactar, Organizar por regras (sem IA), arrastar e soltar. Gravação com backup, execução com desfazer em ordem inversa, verificação e restauração (que nunca apaga áudio). Núcleo em `core/` (compartilhado com o app de celular): 111 testes, lido por quatro leitores independentes (Kotlin, C++ do Pi, Kaitai do banco e do ANLZ) e conferido contra exports reais do rekordbox (páginas das tabelas constantes idênticas byte a byte; biblioteca real de 3886 faixas editada e relida igual). Biblioteca local no computador (`~/.deckbridge/library`), exportar para pendrive e trazer de pendrive. **Nenhum player nem o rekordbox leu o que ele grava (`BLOCKED_HARDWARE`)**: teste numa cópia primeiro. Fora, de propósito: classificação/pontuação por modelo, etiquetas dentro do áudio. Ver `desktop/README.md`.
+- App de celular da biblioteca (ADR-0010, `mobile/`, `os.deckbridge.manager`): biblioteca salva no aparelho, em pé e deitado (referência Galaxy S25 Ultra), importar e analisar, marcar (nota, cor, comentário), playlists, grade e cues, exportar para pendrive pelo seletor de documentos do Android e trazer de pendrive. Atalhos de uso repetido (filtros rápidos com contagem, busca com `bpm:`/`tom:`/`nota:`, playlist alvo de um toque, triagem, editar em lote, Arrumar tudo, analisar todas, refazer, pré-checagem de exportação): ver `mobile/README.md`; os principais também estão no desktop. Planejar set (botão SET na playlist): transições pré-programadas entre faixas vizinhas (saída/entrada em compasso, 4–32 compassos, troca de grave/mistura/eco/corte), encaixe de tom e BPM, sugestão da próxima, prévia de cada transição e do set inteiro montadas no aparelho, com Master Tempo (WSOLA); tela de teste de mixagem no layout do player (dois decks com ondas alinhadas, mixer, transporte, fileiras de ajuste); teste de áudio no MENU para medir no aparelho; sync fino entre os bumbos e grade do analisador no início do clique do bumbo (medido em 14 músicas reais); refazer grades no MENU (celular) e no Organizar (desktop); montar set automático (duração e forma), ordenar para mixar, avisos e ponte em cada troca, ensaio com marcas boa/refazer; ramos do set (linhas alternativas que voltam à principal ou viram outro final, cada uma uma playlist) e master do set (AUTO sem saltos ou fixo; esticada até 10% normal, 16% limite) mapa do set (os caminhos com o andamento de cada um) set flexível (pontos de virada, pool escolhida na hora com AGORA, ramo à mão e ramo de ramo) fluxo para quem é novo (guia em 4 passos, destaque do próximo botão, abas na ordem do trabalho) e visual simples por padrão (grava sozinho, trocas numa linha, mix com AJUSTAR, tom em Camelot em todo o app). 50 testes de JVM (capturas em 1440×3120 e 3120×1440; toques simulados em atalhos de uso repetido; exportação completa por um provedor de documentos de brinquedo). **Não rodou em aparelho**: decodificação de MP3/FLAC (MediaCodec), pendrive USB real no S25 Ultra e toque na tela são `BLOCKED_HARDWARE`. Ver `mobile/README.md`.
+- Nada disto rodou num Pi, num tablet nem na DDJ-400 (`BLOCKED_HARDWARE`).

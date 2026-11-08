@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -7,15 +9,21 @@ plugins {
 
 android {
     namespace = "os.deckbridge.android"
+    // As telas e a lógica dos decks são as mesmas do modo DJ no computador (stage/, ADR-0012).
+    sourceSets["main"].java.srcDir("../../stage/src")
+    // O que as telas do modo DJ e do MIX dividem (shared/) vem pelo módulo :biblioteca, que já o compila: incluir de
+    // novo aqui duplicava as classes.
     compileSdk = 35
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
-        applicationId = "os.deckbridge.android"
+        // Um app só (ADR-0012): o id é o do antigo app da biblioteca, para quem já tem a biblioteca no aparelho não
+        // perder nada ao atualizar (o armazenamento do app é por id).
+        applicationId = "os.deckbridge.manager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 18
-        versionName = "0.14.1"
+        versionCode = 47
+        versionName = "0.35.0"
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
@@ -41,6 +49,27 @@ android {
         }
     }
 
+    // Assinatura de release: a chave NUNCA entra no repositório. Vem de android/keystore.properties (ignorado pelo git)
+    // ou das variáveis DECKBRIDGE_KEYSTORE, DECKBRIDGE_KEYSTORE_PASSWORD, DECKBRIDGE_KEY_ALIAS, DECKBRIDGE_KEY_PASSWORD.
+    // Sem nenhuma das duas, o release sai sem assinatura (app-release-unsigned.apk), nunca com a chave de debug.
+    val keystoreProps = Properties().apply {
+        val file = rootProject.file("keystore.properties")
+        if (file.isFile) file.inputStream().use { load(it) }
+    }
+    fun secret(property: String, env: String): String? = keystoreProps.getProperty(property) ?: System.getenv(env)
+    val releaseStore = secret("storeFile", "DECKBRIDGE_KEYSTORE")
+    val releaseSigned = releaseStore != null && file(releaseStore).isFile
+    if (releaseSigned) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(releaseStore!!)
+                storePassword = secret("storePassword", "DECKBRIDGE_KEYSTORE_PASSWORD")
+                keyAlias = secret("keyAlias", "DECKBRIDGE_KEY_ALIAS")
+                keyPassword = secret("keyPassword", "DECKBRIDGE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -49,7 +78,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (releaseSigned) signingConfigs.getByName("release") else null
         }
     }
 
@@ -100,7 +129,26 @@ androidComponents {
     }
 }
 
+// A lógica de controle da DDJ-400 é C++ (src/main/cpp/controller.h), a mesma do app e do Pi. Nos testes JVM ela
+// roda de verdade: este passo compila o mesmo código como biblioteca do host (Linux, g++), e o ControllerCore a carrega.
+val hostControlLib = layout.buildDirectory.file("host/libdeckbridge_control_host.so")
+val buildHostControl by tasks.registering(Exec::class) {
+    val sources = listOf(file("src/main/cpp/controller_jni.cpp"), file("src/main/cpp/controller.h"), file("src/main/cpp/leds.h"))
+    inputs.files(sources)
+    outputs.file(hostControlLib)
+    val jdk = System.getProperty("java.home")
+    val output = hostControlLib.get().asFile
+    doFirst { output.parentFile.mkdirs() }
+    commandLine(
+        "g++", "-std=c++17", "-O2", "-fwrapv", "-shared", "-fPIC",
+        "-I$jdk/include", "-I$jdk/include/linux",
+        "-o", output.absolutePath, sources[0].absolutePath,
+    )
+}
+
 tasks.withType<Test>().configureEach {
+    dependsOn(buildHostControl)
+    systemProperty("deckbridge.controlLib", hostControlLib.get().asFile.absolutePath)
     // O worker padrão (~512 MB) estoura no lowpass das faixas longas depois
     // das 248 análises de tom. O algoritmo em si cabe; o heap do teste não.
     maxHeapSize = "2g"
@@ -111,6 +159,9 @@ tasks.withType<Test>().configureEach {
 }
 
 dependencies {
+    // O núcleo (lógica compartilhada) e o modo Biblioteca (módulo, processo ":biblioteca").
+    implementation("os.deckbridge:core")
+    implementation(project(":biblioteca"))
     implementation("com.google.oboe:oboe:1.11.0")
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)

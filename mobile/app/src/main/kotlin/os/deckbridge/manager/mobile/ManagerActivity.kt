@@ -1,0 +1,122 @@
+package os.deckbridge.manager.mobile
+
+import os.deckbridge.manager.studio.*
+
+import android.net.Uri
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
+import android.os.Bundle
+import androidx.core.content.ContextCompat
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+
+/** A única tela do app. Girar o celular não recria a atividade (veja o manifesto): o estado fica no [ManagerApp]. */
+class ManagerActivity : ComponentActivity() {
+    internal lateinit var app: ManagerApp
+        private set
+
+    // Fone desconectado: para na hora, para o som não sair pelo alto-falante.
+    private val noisy = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) { if (app.preview.inBackground) app.preview.pause() else app.preview.stop() }
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // A entrada do app abre neste modo da próxima vez.
+        Modes.remember(this, Modes.Mode.LIBRARY)
+        enableEdgeToEdge()
+        app = ManagerApp.get(this)
+        app.pendingIntent = intent
+        setContent { Content(app) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        app.pendingIntent = intent
+    }
+
+    /** Grava sozinho depois de [QUIET_MS] sem mudanças (confere a cada 5 s enquanto o app está na frente). */
+    private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
+    private val autosave = object : Runnable {
+        override fun run() {
+            if (app.model.dirty && System.currentTimeMillis() - app.model.lastChangeAt > QUIET_MS) app.autosave()
+            ticker.postDelayed(this, 5_000)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ticker.postDelayed(autosave, 5_000)
+        ContextCompat.registerReceiver(this, noisy, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    /**
+     * Saiu da tela (fechou, trocou de app, apagou a tela): a pré-escuta para. Ela só existe enquanto o app está na frente.
+     * O set tocando como player continua (serviço de mídia). Também grava o que estiver pendente.
+     */
+    override fun onStop() {
+        if (!app.preview.inBackground) app.preview.stop()
+        runCatching { unregisterReceiver(noisy) }
+        super.onStop()
+        ticker.removeCallbacks(autosave)
+        app.autosave()
+    }
+
+    private companion object {
+        const val QUIET_MS = 20_000L
+    }
+
+    override fun onDestroy() {
+        if (!app.preview.inBackground) app.preview.stop()
+        super.onDestroy()
+    }
+}
+
+@Composable
+private fun Content(app: ManagerApp) {
+    val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> -> app.importAudio(uris) }
+    val pickUsb = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? -> if (uri != null) app.chooseUsb(uri) }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? -> if (uri != null) app.importFolder(uri) }
+    LaunchedEffect(Unit) { if (!app.model.isOpen) app.start() }
+    // Atalhos do ícone e músicas compartilhadas de outros apps.
+    val incoming = app.pendingIntent
+    LaunchedEffect(incoming, app.model.isOpen) {
+        if (incoming == null || !app.model.isOpen) return@LaunchedEffect
+        app.pendingIntent = null
+        app.handle(incoming) { pickAudio.launch(arrayOf("audio/*")) }
+    }
+    // O set virou player em segundo plano: no Android 13+, a notificação com os controles pede licença (uma vez).
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val playingSet = app.preview.setPlay != null
+    LaunchedEffect(playingSet) {
+        if (playingSet && android.os.Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(app.context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) runCatching { askNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+    }
+    val activity = androidx.compose.ui.platform.LocalContext.current as android.app.Activity
+    val actions = remember { Actions(pickAudio = { pickAudio.launch(arrayOf("audio/*")) }, pickUsb = { pickUsb.launch(null) }, pickFolder = { pickFolder.launch(null) }, toDj = { app.goDj(activity) }) }
+    ManagerRoot(app, actions)
+}
+
+const val ACTION_TRIAGEM = "os.deckbridge.manager.TRIAGEM"
+const val ACTION_IMPORTAR = "os.deckbridge.manager.IMPORTAR"
+const val ACTION_EXPORTAR = "os.deckbridge.manager.EXPORTAR"
+
+/** As músicas de um "compartilhar" (uma ou várias). */
+@Suppress("DEPRECATION")
+fun Intent.streamUris(): List<Uri> = when (action) {
+    Intent.ACTION_SEND -> listOfNotNull(getParcelableExtra(Intent.EXTRA_STREAM) as? Uri)
+    Intent.ACTION_SEND_MULTIPLE -> getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
+    else -> emptyList()
+}

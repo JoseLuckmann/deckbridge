@@ -32,7 +32,25 @@ fun decodeTrackAudio(context: Context, name: String, bytes: ByteArray): DecodedP
     return decodeCompressed(context, bytes, suffix)
 }
 
-private fun decodeCompressed(context: Context, bytes: ByteArray, suffix: String): DecodedPcm? {
+
+/** Só um trecho da faixa, para a pré-escuta: WAV pela fatia de bytes; MP3/FLAC/AAC com seek e limite de amostras. */
+fun decodeTrackSegment(context: Context, name: String, bytes: ByteArray, startSec: Double, seconds: Double): DecodedPcm? {
+    val lower = name.lowercase()
+    if (lower.endsWith(".wav") || (bytes.size > 12 && bytes.copyOfRange(0, 4).decodeToString() == "RIFF")) {
+        return os.deckbridge.logic.decodeWavSegment(bytes, startSec, seconds)
+    }
+    val suffix = when {
+        lower.endsWith(".mp3") -> ".mp3"
+        lower.endsWith(".flac") -> ".flac"
+        lower.endsWith(".aac") -> ".aac"
+        lower.endsWith(".m4a") || lower.endsWith(".mp4") -> ".m4a"
+        else -> return null
+    }
+    return decodeCompressed(context, bytes, suffix, (startSec * 1_000_000).toLong().coerceAtLeast(0L), seconds)
+}
+
+
+private fun decodeCompressed(context: Context, bytes: ByteArray, suffix: String, startUs: Long = 0L, seconds: Double = 0.0): DecodedPcm? {
     val file = File.createTempFile("deckbridge-", suffix, context.cacheDir)
     return try {
         file.writeBytes(bytes)
@@ -51,18 +69,23 @@ private fun decodeCompressed(context: Context, bytes: ByteArray, suffix: String)
         }
         if (track < 0 || format == null) return null
         extractor.selectTrack(track)
+        if (startUs > 0L) extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
         val mime = format.getString(MediaFormat.KEY_MIME) ?: return null
         val decoder = MediaCodec.createDecoderByType(mime)
         decoder.configure(format, null, null, 0)
         decoder.start()
         val rate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
         val channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-        val left = ArrayList<Float>()
-        val right = ArrayList<Float>()
+        // Buffers primitivos, pré-dimensionados pela duração do arquivo. Um ArrayList<Float> por amostra
+        // custava ~700 MB de objetos numa faixa de 6 min e estourava a memória.
+        val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
+        val cap = if (seconds > 0.0) (rate * seconds).toInt().coerceAtLeast(rate) else rate * 60 * MAX_TRACK_MINUTES
+        val estimate = if (seconds > 0.0) cap else ((durationUs * rate) / 1_000_000L).toInt().coerceIn(rate * 10, cap)
+        val sink = os.deckbridge.logic.PcmAccumulator(rate, channels, estimate, cap)
         val info = MediaCodec.BufferInfo()
         var inputDone = false
         var outputDone = false
-        while (!outputDone && left.size < rate * 60 * 10) {
+        while (!outputDone) {
             if (!inputDone) {
                 val inIndex = decoder.dequeueInputBuffer(5_000)
                 if (inIndex >= 0) {
@@ -84,22 +107,11 @@ private fun decodeCompressed(context: Context, bytes: ByteArray, suffix: String)
                     buffer.order(ByteOrder.nativeOrder())
                     buffer.position(info.offset)
                     buffer.limit(info.offset + info.size)
-                    val frames = info.size / (2 * channels)
-                    repeat(frames) {
-                        val first = buffer.short.toInt() / 32768f
-                        if (channels == 1) {
-                            left += first
-                            right += first
-                        } else {
-                            val second = buffer.short.toInt() / 32768f
-                            left += first
-                            right += second
-                            repeat((channels - 2).coerceAtLeast(0)) { buffer.short }
-                        }
-                    }
+                    sink.append(buffer, info.size / (2 * channels))
                 }
                 decoder.releaseOutputBuffer(outIndex, false)
                 if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
+                if (sink.full) outputDone = true
             } else if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER && inputDone) {
                 outputDone = true
             }
@@ -107,7 +119,7 @@ private fun decodeCompressed(context: Context, bytes: ByteArray, suffix: String)
         decoder.stop()
         decoder.release()
         extractor.release()
-        if (left.isEmpty()) null else DecodedPcm(left.toFloatArray(), right.toFloatArray(), rate)
+        sink.result()
     } catch (_: Exception) {
         null
     } finally {
